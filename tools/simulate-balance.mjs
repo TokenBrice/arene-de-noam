@@ -1,7 +1,8 @@
 import { CREATURE_IDS } from '../src/data/creatures.js';
-import { createBattle, resolveTurn, applyReplacement } from '../src/battle/engine.js';
 import { chooseAiAction } from '../src/battle/ai.js';
+import { applyReplacement, createBattle, resolveTurn } from '../src/battle/engine.js';
 import { normalizeSeed, randomIndex } from '../src/battle/rng.js';
+import { PROFILE_AXES, teamProfile } from '../src/data/team-profile.js';
 
 function drawTeam(seed) {
   const pool = [...CREATURE_IDS],
@@ -14,8 +15,9 @@ function drawTeam(seed) {
   }
   return { team, state };
 }
-function simulate(playerTeam, enemyTeam, seed) {
-  let state = createBattle({ playerTeam, enemyTeam, seed });
+
+function simulate(playerTeam, enemyTeam, seed, lateTurnPressure) {
+  let state = createBattle({ playerTeam, enemyTeam, seed, lateTurnPressure });
   for (let guard = 0; guard < 140 && state.phase !== 'ended'; guard++) {
     if (state.sides.player.pendingReplacement)
       state = applyReplacement(
@@ -36,43 +38,123 @@ function simulate(playerTeam, enemyTeam, seed) {
   return state;
 }
 
+function emptyRecord(keys) {
+  return new Map(keys.map((key) => [key, { wins: 0, games: 0 }]));
+}
+
+function recordSide(stats, keys, won) {
+  for (const key of keys) {
+    const item = stats.get(key);
+    item.games++;
+    if (won) item.wins++;
+  }
+}
+
+function rate(item) {
+  return item.games ? item.wins / item.games : 0;
+}
+
+function percent(value, digits = 0) {
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
 const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.ARENA_BALANCE_SAMPLES) || 2400))),
   balanceSeed = normalizeSeed(Number(process.env.ARENA_BALANCE_SEED) || 0xc0ffee),
-  stats = new Map(CREATURE_IDS.map((id) => [id, { wins: 0, games: 0 }]));
+  stats = emptyRecord(CREATURE_IDS),
+  archetypes = emptyRecord(PROFILE_AXES),
+  pairwise = new Map(
+    CREATURE_IDS.map((row) => [row, emptyRecord(CREATURE_IDS.filter((column) => column !== row))])
+  );
 let rng = balanceSeed,
-  turns = 0;
+  turnsBefore = 0,
+  turnsAfter = 0,
+  capsBefore = 0,
+  capsAfter = 0;
+
 for (let game = 0; game < samples; game++) {
   const player = drawTeam(rng);
   rng = player.state;
   const enemy = drawTeam(rng);
   rng = enemy.state;
-  const result = simulate(player.team, enemy.team, rng);
+  const battleSeed = rng,
+    before = simulate(player.team, enemy.team, battleSeed, false),
+    result = simulate(player.team, enemy.team, battleSeed, true),
+    playerWon = result.winner === 'player',
+    enemyWon = result.winner === 'enemy';
   rng = (rng + 0x9e3779b9) >>> 0 || 1;
-  turns += result.turn;
-  for (const id of player.team) {
-    const s = stats.get(id);
-    s.games++;
-    if (result.winner === 'player') s.wins++;
-  }
-  for (const id of enemy.team) {
-    const s = stats.get(id);
-    s.games++;
-    if (result.winner === 'enemy') s.wins++;
-  }
+  turnsBefore += before.turn;
+  turnsAfter += result.turn;
+  capsBefore += before.reason === 'turn-cap' ? 1 : 0;
+  capsAfter += result.reason === 'turn-cap' ? 1 : 0;
+  recordSide(stats, player.team, playerWon);
+  recordSide(stats, enemy.team, enemyWon);
+  recordSide(archetypes, [teamProfile(player.team).dominant], playerWon);
+  recordSide(archetypes, [teamProfile(enemy.team).dominant], enemyWon);
+  for (const playerId of player.team)
+    for (const enemyId of enemy.team) {
+      if (playerId === enemyId) continue;
+      recordSide(pairwise.get(playerId), [enemyId], playerWon);
+      recordSide(pairwise.get(enemyId), [playerId], enemyWon);
+    }
 }
+
 const ranked = [...stats]
-  .map(([id, s]) => ({ id, rate: s.wins / s.games, ...s }))
-  .sort((a, b) => b.rate - a.rate);
-const high = ranked.filter((x) => x.rate > 0.68),
-  low = ranked.filter((x) => x.rate < 0.35);
-console.log(ranked.map((x) => `${x.id}:${Math.round(x.rate * 100)}%`).join(' · '));
+    .map(([id, item]) => ({ id, rate: rate(item), ...item }))
+    .sort((a, b) => b.rate - a.rate),
+  high = ranked.filter((item) => item.rate > 0.68),
+  low = ranked.filter((item) => item.rate < 0.35),
+  lopsided = [];
+
+for (let a = 0; a < CREATURE_IDS.length - 1; a++)
+  for (let b = a + 1; b < CREATURE_IDS.length; b++) {
+    const first = CREATURE_IDS[a],
+      second = CREATURE_IDS[b],
+      matchup = pairwise.get(first).get(second),
+      matchupRate = rate(matchup);
+    lopsided.push({
+      winner: matchupRate >= 0.5 ? first : second,
+      loser: matchupRate >= 0.5 ? second : first,
+      rate: Math.max(matchupRate, 1 - matchupRate),
+      games: matchup.games,
+    });
+  }
+lopsided.sort((a, b) => b.rate - a.rate || b.games - a.games);
+
+console.log(ranked.map((item) => `${item.id}:${percent(item.rate)}`).join(' · '));
+console.log(
+  `Simulated ${samples} paired champion-vs-champion matchups (seed ${balanceSeed}) across all ${CREATURE_IDS.length} creatures.`
+);
+console.log(
+  `Late-turn pressure comparison: average turns ${(turnsBefore / samples).toFixed(1)} before → ${(turnsAfter / samples).toFixed(1)} after; turn-cap decisions ${percent(capsBefore / samples, 1)} (${capsBefore}/${samples}) before → ${percent(capsAfter / samples, 1)} (${capsAfter}/${samples}) after.`
+);
+console.log(`Creature win-rate range: ${percent(ranked.at(-1).rate)}–${percent(ranked[0].rate)}.`);
+console.log(
+  `Team archetypes: ${PROFILE_AXES.map((axis) => {
+    const item = archetypes.get(axis);
+    return `${axis} ${percent(rate(item), 1)} (${item.games})`;
+  }).join(' · ')}`
+);
+console.log(
+  `Five most lopsided pairs: ${lopsided
+    .slice(0, 5)
+    .map((item) => `${item.winner} over ${item.loser} ${percent(item.rate, 1)} (${item.games})`)
+    .join(' · ')}`
+);
+console.log('Pairwise creature matchup matrix (row win rate vs column; — = same creature):');
+console.log(['creature', ...CREATURE_IDS].join(','));
+for (const row of CREATURE_IDS)
+  console.log(
+    [
+      row,
+      ...CREATURE_IDS.map((column) =>
+        row === column ? '—' : percent(rate(pairwise.get(row).get(column)), 1)
+      ),
+    ].join(',')
+  );
+
 if (high.length || low.length)
   throw new Error(
-    `Roster balance outside 35–68%: ${[...high, ...low].map((x) => `${x.id} ${Math.round(x.rate * 100)}%`).join(', ')}`
+    `Roster balance outside 35–68%: ${[...high, ...low]
+      .map((item) => `${item.id} ${percent(item.rate)}`)
+      .join(', ')}`
   );
-console.log(
-  `Simulated ${samples} champion-vs-champion battles (seed ${balanceSeed}) across all ${CREATURE_IDS.length} creatures; average ${Math.round((turns / samples) * 10) / 10} turns.`
-);
-console.log(
-  `Creature win-rate range: ${Math.round(ranked.at(-1).rate * 100)}%–${Math.round(ranked[0].rate * 100)}%.`
-);

@@ -235,6 +235,9 @@
   color: #edceff;
   background: #bd6fff10;
 }
+.draft-carousel {
+  display: none;
+}
 @media (max-width: 700px) {
   .draft-head {
     margin-top: 12px;
@@ -294,5 +297,59 @@
   .draft-rival-team img {
     width: 76px;
     height: 76px;
+  }
+}
+@media (max-width: 640px) {
+  .draft-page {
+    padding-inline: var(--space-3);
+  }
+  .draft-lineup {
+    flex-wrap: wrap;
+  }
+  .draft-slot {
+    width: calc(50% - var(--space-1));
+    min-width: 145px;
+    height: auto;
+    min-height: 58px;
+  }
+  .draft-offers .draft-card {
+    display: none;
+  }
+  .draft-offers .draft-card.mobile-active {
+    display: grid;
+  }
+  .draft-carousel {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    gap: var(--space-3);
+    max-width: 360px;
+    margin: var(--space-3) auto 0;
+  }
+  .draft-carousel > button {
+    min-width: 44px;
+    min-height: 44px;
+    border: 1px solid #d8b5ff55;
+    border-radius: 50%;
+    color: var(--ink);
+    background: #252850;
+    font-size: var(--text-2xl);
+  }
+  .draft-dots {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-2);
+  }
+  .draft-dots button {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: 1px solid #d8b5ff88;
+    border-radius: 50%;
+    background: transparent;
+  }
+  .draft-dots button.active {
+    background: #d8b5ff;
+    box-shadow: 0 0 10px #bd76ff;
   }
 }

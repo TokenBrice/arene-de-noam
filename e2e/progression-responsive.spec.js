@@ -76,7 +76,7 @@ test('expanded roster filters all 24 creatures and exposes authored kits', async
   await page.locator('[data-action="title"]').first().click();
   await page.getByRole('button', { name: /Bestiaire/ }).click();
   await expect(page.locator('.bestiary-card')).toHaveCount(24);
-  await expect(page.getByText('Moisson de venin')).toBeVisible();
+  await expect(page.getByText('Moisson de venin').first()).toBeVisible();
 });
 
 test('smart remix composes a fresh legal trio with a lead and matching doctrine', async ({ page }) => {

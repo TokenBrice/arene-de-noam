@@ -19,8 +19,18 @@ test('battle plates and command dock never enter the stage at required viewports
     await page.setViewportSize(viewport);
     await page.goto('/?seed=40&animations=0');
     await page.getByRole('button', { name: /Combat rapide|Quick Battle/ }).click();
-    await page.getByLabel(/Règle du duel|Duel rule/).selectOption('fortress_duel');
-    await page.locator('[data-doctrine="assault"]').click();
+    const ensurePlanOpen = async (target) => {
+      if (await target.isVisible().catch(() => false)) return;
+      const plan = page.locator('details.battle-plan > summary').first();
+      await plan.scrollIntoViewIfNeeded();
+      await plan.click();
+    };
+    const ruleSelect = page.getByLabel(/Règle du duel|Duel rule/);
+    await ensurePlanOpen(ruleSelect);
+    await ruleSelect.selectOption('fortress_duel');
+    const doctrine = page.locator('[data-doctrine="assault"]');
+    await ensurePlanOpen(doctrine);
+    await doctrine.click();
     await page.getByRole('button', { name: /Entrer dans|Enter the/ }).click();
 
     await expect(page.locator('.battle-stage')).toBeVisible();
@@ -39,11 +49,28 @@ test('battle plates and command dock never enter the stage at required viewports
     expect(stage).not.toBeNull();
     expect(dock).not.toBeNull();
     expect(dock.y).toBeGreaterThanOrEqual(stage.y + stage.height - 0.5);
+    expect(dock.y + dock.height).toBeLessThanOrEqual(viewport.height);
     expect(intersects(stage, dock)).toBe(false);
     for (const plate of plates) {
       expect(plate).not.toBeNull();
       expect(plate.y + plate.height).toBeLessThanOrEqual(stage.y + 0.5);
       expect(intersects(stage, plate)).toBe(false);
+    }
+
+    const plateNumbers = await page
+      .locator(
+        '#hud-player .plate-hp-number, #hud-player .plate-surge-number, #hud-enemy .plate-hp-number, #hud-enemy .plate-surge-number'
+      )
+      .evaluateAll((values) =>
+        values.map((value) => ({
+          clientWidth: value.clientWidth,
+          scrollWidth: value.scrollWidth,
+        }))
+      );
+    expect(plateNumbers).toHaveLength(4);
+    for (const value of plateNumbers) {
+      expect(value.clientWidth).toBeGreaterThan(0);
+      expect(value.scrollWidth).toBeLessThanOrEqual(value.clientWidth);
     }
   }
 });

@@ -4,6 +4,7 @@ import {
   activeOf,
   ARENA_RESONANCE,
   getLegalActions,
+  LATE_TURN_PRESSURE,
   previewIncomingAfterSwitch,
   previewMove,
   safeBattleSnapshot,
@@ -34,6 +35,12 @@ function scoreMove(state, side, action, difficulty, style) {
     if (forecast.combo.length) score += 20 + forecast.combo.length * 5;
     if (move.barrier) score += Math.min(move.barrier, 60 - attacker.barrier) * 0.35;
     if (move.signature) score += 14;
+    if (
+      difficulty === 'champion' &&
+      state.lateTurnPressure !== false &&
+      state.turn >= LATE_TURN_PRESSURE.startTurn
+    )
+      score += 35 + (state.turn - LATE_TURN_PRESSURE.startTurn) * 3;
     if (style === 'speed') score += (move.priority || 0) * 7 + (move.scaling === 'speed' ? 12 : 0);
     if (style === 'endurance')
       score += (move.drain ? 14 : 0) + (move.barrier || 0) * 0.35 + (move.teamHealRatio ? 18 : 0);

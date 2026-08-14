@@ -190,13 +190,13 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.selection.filter === 'all'
       ? CREATURE_IDS
       : CREATURE_IDS.filter((id) => CREATURES[id].affinity === ctx.selection.filter);
-  const affinityTabs = `<div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filter === 'all' ? 'active' : ''}" data-filter="all">24</button>${Object.entries(
+  const affinityTabs = `<div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filter === 'all' ? 'active' : ''}" data-filter="all" aria-pressed="${ctx.selection.filter === 'all'}">24</button>${Object.entries(
     AFFINITIES
   )
     .filter(([id]) => id !== 'neutral')
     .map(
       ([id, a]) =>
-        `<button class="affinity-tab ${ctx.selection.filter === id ? 'active' : ''}" data-filter="${id}" style="--tab-color:${a.color}">${a.icon} ${affinityName(id)}</button>`
+        `<button class="affinity-tab ${ctx.selection.filter === id ? 'active' : ''}" data-filter="${id}" aria-pressed="${ctx.selection.filter === id}" style="--tab-color:${a.color}">${a.icon} ${affinityName(id)}</button>`
     )
     .join('')}</div>`;
   const quickEnemyControls =
@@ -237,7 +237,12 @@ function renderTeamSelect(mode = 'ladder') {
         `<button type="button" class="doctrine-card ${ctx.selection.doctrine === id ? 'active' : ''} ${recommended === id ? 'recommended' : ''}" data-doctrine="${id}" aria-pressed="${ctx.selection.doctrine === id}">${recommended === id ? `<em>${t('profile.recommended')}</em>` : ''}<b>${t(`doctrine.icon.${id}`)} ${t(`doctrine.${id}`)}</b><small>${t(`doctrine.effect.${id}`)}</small></button>`
     )
     .join('');
-  const presets = `<section class="squad-presets"><div class="squad-presets-head"><span><b class="eyebrow">${t('squad.title')}</b><small>${t('squad.hint')}</small></span>${actionButton(`⟳ ${t('squad.remix')}`, 'remix-team', 'subtle-btn remix-team-btn')}</div><div class="squad-preset-track">${SQUAD_PRESETS.map((preset) => `<button type="button" class="squad-preset ${preset.team.every((id, i) => ctx.selection.team[i] === id) ? 'active' : ''}" data-squad="${preset.id}"><i>${preset.icon}</i><span><b>${t(`squad.${preset.id}`)}</b><small>${t(`squad.effect.${preset.id}`)}</small></span><div>${preset.team.map((id) => `<img src="${sprite(id)}" alt="">`).join('')}</div></button>`).join('')}</div></section>`;
+  const presets = `<section class="squad-presets"><div class="squad-presets-head"><span><b class="eyebrow">${t('squad.title')}</b><small>${t('squad.hint')}</small></span>${actionButton(`⟳ ${t('squad.remix')}`, 'remix-team', 'subtle-btn remix-team-btn')}</div><div class="squad-preset-track">${SQUAD_PRESETS.map(
+    (preset) => {
+      const active = preset.team.every((id, i) => ctx.selection.team[i] === id);
+      return `<button type="button" class="squad-preset ${active ? 'active' : ''}" data-squad="${preset.id}" aria-pressed="${active}"><i>${preset.icon}</i><span><b>${t(`squad.${preset.id}`)}</b><small>${t(`squad.effect.${preset.id}`)}</small></span><div>${preset.team.map((id) => `<img src="${sprite(id)}" alt="">`).join('')}</div></button>`;
+    }
+  ).join('')}</div></section>`;
   const customSquads = `<section class="custom-squads"><div><span class="eyebrow">${t('loadout.title')}</span><small>${t('loadout.hint')}</small></div><div class="custom-squad-track">${Array.from(
     { length: 3 },
     (_, slot) => {
@@ -283,7 +288,18 @@ function renderTeamSelect(mode = 'ladder') {
           : t('select.opponent'),
     readyLabel =
       mode === 'gauntlet' ? t('gauntlet.begin') : activeTrial ? t('trial.challenge') : t('select.ready');
-  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${selectionEyebrow}</span><h1>${selectionTitle}</h1><p>${selectionSubtitle}</p></div><strong>${t('select.selected', { count: ctx.selection.team.length })}</strong></div>${circuitBanner}${customSquads}${presets}${affinityTabs}${kitShowcaseHtml(ctx.selection.team[ctx.selection.lead])}<div class="selection-layout"><div class="creature-grid">${visibleIds.map((id) => creatureCard(id, ctx.selection.team.includes(id), ctx.selection.team[ctx.selection.lead] === id)).join('')}</div><aside class="glass-panel select-aside">${ranked ? `<div class="trainer-badge">${emblemHtml(ctx.selection.trainerIndex, true)}</div>` : ''}<h2>${opponentTitle}</h2><div class="enemy-list">${enemyRows}</div>${quickEnemyControls}${!['gauntlet', 'circuit', 'trial'].includes(mode) ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty">${['apprentice', 'challenger', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>` : ''}${arenaControl}${contractControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div><h3>${t('doctrine.title')}</h3><div class="doctrine-picker">${doctrines}</div>${teamProfileHtml(ctx.selection.team)}<h3>${t('bond.title')}</h3>${bondsHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div><div class="selected-list">${selectedRows}</div>${actionButton(readyLabel, 'start-battle', 'primary-btn wide', ctx.selection.team.length === 3 && ctx.selection.enemyTeam.length === 3 ? '' : 'disabled')}</aside></div></div>`;
+  const difficultyControl = !['gauntlet', 'circuit', 'trial'].includes(mode)
+      ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty">${['apprentice', 'challenger', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
+      : '',
+    planControls = `<details class="battle-plan"><summary><span><b>${t('select.combatPlan')}</b><small>${t(`doctrine.${ctx.selection.doctrine}`)} · ${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}${contractControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div><h3>${t('doctrine.title')}</h3><div class="doctrine-picker">${doctrines}</div>${teamProfileHtml(ctx.selection.team)}<h3>${t('bond.title')}</h3>${bondsHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
+    ready = actionButton(
+      readyLabel,
+      'start-battle',
+      'primary-btn wide',
+      ctx.selection.team.length === 3 && ctx.selection.enemyTeam.length === 3 ? '' : 'disabled'
+    );
+  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${selectionEyebrow}</span><h1>${selectionTitle}</h1><p>${selectionSubtitle}</p></div><strong>${t('select.selected', { count: ctx.selection.team.length })}</strong></div>${circuitBanner}${customSquads}${presets}${affinityTabs}${kitShowcaseHtml(ctx.selection.team[ctx.selection.lead])}<div class="selection-layout"><div class="creature-grid">${visibleIds.map((id) => creatureCard(id, ctx.selection.team.includes(id), ctx.selection.team[ctx.selection.lead] === id)).join('')}</div><aside class="glass-panel select-aside">${ranked ? `<div class="trainer-badge">${emblemHtml(ctx.selection.trainerIndex, true)}</div>` : ''}<section class="selection-primary"><h2>${opponentTitle}</h2><div class="enemy-list">${enemyRows}</div>${quickEnemyControls}<h3>${t('select.team')}</h3><div class="selected-list">${selectedRows}</div></section>${planControls}${ready}</aside></div></div>`;
+  screen.querySelector('.battle-plan').open = !matchMedia('(max-width: 700px)').matches;
   screen
     .querySelector('.selection-layout')
     ?.insertAdjacentHTML(
@@ -303,13 +319,13 @@ function renderTeamSelect(mode = 'ladder') {
         `<div class="gauntlet-persistence">♥ ${t('gauntlet.persistence')}</div>`
       );
   bindCommon();
-  screen
-    .querySelector('[data-action="open-plan"]')
-    ?.addEventListener('click', () =>
-      screen
-        .querySelector('.select-aside')
-        ?.scrollIntoView({ behavior: ctx.save.reducedMotion ? 'auto' : 'smooth', block: 'start' })
-    );
+  screen.querySelector('[data-action="open-plan"]')?.addEventListener('click', () => {
+    const plan = screen.querySelector('.battle-plan');
+    if (plan) plan.open = true;
+    screen
+      .querySelector('.select-aside')
+      ?.scrollIntoView({ behavior: ctx.save.reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  });
   screen.querySelectorAll('[data-creature]').forEach((card) =>
     card.addEventListener('click', () => {
       const id = card.dataset.creature,

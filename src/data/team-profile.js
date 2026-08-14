@@ -6,6 +6,7 @@ import { teamComboRoutes } from './combos.js';
 import { normalizeSeed, randomFromState } from '../battle/rng.js';
 
 export const PROFILE_AXES = Object.freeze(['pressure', 'control', 'sustain', 'tempo']);
+export const REMIX_DITHER_MAX = 5;
 
 export function teamProfile(ids = []) {
   const creatures = ids.map((id) => CREATURES[id]).filter(Boolean),
@@ -95,7 +96,7 @@ export function remixTeam(enemyIds = [], seed = 1) {
           teamBonds(team).length * 15 +
           Math.min(4, teamComboRoutes(team).length) * 5 +
           matchup * 2 +
-          roll.value * 38;
+          roll.value * REMIX_DITHER_MAX;
         if (!best || score > best.score) best = { team, score };
       }
   const team = best?.team || ids.slice(0, 3);

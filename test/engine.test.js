@@ -11,6 +11,7 @@ import {
   previewMoveOrder,
   resolveTurn,
   signatureCostFor,
+  LATE_TURN_PRESSURE,
   TURN_CAP,
 } from '../src/battle/engine.js';
 import { CREATURES } from '../src/data/creatures.js';
@@ -876,5 +877,87 @@ test('battle end and turn-cap conscious-count/HP/tie rules', () => {
       .state.winner,
     resolveTurn(tieB, { type: 'move', moveId: 'oracle_veil' }, { type: 'move', moveId: 'resonant_focus' })
       .state.winner
+  );
+});
+
+test('late-turn pressure rises from turn 29, ignores barriers, and leaves the bench untouched', () => {
+  const state = make();
+  state.turn = LATE_TURN_PRESSURE.startTurn;
+  state.sides.player.surge = 100;
+  state.sides.player.team[0].barrier = 60;
+  state.sides.enemy.team[0].barrier = 60;
+  const playerBenchHp = state.sides.player.team[1].hp,
+    enemyBenchHp = state.sides.enemy.team[1].hp,
+    result = resolveTurn(
+      state,
+      { type: 'move', moveId: 'oracle_veil' },
+      { type: 'move', moveId: 'resonant_focus' }
+    ),
+    pressure = result.events.filter((event) => event.source === 'late-turn-pressure');
+  assert.equal(pressure.length, 2);
+  for (const event of pressure) {
+    assert.equal(event.type, 'status-tick');
+    assert.equal(event.status, 'cursed');
+    assert.equal(event.ratio, 0.02);
+    assert.equal(event.amount, Math.round(event.maxHp * 0.02));
+  }
+  assert.equal(result.state.sides.player.team[0].barrier, 60);
+  assert.equal(result.state.sides.enemy.team[0].barrier, 60);
+  assert.equal(result.state.sides.player.team[1].hp, playerBenchHp);
+  assert.equal(result.state.sides.enemy.team[1].hp, enemyBenchHp);
+
+  const later = make();
+  later.turn = 35;
+  later.sides.player.surge = 100;
+  const laterResult = resolveTurn(
+      later,
+      { type: 'move', moveId: 'oracle_veil' },
+      { type: 'move', moveId: 'resonant_focus' }
+    ),
+    laterPressure = laterResult.events.find(
+      (event) => event.side === 'player' && event.source === 'late-turn-pressure'
+    );
+  assert.equal(laterPressure.ratio, 0.08);
+});
+
+test('late-turn pressure can be disabled for deterministic balance baselines', () => {
+  const state = make();
+  state.turn = LATE_TURN_PRESSURE.startTurn;
+  state.sides.player.surge = 100;
+  state.lateTurnPressure = false;
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'oracle_veil' },
+    { type: 'move', moveId: 'resonant_focus' }
+  );
+  assert.equal(
+    result.events.some((event) => event.source === 'late-turn-pressure'),
+    false
+  );
+});
+
+test('late-turn pressure caps at 10% and cannot directly knock out a fighter', () => {
+  const state = make();
+  state.turn = TURN_CAP;
+  state.sides.player.team[0].hp = 2;
+  state.sides.player.team[0].barrier = 60;
+  const result = resolveTurn(
+      state,
+      { type: 'move', moveId: 'lucid_arc' },
+      { type: 'move', moveId: 'resonant_focus' }
+    ),
+    pressure = result.events.find(
+      (event) => event.side === 'player' && event.source === 'late-turn-pressure'
+    );
+  assert.equal(pressure.ratio, 0.1);
+  assert.equal(pressure.amount, 1);
+  assert.equal(pressure.hp, 1);
+  assert.equal(result.state.sides.player.team[0].hp, 1);
+  assert.equal(result.state.sides.player.team[0].barrier, 60);
+  assert.equal(
+    result.events.some(
+      (event) => event.type === 'ko' && event.side === 'player' && event.creatureId === 'orakyn'
+    ),
+    false
   );
 });

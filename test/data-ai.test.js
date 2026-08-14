@@ -14,6 +14,7 @@ import { TRAINERS } from '../src/data/trainers.js';
 import { CIRCUIT_CONDITIONS, circuitMatch } from '../src/data/circuit.js';
 import {
   PROFILE_AXES,
+  REMIX_DITHER_MAX,
   bestLeadIndex,
   recommendedDoctrine,
   remixTeam,
@@ -177,6 +178,7 @@ test('smart remix builds deterministic tactical trios and scouts their lead', ()
   assert.equal(first.lead, bestLeadIndex(first.team, enemy));
   assert.equal(first.doctrine, recommendedDoctrine(first.team));
   assert.ok(alternatives.size >= 3, 'different remix seeds should explore the roster');
+  assert.ok(REMIX_DITHER_MAX <= 5, 'random dither must not outweigh tactical scoring');
 });
 
 test('six quick battle rules are symmetric, distinct, and engine-backed', () => {
@@ -412,4 +414,24 @@ test('Challenger AI rotates its kit to cash out a Flow crescendo', () => {
     moveId: 'slowing_riddle',
   });
   assert.deepEqual(state, before);
+});
+
+test('Champion AI converts late-turn pressure into finishing aggression', () => {
+  const pressure = createBattle({
+      playerTeam: ['brontusk', 'ferrax', 'monolith'],
+      enemyTeam: ['mossaur', 'florafae', 'thornox'],
+      seed: 6,
+    }),
+    baseline = structuredClone(pressure);
+  pressure.turn = 29;
+  baseline.turn = 29;
+  baseline.lateTurnPressure = false;
+  assert.deepEqual(chooseAiAction(baseline, 'player', 'champion', 'champion'), {
+    type: 'move',
+    moveId: 'iron_resolve',
+  });
+  assert.deepEqual(chooseAiAction(pressure, 'player', 'champion', 'champion'), {
+    type: 'move',
+    moveId: 'seismic_reversal',
+  });
 });

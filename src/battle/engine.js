@@ -14,6 +14,13 @@ import {
 } from './statuses.js';
 
 export const TURN_CAP = 40;
+export const LATE_TURN_PRESSURE = Object.freeze({
+  startTurn: 29,
+  baseRatio: 0.02,
+  risePerTurn: 0.01,
+  maxRatio: 0.1,
+  minimumHp: 1,
+});
 export const SIGNATURE_COST = 100;
 export const ARENA_RESONANCE = Object.freeze({
   crystal: 'force',
@@ -78,6 +85,7 @@ export function createBattle({
   doctrine = 'balanced',
   masteryRanks = {},
   enemyAce = null,
+  lateTurnPressure = true,
 }) {
   assertTeam(playerTeam);
   assertTeam(enemyTeam);
@@ -95,6 +103,7 @@ export function createBattle({
     enemyAce,
     aceTriggered: false,
     finalDuelTriggered: false,
+    lateTurnPressure: lateTurnPressure !== false,
     turn: 1,
     phase: 'choice',
     winner: null,
@@ -935,6 +944,31 @@ function arenaPulse(state, events) {
     }
   }
 }
+function applyLateTurnPressure(state, events) {
+  if (state.lateTurnPressure === false || state.turn < LATE_TURN_PRESSURE.startTurn) return;
+  const ratio = Math.min(
+    LATE_TURN_PRESSURE.maxRatio,
+    LATE_TURN_PRESSURE.baseRatio +
+      (state.turn - LATE_TURN_PRESSURE.startTurn) * LATE_TURN_PRESSURE.risePerTurn
+  );
+  for (const side of ['player', 'enemy']) {
+    const creature = activeOf(state, side);
+    if (creature.hp <= LATE_TURN_PRESSURE.minimumHp) continue;
+    const intendedAmount = Math.max(1, Math.round(creature.maxHp * ratio)),
+      amount = Math.min(intendedAmount, creature.hp - LATE_TURN_PRESSURE.minimumHp);
+    creature.hp -= amount;
+    push(events, 'status-tick', {
+      side,
+      creatureId: creature.id,
+      status: 'cursed',
+      amount,
+      hp: creature.hp,
+      maxHp: creature.maxHp,
+      source: 'late-turn-pressure',
+      ratio,
+    });
+  }
+}
 function tickEnd(state, events) {
   for (const side of ['player', 'enemy'])
     for (const [index, creature] of state.sides[side].team.entries()) {
@@ -970,6 +1004,7 @@ function tickEnd(state, events) {
       tickTimed(creature.cooldowns, state.turn);
     }
   arenaPulse(state, events);
+  applyLateTurnPressure(state, events);
 }
 
 export function resolveTurn(inputState, playerAction, enemyAction) {

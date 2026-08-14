@@ -776,3 +776,82 @@ body.reduced-motion .detonation-prime::after {
 body.reduced-motion .battle-vignette {
   transition: none;
 }
+
+/* Selection is split into a scouting stage and a disclosed tactical plan. */
+.selection-primary {
+  display: grid;
+  gap: var(--space-3);
+}
+.battle-plan {
+  margin-top: var(--space-4);
+  border: 1px solid #ffffff1a;
+  border-radius: 16px;
+  background: #06081a73;
+  overflow: clip;
+}
+.battle-plan > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: var(--space-3);
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+.battle-plan > summary::-webkit-details-marker {
+  display: none;
+}
+.battle-plan > summary span {
+  display: grid;
+  gap: 2px;
+}
+.battle-plan > summary b {
+  font-size: var(--text-md);
+}
+.battle-plan > summary small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.battle-plan > summary i {
+  font-size: var(--text-xl);
+  font-style: normal;
+  transition: transform 0.2s ease;
+}
+.battle-plan[open] > summary i {
+  transform: rotate(180deg);
+}
+.battle-plan-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-top: 1px solid #ffffff12;
+}
+.select-aside > .primary-btn {
+  margin-top: var(--space-4);
+  min-height: 48px;
+}
+@media (max-width: 900px) {
+  [data-page='selection'] .shell {
+    padding-bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+  .mobile-selection-dock {
+    min-height: 64px;
+  }
+  .mobile-selection-dock > button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .battle-plan {
+    margin-top: var(--space-3);
+  }
+  .battle-plan-body .doctrine-picker {
+    grid-template-columns: 1fr;
+  }
+  .battle-plan-body .field,
+  .battle-plan-body select {
+    width: 100%;
+  }
+}

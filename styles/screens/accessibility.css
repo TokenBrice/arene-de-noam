@@ -257,6 +257,44 @@ body.high-contrast .flow-chip {
   }
 }
 
+.settings-dialog-backdrop {
+  position: fixed;
+  z-index: var(--z-modal);
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: #03040dcc;
+  backdrop-filter: blur(8px);
+}
+.settings-dialog {
+  width: min(440px, 100%);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--danger) 52%, var(--line));
+  border-radius: 20px;
+  background: linear-gradient(145deg, #24233f, #0b0d23);
+  box-shadow: 0 24px 80px #000b;
+}
+.settings-dialog h2 {
+  margin: var(--space-2) 0;
+  font-size: var(--text-2xl);
+}
+.settings-dialog p {
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.settings-dialog > div {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+.settings-dialog button {
+  min-height: 44px;
+}
+
 .difficulty-preview {
   display: grid;
   gap: 4px;

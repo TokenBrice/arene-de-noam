@@ -16,7 +16,6 @@ const {
   affinity,
   affinityName,
   persist,
-  draftInsightHtml,
 } = ctx;
 const {
   renderTitle,
@@ -98,16 +97,13 @@ function bindCommon() {
         );
       card.querySelectorAll('[data-preview-move]').forEach((entry) => {
         const moveId = entry.dataset.previewMove;
+        entry.setAttribute('role', 'button');
         entry.addEventListener('click', () => openMoveTheater(moveId));
       });
     });
   }
   if (screen.dataset.page === 'bestiary' && !screen.querySelector('.bestiary-tools'))
     installBestiaryFilters();
-  if (screen.dataset.page === 'draft' && ctx.draftRun)
-    screen
-      .querySelectorAll('[data-draft-pick]')
-      .forEach((card) => card.insertAdjacentHTML('beforeend', draftInsightHtml(card.dataset.draftPick)));
 }
 
 function installBestiaryFilters() {
@@ -135,17 +131,25 @@ function installBestiaryFilters() {
         return show;
       });
     count.textContent = `${visible.length} / 24`;
+    if (query && visible.length === 1) {
+      const card = visible[0],
+        summary = card.querySelector('.bestiary-summary'),
+        detail = card.querySelector('.bestiary-detail');
+      summary?.setAttribute('aria-expanded', 'true');
+      card.classList.add('expanded');
+      if (summary?.querySelector('.bestiary-expand'))
+        summary.querySelector('.bestiary-expand').textContent = '−';
+      if (detail) detail.hidden = false;
+    }
   };
   input.addEventListener('input', apply);
   screen.querySelectorAll('[data-bestiary-affinity]').forEach((button) =>
     button.addEventListener('click', () => {
       active = button.dataset.bestiaryAffinity;
-      screen
-        .querySelectorAll('[data-bestiary-affinity]')
-        .forEach((item) => {
-          item.classList.toggle('active', item === button);
-          item.setAttribute('aria-pressed', String(item === button));
-        });
+      screen.querySelectorAll('[data-bestiary-affinity]').forEach((item) => {
+        item.classList.toggle('active', item === button);
+        item.setAttribute('aria-pressed', String(item === button));
+      });
       apply();
     })
   );
@@ -167,6 +171,11 @@ function renderCurrent() {
 }
 
 function handleEscape() {
+  const resetDialog = screen.querySelector('.settings-dialog');
+  if (resetDialog) {
+    resetDialog.querySelector('[data-action="reset-cancel"]')?.click();
+    return;
+  }
   if (screen.querySelector('.move-theater')) {
     closeMoveTheater();
     return;

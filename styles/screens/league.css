@@ -272,6 +272,62 @@
     display: none;
   }
 }
+
+/* Rival dossiers use the full width: identity | squad and rule | action. */
+.league-rival {
+  grid-template-columns: 174px minmax(0, 1fr) minmax(150px, 190px);
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+.league-emblem-column {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  align-self: stretch;
+}
+.league-dossier h2 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: 0.015em;
+}
+.league-team {
+  flex-wrap: wrap;
+}
+.league-ace {
+  border: 1px solid color-mix(in srgb, var(--rival-a) 30%, transparent);
+  border-left-width: 3px;
+  border-radius: 10px;
+}
+.league-cta {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+}
+.league-cta button {
+  width: 100%;
+  min-height: 48px;
+}
+@media (max-width: 760px) {
+  .league-rival {
+    grid-template-columns: 105px minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+  .league-emblem-column {
+    grid-template-columns: 30px 1fr;
+  }
+  .league-cta {
+    grid-column: 1 / -1;
+  }
+  .league-dossier h2 {
+    font-size: var(--text-xl);
+  }
+}
 .perfect-relay-mode .fighter.player,
 .perfect-relay-mode .fighter.enemy {
   filter: brightness(0.55);

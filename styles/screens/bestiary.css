@@ -152,3 +152,117 @@
     display: none;
   }
 }
+
+/* Compact summaries disclose the dense career dossier only on request. */
+.bestiary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  align-items: start;
+  gap: var(--space-3);
+}
+.bestiary-card {
+  padding: 0;
+  border-radius: 18px;
+}
+.bestiary-summary {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 112px;
+  padding: var(--space-3);
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bestiary-summary:hover,
+.bestiary-summary:focus-visible {
+  background: color-mix(in srgb, var(--card-affinity) 12%, transparent);
+}
+.bestiary-summary .bestiary-portrait,
+.bestiary-summary .bestiary-portrait img {
+  width: 78px;
+  height: 78px;
+}
+.bestiary-identity {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.bestiary-identity h2 {
+  overflow: hidden;
+  margin: 0;
+  font:
+    700 var(--text-xl) Georgia,
+    serif;
+  text-overflow: ellipsis;
+}
+.bestiary-key-stats {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+.bestiary-signature {
+  overflow: hidden;
+  color: var(--gold);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bestiary-expand {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--card-affinity);
+  font-size: var(--text-xl);
+}
+.bestiary-detail {
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--card-affinity) 24%, transparent);
+}
+.bestiary-detail[hidden] {
+  display: none;
+}
+.move-list button {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: 10px;
+  color: var(--ink);
+  background: #05071c77;
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+}
+.move-list button span {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  line-height: 1.45;
+}
+.bestiary-tools button {
+  min-height: 44px;
+  padding-inline: var(--space-3);
+  font-size: var(--text-xs);
+}
+.bestiary-tools label {
+  min-height: 44px;
+}
+@media (max-width: 650px) {
+  .bestiary-grid {
+    grid-template-columns: 1fr;
+  }
+  .bestiary-summary {
+    grid-template-columns: 70px minmax(0, 1fr) 28px;
+  }
+  .bestiary-summary .bestiary-portrait,
+  .bestiary-summary .bestiary-portrait img {
+    width: 70px;
+    height: 70px;
+  }
+}
