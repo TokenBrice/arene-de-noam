@@ -17,8 +17,7 @@ function parseVars(text) {
     if (separator < 1) continue;
     const key = line.slice(0, separator).trim();
     let value = line.slice(separator + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
     vars[key] = value;
@@ -46,7 +45,11 @@ async function api(token, endpoint, options = {}) {
   });
   const text = await response.text();
   let data;
-  try { data = JSON.parse(text); } catch { data = { message: text }; }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { message: text };
+  }
   if (!response.ok) {
     throw new Error(`PixelLab ${response.status}: ${JSON.stringify(data)}`);
   }
@@ -125,7 +128,9 @@ async function main() {
 
   const request = await requestForBrief(brief);
 
-  console.log(`Requesting ${brief.image_size.width}x${brief.image_size.height} candidates for ${brief.id}...`);
+  console.log(
+    `Requesting ${brief.image_size.width}x${brief.image_size.height} candidates for ${brief.id}...`
+  );
   const created = await api(token, request.endpoint, {
     method: 'POST',
     body: JSON.stringify(request.body),
@@ -139,7 +144,8 @@ async function main() {
     job = await api(token, `/background-jobs/${encodeURIComponent(jobId)}`);
     console.log(`PixelLab job: ${job.status} (${poll}/${MAX_POLLS})`);
     if (job.status === 'completed') break;
-    if (job.status === 'failed') throw new Error(`PixelLab generation failed: ${JSON.stringify(job.last_response)}`);
+    if (job.status === 'failed')
+      throw new Error(`PixelLab generation failed: ${JSON.stringify(job.last_response)}`);
   }
   if (job?.status !== 'completed') throw new Error('PixelLab generation timed out');
 
@@ -155,14 +161,21 @@ async function main() {
     await writeFile(path.join(outputDir, filename), await imageBytes(image));
     files.push(filename);
   }
-  await writeFile(path.join(outputDir, 'generation.json'), `${JSON.stringify({
-    brief: path.relative(outputDir, briefPath),
-    source: brief.edit_image || null,
-    seed: brief.seed,
-    job_id: jobId,
-    usage: job.usage || created.usage || null,
-    files,
-  }, null, 2)}\n`);
+  await writeFile(
+    path.join(outputDir, 'generation.json'),
+    `${JSON.stringify(
+      {
+        brief: path.relative(outputDir, briefPath),
+        source: brief.edit_image || null,
+        seed: brief.seed,
+        job_id: jobId,
+        usage: job.usage || created.usage || null,
+        files,
+      },
+      null,
+      2
+    )}\n`
+  );
   console.log(`Saved ${files.length} candidate(s) to ${outputDir}`);
 }
 

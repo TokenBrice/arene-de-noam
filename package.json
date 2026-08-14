@@ -8,9 +8,11 @@
     "test": "node --test test/*.test.js",
     "test:balance": "node tools/simulate-balance.mjs",
     "test:e2e": "playwright test",
-    "serve": "python3 -m http.server 8178"
+    "serve": "python3 -m http.server 8178",
+    "format": "prettier --write \"src/**/*.js\" \"test/*.js\" \"e2e/*.js\" \"tools/*.mjs\" \"styles/*.css\" index.html"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "^1.49.0",
+    "prettier": "^3.9.6"
   }
 }
