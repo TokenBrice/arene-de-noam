@@ -6,12 +6,12 @@ import {
   watchRuntime,
 } from './helpers.js';
 
-test('visible tutorial teaches affinity, Combo, Signature, and switch, then completes', async ({ page }) => {
+test('visible tutorial teaches types, Combo, Signature, and switch, then completes', async ({ page }) => {
   test.setTimeout(90000);
   const runtime = watchRuntime(page);
   await page.goto('/?seed=4242&animations=0');
   await page.getByRole('button', { name: /Jouer/ }).click();
-  await expect(page.getByText(/Force craint Esprit/)).toBeVisible();
+  await expect(page.getByText(/Combat craint Psy/)).toBeVisible();
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('#hud-enemy')).toContainText('Marqué');
   await expect(page.getByText(/Kordane est Marqué/)).toBeVisible();
@@ -20,7 +20,7 @@ test('visible tutorial teaches affinity, Combo, Signature, and switch, then comp
   await expect(page.getByText(/Éclat est plein/)).toBeVisible();
   await expect(page.locator('[data-move="oracle_veil"]')).toBeEnabled();
   await page.locator('[data-move="oracle_veil"]').click();
-  await expect(page.getByText(/Calderoc craint Marée/)).toBeVisible();
+  await expect(page.getByText(/Calderoc est de type Feu.*Eau est super efficace/)).toBeVisible();
   await page.locator('[data-action="open-switch"]').click();
   await page.getByRole('button', { name: /Abyssar/ }).click();
   await expect(page.getByText(/termine le combat/)).toBeVisible();
@@ -321,7 +321,7 @@ test('a predicted resisted attack exposes and celebrates a Perfect Relay', async
     reducedMotion: false,
     battleSpeed: 1,
   });
-  await page.goto('/?seed=1&player=abyssar,orakyn,virelia&enemy=kordane,calderoc,farfombre');
+  await page.goto('/?seed=1&player=abyssar,orakyn,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('.intent-read')).toContainText('Frappe cristal');
@@ -361,7 +361,9 @@ test('battle codex explains live rules and closes with Escape', async ({ page })
   await page.getByRole('button', { name: 'Codex du combat' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByText('Pouvoir de l’arène')).toBeVisible();
-  await expect(page.getByText('Cycle des affinités')).toBeVisible();
+  await expect(page.getByText('Triangles de types')).toBeVisible();
+  await expect(page.getByText(/Eau → Feu → Plante → Eau/)).toBeVisible();
+  await expect(page.getByText(/entre triangles : ×1/)).toBeVisible();
   await expect(page.locator('.trainer-command-codex')).toContainText('Coup de pouce');
   await expect(page.getByText(/technique offensive donne 20 Éclat/)).toBeVisible();
   await expect(page.locator('.flow-codex, .contract-codex, .resonance-codex')).toHaveCount(0);

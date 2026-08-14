@@ -333,7 +333,7 @@ function renderResults(win) {
       .querySelector('.battle-recap')
       ?.insertAdjacentHTML(
         'afterend',
-        `<section class="battle-advice"><h3>☿ ${t('advice.title')}</h3>${advice.map((key) => `<p><i>${key === 'ace' ? '♛' : key === 'affinity' ? '◈' : key === 'switch' ? '↺' : key === 'barrier' ? '⬡' : '✦'}</i><span>${t(`advice.${key}`)}</span></p>`).join('')}</section>`
+        `<section class="battle-advice"><h3>☿ ${t('advice.title')}</h3>${advice.map((key) => `<p><i>${key === 'ace' ? '♛' : key === 'affinity' ? '△' : key === 'switch' ? '↺' : key === 'barrier' ? '⬡' : '✦'}</i><span>${t(`advice.${key}`)}</span></p>`).join('')}</section>`
       );
   bindCommon();
   screen.querySelector('[data-action="result-log"]')?.addEventListener('click', openBattleLog);

@@ -21,6 +21,9 @@
   scrollbar-width: thin;
 }
 .affinity-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
   min-height: 40px;
   border: 1px solid var(--line);
@@ -29,6 +32,10 @@
   background: #ffffff09;
   color: var(--muted);
   cursor: pointer;
+}
+.affinity-tab .affinity-icon {
+  width: 18px;
+  height: 18px;
 }
 .affinity-tab.active {
   color: #fff;

@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/deuilastre.json",
+  "source": null,
+  "seed": 814201,
+  "job_id": "781006d9-6b5b-4bcf-b5a2-39d1156ec655",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "deuilastre-candidate-1.png",
+    "deuilastre-candidate-2.png",
+    "deuilastre-candidate-3.png",
+    "deuilastre-candidate-4.png"
+  ]
+}

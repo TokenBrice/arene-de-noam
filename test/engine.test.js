@@ -139,6 +139,36 @@ test('a resisted predicted attack rewards a symmetric Perfect Relay', () => {
   assert.ok(result.state.sides.player.surge >= before + 16);
 });
 
+test('forecasts and live damage follow the rewired Combat triangle and cross-triangle neutrality', () => {
+  const state = createBattle({
+      playerTeam: ['orakyn', 'nocturnyx', 'abyssar'],
+      enemyTeam: ['kordane', 'calderoc', 'virelia'],
+      seed: 35,
+    }),
+    strongForecast = previewIncomingAfterSwitch(state, 'player', 1, 'crystal_strike'),
+    neutralForecast = previewIncomingAfterSwitch(state, 'player', 2, 'crystal_strike');
+  assert.equal(strongForecast.affinity, 2);
+  assert.equal(strongForecast.perfectRelay, false);
+  assert.equal(neutralForecast.affinity, 1);
+  assert.equal(neutralForecast.perfectRelay, false);
+
+  const strongResult = resolveTurn(
+      state,
+      { type: 'switch', index: 1 },
+      { type: 'move', moveId: 'crystal_strike' }
+    ),
+    neutralResult = resolveTurn(
+      state,
+      { type: 'switch', index: 2 },
+      { type: 'move', moveId: 'crystal_strike' }
+    ),
+    strongHit = strongResult.events.find((event) => event.type === 'damage' && event.side === 'player'),
+    neutralHit = neutralResult.events.find((event) => event.type === 'damage' && event.side === 'player');
+  assert.equal(strongHit.amount, strongForecast.damage);
+  assert.equal(neutralHit.amount, neutralForecast.damage);
+  assert.ok(strongHit.amount > neutralHit.amount);
+});
+
 test('cooldowns last exact future selection phases and statuses refresh/consume', () => {
   let state = createBattle({
     playerTeam: ['kordane', 'orakyn', 'virelia'],

@@ -152,9 +152,16 @@ test('the tactical academy leads with eight essentials and every current effect'
   await page.goto('/');
   await page.getByRole('button', { name: /Académie tactique/ }).click();
   await expect(page.getByRole('heading', { name: 'Académie de l’Arène' })).toBeVisible();
+  await expect(page.locator('.academy-type-triangle')).toHaveCount(2);
   await expect(page.locator('.academy-affinity')).toHaveCount(6);
-  await expect(page.locator('.academy-affinity').first()).toContainText('Esprit');
-  await expect(page.locator('.academy-affinity').first().locator('u')).toHaveAttribute('aria-label', 'Force');
+  await expect(page.locator('.academy-affinity').first()).toContainText('Eau');
+  await expect(page.locator('.academy-affinity').first().locator('u')).toHaveAttribute('aria-label', 'Feu');
+  await expect(page.locator('.academy-type-triangle.elemental')).toContainText(
+    'Eau bat Feu, Feu bat Plante, Plante bat Eau.'
+  );
+  await expect(page.locator('.academy-type-triangle.tactical')).toContainText(
+    'Psy bat Combat, Combat bat Ténèbres, Ténèbres bat Psy.'
+  );
   await expect(page.locator('.academy-core')).toHaveCount(8);
   await expect(page.locator('.academy-core').first()).toContainText('Ton équipe et les PV');
   await expect(page.locator('.academy-core-3')).toContainText('×2');
@@ -176,6 +183,8 @@ test('Bestiary Move Theater replays all authored techniques accessibly', async (
   await page.getByRole('button', { name: /Bestiaire/ }).click();
   await expect(page.locator('[data-preview-move]')).toHaveCount(72);
   await expect(page.locator('[data-bestiary-affinity]')).toHaveCount(7);
+  await expect(page.locator('[data-bestiary-affinity="force"]')).toContainText('Combat');
+  await expect(page.locator('[data-bestiary-affinity="force"] .affinity-icon')).toHaveCount(1);
   await page.locator('[data-bestiary-affinity="force"]').click();
   await expect(page.locator('.bestiary-card:not([hidden])')).toHaveCount(4);
   await expect(page.locator('[data-bestiary-count]')).toHaveText('4 / 24');

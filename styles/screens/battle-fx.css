@@ -89,11 +89,13 @@
 .fx-projectile b {
   position: relative;
   z-index: 2;
-  font-size: 30px;
-  text-shadow: 0 0 12px #fff;
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 0 12px #fff);
 }
 .signature .fx-projectile b {
-  font-size: 46px;
+  width: 46px;
+  height: 46px;
 }
 .fx-projectile span {
   position: absolute;
@@ -212,6 +214,12 @@
   );
   filter: drop-shadow(0 0 24px var(--fx-color));
   animation: fxCore 0.48s ease-out forwards;
+}
+.fx-core > .affinity-icon,
+.fx-sky-symbol .affinity-icon,
+.fx-projectile .affinity-icon {
+  width: 100%;
+  height: 100%;
 }
 .damage-number {
   width: 120px;
@@ -575,28 +583,10 @@ body.reduced-motion .affinity-callout {
 }
 .fighter.windup img {
   animation: fxCreatureWindup 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-  filter: brightness(1.28) drop-shadow(0 0 13px var(--fx-color, #fff)) drop-shadow(0 24px 14px #0009);
+  filter: brightness(1.3) drop-shadow(0 0 18px var(--attack-affinity-color, #fff)) drop-shadow(0 24px 14px #0009);
 }
 .fighter.hit img {
   animation: fxCreatureHit 0.4s cubic-bezier(0.1, 0.8, 0.2, 1) !important;
-}
-.fighter.attack-mind img {
-  filter: drop-shadow(0 0 18px #8b7dff) brightness(1.3);
-}
-.fighter.attack-force img {
-  filter: drop-shadow(0 0 18px #ffb347) brightness(1.3);
-}
-.fighter.attack-tide img {
-  filter: drop-shadow(0 0 18px #45c7f2) brightness(1.3);
-}
-.fighter.attack-flame img {
-  filter: drop-shadow(0 0 20px #ff624d) brightness(1.35);
-}
-.fighter.attack-grove img {
-  filter: drop-shadow(0 0 18px #64d77a) brightness(1.3);
-}
-.fighter.attack-shadow img {
-  filter: drop-shadow(0 0 20px #c36be8) brightness(1.25);
 }
 .action-line.epic {
   font-size: 18px;

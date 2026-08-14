@@ -394,6 +394,9 @@
   gap: 4px;
 }
 .bestiary-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   min-height: 29px;
   padding: 5px 7px;
   border: 1px solid #ffffff15;
@@ -402,6 +405,10 @@
   background: #ffffff06;
   font-size: var(--text-xs);
   cursor: pointer;
+}
+.bestiary-tools button .affinity-icon {
+  width: 16px;
+  height: 16px;
 }
 .bestiary-tools button.active {
   border-color: var(--filter-color, #71e9f5);

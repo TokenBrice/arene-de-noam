@@ -325,7 +325,29 @@
 }
 .academy-affinity-track {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.academy-type-triangle {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #ffffff18;
+  border-radius: 16px;
+  background: #080b2038;
+}
+.academy-type-triangle > h3 {
+  margin-bottom: 2px;
+  font-size: var(--text-sm);
+}
+.academy-type-triangle > p {
+  min-height: 2.7em;
+  margin-bottom: 8px;
+  color: #b8bbd0;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+.academy-type-triangle > div {
+  display: grid;
   gap: 7px;
 }
 .academy-affinity {
@@ -348,9 +370,12 @@
   border-radius: 12px;
   color: #080b20;
   background: var(--academy-color);
-  font-size: 20px;
   font-style: normal;
   box-shadow: 0 0 16px color-mix(in srgb, var(--academy-color) 35%, transparent);
+}
+.academy-affinity > i .affinity-icon {
+  width: 28px;
+  height: 28px;
 }
 .academy-affinity > span {
   display: grid;
@@ -368,13 +393,22 @@
 }
 .academy-affinity > em {
   color: #d9daea;
+  font-size: 20px;
+  font-weight: 900;
   font-style: normal;
 }
 .academy-affinity > u {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   color: var(--target-color);
-  font-size: 18px;
   text-decoration: none;
-  text-shadow: 0 0 11px var(--target-color);
+  filter: drop-shadow(0 0 7px var(--target-color));
+}
+.academy-affinity > u .affinity-icon {
+  width: 24px;
+  height: 24px;
 }
 .academy-section-title {
   margin-bottom: 12px;
@@ -424,11 +458,16 @@
   line-height: 1.35;
 }
 @media (max-width: 900px) {
-  .academy-affinity-track {
-    grid-template-columns: repeat(3, 1fr);
-  }
   .academy-status-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .academy-affinity-track {
+    grid-template-columns: 1fr;
+  }
+  .academy-type-triangle > p {
+    min-height: 0;
   }
 }
 @media (max-width: 600px) {
@@ -440,15 +479,6 @@
   }
   .academy-section {
     padding: 12px;
-  }
-  .academy-affinity-track {
-    display: flex;
-    overflow: auto;
-    scroll-snap-type: x mandatory;
-  }
-  .academy-affinity {
-    flex: 0 0 180px;
-    scroll-snap-align: start;
   }
   .academy-status-grid {
     grid-template-columns: 1fr 1fr;

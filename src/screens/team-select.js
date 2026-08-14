@@ -2,6 +2,7 @@ import { ctx, registerRoutes, route } from '../app/context.js';
 
 const {
   AFFINITIES,
+  AFFINITY_ORDER,
   affinityMultiplier,
   CREATURES,
   CREATURE_IDS,
@@ -29,6 +30,7 @@ const {
   creatureName,
   affinity,
   affinityName,
+  affinityIcon,
   actionButton,
   persist,
   notify,
@@ -143,7 +145,7 @@ function creatureCard(id, selected, lead, enemy = ctx.selection?.enemyTeam || []
         return `<span class="kit-move kind-${move.kind} ${move.signature ? 'signature' : ''}" style="--kit-color:${color}" title="${escapeHtml(`${t(`move.${moveId}`)} — ${t(`move.effect.${moveId}`)}`)}"><i>${moveArchetype(move)}</i><small>${t(`move.${moveId}`)}</small></span>`;
       })
       .join('');
-  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-dot" style="background:${a.color}">${a.icon}</span><span>${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
+  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-dot" style="background:${a.color}">${affinityIcon(c.affinity)}</span><span>${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
 }
 
 function kitShowcaseHtml(id) {
@@ -174,13 +176,12 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.selection.filter === 'all'
       ? CREATURE_IDS
       : CREATURE_IDS.filter((id) => CREATURES[id].affinity === ctx.selection.filter);
-  const affinityTabs = `<div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filter === 'all' ? 'active' : ''}" data-filter="all" aria-pressed="${ctx.selection.filter === 'all'}">24</button>${Object.entries(
-    AFFINITIES
+  const affinityTabs = `<div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filter === 'all' ? 'active' : ''}" data-filter="all" aria-pressed="${ctx.selection.filter === 'all'}">24</button>${AFFINITY_ORDER.map(
+    (id) => [id, AFFINITIES[id]]
   )
-    .filter(([id]) => id !== 'neutral')
     .map(
       ([id, a]) =>
-        `<button class="affinity-tab ${ctx.selection.filter === id ? 'active' : ''}" data-filter="${id}" aria-pressed="${ctx.selection.filter === id}" style="--tab-color:${a.color}">${a.icon} ${affinityName(id)}</button>`
+        `<button class="affinity-tab ${ctx.selection.filter === id ? 'active' : ''}" data-filter="${id}" aria-pressed="${ctx.selection.filter === id}" style="--tab-color:${a.color}">${affinityIcon(id)} ${affinityName(id)}</button>`
     )
     .join('')}</div>`;
   const quickEnemyControls =

@@ -124,6 +124,11 @@
   font-style: normal;
   box-shadow: 0 0 12px var(--switch-color);
 }
+.switch-portrait i .affinity-icon {
+  width: 18px;
+  height: 18px;
+  color: #0b1025;
+}
 .switch-option > span {
   color: #d8d9e8;
   font-size: 11px;

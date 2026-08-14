@@ -15,6 +15,7 @@ const {
   creatureName,
   affinity,
   affinityName,
+  affinityIcon,
   persist,
 } = ctx;
 const {
@@ -122,7 +123,7 @@ function installBestiaryFilters() {
     .querySelector('.bestiary-grid')
     ?.insertAdjacentHTML(
       'beforebegin',
-      `<section class="bestiary-tools"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><div><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">24</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${AFFINITIES[id].icon} ${affinityName(id)}</button>`).join('')}</div><b data-bestiary-count>24 / 24</b></section>`
+      `<section class="bestiary-tools"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><div><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">24</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><b data-bestiary-count>24 / 24</b></section>`
     );
   const input = screen.querySelector('[data-bestiary-search]'),
     count = screen.querySelector('[data-bestiary-count]');

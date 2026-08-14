@@ -474,8 +474,8 @@ test('Standard AI cannot inspect a player action committed outside its safe snap
 
 test('Champion reply forecasts account for an active barrier through authoritative previews', () => {
   const clear = createBattle({
-      playerTeam: ['lumivox', 'prismage', 'kordane'],
-      enemyTeam: ['farfombre', 'brontusk', 'ferrax'],
+      playerTeam: ['nocturnyx', 'orakyn', 'lumivox'],
+      enemyTeam: ['ferrax', 'umbrawl', 'hexalune'],
       seed: 1,
     }),
     barrier = structuredClone(clear);
@@ -487,11 +487,11 @@ test('Champion reply forecasts account for an active barrier through authoritati
   barrier.sides.player.team[0].barrier = 35;
   assert.deepEqual(chooseAiAction(clear, 'player', 'champion', 'champion'), {
     type: 'switch',
-    index: 2,
+    index: 1,
   });
   assert.deepEqual(chooseAiAction(barrier, 'player', 'champion', 'champion'), {
     type: 'move',
-    moveId: 'crescendo_lock',
+    moveId: 'sonic_gloom',
   });
   clear.rngState = 123456789;
   barrier.rngState = 123456789;

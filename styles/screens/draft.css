@@ -154,6 +154,10 @@
   font-size: 20px;
   box-shadow: 0 0 18px var(--draft-color);
 }
+.draft-portrait i .affinity-icon {
+  width: 24px;
+  height: 24px;
+}
 .draft-card h2 {
   margin: 4px 0 9px;
   font-size: 26px;

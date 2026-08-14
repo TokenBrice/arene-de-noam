@@ -18,7 +18,7 @@ The first launch offers a short tutorial. The game starts in French; change the 
 
 - Bring three creatures and knock out all three rivals. Barriers protect HP temporarily.
 - Switch to improve the matchup. The incoming creature receives the planned enemy action; K.O. replacement is free.
-- Affinities follow **Mind → Force → Tide → Flame → Grove → Shadow → Mind**. The next affinity takes `2×`; the previous one takes `0.5×`.
+- Types form two independent triangles: **Water → Fire → Grass → Water** and **Psychic → Fighting → Dark → Psychic**. Follow an arrow for `2×`; reverse it for `0.5×`. Same-type and cross-triangle matchups are neutral at `1×`.
 - Every creature has exactly three moves. One may be a Signature, and cooldowns make a move wait before returning.
 - Priority decides turn order first, then Speed.
 - Actions fill the shared Surge gauge. At the required cost, choose a creature's Signature.
@@ -42,9 +42,9 @@ If another ally applied the setup, a short cut-in credits that helper. The credi
 - **Daily Draft** — make three picks, choose a lead, and face the daily rival.
 - **Mythic Trials** — six authored challenge encounters.
 - **Bestiary & Move Theater** — records, talents, lore, mastery progress, and all 72 move previews.
-- **Arena Academy** — the eight essentials, six-affinity cycle, and eight-effect reference.
+- **Arena Academy** — the eight essentials, both type triangles, and the eight-effect reference.
 
-Team selection and Draft show affinity coverage, team roles, and cross-creature Combo routes. Mastery ranks are collection progress only and never change combat stats.
+Team selection and Draft show type coverage, team roles, and cross-creature Combo routes. Mastery ranks are collection progress only and never change combat stats.
 
 ## Controls and accessibility
 

@@ -1,4 +1,9 @@
-import { AFFINITIES, AFFINITY_ORDER, affinityMultiplier } from '../data/affinities.js';
+import {
+  AFFINITIES,
+  AFFINITY_ORDER,
+  AFFINITY_TRIANGLES,
+  affinityMultiplier,
+} from '../data/affinities.js';
 import { CREATURES, CREATURE_IDS } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
 import { PASSIVES } from '../data/passives.js';
@@ -152,6 +157,17 @@ function escapeHtml(value) {
   );
 }
 
+function affinityIcon(id, { title = '', className = '' } = {}) {
+  const meta = AFFINITIES[id];
+  if (!meta) throw new Error(`Unknown affinity icon: ${id}`);
+  const accessible = Boolean(title),
+    titleMarkup = accessible ? `<title>${escapeHtml(title)}</title>` : '',
+    strokeMarkup = meta.iconStrokePath
+      ? `<path class="affinity-icon-stroke" d="${meta.iconStrokePath}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`
+      : '';
+  return `<svg class="affinity-icon${className ? ` ${escapeHtml(className)}` : ''}" viewBox="0 0 24 24" focusable="false" ${accessible ? `role="img" aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"'}>${titleMarkup}<path d="${meta.iconPath}" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"/>${strokeMarkup}</svg>`;
+}
+
 function disposeArena() {
   ctx.arenaScene?.dispose();
   ctx.arenaScene = null;
@@ -193,7 +209,7 @@ function draftInsightHtml(candidateId) {
     ...(newRoutes.length ? [`↗ ${t('draft.newRoutes', { count: newRoutes.length })}`] : []),
     ...(newAffinity && before.length
       ? [
-          `${AFFINITIES[CREATURES[candidateId].affinity].icon} ${t('draft.newAffinity', { affinity: affinityName(CREATURES[candidateId].affinity) })}`,
+          `${affinityIcon(CREATURES[candidateId].affinity)} ${t('draft.newAffinity', { affinity: affinityName(CREATURES[candidateId].affinity) })}`,
         ]
       : []),
   ];
@@ -207,6 +223,7 @@ function topbar(backAction = 'title') {
 Object.assign(ctx, {
   AFFINITIES,
   AFFINITY_ORDER,
+  AFFINITY_TRIANGLES,
   affinityMultiplier,
   CREATURES,
   CREATURE_IDS,
@@ -277,6 +294,7 @@ Object.assign(ctx, {
   persist,
   notify,
   escapeHtml,
+  affinityIcon,
   disposeArena,
   emblemHtml,
   statusVisuals,

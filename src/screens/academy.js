@@ -2,12 +2,13 @@ import { ctx, registerRoutes, route } from '../app/context.js';
 
 const {
   AFFINITIES,
-  AFFINITY_ORDER,
+  AFFINITY_TRIANGLES,
   STATUS_DEFINITIONS,
   t,
   screen,
   affinity,
   affinityName,
+  affinityIcon,
   actionButton,
   disposeArena,
   topbar,
@@ -21,24 +22,31 @@ function renderAcademy() {
   ctx.previousScreen = 'title';
   screen.dataset.page = 'academy';
   screen.className = 'screen';
-  const cycle = AFFINITY_ORDER.map((id, index) => {
-    const next = AFFINITY_ORDER[(index + 1) % AFFINITY_ORDER.length],
-      a = AFFINITIES[id],
-      target = AFFINITIES[next];
-    return `<div class="academy-affinity" style="--academy-color:${a.color};--target-color:${target.color}"><i>${a.icon}</i><span><b>${affinityName(id)}</b><small>${t('academy.beats')}</small></span><em>→</em><u title="${affinityName(next)}" aria-label="${affinityName(next)}">${target.icon}</u></div>`;
-  }).join('');
+  const triangleKeys = ['elemental', 'tactical'],
+    triangles = AFFINITY_TRIANGLES.map((triangle, triangleIndex) => {
+      const key = triangleKeys[triangleIndex],
+        relations = triangle
+          .map((id, index) => {
+            const next = triangle[(index + 1) % triangle.length],
+              a = AFFINITIES[id],
+              target = AFFINITIES[next];
+            return `<div class="academy-affinity" style="--academy-color:${a.color};--target-color:${target.color}"><i>${affinityIcon(id)}</i><span><b>${affinityName(id)}</b><small>${t('academy.beats')}</small></span><em aria-hidden="true">→</em><u title="${affinityName(next)}" aria-label="${affinityName(next)}">${affinityIcon(next)}</u></div>`;
+          })
+          .join('');
+      return `<section class="academy-type-triangle ${key}" aria-label="${t(`academy.triangle.${key}`)}"><h3>${t(`academy.triangle.${key}`)}</h3><p>${t(`academy.${key}Rule`)}</p><div>${relations}</div></section>`;
+    }).join('');
   const statuses = Object.entries(STATUS_DEFINITIONS)
       .map(
         ([id, meta]) =>
           `<article class="academy-status ${meta.positive ? 'boon' : 'penalty'}" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}${meta.stackable ? ` <em>×${meta.maxStacks}</em>` : ''}</b><small>${t(`status.effect.${id}`)}</small></span></article>`
       )
       .join('');
-  const icons = ['♥', '↺', '◈', '3', '»', '✦', '☿', '◎'],
+  const icons = ['♥', '↺', '△', '3', '»', '✦', '☿', '◎'],
     core = Array.from({ length: 8 }, (_, index) => {
       const number = index + 1,
         extra =
           number === 3
-            ? `<div class="academy-affinity-track">${cycle}</div><p class="academy-core-note">${t('academy.affinityHint')}</p>`
+            ? `<div class="academy-affinity-track">${triangles}</div><p class="academy-core-note">${t('academy.affinityHint')}</p>`
             : number === 7
               ? `<div class="academy-status-grid academy-status-grid-all">${statuses}</div>`
               : '';

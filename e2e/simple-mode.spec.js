@@ -12,6 +12,8 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await expect(page.locator('.battle-screen')).toHaveClass(/simple-mode/);
   await expect(page.locator('#hud-player .surge-caption')).toHaveText('Signature');
   await expect(page.locator('[data-move="lucid_arc"] .move-effectiveness.effective')).toContainText('▲');
+  await expect(page.locator('#hud-player .affinity-icon')).toBeVisible();
+  await expect(page.locator('[data-move="lucid_arc"] .simple-affinity .affinity-icon')).toBeVisible();
   await expect(page.locator('[data-move] .move-archetype')).toHaveCount(0);
   await expect(page.locator('[data-move] .damage-preview')).toHaveCount(0);
   await expect(page.locator('[data-move] .move-context-source')).toHaveCount(0);

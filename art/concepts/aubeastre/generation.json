@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/aubeastre.json",
+  "source": null,
+  "seed": 814202,
+  "job_id": "aae1f49d-7554-4a82-bbf3-93a786bb359d",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "aubeastre-candidate-1.png",
+    "aubeastre-candidate-2.png",
+    "aubeastre-candidate-3.png",
+    "aubeastre-candidate-4.png"
+  ]
+}

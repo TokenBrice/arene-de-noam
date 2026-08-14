@@ -14,6 +14,7 @@ const {
   sprite,
   creatureName,
   affinity,
+  affinityIcon,
   wait,
 } = ctx;
 
@@ -69,7 +70,7 @@ function beginMoveFx(event) {
     { length: strong ? 6 : 3 },
     (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 58}ms"></i>`
   ).join('');
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${a.icon}</b><span></span></div><div class="fx-source-aura">${echoes}</div><div class="fx-trail"></div><div class="fx-detail">${Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-projectile"><b>${a.icon}</b><span></span></div><div class="fx-impact">${particles}<i class="fx-core">${a.icon}</i>${echoes}</div><div class="fx-aftershock"></div>`;
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${echoes}</div><div class="fx-trail"></div><div class="fx-detail">${Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${echoes}</div><div class="fx-aftershock"></div>`;
   screen.classList.add(
     'cinematic',
     `cinematic-${move.affinity}`,
@@ -78,6 +79,7 @@ function beginMoveFx(event) {
   );
   if (strong) screen.classList.add('cinematic-signature');
   const attacker = screen.querySelector(`#fighter-${source}`);
+  attacker?.style.setProperty('--attack-affinity-color', a.color);
   attacker?.classList.add('windup', `attack-${move.affinity}`);
   screen.querySelector('#action-line')?.classList.toggle('epic', strong);
 }
@@ -385,6 +387,7 @@ function clearBattleFx() {
   );
   screen.querySelectorAll('.fighter').forEach((fighter) => {
     fighter.className = fighter.classList.contains('enemy') ? 'fighter enemy' : 'fighter player';
+    fighter.style.removeProperty('--attack-affinity-color');
   });
   screen.querySelector('#action-line')?.classList.remove('epic');
   ctx.currentFxMove = null;

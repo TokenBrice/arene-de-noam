@@ -28,6 +28,35 @@ test('French and English localization keys are complete and interpolation works'
   assert.deepEqual(Object.keys(DICTIONARIES.fr).sort(), Object.keys(DICTIONARIES.en).sort());
   assert.equal(createI18n('en').t('battle.turn', { turn: 7 }), 'Turn 7');
 });
+test('legacy affinity ids expose the canonical type labels and parallel triangle copy', () => {
+  assert.deepEqual(
+    ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map(
+      (id) => DICTIONARIES.fr[`affinity.${id}`]
+    ),
+    ['Psy', 'Combat', 'Eau', 'Feu', 'Plante', 'Ténèbres']
+  );
+  assert.deepEqual(
+    ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map(
+      (id) => DICTIONARIES.en[`affinity.${id}`]
+    ),
+    ['Psychic', 'Fighting', 'Water', 'Fire', 'Grass', 'Dark']
+  );
+  for (const key of [
+    'academy.triangle.elemental',
+    'academy.triangle.tactical',
+    'academy.elementalRule',
+    'academy.tacticalRule',
+    'academy.crossNeutral',
+    'academy.arrowRule',
+  ]) {
+    assert.ok(DICTIONARIES.fr[key], key);
+    assert.ok(DICTIONARIES.en[key], key);
+  }
+  assert.match(DICTIONARIES.fr['settings.affinities'], /×2.*×0,5.*×1/);
+  assert.match(DICTIONARIES.en['settings.affinities'], /×2.*×0\.5.*×1/);
+  assert.match(DICTIONARIES.fr['academy.affinityHint'], /Entre les deux triangles : ×1/);
+  assert.match(DICTIONARIES.en['academy.affinityHint'], /Between triangles: ×1/);
+});
 test('the eight kid-clear status labels are complete and dead ids are absent', () => {
   const dead = [
     'guarded',
@@ -81,6 +110,8 @@ test('save round-trips with validated ranges', () => {
   };
   assert.equal(persistSave(changed, memory), true);
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
+  assert.equal(loadSave(memory).save.version, 15);
+  assert.equal('affinity' in loadSave(memory).save, false);
 });
 test('v14 personal squad slots migrate to legal teams and leads only', () => {
   const save = validateSave({

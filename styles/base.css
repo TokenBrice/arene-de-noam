@@ -345,6 +345,18 @@ input:focus-visible {
   color: #0a1022;
   font-weight: 900;
 }
+.affinity-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  overflow: visible;
+  color: inherit;
+}
+.affinity-dot .affinity-icon {
+  width: 16px;
+  height: 16px;
+}
 .mini-stats {
   margin-top: 10px;
   color: #8f91ad;

@@ -20,6 +20,7 @@ const {
   creatureName,
   affinity,
   affinityName,
+  affinityIcon,
   actionButton,
   persist,
   disposeArena,
@@ -85,7 +86,7 @@ function renderDraft() {
         a = AFFINITIES[c.affinity],
         passive = PASSIVES[c.passive],
         rank = masteryRank(ctx.save.mastery[id] || 0);
-      return `<button type="button" class="draft-card mastery-card-${rank} ${offerIndex === (ctx.draftRun.offerIndex || 0) ? 'mobile-active' : ''}" data-draft-pick="${id}" data-offer-index="${offerIndex}" style="--draft-color:${a.color}">${rank ? `<em>${'★'.repeat(rank)}</em>` : ''}<div class="draft-portrait"><img src="${sprite(id)}" alt=""><i>${a.icon}</i></div><span class="eyebrow">${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span><h2>${creatureName(id)}</h2><div class="draft-talent"><b>${passive.icon} ${t(`passive.${c.passive}`)}</b><small>${t(`passive.effect.${c.passive}`)}</small></div><ul>${c.moves.map((moveId) => `<li>${MOVES[moveId].signature ? '✦ ' : ''}${t(`move.${moveId}`)}</li>`).join('')}</ul>${candidateDraftInsight(id)}</button>`;
+      return `<button type="button" class="draft-card mastery-card-${rank} ${offerIndex === (ctx.draftRun.offerIndex || 0) ? 'mobile-active' : ''}" data-draft-pick="${id}" data-offer-index="${offerIndex}" style="--draft-color:${a.color}">${rank ? `<em>${'★'.repeat(rank)}</em>` : ''}<div class="draft-portrait"><img src="${sprite(id)}" alt=""><i>${affinityIcon(c.affinity)}</i></div><span class="eyebrow">${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span><h2>${creatureName(id)}</h2><div class="draft-talent"><b>${passive.icon} ${t(`passive.${c.passive}`)}</b><small>${t(`passive.effect.${c.passive}`)}</small></div><ul>${c.moves.map((moveId) => `<li>${MOVES[moveId].signature ? '✦ ' : ''}${t(`move.${moveId}`)}</li>`).join('')}</ul>${candidateDraftInsight(id)}</button>`;
     })
     .join('');
   const reveal = complete
