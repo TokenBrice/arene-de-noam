@@ -15,6 +15,9 @@ import {
   TURN_CAP,
 } from '../src/battle/engine.js';
 import { CREATURES } from '../src/data/creatures.js';
+import { MOVES } from '../src/data/moves.js';
+import { COMBO_DAMAGE_MULTIPLIER } from '../src/data/combos.js';
+import { calculateDamage } from '../src/battle/damage.js';
 import { effectiveSpeed } from '../src/battle/statuses.js';
 
 const make = () =>
@@ -161,7 +164,7 @@ test('cooldowns last exact future selection phases and statuses refresh/consume'
   assert.equal(state.sides.player.team[0].cooldowns.fault_charge, undefined);
   state.sides.player.surge = 100;
   assert.ok(getLegalActions(state, 'player').some((a) => a.moveId === 'fault_charge'));
-  assert.equal(state.sides.player.team[0].statuses.marked, undefined, 'Marked is consumed by a damaging hit');
+  assert.ok(state.sides.player.team[0].statuses.marked, 'an untagged attack preserves Marked');
   state.sides.player.team[0].statuses.stunned = { remaining: 2, appliedTurn: state.turn };
   state.sides.player.team[0].attack = 1;
   result = resolveTurn(
@@ -700,7 +703,7 @@ test('a drain move cannot resurrect its user after reflected damage knocks it ou
   assert.ok(passiveResult.events.some((event) => event.type === 'recoil' && event.source === 'bramblehide'));
 });
 
-test('prepared finishers expose combo and detonation semantics', () => {
+test('Burning powers Venom Harvest through the single Combo rule', () => {
   const state = createBattle({
     playerTeam: ['thornox', 'mossaur', 'florafae'],
     enemyTeam: ['monolith', 'kordane', 'brontusk'],
@@ -708,24 +711,39 @@ test('prepared finishers expose combo and detonation semantics', () => {
   });
   state.sides.player.surge = 100;
   state.sides.enemy.team[0].statuses.burning = { remaining: 3, appliedTurn: 0, stacks: 2 };
-  assert.ok(previewMove(state, 'player', 'venom_harvest').combo.includes('burning'));
+  const preview = previewMove(state, 'player', 'venom_harvest');
+  assert.deepEqual(preview.combo, {
+    status: 'burning',
+    multiplier: COMBO_DAMAGE_MULTIPLIER,
+    helperId: null,
+  });
   const result = resolveTurn(
     state,
     { type: 'move', moveId: 'venom_harvest' },
     { type: 'move', moveId: 'gravity_fist' }
   );
-  assert.ok(result.events.some((e) => e.type === 'status' && e.status === 'burning' && e.detonated));
-  assert.ok(result.events.some((e) => e.type === 'damage' && e.combo.includes('burning')));
+  assert.ok(
+    result.events.some(
+      (event) =>
+        event.type === 'status' &&
+        event.status === 'burning' &&
+        event.consumed &&
+        event.source === 'combo'
+    )
+  );
+  assert.equal(result.events.filter((event) => event.type === 'damage' && event.combo).length, 1);
   assert.equal(result.state.sides.enemy.team[0].statuses.burning, undefined);
 });
 
-test('a teammate converting an authored setup triggers an assist and Surge', () => {
+test('a teammate Combo credits its helper once and grants no assist Surge', () => {
   const state = createBattle({
     playerTeam: ['pyrolynx', 'orakyn', 'virelia'],
     enemyTeam: ['monolith', 'kordane', 'brontusk'],
     seed: 68,
   });
   state.sides.player.surge = 80;
+  state.sides.enemy.team[0].maxHp = 999;
+  state.sides.enemy.team[0].hp = 999;
   const plain = previewMove(state, 'player', 'ninefold_inferno');
   state.sides.enemy.team[0].statuses.marked = {
     remaining: 2,
@@ -734,8 +752,12 @@ test('a teammate converting an authored setup triggers an assist and Surge', () 
     sourceCreatureId: 'orakyn',
   };
   const preview = previewMove(state, 'player', 'ninefold_inferno');
-  assert.deepEqual(preview.assists, ['orakyn']);
-  assert.ok(preview.combo.includes('marked'));
+  assert.deepEqual(preview.combo, {
+    status: 'marked',
+    multiplier: COMBO_DAMAGE_MULTIPLIER,
+    helperId: 'orakyn',
+  });
+  assert.equal(preview.helperId, 'orakyn');
   assert.ok(preview.raw > plain.raw);
   state.sides.player.surge = 100;
   const result = resolveTurn(
@@ -751,17 +773,62 @@ test('a teammate converting an authored setup triggers an assist and Surge', () 
   const hits = result.events.filter(
     (event) => event.type === 'damage' && event.sourceCreatureId === 'pyrolynx'
   );
-  assert.ok(hits[0].rawAmount > hits[1].rawAmount);
-  assert.ok(hits.slice(1).every((hit) => hit.rawAmount === hits[1].rawAmount));
+  assert.ok(hits.every((hit) => hit.rawAmount === hits[0].rawAmount));
+  assert.deepEqual(hits[0].combo, preview.combo);
+  assert.ok(hits.slice(1).every((hit) => hit.combo === null));
   assert.equal(result.state.sides.enemy.team[0].statuses.marked, undefined);
   assert.equal(result.events.filter((event) => event.type === 'assist').length, 1);
-  assert.equal(
-    result.events.filter((event) => event.type === 'surge' && event.source === 'assist').length,
-    1
+  assert.equal(result.events.filter((event) => event.type === 'surge' && event.source === 'assist').length, 0);
+});
+
+test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consume it', () => {
+  const state = createBattle({
+    playerTeam: ['orakyn', 'abyssar'],
+    enemyTeam: ['kordane', 'farfombre'],
+    seed: 69,
+  });
+  delete state.sides.player.team[0].statuses.focused;
+  state.sides.enemy.team[0].statuses.marked = {
+    appliedTurn: 0,
+    remaining: 2,
+    sourceCreatureId: 'orakyn',
+  };
+  const attacker = activeOf(state, 'player'),
+    defender = activeOf(state, 'enemy'),
+    expected = calculateDamage(
+      { ...MOVES.slowing_riddle, power: MOVES.slowing_riddle.power * COMBO_DAMAGE_MULTIPLIER },
+      attacker,
+      defender
+    ).damage,
+    preview = previewMove(state, 'player', 'slowing_riddle');
+  assert.equal(preview.raw, expected);
+  assert.equal(preview.combo.multiplier, 1.4);
+  const barrierState = structuredClone(state);
+  barrierState.sides.enemy.team[0].barrier = 999;
+  const barrierPreview = previewMove(barrierState, 'player', 'slowing_riddle');
+  assert.equal(barrierPreview.damage, 0);
+  assert.ok(barrierPreview.combo);
+  const barrierResult = resolveTurn(
+    barrierState,
+    { type: 'move', moveId: 'slowing_riddle' },
+    { type: 'move', moveId: 'crystal_strike' }
   );
-  assert.ok(
-    result.events.some((event) => event.type === 'surge' && event.source === 'assist' && event.amount === 8)
+  assert.equal(barrierResult.state.sides.enemy.team[0].statuses.marked, undefined);
+
+  const missState = createBattle({
+    playerTeam: ['orakyn', 'abyssar'],
+    enemyTeam: ['farfombre', 'kordane'],
+    seed: 70,
+  });
+  missState.sides.enemy.team[0].statuses.marked = { appliedTurn: 0, remaining: 2 };
+  assert.equal(previewMove(missState, 'player', 'slowing_riddle').miss, true);
+  const missResult = resolveTurn(
+    missState,
+    { type: 'move', moveId: 'slowing_riddle' },
+    { type: 'move', moveId: 'shade_spark' }
   );
+  assert.ok(missResult.state.sides.enemy.team[0].statuses.marked);
+  assert.equal(missResult.events.some((event) => event.type === 'damage' && event.combo), false);
 });
 
 test('damage previews are exact, barrier-aware, immutable, and honest about guaranteed survival', () => {
@@ -905,7 +972,7 @@ test('knockout skips the second move and requires a free replacement', () => {
   assert.equal(replaced.state.phase, 'choice');
   assert.equal(replaced.state.sides.enemy.surge, beforeSurge);
   assert.equal(activeOf(replaced.state, 'enemy').statuses.focused, undefined);
-  assert.ok(replaced.events.some((e) => e.type === 'rally'));
+  assert.equal(replaced.events.some((e) => e.type === 'rally'), false);
 });
 
 test('trainer ace powers trigger exactly once when the final enemy enters', () => {
@@ -929,7 +996,7 @@ test('trainer ace powers trigger exactly once when the final enemy enters', () =
   assert.ok(activeOf(result.state, 'enemy').barrier >= 16);
 });
 
-test('the last fighters enter one symmetric Final Duel exactly once', () => {
+test('the last fighters add no synthetic duel event or reward', () => {
   const state = make();
   state.sides.player.surge = 100;
   state.sides.player.team[1].hp = 0;
@@ -941,19 +1008,10 @@ test('the last fighters enter one symmetric Final Duel exactly once', () => {
     { type: 'move', moveId: 'oracle_veil' },
     { type: 'move', moveId: 'resonant_focus' }
   );
-  assert.equal(result.events.filter((event) => event.type === 'final-duel').length, 1);
-  assert.equal(result.state.finalDuelTriggered, true);
+  assert.equal(result.events.filter((event) => event.type === 'final-duel').length, 0);
+  assert.equal('finalDuelTriggered' in result.state, false);
   assert.equal(
     result.events.some((event) => event.type === 'surge' && event.source === 'final-duel'),
-    false
-  );
-  const again = resolveTurn(
-    result.state,
-    { type: 'move', moveId: 'lucid_arc' },
-    { type: 'move', moveId: 'crystal_strike' }
-  );
-  assert.equal(
-    again.events.some((event) => event.type === 'final-duel'),
     false
   );
 });

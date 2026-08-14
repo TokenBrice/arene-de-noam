@@ -5,7 +5,7 @@ const {
   AFFINITY_ORDER,
   CREATURES,
   CREATURE_IDS,
-  FEATS,
+  CURRENT_FEAT_IDS,
   previewMove,
   i18n,
   t,
@@ -70,11 +70,17 @@ function bindCommon() {
     screen
       .querySelector('.settings-card:last-child .cycle')
       ?.insertAdjacentHTML('beforebegin', `<p class="gamepad-help">🎮 ${t('settings.gamepad')}</p>`);
-  if (screen.dataset.page === 'bestiary' && screen.querySelector('.feat-hall .eyebrow'))
+  if (screen.dataset.page === 'bestiary' && screen.querySelector('.feat-hall .eyebrow')) {
+    const visibleFeatIds = [
+        ...CURRENT_FEAT_IDS,
+        ...(ctx.save.feats.includes('team_assist') ? ['team_assist'] : []),
+      ],
+      earnedVisible = visibleFeatIds.filter((id) => ctx.save.feats.includes(id)).length;
     screen.querySelector('.feat-hall .eyebrow').textContent =
-      `${ctx.save.feats.length}/${Object.keys(FEATS).length}`;
+      `${earnedVisible}/${visibleFeatIds.length}`;
+  }
   if (screen.dataset.page === 'bestiary') {
-    const emptyRecord = { battles: 0, wins: 0, damage: 0, kos: 0, signatures: 0, assists: 0 },
+    const emptyRecord = { battles: 0, wins: 0, damage: 0, kos: 0, signatures: 0, combos: 0, assists: 0 },
       favorite = CREATURE_IDS.map((id) => ({ id, ...emptyRecord, ...(ctx.save.records?.[id] || {}) })).sort(
         (a, b) =>
           b.battles - a.battles ||
@@ -93,7 +99,7 @@ function bindCommon() {
         .querySelector('.passive-line')
         ?.insertAdjacentHTML(
           'beforebegin',
-          `<div class="creature-record"><span><b>${record.battles}</b>${t('record.battles')}</span><span><b>${record.wins}</b>${t('record.wins')}</span><span><b>${record.damage}</b>${t('record.damage')}</span><span><b>${record.kos}</b>${t('record.kos')}</span><span><b>${record.signatures}</b>${t('record.signatures')}</span><span><b>${record.assists}</b>${t('record.assists')}</span></div>`
+          `<div class="creature-record"><span><b>${record.battles}</b>${t('record.battles')}</span><span><b>${record.wins}</b>${t('record.wins')}</span><span><b>${record.damage}</b>${t('record.damage')}</span><span><b>${record.kos}</b>${t('record.kos')}</span><span><b>${record.signatures}</b>${t('record.signatures')}</span><span><b>${record.combos}</b>${t('record.combos')}</span>${record.assists ? `<span class="legacy-record"><b>${record.assists}</b>${t('record.assistsLegacy')}</span>` : ''}</div>`
         );
       card.querySelectorAll('[data-preview-move]').forEach((entry) => {
         const moveId = entry.dataset.previewMove;

@@ -236,8 +236,7 @@ export function calculateTension(state = {}) {
     lowHealth * 0.48 +
       closeFight * 0.12 +
       Math.min(0.22, turn * 0.012) +
-      (state.signatureReady ? 0.12 : 0) +
-      (state.finalDuel ? 0.28 : 0)
+      (state.signatureReady ? 0.12 : 0)
   );
 }
 
@@ -865,23 +864,6 @@ export class SoundSystem {
     );
   }
 
-  rally() {
-    [294, 370, 440].forEach((freq, index) =>
-      this.patch({
-        seed: `rally:${index}`,
-        freq,
-        endFreq: freq * 1.08,
-        duration: 0.24,
-        wave: 'triangle',
-        gain: 0.03,
-        delay: index * 0.07,
-        noiseGain: 0.004,
-        noiseFreq: 2100,
-        reverb: 0.32,
-      })
-    );
-  }
-
   hash(value) {
     return [...String(value)].reduce((total, character) => (total * 31 + character.charCodeAt(0)) >>> 0, 7);
   }
@@ -998,7 +980,7 @@ export class SoundSystem {
       126;
     const heavy = (move.power || 0) >= 42 || move.signature;
     const multiIndex = Math.max(0, (event.hit || 1) - 1);
-    const multiplier = event.affinity === 1.5 ? 1.3 : event.affinity === 0.75 ? 0.72 : 1;
+    const multiplier = event.affinity > 1 ? 1.3 : event.affinity < 1 ? 0.72 : 1;
     this.patch({
       seed: `${seed}:impact`,
       freq: (base + multiIndex * 38) * multiplier,
@@ -1013,7 +995,7 @@ export class SoundSystem {
       filterEnd: 280,
       reverb: heavy ? 0.3 : 0.14,
     });
-    if (event.combo?.length || move.detonate)
+    if (event.combo)
       this.patch({
         seed: `${seed}:spark`,
         freq: base * 3.4,
@@ -1028,13 +1010,13 @@ export class SoundSystem {
       });
   }
 
-  assist(affinity = 'neutral') {
+  comboCredit(affinity = 'neutral') {
     const freq =
       { mind: 590, force: 255, tide: 405, flame: 325, grove: 515, shadow: 215, neutral: 435 }[affinity] ||
       435;
     [1, 1.26, 1.68].forEach((ratio, index) =>
       this.patch({
-        seed: `assist:${affinity}:${index}`,
+        seed: `combo-credit:${affinity}:${index}`,
         freq: freq * ratio,
         endFreq: freq * ratio * 1.1,
         duration: 0.2,
@@ -1046,36 +1028,6 @@ export class SoundSystem {
         reverb: 0.4,
       })
     );
-  }
-
-  detonate(status = 'burning') {
-    const seed = this.hash(status);
-    const base = 120 + (seed % 145);
-    this.patch({
-      seed: `${status}:detonate`,
-      freq: base,
-      endFreq: base * 2.8,
-      duration: 0.34,
-      wave: 'sawtooth',
-      gain: 0.058,
-      noiseGain: 0.048,
-      noiseFreq: 790,
-      noiseDuration: 0.24,
-      filterStart: 600,
-      filterEnd: 2600,
-      reverb: 0.3,
-    });
-    this.patch({
-      seed: `${status}:sub`,
-      freq: 72,
-      endFreq: 38,
-      duration: 0.4,
-      wave: 'sine',
-      gain: 0.052,
-      delay: 0.11,
-      noiseGain: 0,
-      reverb: 0.2,
-    });
   }
 
   clash() {

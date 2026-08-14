@@ -18,7 +18,6 @@ export const DEFAULT_SAVE = Object.freeze({
   gauntletWins: 0,
   draftWins: 0,
   circuitWins: 0,
-  contractsCompleted: 0,
   bestGrade: null,
   battlesPlayed: 0,
   wins: 0,
@@ -147,6 +146,7 @@ export function validateSave(value) {
         kos: bounded('kos', 99999),
         signatures: bounded('signatures', 99999),
         assists: bounded('assists', 99999),
+        combos: bounded('combos', 99999),
       };
       if (Object.values(record).some(Boolean)) records[id] = record;
     }
@@ -199,9 +199,6 @@ export function validateSave(value) {
     draftWins: Number.isInteger(migrated.draftWins) ? Math.min(9999, Math.max(0, migrated.draftWins)) : 0,
     circuitWins: Number.isInteger(migrated.circuitWins)
       ? Math.min(9999, Math.max(0, migrated.circuitWins))
-      : 0,
-    contractsCompleted: Number.isInteger(migrated.contractsCompleted)
-      ? Math.min(9999, Math.max(0, migrated.contractsCompleted))
       : 0,
     bestGrade: ['D', 'C', 'B', 'A', 'S'].includes(migrated.bestGrade) ? migrated.bestGrade : null,
     battlesPlayed: Number.isInteger(migrated.battlesPlayed)

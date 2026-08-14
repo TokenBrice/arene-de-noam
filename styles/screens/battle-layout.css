@@ -1,4 +1,4 @@
-/* Battle layout contract: information, stage, and commands are exclusive rows.
+/* Battle layout structure: information, stage, and commands are exclusive rows.
    The canvas remains full bleed; every interactive surface stays outside the stage. */
 .battle-screen {
   --battle-side-gap: clamp(8px, 2vw, 24px);
@@ -651,7 +651,7 @@
   white-space: nowrap;
 }
 
-.battle-screen .move-assist-badge {
+.battle-screen .move-combo-badge {
   display: block;
   max-width: 88px;
   min-height: 22px;
@@ -961,11 +961,11 @@ body.high-contrast .battle-screen .action-line {
     display: none;
   }
 
-  .battle-screen .move-btn:has(.move-assist-badge) .move-figure > b {
+  .battle-screen .move-btn:has(.move-combo-badge) .move-figure > b {
     display: none;
   }
 
-  .battle-screen .move-assist-badge {
+  .battle-screen .move-combo-badge {
     max-width: 74px;
     min-height: 20px;
     margin-inline: 0;

@@ -1,6 +1,6 @@
 // Innate talents are deliberately creature-specific. The engine owns their
 // deterministic hooks; this table is presentation metadata and a completeness
-// contract for the roster.
+// guarantee for the roster.
 export const PASSIVES = Object.freeze({
   foresight: { icon: '◎' },
   encore: { icon: '♫' },

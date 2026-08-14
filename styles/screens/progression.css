@@ -1113,19 +1113,6 @@
   font-weight: 1000;
   box-shadow: 0 0 10px #ffc84b1a;
 }
-.detonation-prime .fx-curtain {
-  opacity: 1;
-  background:
-    radial-gradient(circle at var(--to-x) var(--to-y), #fff9 0 3%, var(--fx-color) 8%, transparent 35%),
-    #07010d88;
-}
-.detonation-prime .fx-projectile {
-  filter: brightness(2.2) drop-shadow(0 0 30px #fff);
-}
-.detonation-prime .fx-aftershock {
-  display: block;
-  animation-delay: 0s;
-}
 .order-first {
   color: #9effb8;
   background: #45e47d16;
@@ -1140,12 +1127,6 @@
   color: #e2d3ff;
   background: #a172ff13;
   font-weight: 900;
-}
-.rally-beat .action-line {
-  color: #caffdc;
-  border-color: #7dffc0;
-  box-shadow: 0 0 30px #64ffb644;
-  animation: rallyLabel 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .finisher-impact {
   z-index: 12 !important;

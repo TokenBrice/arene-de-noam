@@ -7,6 +7,7 @@ const {
   MOVES,
   PASSIVES,
   FEATS,
+  CURRENT_FEAT_IDS,
   masteryProgress,
   t,
   screen,
@@ -91,7 +92,12 @@ function renderBestiary() {
   ctx.previousScreen = 'title';
   screen.dataset.page = 'bestiary';
   screen.className = 'screen';
-  const featGallery = Object.values(FEATS)
+  const visibleFeatIds = [
+      ...CURRENT_FEAT_IDS,
+      ...(ctx.save.feats.includes('team_assist') ? ['team_assist'] : []),
+    ],
+    featGallery = visibleFeatIds
+    .map((id) => FEATS[id])
     .map((feat) => {
       const earned = ctx.save.feats.includes(feat.id);
       return `<div class="feat-card ${earned ? 'earned' : 'locked'}"><i>${earned ? feat.icon : '?'}</i><span><b>${earned ? t(`feat.${feat.id}`) : t('feat.unknown')}</b><small>${earned ? t(`feat.effect.${feat.id}`) : t('feat.locked')}</small></span></div>`;
@@ -106,7 +112,8 @@ function renderBestiary() {
       signatureId = c.moves.find((moveId) => MOVES[moveId].signature);
     return `<article class="bestiary-card rank-${mastery.rank}" style="--card-affinity:${a.color}"><button type="button" class="bestiary-summary" aria-expanded="false" aria-controls="bestiary-detail-${id}"><span class="bestiary-portrait"><img src="${sprite(id)}" alt=""></span><span class="bestiary-identity"><h2>${creatureName(id)}</h2><span class="meta-row"><span class="affinity-dot" style="background:${a.color}">${a.icon}</span>${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span><span class="bestiary-key-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</span><span class="bestiary-signature">✦ ${t(`move.${signatureId}`)}</span></span><span class="bestiary-expand" aria-hidden="true">＋</span></button><div class="bestiary-detail" id="bestiary-detail-${id}" hidden><div class="mastery-mini"><b>${'★'.repeat(mastery.rank)}${'☆'.repeat(5 - mastery.rank)}</b><i><u style="width:${mastery.ratio * 100}%"></u></i></div><div class="passive-line"><b>${passive.icon} ${t(`passive.${c.passive}`)}</b><span>${t(`passive.effect.${c.passive}`)}</span></div><p class="lore ${unlocked ? '' : 'locked-lore'}">${unlocked ? t(`lore.${id}`) : `🔒 ${t('bestiary.loreLocked')}`}</p><strong>${t('bestiary.moves')}</strong><div class="move-list">${c.moves.map((moveId) => `<button type="button" data-preview-move="${moveId}" class="theater-trigger ${MOVES[moveId].signature ? 'signature-entry' : ''}" aria-label="${t('bestiary.preview', { move: t(`move.${moveId}`) })}"><strong>${MOVES[moveId].signature ? '✦ ' : ''}${t(`move.${moveId}`)}</strong><span>${t(`move.effect.${moveId}`)}</span></button>`).join('')}</div></div></article>`;
   }).join('');
-  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">24 / 24</span><h1>${t('bestiary.title')}</h1><p>${t('bestiary.subtitle')}</p></div></div><section class="feat-hall"><div><span class="eyebrow">${ctx.save.feats.length}/${Object.keys(FEATS).length}</span><h2>${t('feat.gallery')}</h2></div><div class="feat-gallery">${featGallery}</div></section><div class="bestiary-grid">${cards}</div></div>`;
+  const earnedVisible = visibleFeatIds.filter((id) => ctx.save.feats.includes(id)).length;
+  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">24 / 24</span><h1>${t('bestiary.title')}</h1><p>${t('bestiary.subtitle')}</p></div></div><section class="feat-hall"><div><span class="eyebrow">${earnedVisible}/${visibleFeatIds.length}</span><h2>${t('feat.gallery')}</h2></div><div class="feat-gallery">${featGallery}</div></section><div class="bestiary-grid">${cards}</div></div>`;
   bindCommon();
   screen.querySelectorAll('.bestiary-summary').forEach((button) =>
     button.addEventListener('click', () => {

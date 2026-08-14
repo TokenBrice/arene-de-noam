@@ -88,6 +88,7 @@ function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
         kos: 0,
         signatures: 0,
         assists: 0,
+        combos: 0,
       },
       damage = state.history
         .filter(
@@ -108,8 +109,12 @@ function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
           event.creatureId === id &&
           MOVES[event.moveId]?.signature
       ).length,
-      assists = state.history.filter(
-        (event) => event.type === 'assist' && event.side === 'player' && event.creatureId === id
+      combos = state.history.filter(
+        (event) =>
+          event.type === 'damage' &&
+          event.sourceSide === 'player' &&
+          event.sourceCreatureId === id &&
+          event.combo
       ).length;
     ctx.save.records[id] = {
       battles: Math.min(99999, previous.battles + 1),
@@ -117,7 +122,8 @@ function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
       damage: Math.min(9999999, previous.damage + damage),
       kos: Math.min(99999, previous.kos + kos),
       signatures: Math.min(99999, previous.signatures + signatures),
-      assists: Math.min(99999, previous.assists + assists),
+      assists: Math.min(99999, previous.assists || 0),
+      combos: Math.min(99999, (previous.combos || 0) + combos),
     };
   }
   const signals = battleAchievementSignals(state.history),
@@ -135,8 +141,6 @@ function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
   if (win && state.sides.player.team.filter((c) => c.hp <= 0).length === 2) candidates.push('comeback');
   if (state.history.some((e) => e.type === 'perfect-relay' && e.side === 'player'))
     candidates.push('perfect_relay');
-  if (state.history.some((e) => e.type === 'assist' && e.side === 'player')) candidates.push('team_assist');
-  if (win && state.history.some((e) => e.type === 'final-duel')) candidates.push('final_duelist');
   for (const id of candidates)
     if (!ctx.save.feats.includes(id)) {
       ctx.save.feats.push(id);
@@ -209,8 +213,12 @@ function battleRecap(state) {
     actions: state.history.filter(
       (event) => event.type === 'move-start' && event.side === 'player' && event.creatureId === creature.id
     ).length,
-    assists: state.history.filter(
-      (event) => event.type === 'assist' && event.side === 'player' && event.creatureId === creature.id
+    combos: state.history.filter(
+      (event) =>
+        event.type === 'damage' &&
+        event.sourceSide === 'player' &&
+        event.sourceCreatureId === creature.id &&
+        event.combo
     ).length,
     kos: playerDamage.filter((event) => event.sourceCreatureId === creature.id && event.hp === 0).length,
   }));
@@ -223,7 +231,7 @@ function battleRecap(state) {
     absorbed: state.history
       .filter((e) => e.type === 'barrier-hit' && e.side === 'player')
       .reduce((n, e) => n + e.amount, 0),
-    combos: playerDamage.filter((e) => e.combo?.length).length,
+    combos: playerDamage.filter((e) => e.combo).length,
     signatures: state.history.filter(
       (e) => e.type === 'move-start' && e.side === 'player' && MOVES[e.moveId]?.signature
     ).length,
@@ -298,7 +306,7 @@ function renderResults(win) {
     .map((entry) => {
       const creature = CREATURES[entry.id],
         color = AFFINITIES[creature.affinity].color;
-      return `<article style="--report-color:${color}"><img src="${sprite(entry.id)}" alt=""><span><b>${creatureName(entry.id)}</b><small>${t(`role.${creature.role}`)}</small></span><dl><div><dt>${t('result.dealt')}</dt><dd>${entry.damage}</dd></div><div><dt>${t('result.actions')}</dt><dd>${entry.actions}</dd></div><div><dt>${t('result.assists')}</dt><dd>${entry.assists}</dd></div><div><dt>${t('result.kos')}</dt><dd>${entry.kos}</dd></div></dl></article>`;
+      return `<article style="--report-color:${color}"><img src="${sprite(entry.id)}" alt=""><span><b>${creatureName(entry.id)}</b><small>${t(`role.${creature.role}`)}</small></span><dl><div><dt>${t('result.dealt')}</dt><dd>${entry.damage}</dd></div><div><dt>${t('result.actions')}</dt><dd>${entry.actions}</dd></div><div><dt>${t('result.combos')}</dt><dd>${entry.combos}</dd></div><div><dt>${t('result.kos')}</dt><dd>${entry.kos}</dd></div></dl></article>`;
     })
     .join('')}</div></section>`;
   const celebration = win

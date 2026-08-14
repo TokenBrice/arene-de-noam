@@ -92,7 +92,7 @@ function impactMoveFx(event) {
   const impact = stage.querySelector('.fx-impact'),
     core = impact?.querySelector('.fx-core');
   if (core) {
-    core.textContent = event.hp <= 0 ? 'K.O.' : `${event.combo?.length ? 'COMBO ' : ''}−${event.amount}`;
+    core.textContent = event.hp <= 0 ? 'K.O.' : `${event.combo ? 'COMBO ' : ''}−${event.amount}`;
     core.classList.add('damage-number');
   }
   stage.querySelectorAll('.affinity-callout,.hit-chain').forEach((node) => node.remove());
@@ -104,7 +104,7 @@ function impactMoveFx(event) {
     impact?.append(chain);
     stage.classList.add('multi-hit-impact');
   }
-  if (event.combo?.length) {
+  if (event.combo) {
     stage.classList.add('combo-impact');
     screen.classList.add('combo-hit');
   }
@@ -174,36 +174,19 @@ function tacticalFx(event) {
   ctx.arenaScene?.burst(color, side, event.type === 'heal' ? 1.2 : 0.8);
 }
 
-function detonationFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    meta = STATUS_DEFINITIONS[event.status];
-  if (!stage || !meta) return;
-  stage.classList.add('active', 'detonation-prime');
-  stage.style.setProperty('--detonate-color', meta.color);
-  stage.querySelectorAll('.detonation-call').forEach((node) => node.remove());
-  const call = document.createElement('div');
-  call.className = `detonation-call ${event.side}`;
-  call.style.setProperty('--detonate-color', meta.color);
-  call.innerHTML = `<i>${meta.icon}</i><span><small>${t('battle.chainReaction')}</small><b>${t(`status.${event.status}`)}</b><em>${t('battle.detonation')}</em></span>`;
-  stage.append(call);
-  ctx.arenaScene?.flash('power', meta.color, event.side);
-  ctx.arenaScene?.punch(event.side, 1.15);
-  sound.detonate(event.status);
-}
-
-function assistFx(event) {
+function comboCreditFx(event) {
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const a = AFFINITIES[CREATURES[event.creatureId].affinity],
     call = document.createElement('div');
-  call.className = `assist-call ${event.side}`;
-  call.style.setProperty('--assist-color', a.color);
-  call.innerHTML = `<img src="${sprite(event.creatureId)}" alt=""><span><small>${t('battle.teamAssist')}</small><b>${creatureName(event.creatureId)}</b><em>+8 ${t('battle.surge')}</em></span>`;
+  call.className = `combo-credit-call ${event.side}`;
+  call.style.setProperty('--combo-credit-color', a.color);
+  call.innerHTML = `<img src="${sprite(event.creatureId)}" alt=""><span><small>COMBO</small><b>${creatureName(event.creatureId)}</b><em>${t('battle.preparedBy', { helper: creatureName(event.creatureId) })}</em></span>`;
   stage.append(call);
-  screen.classList.add('assist-mode');
+  screen.classList.add('combo-credit-mode');
   ctx.arenaScene?.burst(a.color, event.side, 1);
   sound.call(event.creatureId);
-  sound.assist(CREATURES[event.creatureId].affinity);
+  sound.comboCredit(CREATURES[event.creatureId].affinity);
 }
 
 function perfectRelayFx(event) {
@@ -238,7 +221,7 @@ function relayRushFx(event) {
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.5);
   ctx.arenaScene?.punch(event.side, 1.15);
-  sound.assist(creature.affinity);
+  sound.comboCredit(creature.affinity);
   sound.ui();
 }
 
@@ -280,22 +263,6 @@ function signatureReadyFx(event) {
     },
     (ctx.save.reducedMotion ? 180 : 900) / ctx.save.battleSpeed
   );
-}
-
-function finalDuelFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    player = CREATURES[event.playerCreatureId],
-    enemy = CREATURES[event.enemyCreatureId];
-  if (!stage) return;
-  stage.className = 'fx-stage active final-duel-fx';
-  stage.style.setProperty('--player-color', AFFINITIES[player.affinity].color);
-  stage.style.setProperty('--enemy-color', AFFINITIES[enemy.affinity].color);
-  stage.innerHTML = `<div class="duel-half player"><img src="${sprite(player.id)}" alt=""><b>${creatureName(player.id)}</b></div><div class="duel-center"><i>⚔</i><strong>${t('battle.finalDuel')}</strong></div><div class="duel-half enemy"><img src="${sprite(enemy.id)}" alt=""><b>${creatureName(enemy.id)}</b></div>`;
-  screen.classList.add('final-duel-mode');
-  ctx.arenaScene?.flash('power', '#fff09a', 'enemy');
-  ctx.arenaScene?.burst(AFFINITIES[player.affinity].color, 'player', 1.6);
-  ctx.arenaScene?.burst(AFFINITIES[enemy.affinity].color, 'enemy', 1.6);
-  sound.clash();
 }
 
 function aceFx(event) {
@@ -406,13 +373,11 @@ function clearBattleFx() {
     'clash-mode',
     'combo-hit',
     'intro-mode',
-    'rally-beat',
-    'assist-mode',
+    'combo-credit-mode',
     'perfect-relay-mode',
     'relay-rush-mode',
     'relay-player',
     'relay-enemy',
-    'final-duel-mode',
     'command-mode',
     'ace-mode',
     'finisher-mode',
@@ -430,13 +395,11 @@ registerRoutes({
   impactMoveFx,
   effectivenessCalloutFx,
   tacticalFx,
-  detonationFx,
-  assistFx,
+  comboCreditFx,
   perfectRelayFx,
   relayRushFx,
   trainerCommandFx,
   signatureReadyFx,
-  finalDuelFx,
   aceFx,
   statusTickFx,
   arenaPulseFx,

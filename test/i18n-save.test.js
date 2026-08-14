@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DICTIONARIES, createI18n, validateDictionaries } from '../src/i18n.js';
 import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave, validateSave } from '../src/save.js';
-import { FEATS, masteryProgress, masteryRank, performanceGrade } from '../src/data/progression.js';
+import {
+  CURRENT_FEAT_IDS,
+  FEATS,
+  FEAT_IDS,
+  masteryProgress,
+  masteryRank,
+  performanceGrade,
+} from '../src/data/progression.js';
 import { MOVES } from '../src/data/moves.js';
 import { STATUS_DEFINITIONS } from '../src/battle/statuses.js';
 
@@ -50,6 +57,18 @@ test('the eight kid-clear status labels are complete and dead ids are absent', (
       assert.equal(dictionary[`status.effect.${id}`], undefined);
     }
   }
+});
+test('all seventy-two move effects are short, localized, and free of removed systems', () => {
+  const removed = /\b(doctrine|flow|resonance|contract|bond|detonat|assist)\b/i;
+  for (const dictionary of Object.values(DICTIONARIES))
+    for (const id of Object.keys(MOVES)) {
+      const name = dictionary[`move.${id}`],
+        effect = dictionary[`move.effect.${id}`];
+      assert.ok(name, `${id} name`);
+      assert.ok(effect, `${id} effect`);
+      assert.ok(effect.trim().split(/\s+/).length <= 12, `${id}: ${effect}`);
+      assert.equal(removed.test(effect), false, `${id}: ${effect}`);
+    }
 });
 test('save round-trips with validated ranges', () => {
   const memory = storage();
@@ -121,13 +140,14 @@ test('older saves migrate and progression fields are bounded', () => {
     kos: 4,
     signatures: 3,
     assists: 2,
+    combos: 0,
   });
   assert.equal(migrated.records.bad, undefined);
   assert.deepEqual(migrated.feats, ['blitz', 'contract_hero']);
   assert.equal(migrated.gauntletWins, 999);
   assert.equal(migrated.draftWins, 9999);
   assert.equal(migrated.circuitWins, 9999);
-  assert.equal(migrated.contractsCompleted, 9999);
+  assert.equal('contractsCompleted' in migrated, false);
   assert.equal(migrated.bestGrade, 'S');
   assert.equal(migrated.winStreak, 7);
   assert.equal(migrated.bestStreak, 7);
@@ -153,11 +173,14 @@ test('performance grades use only victory, turns, and survivors', () => {
   assert.equal(performanceGrade({ win: false, turns: 30, survivors: 0 }).letter, 'D');
   assert.equal(performanceGrade({ win: true, turns: 40, survivors: 1 }).letter, 'B');
 });
-test('all twelve feats have stable ids, collection totals, and localized reveal copy', () => {
+test('current feats and the owned-only legacy assist feat have stable localized reveal copy', () => {
   const count = Object.keys(FEATS).length;
-  assert.equal(count, 12);
-  assert.equal(createI18n('fr').t('feat.total', { count: 0 }), `0/${count} exploits`);
-  assert.equal(createI18n('en').t('feat.total', { count: 0 }), `0/${count} feats`);
+  assert.equal(CURRENT_FEAT_IDS.length, 9);
+  assert.equal(count, 10);
+  assert.deepEqual(FEAT_IDS.slice(-2), ['contract_hero', 'final_duelist']);
+  assert.equal(CURRENT_FEAT_IDS.includes('team_assist'), false);
+  assert.equal(createI18n('fr').t('feat.total', { count: 0, total: count }), `0/${count} exploits`);
+  assert.equal(createI18n('en').t('feat.total', { count: 0, total: count }), `0/${count} feats`);
   for (const [id, feat] of Object.entries(FEATS)) {
     assert.equal(feat.id, id);
     assert.notEqual(DICTIONARIES.fr[`feat.${id}`], undefined);

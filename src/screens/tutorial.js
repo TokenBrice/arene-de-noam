@@ -20,7 +20,7 @@ function startTutorial() {
 
 function tutorialEnemyAction(step) {
   const legal = getLegalActions(ctx.battleSession.state, 'enemy');
-  if (step === 1) {
+  if (step === 2) {
     const switchToCalderoc = legal.find(
       (action) =>
         action.type === 'switch' && ctx.battleSession.state.sides.enemy.team[action.index].id === 'calderoc'

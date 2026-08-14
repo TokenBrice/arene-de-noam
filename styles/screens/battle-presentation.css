@@ -973,17 +973,6 @@
     opacity: 0.58;
   }
 }
-@keyframes rallyLabel {
-  0% {
-    transform: translateX(-50%) scale(0.7);
-  }
-  45% {
-    transform: translateX(-50%) scale(1.18);
-  }
-  100% {
-    transform: translateX(-50%) scale(1);
-  }
-}
 @keyframes finisherSlash {
   0% {
     opacity: 0;

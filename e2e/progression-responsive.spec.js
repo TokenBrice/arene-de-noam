@@ -116,8 +116,8 @@ test('three personal squad slots save, reload, and clear a team with its lead', 
 test('Bestiary preserves creature career records and highlights a favorite partner', async ({ page }) => {
   await installCompletedTutorial(page, {
     records: {
-      orakyn: { battles: 7, wins: 5, damage: 1234, kos: 9, signatures: 2, assists: 3 },
-      kordane: { battles: 3, wins: 2, damage: 400, kos: 2, signatures: 1, assists: 0 },
+      orakyn: { battles: 7, wins: 5, damage: 1234, kos: 9, signatures: 2, combos: 4, assists: 3 },
+      kordane: { battles: 3, wins: 2, damage: 400, kos: 2, signatures: 1, combos: 0, assists: 0 },
     },
   });
   await page.goto('/');
@@ -129,24 +129,25 @@ test('Bestiary preserves creature career records and highlights a favorite partn
     .locator('.bestiary-card')
     .filter({ has: page.getByRole('heading', { name: 'Orakyn', exact: true }) });
   await expect(card.locator('.creature-record')).toContainText('7combats');
-  await expect(card.locator('.creature-record')).toContainText('3assistances');
+  await expect(card.locator('.creature-record')).toContainText('4Combos');
+  await expect(card.locator('.creature-record')).toContainText('3assistances (héritage)');
 });
 
 test('the feat hall reveals earned high-skill accomplishments', async ({ page }) => {
   await installCompletedTutorial(page, {
-    feats: ['first_signature', 'perfect_relay', 'team_assist', 'contract_hero', 'final_duelist'],
+    feats: ['first_signature', 'perfect_relay', 'team_assist'],
   });
   await page.goto('/');
   await page.getByRole('button', { name: /Bestiaire/ }).click();
-  await expect(page.locator('.feat-card')).toHaveCount(12);
-  await expect(page.locator('.feat-card.earned')).toHaveCount(5);
-  await expect(page.locator('.feat-hall .eyebrow')).toHaveText('5/12');
+  await expect(page.locator('.feat-card')).toHaveCount(10);
+  await expect(page.locator('.feat-card.earned')).toHaveCount(3);
+  await expect(page.locator('.feat-hall .eyebrow')).toHaveText('3/10');
   await expect(page.locator('.feat-hall')).toContainText('Lecture parfaite');
-  await expect(page.locator('.feat-hall')).toContainText('Cœur du duel');
-  await expect(page.locator('.feat-hall')).toContainText('historique');
+  await expect(page.locator('.feat-hall')).toContainText('Plus forts ensemble');
+  await expect(page.locator('.feat-hall')).toContainText('hérité');
 });
 
-test('the tactical academy explains the affinity cycle, master plays, and every status', async ({ page }) => {
+test('the tactical academy leads with eight essentials and every current effect', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/');
   await page.getByRole('button', { name: /Académie tactique/ }).click();
@@ -154,15 +155,18 @@ test('the tactical academy explains the affinity cycle, master plays, and every 
   await expect(page.locator('.academy-affinity')).toHaveCount(6);
   await expect(page.locator('.academy-affinity').first()).toContainText('Esprit');
   await expect(page.locator('.academy-affinity').first().locator('u')).toHaveAttribute('aria-label', 'Force');
-  await expect(page.locator('.academy-mechanic')).toHaveCount(5);
-  await expect(page.locator('.academy-mechanics')).toContainText('Coup de pouce');
-  await expect(page.locator('.academy-mechanics')).toContainText('20 Éclat');
+  await expect(page.locator('.academy-core')).toHaveCount(8);
+  await expect(page.locator('.academy-core').first()).toContainText('Ton équipe et les PV');
+  await expect(page.locator('.academy-core-3')).toContainText('×2');
+  await expect(page.locator('.academy-core-3')).toContainText('×0,5');
   await expect(page.locator('.academy-status')).toHaveCount(8);
   await expect(page.locator('.academy-status.boon')).toHaveCount(4);
   await expect(page.locator('.academy-status.penalty')).toHaveCount(4);
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toHaveCount(1);
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toContainText('Brûlure');
-  await page.getByRole('button', { name: /Explorer les 72 techniques/ }).click();
+  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('Combo');
+  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('+40 %');
+  await page.getByRole('button', { name: /Explorer les 72 techniques/ }).first().click();
   await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeVisible();
 });
 

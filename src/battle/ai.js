@@ -1,4 +1,5 @@
 import { MOVES } from '../data/moves.js';
+import { comboSetupStatus, moveCanCombo } from '../data/combos.js';
 import { affinityMultiplier } from '../data/affinities.js';
 import {
   activeOf,
@@ -11,6 +12,49 @@ import {
 } from './engine.js';
 import { STATUS_DEFINITIONS } from './statuses.js';
 import { randomIndex, randomFromState } from './rng.js';
+
+function availableComboMove(creature, defender) {
+  return creature.moves
+    .map((id) => MOVES[id])
+    .find(
+      (move) =>
+        moveCanCombo(move) &&
+        defender.statuses[comboSetupStatus(move)] &&
+        !creature.cooldowns[move.id]?.remaining
+    );
+}
+
+function setupScore(state, side, move) {
+  const defender = activeOf(state, side === 'player' ? 'enemy' : 'player'),
+    setupStatuses = [...new Set((move.targetStatuses || []).map(({ id }) => id))].filter((id) =>
+      state.sides[side].team.some((creature) =>
+        creature.moves.some((moveId) => comboSetupStatus(MOVES[moveId]) === id)
+      )
+    );
+  let score = 0;
+  for (const id of setupStatuses) {
+    const descriptor = move.targetStatuses.find((status) => status.id === id),
+      current = defender.statuses[id];
+    if (current && (current.remaining ?? Infinity) >= (descriptor?.duration ?? Infinity)) score -= 6;
+    else {
+      score += 8;
+      if (
+        state.sides[side].team.some(
+          (creature) =>
+            creature.hp > 0 &&
+            creature.moves.some(
+              (moveId) =>
+                moveCanCombo(MOVES[moveId]) &&
+                comboSetupStatus(MOVES[moveId]) === id &&
+                !creature.cooldowns[moveId]?.remaining
+            )
+        )
+      )
+        score += 6;
+    }
+  }
+  return score;
+}
 
 function scoreMove(state, side, action, difficulty, style) {
   const attacker = activeOf(state, side);
@@ -32,16 +76,16 @@ function scoreMove(state, side, action, difficulty, style) {
     if (move.drain) score += Math.min(attacker.maxHp - attacker.hp, estimated * move.drain) * 0.6;
     if (move.recoil) score -= estimated * move.recoil * 0.7;
     if (move.executeThreshold && defender.hp / defender.maxHp <= move.executeThreshold) score += 28;
-    if (forecast.combo.length) score += 20 + forecast.combo.length * 5;
+    if (forecast.combo)
+      score += difficulty === 'apprentice' ? 3 : difficulty === 'champion' ? 10 : 8;
+    score += setupScore(state, side, move);
     if (move.barrier) score += Math.min(move.barrier, Math.max(0, BARRIER_CAP - attacker.barrier)) * 0.35;
     if (move.signature) score += 14;
     if (style === 'speed') score += (move.priority || 0) * 7 + (move.scaling === 'speed' ? 12 : 0);
     if (style === 'endurance')
       score += (move.drain ? 14 : 0) + (move.barrier || 0) * 0.35 + (move.teamHealRatio ? 18 : 0);
     if (style === 'control')
-      score +=
-        (move.targetStatuses?.length || 0) * 9 +
-        (difficulty !== 'standard' && move.detonate?.some((id) => defender.statuses[id]) ? 15 : 0);
+      score += move.targetStatuses?.some((status) => status.id === 'marked') ? 9 : 0;
     if (style === 'pressure')
       score += estimated * 0.16 + (move.targetStatuses?.some((x) => x.id === 'burning') ? 12 : 0);
     if (style === 'deception')
@@ -98,6 +142,7 @@ function scoreMove(state, side, action, difficulty, style) {
     for (const status of move.selfStatuses || [])
       score += attacker.statuses[status.id] ? -4 : status.id === 'focused' ? 17 : 10;
     for (const status of move.targetStatuses || []) score += defender.statuses[status.id] ? -4 : 12;
+    score += setupScore(state, side, move);
     if (style === 'endurance') score += (barrierValue + teamBarrierValue) * 0.28 + 12;
     if (style === 'control') score += (move.targetStatuses?.length || 0) * 10;
     if (style === 'deception' && move.selfStatuses?.some((x) => ['evasive', 'countering'].includes(x.id)))
@@ -147,9 +192,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
           ? -20
           : 0
       : 0,
-    primed = defender.moves
-      .flatMap((id) => MOVES[id].detonate || [])
-      .some((status) => candidate.statuses[status]);
+    comboReady = availableComboMove(candidate, defender);
   return (
     (outgoing - 1) * 28 -
     (incoming - 1) * 22 +
@@ -160,7 +203,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (relayReadiesSignature ? 25 : 0) +
     (style === 'deception' ? 8 : 0) +
     (lastOwnDecision?.type === 'switch' ? -30 : 0) +
-    (difficulty === 'champion' ? signatureRead + (primed ? 18 : 0) : 0) +
+    (difficulty === 'champion' ? signatureRead + (comboReady ? 20 : 0) : comboReady ? 12 : 0) +
     // Without a response forecast, Standard overvalues a visibly favorable
     // matchup and pivots a little too eagerly—a readable, human mistake.
     (difficulty === 'standard' ? 17 : 0)

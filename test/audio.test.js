@@ -74,7 +74,7 @@ test('mixer settings clamp independently and mute only the master', () => {
     calculateTension({ playerHpRatio: 0.08, enemyHpRatio: 0.1, turn: 24, signatureReady: true }) >
       calculateTension({ playerHpRatio: 1, enemyHpRatio: 1, turn: 1 })
   );
-  assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99, finalDuel: true }), 1);
+  assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99 }), 0.82);
 });
 
 test('the explicit migration chain advances every historical version to v15', () => {

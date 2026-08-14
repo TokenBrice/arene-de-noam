@@ -22,12 +22,12 @@ export function teamProfile(ids = []) {
     raw.control +=
       targetStatuses.filter((id) => id === 'stunned' || id === 'rooted').length * 15 +
       (targetStatuses.includes('marked') ? 8 : 0) +
-      (move.bonusAgainst?.length || 0) * 5 +
+      (move.combo ? 5 : 0) +
       (move.purge ? 9 : 0);
     raw.pressure +=
       (targetStatuses.includes('burning') ? 12 : 0) +
       (targetStatuses.includes('marked') ? 6 : 0) +
-      (move.detonate?.includes('burning') ? 19 : 0);
+      (move.id === 'venom_harvest' ? 19 : 0);
     raw.sustain +=
       (move.barrier || 0) * 0.8 +
       (move.teamBarrier || 0) * 2.2 +

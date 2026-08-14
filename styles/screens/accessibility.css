@@ -63,8 +63,7 @@ body.high-contrast .tag {
   border: 1px solid #ffffff65;
 }
 body.high-contrast .damage-preview,
-body.high-contrast .combo-ready,
-body.high-contrast .team-assist-ready {
+body.high-contrast .combo-ready {
   border-width: 2px;
 }
 body.high-contrast .team-dot {

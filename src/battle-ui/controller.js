@@ -111,11 +111,6 @@ function startBattle(config) {
     state.sides.player.team.forEach((creature) => {
       creature.hp = Math.min(creature.maxHp, Math.round(testTeamHp));
     });
-  if (params.get('finalDuel') === '1')
-    for (const side of ['player', 'enemy'])
-      state.sides[side].team.forEach((creature, index) => {
-        if (index !== state.sides[side].active) creature.hp = 0;
-      });
   ctx.battleSession = {
     ...config,
     state,
@@ -248,12 +243,6 @@ function openBattleCodex() {
     true
   );
   root.innerHTML = `<div class="replacement codex-overlay"><section class="glass-panel battle-codex" role="dialog" aria-modal="true" aria-labelledby="codex-title"><button class="codex-close icon-btn" data-action="close-codex" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.fieldState')}</span><h2 id="codex-title">${t('battle.codex')}</h2><div class="codex-grid"><article><h3>⚡ ${t('arena.ruleTitle')}</h3><b>${t(`arena.${state.arena}`)}</b><p>${t(`arena.rule.${state.arena}`)}</p></article><article><h3>✦ ${t('battle.surge')}</h3><p>${t('academy.surge')}</p></article><article class="codex-wide"><h3>↺ ${t('battle.switchRead')}</h3><p>${t('battle.perfectRelayHint')}</p></article>${routes ? `<article class="codex-wide"><h3>↗ ${t('combo.title')}</h3>${routes}</article>` : ''}${boons.length ? `<article class="codex-wide"><h3>↟ ${t('gauntlet.boons')}</h3><ul>${boons.map((id) => `<li><b>${t(`boon.${id}`)}</b> — ${t(`boon.effect.${id}`)}</li>`).join('')}</ul></article>` : ''}<article class="codex-wide"><h3>☿ ${t('battle.activeStatuses')}</h3><div class="codex-statuses">${activeStatuses}</div></article><article class="codex-wide affinity-reminder"><h3>◈ ${t('battle.affinityCycle')}</h3><p>${t('settings.affinities')}</p></article></div></section></div>`;
-  root
-    .querySelector('.codex-grid')
-    ?.insertAdjacentHTML(
-      'beforeend',
-      `<article class="codex-wide final-duel-codex"><h3>⚔ ${t('battle.finalDuel')}</h3><p>${t('battle.finalDuelHint')}</p></article>`
-    );
   root
     .querySelector('.codex-grid')
     ?.insertAdjacentHTML(
@@ -478,7 +467,7 @@ function refreshBattle() {
   }
   screen.querySelector('#moves').innerHTML = p.moves.map(moveButton).join('');
   const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
-  if (forecastPlan)
+  if (forecastPlan && expertMode)
     screen
       .querySelectorAll('[data-move]')
       .forEach((button) =>
@@ -499,7 +488,7 @@ function refreshBattle() {
   const switchButton = screen.querySelector('[data-action="open-switch"]');
   switchButton.disabled =
     ctx.locked ||
-    (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 2) ||
+    (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 3) ||
     !getLegalActions(state, 'player').some((action) => action.type === 'switch');
   switchButton.onclick = openSwitch;
   const speedButton = screen.querySelector('[data-action="battle-speed"]');
@@ -525,8 +514,8 @@ function renderTutorialTip() {
     if (root) root.innerHTML = '';
     return;
   }
-  const step = Math.min(3, ctx.battleSession.tutorialStep);
-  root.innerHTML = `<div class="tutorial-tip"><strong>${t('tutorial.title')}</strong><br>${t(`tutorial.${step + 1}`)} ${step < 3 ? `<button class="subtle-btn" data-action="skip-tutorial">${t('app.skip')}</button>` : ''}</div>`;
+  const step = Math.min(4, ctx.battleSession.tutorialStep);
+  root.innerHTML = `<div class="tutorial-tip"><strong>${t('tutorial.title')}</strong><br>${t(`tutorial.${step + 1}`)} ${step < 4 ? `<button class="subtle-btn" data-action="skip-tutorial">${t('app.skip')}</button>` : ''}</div>`;
   root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
 }
 
@@ -550,6 +539,8 @@ function openSwitch() {
       return { icon: '✦', text: t('battle.switchIncomingTactic'), lethal: false };
     const incoming = previewIncomingAfterSwitch(state, 'player', index, plan.moveId);
     if (!incoming) return null;
+    if (!ctx.save.expertMode)
+      return { icon: '⚔', text: t('battle.switchIncomingAttack'), lethal: false, read: incoming.perfectRelay };
     return {
       icon: incoming.lethal ? '☠' : '⚔',
       lethal: incoming.lethal,
@@ -579,12 +570,12 @@ function openSwitch() {
     recommended = scouted.slice().sort((a, b) => b.score - a.score || a.index - b.index)[0]?.index;
   const optionHtml = scouted
     .map(({ c, index, mult, forecast }) => {
-      const match = mult === 1.5 ? 'good' : mult === 0.75 ? 'risky' : 'neutral',
+      const match = mult > 1 ? 'good' : mult < 1 ? 'risky' : 'neutral',
         passive = PASSIVES[c.passive],
-        statuses = Object.keys(c.statuses)
+        statuses = (ctx.save.expertMode ? Object.keys(c.statuses) : [])
           .map((id) => STATUS_DEFINITIONS[id].icon)
           .join(' ');
-      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${AFFINITIES[c.affinity].icon}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="switch-match ${match}">${mult === 1.5 ? '↑ ' + t('battle.switchGood') : mult === 0.75 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon} ${t(`passive.${c.passive}`)}${statuses ? ` · ${statuses}` : ''}</small></button>`;
+      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${AFFINITIES[c.affinity].icon}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="switch-match ${match}">${mult > 1 ? '↑ ' + t('battle.switchGood') : mult < 1 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small ${ctx.save.expertMode ? `title="${escapeHtml(t(`passive.effect.${c.passive}`))}"` : ''}>${passive.icon} ${t(`passive.${c.passive}`)}${statuses ? ` · ${statuses}` : ''}</small></button>`;
     })
     .join('');
   const switchBonusKey = state.modifiers?.includes('relay_fever')
@@ -633,9 +624,10 @@ async function handlePlayerAction(action) {
   const tutorialStep = session.tutorialStep;
   const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
   if (session.mode === 'tutorial') {
-    if (tutorialStep === 0 && action.type === 'move') session.tutorialStep = 1;
-    else if (tutorialStep === 1 && action.moveId === 'oracle_veil') session.tutorialStep = 2;
-    else if (tutorialStep === 2 && action.type === 'switch') session.tutorialStep = 3;
+    if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
+    else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;
+    else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
+    else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
   }
   if (
     action?.type === 'move' &&

@@ -1,5 +1,9 @@
 import { CREATURES } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
+import {
+  COMBO_DAMAGE_MULTIPLIER,
+  comboSetupStatus,
+} from '../data/combos.js';
 import { calculateDamage } from './damage.js';
 import { randomFromState } from './rng.js';
 import {
@@ -76,7 +80,6 @@ export function createBattle({
     modifiers: activeModifiers,
     enemyAce,
     aceTriggered: false,
-    finalDuelTriggered: false,
     turn: 1,
     phase: 'choice',
     winner: null,
@@ -207,6 +210,11 @@ function enterTalent(state, side, events = null) {
     creature.talent.entry = true;
     passiveEvent(events, side, creature);
   }
+  if (creature.passive === 'conductor' && !creature.talent.entry) {
+    applyStatus(creature, 'haste', state.turn, 2);
+    creature.talent.entry = true;
+    passiveEvent(events, side, creature);
+  }
   if (creature.passive === 'apex_stalker' && !creature.talent.entry) {
     applyStatus(creature, 'focused', state.turn, null);
     creature.talent.entry = true;
@@ -237,17 +245,6 @@ function adjustSurge(state, side, amount, events, source) {
       ready: owner.surge === SIGNATURE_COST,
     });
   return change;
-}
-function triggerFinalDuel(state, events) {
-  if (state.finalDuelTriggered) return;
-  const player = consciousIndices(state, 'player'),
-    enemy = consciousIndices(state, 'enemy');
-  if (player.length !== 1 || enemy.length !== 1) return;
-  state.finalDuelTriggered = true;
-  push(events, 'final-duel', {
-    playerCreatureId: state.sides.player.team[player[0]].id,
-    enemyCreatureId: state.sides.enemy.team[enemy[0]].id,
-  });
 }
 function triggerAce(state, events) {
   if (!state.enemyAce || state.aceTriggered || consciousIndices(state, 'enemy').length !== 1) return;
@@ -337,10 +334,7 @@ function resolveSwitch(state, side, action, events, replacement = false) {
         events,
         activeOf(state, side).id
       );
-  } else {
-    push(events, 'rally', { side, creatureId: activeOf(state, side).id });
-    if (side === 'enemy') triggerAce(state, events);
-  }
+  } else if (side === 'enemy') triggerAce(state, events);
 }
 function consume(record, id) {
   const found = Boolean(record[id]);
@@ -450,8 +444,6 @@ function scaledPower(move, attacker, defender) {
     power *= 1 + move.scaleAmount * Object.keys(defender.statuses).length;
   if (move.executeThreshold && defender.hp / defender.maxHp <= move.executeThreshold)
     power *= move.executeMultiplier;
-  const matches = (move.bonusAgainst || []).filter((id) => hasStatus(defender, id));
-  if (matches.length) power *= move.bonusMultiplier;
   if (
     attacker.passive === 'duel_oath' &&
     attacker.hp / attacker.maxHp > 0.5 &&
@@ -459,16 +451,7 @@ function scaledPower(move, attacker, defender) {
   )
     power *= 1.12;
   if (attacker.passive === 'blood_in_water' && defender.hp / defender.maxHp < 0.5) power *= 1.18;
-  const detonated = (move.detonate || []).filter((id) => hasStatus(defender, id));
-  power += detonated.length * (move.detonatePower || 0);
-  const assistIds = [
-    ...new Set(
-      [...matches, ...detonated]
-        .map((id) => defender.statuses[id]?.sourceCreatureId)
-        .filter((id) => id && id !== attacker.id)
-    ),
-  ];
-  return { power, detonated, matches, assistIds };
+  return power;
 }
 
 function resolveDamageTransaction(state, side, move, events) {
@@ -484,49 +467,47 @@ function resolveDamageTransaction(state, side, move, events) {
       absorbed: 0,
       raw: 0,
       affinity: 1,
-      combo: [],
-      assists: [],
+      combo: null,
+      helperId: null,
       lethal: false,
       miss: true,
     };
   }
   const focused = consume(attacker.statuses, 'focused'),
     stunned = hasStatus(attacker, 'stunned'),
-    markedRecord = defender.statuses.marked || null,
-    scaled = scaledPower(move, attacker, defender);
+    comboStatus = comboSetupStatus(move),
+    setupRecord = comboStatus ? defender.statuses[comboStatus] || null : null,
+    combo = setupRecord
+      ? {
+          status: comboStatus,
+          multiplier: COMBO_DAMAGE_MULTIPLIER,
+          helperId:
+            setupRecord.sourceCreatureId && setupRecord.sourceCreatureId !== attacker.id
+              ? setupRecord.sourceCreatureId
+              : null,
+        }
+      : null;
   if (focused) emitStatus(events, side, attacker, 'focused', false, { consumed: true });
-  if (markedRecord) {
-    delete defender.statuses.marked;
-    emitStatus(events, targetSide, defender, 'marked', false, { consumed: true });
+  if (combo) {
+    delete defender.statuses[combo.status];
+    emitStatus(events, targetSide, defender, combo.status, false, {
+      consumed: true,
+      source: 'combo',
+    });
   }
-  const combo = [...new Set([...scaled.matches, ...scaled.detonated, ...(markedRecord ? ['marked'] : [])])],
-    markedHelperId =
-      markedRecord?.sourceCreatureId && markedRecord.sourceCreatureId !== attacker.id
-        ? markedRecord.sourceCreatureId
-        : null,
-    assistIds = [...new Set([...scaled.assistIds, ...(markedHelperId ? [markedHelperId] : [])])],
-    power = scaled.power * (state.modifiers?.includes('high_voltage') ? 1.18 : 1);
-  for (const helperId of assistIds) {
+  const helperId = combo?.helperId || null,
+    power =
+      scaledPower(move, attacker, defender) *
+      (combo ? COMBO_DAMAGE_MULTIPLIER : 1) *
+      (state.modifiers?.includes('high_voltage') ? 1.18 : 1);
+  if (helperId) {
     push(events, 'assist', {
       side,
       creatureId: helperId,
       attackerId: attacker.id,
-      statuses: combo.filter(
-        (id) =>
-          (id === 'marked' ? markedRecord?.sourceCreatureId : defender.statuses[id]?.sourceCreatureId) ===
-          helperId
-      ),
+      combo: true,
     });
-    adjustSurge(state, side, 8, events, 'assist');
   }
-  if (attacker.passive === 'conductor' && markedRecord) {
-    passiveEvent(events, side, attacker);
-    adjustSurge(state, side, 8, events, 'passive');
-  }
-  scaled.detonated.forEach((status) => {
-    delete defender.statuses[status];
-    emitStatus(events, targetSide, defender, status, false, { detonated: true });
-  });
   let damage = 0,
     absorbedTotal = 0,
     raw = 0,
@@ -534,7 +515,6 @@ function resolveDamageTransaction(state, side, move, events) {
   for (let hit = 1; hit <= hits && defender.hp > 0; hit++) {
     const result = calculateDamage({ ...move, power }, attacker, defender, {
       focused,
-      marked: Boolean(markedRecord) && hit === 1,
       stunned,
     });
     let incoming = result.damage,
@@ -576,8 +556,7 @@ function resolveDamageTransaction(state, side, move, events) {
       maxHp: defender.maxHp,
       affinity: result.affinity,
       moveAffinity: move.affinity,
-      combo,
-      assists: assistIds,
+      combo: hit === 1 ? combo : null,
     });
     if (
       defender.passive === 'last_bastion' &&
@@ -621,7 +600,7 @@ function resolveDamageTransaction(state, side, move, events) {
     raw,
     affinity,
     combo,
-    assists: assistIds,
+    helperId,
     lethal: defender.hp <= 0,
     miss: false,
   };
@@ -913,9 +892,7 @@ export function resolveTurn(inputState, playerAction, enemyAction) {
     if (endBattleIfNeeded(state, events)) break;
   }
   if (state.phase !== 'ended') {
-    triggerFinalDuel(state, events);
     tickEnd(state, events);
-    triggerFinalDuel(state, events);
     if (!endBattleIfNeeded(state, events)) {
       if (state.turn >= TURN_CAP) {
         state.winner = capWinner(state);

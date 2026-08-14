@@ -21,13 +21,11 @@ const {
   impactMoveFx,
   effectivenessCalloutFx,
   tacticalFx,
-  detonationFx,
-  assistFx,
+  comboCreditFx,
   perfectRelayFx,
   relayRushFx,
   trainerCommandFx,
   signatureReadyFx,
-  finalDuelFx,
   aceFx,
   statusTickFx,
   arenaPulseFx,
@@ -59,14 +57,12 @@ function eventPresentationDelay(event) {
       ctx.save.battleSpeed
     );
   if (event.type === 'arena-pulse') return 760 / ctx.save.battleSpeed;
-  if (event.type === 'rally') return 620 / ctx.save.battleSpeed;
   if (event.type === 'surge')
     return (
       (event.source === 'switch' && event.amount >= 24 ? 650 : event.ready ? 760 : 100) / ctx.save.battleSpeed
     );
   if (event.type === 'assist') return 480 / ctx.save.battleSpeed;
   if (event.type === 'perfect-relay') return 620 / ctx.save.battleSpeed;
-  if (event.type === 'final-duel') return 1050 / ctx.save.battleSpeed;
   if (event.type === 'ace') return 1050 / ctx.save.battleSpeed;
   if (event.type === 'ko') return 700 / ctx.save.battleSpeed;
   if (['heal', 'status', 'barrier', 'barrier-hit', 'miss', 'recoil', 'status-tick'].includes(event.type))
@@ -103,20 +99,13 @@ async function playEvents(events) {
       sound.call(event.creatureId);
       sound.move(MOVES[event.moveId]);
     }
-    if (event.type === 'assist') {
-      session.lastLine = t('battle.assist', {
-        helper: creatureName(event.creatureId),
-        actor: creatureName(event.attackerId),
-      });
-      assistFx(event);
+    if (event.type === 'assist' && event.combo === true) {
+      session.lastLine = t('battle.comboCredit', { helper: creatureName(event.creatureId) });
+      comboCreditFx(event);
     }
     if (event.type === 'perfect-relay') {
       session.lastLine = t('battle.perfectRelay', { actor: creatureName(event.creatureId) });
       perfectRelayFx(event);
-    }
-    if (event.type === 'final-duel') {
-      session.lastLine = t('battle.finalDuelLine');
-      finalDuelFx(event);
     }
     if (event.type === 'damage') {
       const affinityNote =
@@ -125,7 +114,7 @@ async function playEvents(events) {
           : event.affinity < 1
             ? `↓ ${t('battle.resisted')} · `
             : '';
-      session.lastLine = `${affinityNote}${event.combo?.length ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
+      session.lastLine = `${affinityNote}${event.combo ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
       fighter?.classList.add('hit');
       impactMoveFx(event);
       effectivenessCalloutFx(event);
@@ -139,10 +128,8 @@ async function playEvents(events) {
       tacticalFx(event);
       sound.heal();
     }
-    if (event.type === 'status') {
-      session.lastLine = event.detonated
-        ? t('battle.detonate', { status: t(`status.${event.status}`) })
-        : event.applied
+    if (event.type === 'status' && !(event.consumed && event.source === 'combo')) {
+      session.lastLine = event.applied
           ? t('battle.action.status', {
               actor: creatureName(event.creatureId),
               status: t(`status.${event.status}`),
@@ -151,14 +138,8 @@ async function playEvents(events) {
               actor: creatureName(event.creatureId),
               status: t(`status.${event.status}`),
             });
-      if (event.detonated) {
-        screen.classList.add('combo-hit');
-        detonationFx(event);
-        ctx.arenaScene?.burst(STATUS_DEFINITIONS[event.status]?.color || '#fff', event.side, 1.35);
-      } else {
-        tacticalFx(event);
-        sound.guard();
-      }
+      tacticalFx(event);
+      sound.guard();
     }
     if (event.type === 'barrier') {
       session.lastLine = t('battle.action.barrier', {
@@ -220,11 +201,6 @@ async function playEvents(events) {
       });
       aceFx(event);
     }
-    if (event.type === 'rally') {
-      session.lastLine = t('battle.rally', { actor: creatureName(event.creatureId) });
-      screen.classList.add('rally-beat');
-      sound.rally();
-    }
     if (event.type === 'passive') {
       session.lastLine = t('battle.passive', {
         actor: creatureName(event.creatureId),
@@ -246,7 +222,7 @@ async function playEvents(events) {
     if (event.type === 'battle-end' && event.reason === 'turn-cap') session.lastLine = t('battle.cap');
     if (LOG_EVENT_TYPES.has(event.type)) {
       session.timeline.push({
-        type: event.type,
+        type: event.type === 'damage' && event.combo ? 'combo' : event.type,
         side: event.side,
         turn: event.turn || session.state.turn,
         text: session.lastLine,
@@ -268,9 +244,7 @@ async function playEvents(events) {
         'recoil',
         'status-tick',
         'arena-pulse',
-        'rally',
         'ace',
-        'final-duel',
       ].includes(event.type) ||
       (event.type === 'status' && !['status', 'damage'].includes(next?.type)) ||
       (event.type === 'passive' && !['barrier', 'heal', 'status'].includes(next?.type)) ||

@@ -4,6 +4,7 @@ import { MOVES } from '../data/moves.js';
 import { PASSIVES } from '../data/passives.js';
 import {
   FEATS,
+  CURRENT_FEAT_IDS,
   PERFORMANCE_GRADES,
   battleAchievementSignals,
   masteryProgress,
@@ -58,9 +59,7 @@ const LADDER_COUNT = TRAINERS.length;
 const LOG_EVENT_TYPES = new Set([
   'move-start',
   'trainer-command',
-  'assist',
   'perfect-relay',
-  'final-duel',
   'damage',
   'heal',
   'status',
@@ -71,7 +70,6 @@ const LOG_EVENT_TYPES = new Set([
   'status-tick',
   'arena-pulse',
   'ace',
-  'rally',
   'passive',
   'switch',
   'replace',
@@ -80,10 +78,9 @@ const LOG_EVENT_TYPES = new Set([
 const LOG_TYPE_GROUPS = {
   'move-start': 'move',
   'trainer-command': 'talent',
-  assist: 'assist',
   'perfect-relay': 'switch',
-  'final-duel': 'rally',
   damage: 'damage',
+  combo: 'combo',
   recoil: 'damage',
   'status-tick': 'damage',
   heal: 'recovery',
@@ -93,7 +90,6 @@ const LOG_TYPE_GROUPS = {
   miss: 'dodge',
   'arena-pulse': 'arena',
   ace: 'ace',
-  rally: 'rally',
   passive: 'talent',
   switch: 'switch',
   replace: 'switch',
@@ -182,7 +178,7 @@ function statusVisuals(creature) {
 function comboRoutesHtml(ids, compact = false) {
   const routes = teamComboRoutes(ids).slice(0, compact ? 2 : 4);
   if (!routes.length) return compact ? '' : `<div class="combo-routes empty">${t('combo.none')}</div>`;
-  return `<div class="combo-routes ${compact ? 'compact' : ''}">${routes.map((route) => `<div class="combo-route"><span><img src="${sprite(route.setterId)}" alt=""><small>${creatureName(route.setterId)}</small><b>${t(`move.${route.setupMoveId}`)}</b></span><i>${route.statuses.map((id) => STATUS_DEFINITIONS[id].icon).join('')} ${route.detonation ? '☄' : '→'}</i><span><img src="${sprite(route.finisherId)}" alt=""><small>${creatureName(route.finisherId)}</small><b>${route.signature ? '✦ ' : ''}${t(`move.${route.finishMoveId}`)}</b></span></div>`).join('')}</div>`;
+  return `<div class="combo-routes ${compact ? 'compact' : ''}">${routes.map((route) => `<div class="combo-route"><span><img src="${sprite(route.setterId)}" alt=""><small>${creatureName(route.setterId)}</small><b>${t(`move.${route.setupMoveId}`)}</b></span><i>⌖ → COMBO<br><small>+40%</small></i><span><img src="${sprite(route.finisherId)}" alt=""><small>${creatureName(route.finisherId)}</small><b>${route.signature ? '✦ ' : ''}${t(`move.${route.finishMoveId}`)}</b></span></div>`).join('')}</div>`;
 }
 
 function draftInsightHtml(candidateId) {
@@ -217,6 +213,7 @@ Object.assign(ctx, {
   MOVES,
   PASSIVES,
   FEATS,
+  CURRENT_FEAT_IDS,
   PERFORMANCE_GRADES,
   masteryProgress,
   masteryRank,

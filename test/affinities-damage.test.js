@@ -14,7 +14,7 @@ test('all affinity pairings follow the single six-affinity cycle', () => {
   for (const affinity of AFFINITY_ORDER) assert.equal(affinityMultiplier('neutral', affinity), 1);
 });
 
-test('damage is deterministic and applies Focused, Marked, Dazed, and minimum damage', () => {
+test('damage is deterministic and applies Focused, Dazed, and minimum damage', () => {
   const move = MOVES.lucid_arc,
     attacker = CREATURES.orakyn,
     defender = CREATURES.kordane;
@@ -23,7 +23,6 @@ test('damage is deterministic and applies Focused, Marked, Dazed, and minimum da
   assert.deepEqual(a, b);
   assert.deepEqual(a, { damage: 53, affinity: 2, status: 1 });
   assert.equal(calculateDamage(move, attacker, defender, { focused: true }).status, 1.3);
-  assert.equal(calculateDamage(move, attacker, defender, { marked: true }).status, 1.35);
   assert.equal(calculateDamage(move, attacker, defender, { stunned: true }).status, 0.75);
   assert.equal(calculateDamage({ ...move, power: 0 }, attacker, defender).damage, 1);
 });

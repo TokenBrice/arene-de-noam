@@ -24,7 +24,7 @@ export function battleAdviceKeys(state, win = false) {
       .reduce((sum, event) => sum + event.amount, 0) >= 24
   )
     add('barrier');
-  if (damage.length >= 4 && !damage.some((event) => event.combo?.length)) add('combo');
+  if (damage.length >= 4 && !damage.some((event) => event.combo)) add('combo');
   if (
     state.turn >= 8 &&
     !playerMoves.some((event) => event.moveId && event.moveId.includes('signature')) &&
