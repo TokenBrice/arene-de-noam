@@ -10,7 +10,7 @@ export const PASSIVES = Object.freeze({
   last_bastion: { icon: '⬢' },
   razor_engine: { icon: '»' },
   foundation: { icon: '▣' },
-  deep_pressure: { icon: '◉' },
+  deep_pressure: { icon: '⌖' },
   blood_in_water: { icon: '⌁' },
   spring_tide: { icon: '✚' },
   conductor: { icon: 'ϟ' },
@@ -23,7 +23,7 @@ export const PASSIVES = Object.freeze({
   dream_dust: { icon: '✧' },
   bramblehide: { icon: '✥' },
   living_shadow: { icon: '◐' },
-  night_terror: { icon: '☽' },
+  night_terror: { icon: '★' },
   apex_stalker: { icon: '⌃' },
   ill_omen: { icon: '☿' },
 });

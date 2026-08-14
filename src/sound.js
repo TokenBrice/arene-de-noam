@@ -1048,7 +1048,7 @@ export class SoundSystem {
     );
   }
 
-  detonate(status = 'charged') {
+  detonate(status = 'burning') {
     const seed = this.hash(status);
     const base = 120 + (seed % 145);
     this.patch({

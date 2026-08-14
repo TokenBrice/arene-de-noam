@@ -13,7 +13,7 @@ const HP_SCENARIOS = [
   { id: 'threshold', ratio: 0.5, barrier: 0 },
   { id: 'critical', ratio: 0.12, barrier: 0 },
   { id: 'barrier', ratio: 0.25, barrier: 17 },
-  { id: 'guarded', ratio: 0.51, barrier: 9, status: 'guarded' },
+  { id: 'marked', ratio: 0.51, barrier: 9, status: 'marked' },
   { id: 'evasive', ratio: 0.25, barrier: 7, status: 'evasive' },
 ];
 

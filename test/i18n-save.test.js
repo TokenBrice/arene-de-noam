@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { DICTIONARIES, createI18n, validateDictionaries } from '../src/i18n.js';
 import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave, validateSave } from '../src/save.js';
 import { FEATS, masteryProgress, masteryRank, performanceGrade } from '../src/data/progression.js';
+import { MOVES } from '../src/data/moves.js';
+import { STATUS_DEFINITIONS } from '../src/battle/statuses.js';
 
 function storage(initial = null) {
   let value = initial;
@@ -18,6 +20,36 @@ test('French and English localization keys are complete and interpolation works'
   assert.equal(validateDictionaries(), true);
   assert.deepEqual(Object.keys(DICTIONARIES.fr).sort(), Object.keys(DICTIONARIES.en).sort());
   assert.equal(createI18n('en').t('battle.turn', { turn: 7 }), 'Turn 7');
+});
+test('the eight kid-clear status labels are complete and dead ids are absent', () => {
+  const dead = [
+    'guarded',
+    'regenerating',
+    'thorns',
+    'anchored',
+    'exposed',
+    'slowed',
+    'weakened',
+    'silenced',
+    'poisoned',
+    'soaked',
+    'charged',
+    'drowsy',
+    'cursed',
+  ];
+  assert.equal(Object.keys(STATUS_DEFINITIONS).length, 8);
+  for (const dictionary of Object.values(DICTIONARIES)) {
+    for (const id of Object.keys(STATUS_DEFINITIONS)) {
+      assert.ok(dictionary[`status.${id}`]);
+      const effect = dictionary[`status.effect.${id}`];
+      assert.ok(effect);
+      assert.ok(effect.trim().split(/\s+/).length <= 6, `${id}: ${effect}`);
+    }
+    for (const id of dead) {
+      assert.equal(dictionary[`status.${id}`], undefined);
+      assert.equal(dictionary[`status.effect.${id}`], undefined);
+    }
+  }
 });
 test('save round-trips with validated ranges', () => {
   const memory = storage();
@@ -144,10 +176,14 @@ test('all twelve feats have stable ids, collection totals, and localized reveal 
 test('signature support tooltips stay synchronized with their authored battle values', () => {
   for (const lang of ['fr', 'en']) {
     const t = createI18n(lang).t;
-    assert.match(t('move.effect.oracle_veil'), /20/);
-    assert.match(t('move.effect.deja_vu'), /16/);
-    assert.match(t('move.effect.shell_bastion'), /40/);
-    assert.match(t('move.effect.leaf_mantle'), /14/);
-    assert.match(t('move.effect.leaf_mantle'), /8/);
+    assert.match(t('move.effect.oracle_veil'), new RegExp(String(MOVES.oracle_veil.barrier)));
+    assert.match(t('move.effect.deja_vu'), new RegExp(String(MOVES.deja_vu.barrier)));
+    assert.match(t('move.effect.shell_bastion'), new RegExp(String(MOVES.shell_bastion.barrier)));
+    assert.match(t('move.effect.leaf_mantle'), new RegExp(String(MOVES.leaf_mantle.barrier)));
+    assert.match(t('move.effect.leaf_mantle'), new RegExp(String(MOVES.leaf_mantle.teamBarrier)));
+    assert.match(
+      t('move.effect.leaf_mantle'),
+      new RegExp(String(Math.round(MOVES.leaf_mantle.teamHealRatio * 100)))
+    );
   }
 });

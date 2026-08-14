@@ -68,7 +68,7 @@ test('expanded roster filters all 24 creatures and exposes authored kits', async
   await page.locator('[data-squad="storm_circuit"]').click();
   await expect(page.locator('[data-doctrine="ambush"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.team-profile')).toContainText('Contrôle');
-  await expect(page.locator('[data-doctrine="balanced"]')).toHaveClass(/recommended/);
+  await expect(page.locator(".doctrine-card.recommended")).toHaveCount(1);
   await expect(page.locator('#contract-select option').filter({ hasText: '★' })).toHaveCount(1);
   await page.locator('[data-filter="shadow"]').click();
   await expect(page.locator('[data-creature]')).toHaveCount(4);
@@ -155,9 +155,11 @@ test('the tactical academy explains the affinity cycle, master plays, and every 
   await expect(page.locator('.academy-affinity').first()).toContainText('Esprit');
   await expect(page.locator('.academy-affinity').first().locator('u')).toHaveAttribute('aria-label', 'Force');
   await expect(page.locator('.academy-mechanic')).toHaveCount(7);
-  await expect(page.locator('.academy-status')).toHaveCount(21);
-  await expect(page.locator('.academy-status.boon')).toHaveCount(8);
-  await expect(page.locator('.academy-status.penalty')).toHaveCount(13);
+  await expect(page.locator('.academy-status')).toHaveCount(8);
+  await expect(page.locator('.academy-status.boon')).toHaveCount(4);
+  await expect(page.locator('.academy-status.penalty')).toHaveCount(4);
+  await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toHaveCount(1);
+  await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toContainText('Brûlure');
   await page.getByRole('button', { name: /Explorer les 72 techniques/ }).click();
   await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeVisible();
 });
@@ -218,7 +220,7 @@ test('battle doctrines expose explicit tradeoffs and change the live opening', a
   await page.locator('[data-doctrine="assault"]').click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('#hud-player')).toContainText('65/100');
-  await expect(page.locator('#hud-player')).toContainText('Exposé');
+  await expect(page.locator('#hud-player')).toContainText('Marqué');
 });
 
 test('the gauntlet carries a chosen boon into its second escalating battle', async ({ page }) => {

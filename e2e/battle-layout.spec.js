@@ -36,7 +36,7 @@ test('battle plates and command dock never enter the stage at required viewports
     await expect(page.locator('.battle-stage')).toBeVisible();
     await expect(page.locator('.intent-read')).toBeVisible();
     await expect(page.locator('#hud-player')).toContainText(/Barrière|Barrier/);
-    await expect(page.locator('#hud-player')).toContainText(/Exposé|Exposed/);
+    await expect(page.locator('#hud-player')).toContainText(/Marqué|Marked/);
     await expect(page.locator('#hud-enemy')).toContainText(/Barrière|Barrier/);
 
     const stage = await page.locator('.battle-stage').boundingBox();

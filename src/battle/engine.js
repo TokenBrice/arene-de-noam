@@ -14,13 +14,6 @@ import {
 } from './statuses.js';
 
 export const TURN_CAP = 40;
-export const LATE_TURN_PRESSURE = Object.freeze({
-  startTurn: 29,
-  baseRatio: 0.02,
-  risePerTurn: 0.01,
-  maxRatio: 0.1,
-  minimumHp: 1,
-});
 export const SIGNATURE_COST = 100;
 export const BARRIER_CAP = 35;
 export const ARENA_RESONANCE = Object.freeze({
@@ -86,7 +79,6 @@ export function createBattle({
   doctrine = 'balanced',
   masteryRanks = {},
   enemyAce = null,
-  lateTurnPressure = true,
 }) {
   assertTeam(playerTeam);
   assertTeam(enemyTeam);
@@ -104,7 +96,6 @@ export function createBattle({
     enemyAce,
     aceTriggered: false,
     finalDuelTriggered: false,
-    lateTurnPressure: lateTurnPressure !== false,
     turn: 1,
     phase: 'choice',
     winner: null,
@@ -177,7 +168,7 @@ export function createBattle({
   }
   if (activeDoctrine === 'assault') {
     state.sides.player.surge = Math.min(100, state.sides.player.surge + 20);
-    applyStatus(activeOf(state, 'player'), 'exposed', state.turn, null);
+    applyStatus(activeOf(state, 'player'), 'marked', state.turn, null);
   }
   if (activeDoctrine === 'bastion') {
     state.sides.player.surge = Math.max(0, state.sides.player.surge - 10);
@@ -216,12 +207,10 @@ export function getLegalActions(state, side) {
   const moves = active.moves
     .filter(
       (id) =>
-        !active.cooldowns[id]?.remaining &&
-        !(MOVES[id].signature && owner.surge < signatureCostFor(active)) &&
-        !(hasStatus(active, 'silenced') && MOVES[id].kind !== 'damage')
+        !active.cooldowns[id]?.remaining && !(MOVES[id].signature && owner.surge < signatureCostFor(active))
     )
     .map((moveId) => ({ type: 'move', moveId }));
-  const canSwitch = !hasStatus(active, 'rooted') || hasStatus(active, 'anchored');
+  const canSwitch = !hasStatus(active, 'rooted') || active.passive === 'ancient_roots';
   const switches = canSwitch
     ? consciousIndices(state, side)
         .filter((i) => i !== owner.active)
@@ -251,8 +240,6 @@ function enterTalent(state, side, events = null) {
     creature.talent.masteryEntry = true;
     adjustSurge(state, side, 5, events || [], 'mastery');
   }
-  if (creature.passive === 'ancient_roots' && !hasStatus(creature, 'anchored'))
-    applyStatus(creature, 'anchored', state.turn, null);
   if (creature.passive === 'foresight' && !creature.talent.entry) {
     applyStatus(creature, 'focused', state.turn, null);
     creature.talent.entry = true;
@@ -332,33 +319,30 @@ function triggerAce(state, events) {
   push(events, 'ace', { side: 'enemy', creatureId: creature.id, ace });
   if (ace === 'second_wind') {
     healCreature(creature, creature.maxHp * 0.18, 'enemy', events, 'ace');
-    removeAndEmit(creature, 'negative', 2, 'enemy', events);
+    removeAndEmit(creature, 'negative', 1, 'enemy', events);
     addBarrier(creature, 12, 'enemy', events);
   }
   if (ace === 'redline') {
-    addSelf([{ id: 'haste', duration: 4, stacks: 2 }]);
+    addSelf([{ id: 'haste', duration: 4 }]);
     adjustSurge(state, 'enemy', 20, events, 'ace');
   }
   if (ace === 'overgrowth') {
-    addSelf([
-      { id: 'regenerating', duration: 4 },
-      { id: 'thorns', duration: 3 },
-    ]);
+    healCreature(creature, creature.maxHp * 0.08, 'enemy', events, 'ace');
+    addSelf([{ id: 'countering', duration: 3 }]);
     addBarrier(creature, 10, 'enemy', events);
   }
   if (ace === 'mindlock')
     addFoe([
-      { id: 'silenced', duration: 2 },
+      { id: 'stunned', duration: 2 },
       { id: 'marked', duration: 3 },
     ]);
   if (ace === 'high_tide') {
-    removeAndEmit(creature, 'negative', 'all', 'enemy', events);
+    removeAndEmit(creature, 'negative', 1, 'enemy', events);
     healCreature(creature, creature.maxHp * 0.14, 'enemy', events, 'ace');
     addBarrier(creature, 14, 'enemy', events);
   }
   if (ace === 'citadel') {
-    addSelf([{ id: 'anchored', duration: 5 }, { id: 'guarded' }]);
-    addBarrier(creature, 30, 'enemy', events);
+    addBarrier(creature, 38, 'enemy', events);
   }
   if (ace === 'wildfire') {
     addSelf([{ id: 'focused' }]);
@@ -366,8 +350,8 @@ function triggerAce(state, events) {
   }
   if (ace === 'vanishing_act') addSelf([{ id: 'evasive' }, { id: 'countering' }]);
   if (ace === 'stormfront') {
-    addSelf([{ id: 'haste', duration: 4, stacks: 2 }, { id: 'focused' }]);
-    addFoe([{ id: 'charged', duration: 3 }]);
+    addSelf([{ id: 'haste', duration: 4 }, { id: 'focused' }]);
+    addFoe([{ id: 'marked', duration: 3 }]);
   }
   if (ace === 'titanheart') {
     const before = creature.maxHp;
@@ -378,8 +362,8 @@ function triggerAce(state, events) {
   if (ace === 'dark_fate')
     addFoe([
       { id: 'marked', duration: 4 },
-      { id: 'weakened', duration: 2 },
-      { id: 'cursed', duration: 3 },
+      { id: 'stunned', duration: 2 },
+      { id: 'burning', duration: 3 },
     ]);
   if (ace === 'royal_ascension') {
     creature.attack = Math.round(creature.attack * 1.12);
@@ -467,9 +451,17 @@ function recordKnockout(state, side, creature, events) {
 }
 function applyStatuses(creature, descriptors, state, side, events, sourceCreatureId = null) {
   for (const spec of descriptors || []) {
-    applyStatus(creature, spec.id, state.turn, spec.duration ?? null, spec.stacks ?? 1, sourceCreatureId);
+    if (spec.id === 'rooted' && creature.passive === 'ancient_roots') continue;
+    const applied = applyStatus(
+      creature,
+      spec.id,
+      state.turn,
+      spec.duration ?? null,
+      spec.stacks ?? 1,
+      sourceCreatureId
+    );
     emitStatus(events, side, creature, spec.id, true, {
-      remaining: spec.duration ?? null,
+      remaining: applied.remaining ?? null,
       stacks: statusStacks(creature, spec.id),
       sourceCreatureId,
     });
@@ -503,11 +495,10 @@ export function applyTrainerCommand(inputState, side = 'player') {
   }
   if (command === 'assault') {
     adjustSurge(state, side, 25, events, 'command');
-    applyStatuses(creature, [{ id: 'exposed' }], state, side, events, creature.id);
+    applyStatuses(creature, [{ id: 'marked' }], state, side, events, creature.id);
   }
   if (command === 'bastion') {
-    addBarrier(creature, 20, side, events);
-    applyStatuses(creature, [{ id: 'guarded' }], state, side, events, creature.id);
+    addBarrier(creature, 28, side, events);
   }
   if (command === 'ambush')
     applyStatuses(
@@ -542,10 +533,8 @@ function scaledPower(move, attacker, defender) {
   )
     power *= 1.12;
   if (attacker.passive === 'blood_in_water' && defender.hp / defender.maxHp < 0.5) power *= 1.18;
-  if (attacker.passive === 'conductor' && (hasStatus(defender, 'charged') || hasStatus(defender, 'soaked')))
-    power *= 1.12;
   const detonated = (move.detonate || []).filter((id) => hasStatus(defender, id));
-  power += detonated.length * ((move.detonatePower || 0) + (attacker.passive === 'conductor' ? 8 : 0));
+  power += detonated.length * (move.detonatePower || 0);
   const assistIds = [
     ...new Set(
       [...matches, ...detonated]
@@ -576,23 +565,37 @@ function resolveDamageTransaction(state, side, move, events) {
     };
   }
   const focused = consume(attacker.statuses, 'focused'),
-    weakened = consume(attacker.statuses, 'weakened'),
-    drowsy = hasStatus(attacker, 'drowsy'),
     stunned = hasStatus(attacker, 'stunned'),
-    guarded = move.ignoreGuard ? false : consume(defender.statuses, 'guarded'),
-    exposed = consume(defender.statuses, 'exposed'),
-    marked = hasStatus(defender, 'marked'),
-    scaled = scaledPower(move, attacker, defender),
-    combo = [...scaled.matches, ...scaled.detonated],
+    markedRecord = defender.statuses.marked || null,
+    scaled = scaledPower(move, attacker, defender);
+  if (focused) emitStatus(events, side, attacker, 'focused', false, { consumed: true });
+  if (markedRecord) {
+    delete defender.statuses.marked;
+    emitStatus(events, targetSide, defender, 'marked', false, { consumed: true });
+  }
+  const combo = [...new Set([...scaled.matches, ...scaled.detonated, ...(markedRecord ? ['marked'] : [])])],
+    markedHelperId =
+      markedRecord?.sourceCreatureId && markedRecord.sourceCreatureId !== attacker.id
+        ? markedRecord.sourceCreatureId
+        : null,
+    assistIds = [...new Set([...scaled.assistIds, ...(markedHelperId ? [markedHelperId] : [])])],
     power = scaled.power * (state.modifiers?.includes('high_voltage') ? 1.18 : 1);
-  for (const helperId of scaled.assistIds) {
+  for (const helperId of assistIds) {
     push(events, 'assist', {
       side,
       creatureId: helperId,
       attackerId: attacker.id,
-      statuses: combo.filter((id) => defender.statuses[id]?.sourceCreatureId === helperId),
+      statuses: combo.filter(
+        (id) =>
+          (id === 'marked' ? markedRecord?.sourceCreatureId : defender.statuses[id]?.sourceCreatureId) ===
+          helperId
+      ),
     });
     adjustSurge(state, side, 8, events, 'assist');
+  }
+  if (attacker.passive === 'conductor' && markedRecord) {
+    passiveEvent(events, side, attacker);
+    adjustSurge(state, side, 8, events, 'passive');
   }
   scaled.detonated.forEach((status) => {
     delete defender.statuses[status];
@@ -605,11 +608,7 @@ function resolveDamageTransaction(state, side, move, events) {
   for (let hit = 1; hit <= hits && defender.hp > 0; hit++) {
     const result = calculateDamage({ ...move, power }, attacker, defender, {
       focused,
-      weakened,
-      guarded,
-      exposed,
-      marked,
-      drowsy,
+      marked: Boolean(markedRecord) && hit === 1,
       stunned,
     });
     let incoming = result.damage,
@@ -652,7 +651,7 @@ function resolveDamageTransaction(state, side, move, events) {
       affinity: result.affinity,
       moveAffinity: move.affinity,
       combo,
-      assists: scaled.assistIds,
+      assists: assistIds,
     });
     if (
       defender.passive === 'last_bastion' &&
@@ -680,7 +679,7 @@ function resolveDamageTransaction(state, side, move, events) {
       let duration = spec.duration,
         stacks = spec.stacks;
       if (attacker.passive === 'dream_dust' && duration) duration += 1;
-      if (attacker.passive === 'night_terror' && spec.id === 'drowsy' && duration) duration += 1;
+      if (attacker.passive === 'night_terror' && spec.id === 'stunned' && duration) duration += 1;
       if (attacker.passive === 'living_furnace' && spec.id === 'burning') stacks = (stacks || 1) + 1;
       return { ...spec, duration, stacks };
     });
@@ -696,7 +695,7 @@ function resolveDamageTransaction(state, side, move, events) {
     raw,
     affinity,
     combo,
-    assists: scaled.assistIds,
+    assists: assistIds,
     lethal: defender.hp <= 0,
     miss: false,
   };
@@ -762,37 +761,33 @@ function executeMove(state, side, moveId, events) {
     const transaction = resolveDamageTransaction(state, side, move, events);
     totalHpDamage = transaction.damage;
     if (!transaction.miss) {
-      if (
-        totalHpDamage &&
-        (hasStatus(defender, 'thorns') || defender.passive === 'bramblehide') &&
-        attacker.hp > 0
-      ) {
-        const ratio =
-            (hasStatus(defender, 'thorns') ? 0.18 : 0) + (defender.passive === 'bramblehide' ? 0.06 : 0),
-          reflected = Math.max(1, Math.round(totalHpDamage * ratio));
-        if (defender.passive === 'bramblehide') passiveEvent(events, targetSide, defender);
-        attacker.hp = Math.max(0, attacker.hp - reflected);
-        push(events, 'recoil', {
-          side,
-          creatureId: attacker.id,
-          amount: reflected,
-          hp: attacker.hp,
-          maxHp: attacker.maxHp,
-          source: 'thorns',
-        });
-      }
-      if (totalHpDamage && consume(defender.statuses, 'countering') && attacker.hp > 0) {
-        const reflected = Math.max(1, Math.round(totalHpDamage * 0.35));
-        attacker.hp = Math.max(0, attacker.hp - reflected);
-        push(events, 'recoil', {
-          side,
-          creatureId: attacker.id,
-          amount: reflected,
-          hp: attacker.hp,
-          maxHp: attacker.maxHp,
-          source: 'counter',
-        });
+      if (totalHpDamage && consume(defender.statuses, 'countering')) {
+        if (attacker.hp > 0) {
+          const reflected = Math.max(1, Math.round(totalHpDamage * 0.25));
+          attacker.hp = Math.max(0, attacker.hp - reflected);
+          push(events, 'recoil', {
+            side,
+            creatureId: attacker.id,
+            amount: reflected,
+            hp: attacker.hp,
+            maxHp: attacker.maxHp,
+            source: 'countering',
+          });
+        }
         emitStatus(events, targetSide, defender, 'countering', false);
+      }
+      if (totalHpDamage && defender.passive === 'bramblehide' && attacker.hp > 0) {
+        const reflected = Math.max(1, Math.round(totalHpDamage * 0.06));
+        passiveEvent(events, targetSide, defender);
+        attacker.hp = Math.max(0, attacker.hp - reflected);
+        push(events, 'recoil', {
+          side,
+          creatureId: attacker.id,
+          amount: reflected,
+          hp: attacker.hp,
+          maxHp: attacker.maxHp,
+          source: 'bramblehide',
+        });
       }
       if (
         totalHpDamage &&
@@ -802,11 +797,11 @@ function executeMove(state, side, moveId, events) {
       ) {
         defender.talent.deepPressureTurn = state.turn;
         passiveEvent(events, targetSide, defender);
-        applyStatuses(attacker, [{ id: 'soaked', duration: 2 }], state, side, events, defender.id);
+        applyStatuses(attacker, [{ id: 'marked', duration: 2 }], state, side, events, defender.id);
       }
     }
   }
-  if (move.kind === 'heal' && move.healRatio)
+  if (move.kind !== 'damage' && move.healRatio)
     healCreature(attacker, attacker.maxHp * move.healRatio, side, events);
   if (move.kind !== 'damage' && defender.hp > 0)
     applyStatuses(defender, move.targetStatuses, state, targetSide, events, attacker.id);
@@ -947,41 +942,12 @@ function arenaPulse(state, events) {
     }
   }
 }
-function applyLateTurnPressure(state, events) {
-  if (state.lateTurnPressure === false || state.turn < LATE_TURN_PRESSURE.startTurn) return;
-  const ratio = Math.min(
-    LATE_TURN_PRESSURE.maxRatio,
-    LATE_TURN_PRESSURE.baseRatio +
-      (state.turn - LATE_TURN_PRESSURE.startTurn) * LATE_TURN_PRESSURE.risePerTurn
-  );
-  for (const side of ['player', 'enemy']) {
-    const creature = activeOf(state, side);
-    if (creature.hp <= LATE_TURN_PRESSURE.minimumHp) continue;
-    const intendedAmount = Math.max(1, Math.round(creature.maxHp * ratio)),
-      amount = Math.min(intendedAmount, creature.hp - LATE_TURN_PRESSURE.minimumHp);
-    creature.hp -= amount;
-    push(events, 'status-tick', {
-      side,
-      creatureId: creature.id,
-      status: 'cursed',
-      amount,
-      hp: creature.hp,
-      maxHp: creature.maxHp,
-      source: 'late-turn-pressure',
-      ratio,
-    });
-  }
-}
 function tickEnd(state, events) {
   for (const side of ['player', 'enemy'])
     for (const [index, creature] of state.sides[side].team.entries()) {
       const isActive = index === state.sides[side].active;
       if (creature.hp > 0 && isActive) {
-        const dot = [
-          ['burning', 0.055],
-          ['poisoned', 0.038],
-          ['cursed', 0.032],
-        ];
+        const dot = [['burning', 0.05]];
         for (const [status, ratio] of dot)
           if (hasStatus(creature, status)) {
             const amount = Math.max(1, Math.round(creature.maxHp * ratio * statusStacks(creature, status)));
@@ -995,8 +961,6 @@ function tickEnd(state, events) {
               maxHp: creature.maxHp,
             });
           }
-        if (creature.hp > 0 && hasStatus(creature, 'regenerating'))
-          healCreature(creature, creature.maxHp * 0.04, side, events, 'regeneration');
         if (creature.hp <= 0) {
           push(events, 'ko', { side, creatureId: creature.id });
           const remaining = consciousIndices(state, side).filter((i) => i !== state.sides[side].active);
@@ -1007,7 +971,6 @@ function tickEnd(state, events) {
       tickTimed(creature.cooldowns, state.turn);
     }
   arenaPulse(state, events);
-  applyLateTurnPressure(state, events);
 }
 
 export function resolveTurn(inputState, playerAction, enemyAction) {

@@ -159,7 +159,7 @@ function tacticalFx(event) {
             : event.status === 'focused'
               ? '◎'
               : '⬡';
-  stage.className = `fx-stage active tactical-fx tactical-${event.type === 'heal' ? 'heal' : event.status || 'cleanse'} ${numeric ? 'tactical-numeric' : ''} ${moveClass} from-${side}`;
+  stage.className = `fx-stage active tactical-fx tactical-${['heal', 'barrier'].includes(event.type) ? event.type : event.status || 'cleanse'} ${numeric ? 'tactical-numeric' : ''} ${moveClass} from-${side}`;
   stage.style.setProperty('--fx-color', color);
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
   stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');

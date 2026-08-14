@@ -5,7 +5,6 @@ import {
   ARENA_RESONANCE,
   BARRIER_CAP,
   getLegalActions,
-  LATE_TURN_PRESSURE,
   previewIncomingAfterSwitch,
   previewMove,
   safeBattleSnapshot,
@@ -29,7 +28,7 @@ function scoreMove(state, side, action, difficulty, style) {
       (forecast.miss ? 45 : 0);
     if (move.targetStatuses?.length)
       score += move.targetStatuses.length * (difficulty === 'apprentice' ? 2 : 8);
-    if (move.selfStatuses?.some((x) => x.id === 'exposed'))
+    if (move.selfStatuses?.some((x) => x.id === 'marked'))
       score -= ['standard', 'champion'].includes(difficulty) ? 9 : 3;
     if (move.drain) score += Math.min(attacker.maxHp - attacker.hp, estimated * move.drain) * 0.6;
     if (move.recoil) score -= estimated * move.recoil * 0.7;
@@ -37,12 +36,6 @@ function scoreMove(state, side, action, difficulty, style) {
     if (forecast.combo.length) score += 20 + forecast.combo.length * 5;
     if (move.barrier) score += Math.min(move.barrier, Math.max(0, BARRIER_CAP - attacker.barrier)) * 0.35;
     if (move.signature) score += 14;
-    if (
-      difficulty === 'champion' &&
-      state.lateTurnPressure !== false &&
-      state.turn >= LATE_TURN_PRESSURE.startTurn
-    )
-      score += 35 + (state.turn - LATE_TURN_PRESSURE.startTurn) * 3;
     if (style === 'speed') score += (move.priority || 0) * 7 + (move.scaling === 'speed' ? 12 : 0);
     if (style === 'endurance')
       score += (move.drain ? 14 : 0) + (move.barrier || 0) * 0.35 + (move.teamHealRatio ? 18 : 0);
@@ -51,9 +44,7 @@ function scoreMove(state, side, action, difficulty, style) {
         (move.targetStatuses?.length || 0) * 9 +
         (difficulty !== 'standard' && move.detonate?.some((id) => defender.statuses[id]) ? 15 : 0);
     if (style === 'pressure')
-      score +=
-        estimated * 0.16 +
-        (move.targetStatuses?.some((x) => ['burning', 'poisoned', 'cursed'].includes(x.id)) ? 12 : 0);
+      score += estimated * 0.16 + (move.targetStatuses?.some((x) => x.id === 'burning') ? 12 : 0);
     if (style === 'deception')
       score +=
         (move.selfStatuses?.some((x) => ['evasive', 'countering'].includes(x.id)) ? 18 : 0) +
@@ -94,21 +85,19 @@ function scoreMove(state, side, action, difficulty, style) {
         ? team
             .filter((c) => c.hp > 0)
             .reduce((sum, c) => sum + Math.min(c.maxHp - c.hp, c.maxHp * move.teamHealRatio), 0)
+        : 0,
+      selfHealValue = move.healRatio
+        ? Math.min(attacker.maxHp - attacker.hp, attacker.maxHp * move.healRatio)
         : 0;
     let score =
       barrierValue * 0.7 +
       teamBarrierValue * 0.48 +
       teamHealValue * 0.62 +
+      selfHealValue * 0.72 +
       (move.cleanse ? ownNegatives * 9 : 0) +
       (move.teamCleanse ? teamNegatives * 8 : 0);
     for (const status of move.selfStatuses || [])
-      score += attacker.statuses[status.id]
-        ? -4
-        : status.id === 'focused'
-          ? 17
-          : status.id === 'guarded'
-            ? 15
-            : 10;
+      score += attacker.statuses[status.id] ? -4 : status.id === 'focused' ? 17 : 10;
     for (const status of move.targetStatuses || []) score += defender.statuses[status.id] ? -4 : 12;
     if (style === 'endurance') score += (barrierValue + teamBarrierValue) * 0.28 + 12;
     if (style === 'control') score += (move.targetStatuses?.length || 0) * 10;
@@ -132,6 +121,9 @@ function scoreSwitch(state, side, action, difficulty, style) {
   const owner = state.sides[side];
   const candidate = owner.team[action.index];
   const defender = activeOf(state, side === 'player' ? 'enemy' : 'player');
+  const lastOwnDecision = [...state.history]
+    .reverse()
+    .find((event) => event.side === side && ['move-start', 'switch'].includes(event.type));
   const outgoing = affinityMultiplier(candidate.affinity, defender.affinity);
   const incoming = affinityMultiplier(defender.affinity, candidate.affinity);
   const relayFever = state.modifiers?.includes('relay_fever'),
@@ -175,6 +167,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (relayFever ? 26 : 0) +
     (relayReadiesSignature ? 25 : 0) +
     (style === 'deception' ? 8 : 0) +
+    (lastOwnDecision?.type === 'switch' ? -30 : 0) +
     (resonanceSoon ? (difficulty === 'champion' ? 22 : 12) : 0) +
     (difficulty === 'champion' ? signatureRead + (primed ? 18 : 0) : 0) +
     // Without a response forecast, Standard overvalues a visibly favorable
@@ -228,7 +221,8 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
   }
   if (difficulty === 'standard' || difficulty === 'champion') {
     for (const item of scored) {
-      if (item.action.type === 'move' && MOVES[item.action.moveId].kind === 'damage') item.score += 3;
+      if (item.action.type === 'move' && MOVES[item.action.moveId].kind === 'damage')
+        item.score += difficulty === 'champion' ? 40 : 3;
       if (item.action.type === 'switch' && activeOf(state, side).hp < activeOf(state, side).maxHp * 0.3)
         item.score += 13;
       const opponentSide = side === 'player' ? 'enemy' : 'player',
@@ -259,14 +253,9 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
         opponent.moves.some((id) => MOVES[id].signature);
       if (difficulty === 'champion' && opponentSignatureReady && item.action.type === 'move') {
         const move = MOVES[item.action.moveId];
-        if (move.selfStatuses?.some((status) => ['guarded', 'evasive', 'countering'].includes(status.id)))
+        if (move.selfStatuses?.some((status) => ['evasive', 'countering'].includes(status.id)))
           item.score += 24;
-        if (
-          move.targetStatuses?.some((status) =>
-            ['weakened', 'silenced', 'drowsy', 'stunned'].includes(status.id)
-          )
-        )
-          item.score += 12;
+        if (move.targetStatuses?.some((status) => status.id === 'stunned')) item.score += 12;
       }
     }
   }

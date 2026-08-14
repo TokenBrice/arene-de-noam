@@ -19,11 +19,16 @@ export function teamProfile(ids = []) {
         (move.power || 0) * (move.hits || 1) * 0.42 +
         (move.executeMultiplier ? 15 : 0) +
         (move.signature ? 8 : 0);
+    const targetStatuses = [...new Set((move.targetStatuses || []).map((status) => status.id))];
     raw.control +=
-      (move.targetStatuses?.length || 0) * 15 +
-      (move.detonate?.length || 0) * 19 +
+      targetStatuses.filter((id) => id === 'stunned' || id === 'rooted').length * 15 +
+      (targetStatuses.includes('marked') ? 8 : 0) +
       (move.bonusAgainst?.length || 0) * 5 +
       (move.purge ? 9 : 0);
+    raw.pressure +=
+      (targetStatuses.includes('burning') ? 12 : 0) +
+      (targetStatuses.includes('marked') ? 6 : 0) +
+      (move.detonate?.includes('burning') ? 19 : 0);
     raw.sustain +=
       (move.barrier || 0) * 0.8 +
       (move.teamBarrier || 0) * 2.2 +

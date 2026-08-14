@@ -23,6 +23,18 @@ import {
 } from '../src/data/team-profile.js';
 import { chooseAiAction } from '../src/battle/ai.js';
 import { createBattle, getLegalActions, resolveTurn } from '../src/battle/engine.js';
+import { NEGATIVE_STATUSES, POSITIVE_STATUSES, STATUS_DEFINITIONS } from '../src/battle/statuses.js';
+
+const SURVIVING_STATUSES = new Set([
+  'focused',
+  'haste',
+  'evasive',
+  'countering',
+  'marked',
+  'stunned',
+  'rooted',
+  'burning',
+]);
 
 test('twenty-four creatures each reference exactly three authored owner moves', () => {
   assert.equal(CREATURE_IDS.length, 24);
@@ -78,16 +90,18 @@ test('move sustain stays inside the decisive-fight budget', () => {
         .map((move) => [move.id, move.barrier])
     ),
     {
-      oracle_veil: 10,
+      oracle_veil: 18,
       deja_vu: 9,
       mirror_maze: 9,
-      iron_resolve: 9,
+      iron_resolve: 17,
       fortress_protocol: 14,
       abyssal_surge: 4,
-      shell_bastion: 22,
+      shell_bastion: 30,
       bubble_burst: 3,
+      ember_armor: 8,
+      leaf_mantle: 8,
       ancient_bark: 17,
-      shadow_shed: 4,
+      shadow_shed: 12,
       moonless_omen: 8,
     }
   );
@@ -97,12 +111,12 @@ test('move sustain stays inside the decisive-fight budget', () => {
         .filter((move) => move.healRatio)
         .map((move) => [move.id, move.healRatio])
     ),
-    { ash_rebirth: 0.18, seed_bloom: 0.15 }
+    { furnace_heart: 0.08, ash_rebirth: 0.18, seed_bloom: 0.23 }
   );
   assert.ok(Object.values(MOVES).every((move) => !move.drain || move.drain <= 0.25));
   assert.ok(
     Object.values(MOVES).every(
-      (move) => !move.selfStatuses?.some((status) => status.id === 'evasive') || (move.barrier || 0) <= 10
+      (move) => !move.selfStatuses?.some((status) => status.id === 'evasive') || (move.barrier || 0) <= 18
     )
   );
   assert.equal(MOVES.leaf_mantle.teamBarrier, 7);
@@ -214,7 +228,7 @@ test('the Team Compass exposes bounded and distinct squad identities', () => {
       assert.ok(profile[axis] >= 0 && profile[axis] <= 100, `${preset.id} ${axis} must fit the compass`);
   }
   assert.equal(teamProfile(['ferrax', 'pyrolynx', 'riptalon']).dominant, 'tempo');
-  assert.equal(teamProfile(['florafae', 'thornox', 'mnemora']).dominant, 'control');
+  assert.equal(teamProfile(['florafae', 'thornox', 'mnemora']).dominant, 'tempo');
   assert.equal(teamProfile(['orakyn', 'abyssar', 'virelia']).dominant, 'sustain');
   assert.deepEqual(teamProfile([]), { pressure: 0, control: 0, sustain: 0, tempo: 0, dominant: 'pressure' });
   assert.equal(recommendedDoctrine(['ferrax', 'pyrolynx', 'riptalon']), 'ambush');
@@ -293,7 +307,31 @@ test('team combo routes expose cross-creature setups and never self-credit', () 
     )
   );
   assert.ok(routes.every((route) => route.setterId !== route.finisherId));
+  assert.ok(routes.every((route) => route.statuses.every((status) => SURVIVING_STATUSES.has(status))));
+  assert.ok(routes.filter((route) => route.statuses.includes('marked')).every((route) => !route.detonation));
+  assert.ok(
+    teamComboRoutes(['calderoc', 'thornox']).some(
+      (route) => route.statuses.includes('burning') && route.detonation
+    )
+  );
   assert.deepEqual(teamComboRoutes(['kordane', 'monolith', 'virelia']), []);
+});
+
+test('move status data uses exactly the eight-status contract', () => {
+  assert.deepEqual(Object.keys(STATUS_DEFINITIONS), [...SURVIVING_STATUSES]);
+  assert.equal(POSITIVE_STATUSES.length, 4);
+  assert.equal(NEGATIVE_STATUSES.length, 4);
+  for (const move of Object.values(MOVES))
+    for (const field of ['targetStatuses', 'selfStatuses', 'bonusAgainst', 'detonate', 'consume'])
+      for (const entry of move[field] || []) {
+        const id = typeof entry === 'string' ? entry : entry.id;
+        assert.ok(SURVIVING_STATUSES.has(id), `${move.id}.${field} contains ${id}`);
+        if (typeof entry !== 'string' && entry.stacks != null) assert.equal(id, 'burning');
+      }
+  assert.equal(STATUS_DEFINITIONS.burning.maxStacks, 2);
+  assert.ok(
+    Object.entries(STATUS_DEFINITIONS).every(([id, definition]) => id === 'burning' || !definition.stackable)
+  );
 });
 
 test('every AI difficulty chooses legal actions while mutating only the deterministic RNG cursor', () => {
@@ -348,7 +386,7 @@ test('Champion AI saves defensive Signatures for genuine team pressure', () => {
   state.sides.player.surge = 100;
   state.rngState = 123456789;
   state.sides.player.team.forEach((creature) => (creature.hp = Math.round(creature.maxHp * 0.5)));
-  state.sides.player.team[1].statuses.slowed = { remaining: 2, appliedTurn: state.turn, stacks: 1 };
+  state.sides.player.team[1].statuses.stunned = { remaining: 2, appliedTurn: state.turn, stacks: 1 };
   const before = structuredClone(state),
     action = chooseAiAction(state, 'player', 'champion', 'endurance');
   assert.deepEqual(action, { type: 'move', moveId: 'leaf_mantle' });
@@ -372,11 +410,11 @@ test('Champion AI can pivot into a resistant bench answer to a ready Signature',
   assert.deepEqual(state, before);
 });
 
-test('Champion switch scoring reads detonation setup from the candidate, not the active creature', () => {
+test('Champion switch scoring reads Burning detonation setup from the candidate, not the active creature', () => {
   const makeState = () => {
     const state = createBattle({
-      playerTeam: ['pyrolynx', 'mnemora', 'hexalune'],
-      enemyTeam: ['voltide', 'umbrawl', 'nocturnyx'],
+      playerTeam: ['orakyn', 'calderoc', 'magmoth'],
+      enemyTeam: ['thornox', 'umbrawl', 'nocturnyx'],
       seed: 3802152333,
       modifiers: ['relay_fever'],
     });
@@ -388,12 +426,12 @@ test('Champion switch scoring reads detonation setup from the candidate, not the
   const clean = makeState(),
     candidatePrimed = makeState(),
     activePrimed = makeState();
-  candidatePrimed.sides.player.team[1].statuses.charged = {
+  candidatePrimed.sides.player.team[1].statuses.burning = {
     appliedTurn: candidatePrimed.turn,
     remaining: 2,
     stacks: 1,
   };
-  activePrimed.sides.player.team[0].statuses.charged = {
+  activePrimed.sides.player.team[0].statuses.burning = {
     appliedTurn: activePrimed.turn,
     remaining: 2,
     stacks: 1,
@@ -414,7 +452,7 @@ test('Champion switch scoring reads detonation setup from the candidate, not the
     standardPrimed = makeState();
   standardClean.rngState = 123456789;
   standardPrimed.rngState = 123456789;
-  standardPrimed.sides.player.team[1].statuses.charged = {
+  standardPrimed.sides.player.team[1].statuses.burning = {
     appliedTurn: standardPrimed.turn,
     remaining: 2,
     stacks: 1,
@@ -443,7 +481,7 @@ test('Standard AI cannot inspect a player action committed outside its safe snap
 
 test('Champion reply forecasts account for an active barrier through authoritative previews', () => {
   const clear = createBattle({
-      playerTeam: ['orakyn', 'lumivox', 'mnemora'],
+      playerTeam: ['orakyn', 'lumivox', 'kordane'],
       enemyTeam: ['farfombre', 'prismage', 'kordane'],
       seed: 1,
     }),
@@ -516,24 +554,19 @@ test('Standard AI rotates its kit to cash out a Flow crescendo', () => {
   assert.deepEqual(state, before);
 });
 
-test('Champion AI converts late-turn pressure into finishing aggression', () => {
-  const pressure = createBattle({
+test('Champion AI has no hidden late-turn urgency branch', () => {
+  const early = createBattle({
       playerTeam: ['kordane', 'lumivox', 'mnemora'],
       enemyTeam: ['orakyn', 'prismage', 'brontusk'],
       seed: 6,
     }),
-    baseline = structuredClone(pressure);
-  pressure.rngState = 123456789;
-  baseline.rngState = 123456789;
-  pressure.turn = 29;
-  baseline.turn = 29;
-  baseline.lateTurnPressure = false;
-  assert.deepEqual(chooseAiAction(baseline, 'player', 'champion', 'champion'), {
-    type: 'move',
-    moveId: 'resonant_focus',
-  });
-  assert.deepEqual(chooseAiAction(pressure, 'player', 'champion', 'champion'), {
-    type: 'move',
-    moveId: 'crystal_strike',
-  });
+    late = structuredClone(early);
+  early.rngState = 123456789;
+  late.rngState = 123456789;
+  early.turn = 28;
+  late.turn = 29;
+  assert.deepEqual(
+    chooseAiAction(late, 'player', 'champion', 'champion'),
+    chooseAiAction(early, 'player', 'champion', 'champion')
+  );
 });

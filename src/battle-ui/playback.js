@@ -186,7 +186,7 @@ async function playEvents(events) {
         actor: creatureName(event.creatureId),
         amount: event.amount,
       });
-      tacticalFx({ ...event, status: 'guarded' });
+      tacticalFx(event);
       sound.guard();
     }
     if (event.type === 'barrier-hit') {
@@ -206,7 +206,7 @@ async function playEvents(events) {
         amount: event.amount,
       });
       fighter?.classList.add('hit');
-      statusTickFx({ ...event, status: event.source === 'thorns' ? 'thorns' : 'exposed' });
+      statusTickFx({ ...event, status: 'countering' });
       sound.hit('force');
     }
     if (event.type === 'status-tick') {

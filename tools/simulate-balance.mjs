@@ -23,8 +23,8 @@ function drawTeam(seed) {
   return { team, state };
 }
 
-function simulate(playerTeam, enemyTeam, seed, lateTurnPressure) {
-  let state = createBattle({ playerTeam, enemyTeam, seed, lateTurnPressure });
+function simulate(playerTeam, enemyTeam, seed) {
+  let state = createBattle({ playerTeam, enemyTeam, seed });
   for (let guard = 0; guard < 140 && state.phase !== 'ended'; guard++) {
     if (state.sides.player.pendingReplacement)
       state = applyReplacement(
@@ -87,7 +87,7 @@ function checkNaiveRamp() {
     targets = {
       apprentice: [0.65, 1],
       standard: [0.4, 0.6],
-      champion: [0.2, 0.4],
+      champion: [0.2, 0.45],
     },
     results = {};
   for (const difficulty of Object.keys(targets)) {
@@ -218,30 +218,22 @@ const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.AREN
     CREATURE_IDS.map((row) => [row, emptyRecord(CREATURE_IDS.filter((column) => column !== row))])
   );
 let rng = balanceSeed,
-  turnsBefore = 0,
-  turnsAfter = 0,
-  turnSamplesBefore = [],
-  turnSamplesAfter = [],
-  capsBefore = 0,
-  capsAfter = 0;
+  totalTurns = 0,
+  turnSamples = [],
+  caps = 0;
 
 for (let game = 0; game < samples; game++) {
   const player = drawTeam(rng);
   rng = player.state;
   const enemy = drawTeam(rng);
   rng = enemy.state;
-  const battleSeed = rng,
-    before = simulate(player.team, enemy.team, battleSeed, false),
-    result = simulate(player.team, enemy.team, battleSeed, true),
+  const result = simulate(player.team, enemy.team, rng),
     playerWon = result.winner === 'player',
     enemyWon = result.winner === 'enemy';
   rng = (rng + 0x9e3779b9) >>> 0 || 1;
-  turnsBefore += before.turn;
-  turnsAfter += result.turn;
-  turnSamplesBefore.push(before.turn);
-  turnSamplesAfter.push(result.turn);
-  capsBefore += before.reason === 'turn-cap' ? 1 : 0;
-  capsAfter += result.reason === 'turn-cap' ? 1 : 0;
+  totalTurns += result.turn;
+  turnSamples.push(result.turn);
+  caps += result.reason === 'turn-cap' ? 1 : 0;
   recordSide(stats, player.team, playerWon);
   recordSide(stats, enemy.team, enemyWon);
   recordSide(archetypes, [teamProfile(player.team).dominant], playerWon);
@@ -278,10 +270,10 @@ lopsided.sort((a, b) => b.rate - a.rate || b.games - a.games);
 
 console.log(ranked.map((item) => `${item.id}:${percent(item.rate)}`).join(' · '));
 console.log(
-  `Simulated ${samples} paired champion-vs-champion matchups (seed ${balanceSeed}) across all ${CREATURE_IDS.length} creatures.`
+  `Simulated ${samples} champion-vs-champion matchups (seed ${balanceSeed}) across all ${CREATURE_IDS.length} creatures.`
 );
 console.log(
-  `Late-turn pressure comparison: average turns ${(turnsBefore / samples).toFixed(1)} before → ${(turnsAfter / samples).toFixed(1)} after; p90 ${percentile(turnSamplesBefore, 0.9)} → ${percentile(turnSamplesAfter, 0.9)}; turn-cap decisions ${percent(capsBefore / samples, 1)} (${capsBefore}/${samples}) before → ${percent(capsAfter / samples, 1)} (${capsAfter}/${samples}) after.`
+  `Pacing: average turns ${(totalTurns / samples).toFixed(1)}; p90 ${percentile(turnSamples, 0.9)}; turn-cap decisions ${percent(caps / samples, 1)} (${caps}/${samples}).`
 );
 console.log(`Creature win-rate range: ${percent(ranked.at(-1).rate, 1)}–${percent(ranked[0].rate, 1)}.`);
 console.log(
@@ -311,9 +303,9 @@ for (const row of CREATURE_IDS)
 checkNaiveRamp();
 checkTtkProfile();
 
-const averageTurns = turnsAfter / samples,
-  capShare = capsAfter / samples;
-if (averageTurns < 16 || averageTurns > 20 || capShare >= 0.1)
+const averageTurns = totalTurns / samples,
+  capShare = caps / samples;
+if (averageTurns < 12 || averageTurns > 16 || capShare >= 0.05)
   throw new Error(
     `Pacing outside targets: average turns ${averageTurns.toFixed(1)}, turn-cap share ${percent(capShare, 1)}`
   );

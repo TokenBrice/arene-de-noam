@@ -192,7 +192,7 @@ test('a doctrine grants one cinematic free Trainer Command per battle', async ({
   await expect(page.locator('.trainer-command-fx')).toContainText('Tenir la ligne');
   await expect(page.locator('.tactical-number')).toContainText(/\+\d+ ⬡/);
   await expect(command).toBeDisabled({ timeout: 5000 });
-  await expect(page.locator('#hud-player')).toContainText('Protégé');
+  await expect(page.locator('#hud-player')).toContainText('Barrière');
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.getByRole('button', { name: 'Codex du combat' }).click();
   await expect(page.locator('.trainer-command-codex.used')).toContainText('Ordre donné');
@@ -333,7 +333,7 @@ test('the last two creatures receive a full-screen Final Duel stinger', async ({
 
 test('a primed status fractures into a dedicated detonation beat before impact', async ({ page }) => {
   await installCompletedTutorial(page, {
-    lastTeam: ['voltide', 'nymbloom', 'riptalon'],
+    lastTeam: ['thornox', 'nymbloom', 'riptalon'],
     reducedMotion: false,
     battleSpeed: 2,
   });
@@ -341,13 +341,13 @@ test('a primed status fractures into a dedicated detonation beat before impact',
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.locator('#quick-rule').selectOption('starstorm');
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('[data-move="static_wake"]')).toBeEnabled();
-  await page.locator('[data-move="static_wake"]').click();
-  await expect(page.locator('[data-move="thunder_deluge"]')).toBeEnabled();
-  await page.locator('[data-move="thunder_deluge"]').click();
+  await expect(page.locator('[data-move="toxic_spines"]')).toBeEnabled();
+  await page.locator('[data-move="toxic_spines"]').click();
+  await expect(page.locator('[data-move="venom_harvest"]')).toBeEnabled();
+  await page.locator('[data-move="venom_harvest"]').click();
   await expect(page.locator('.detonation-call')).toBeVisible();
   await expect(page.locator('.detonation-call')).toContainText('RÉACTION EN CHAÎNE');
-  await expect(page.locator('.detonation-call')).toContainText('Chargé');
+  await expect(page.locator('.detonation-call')).toContainText('Brûlure');
 });
 
 test('battle codex explains live rules and closes with Escape', async ({ page }) => {
