@@ -234,6 +234,91 @@
 .status-chip.negative {
   color: #ffe6e6;
 }
+.status-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+  overflow: visible;
+  color: inherit;
+}
+.status-polarity-label {
+  color: var(--status-color);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.status-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 7px 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 64%, #fff2);
+  color: color-mix(in srgb, var(--status-color) 82%, #fff);
+  background: color-mix(in srgb, var(--status-color) 13%, #07091d);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  vertical-align: middle;
+}
+.status-badge.positive {
+  border-radius: 999px;
+}
+.status-badge.negative {
+  border-style: inset;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--status-color) 18%, #050611);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.status-badge::after {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 9px;
+  height: 9px;
+  color: #07091d;
+  background: var(--status-color);
+  font-size: 7px;
+  line-height: 1;
+}
+.status-badge.positive::after {
+  content: '▲';
+  top: -5px;
+  right: 1px;
+  border-radius: 50%;
+}
+.status-badge.negative::after {
+  content: '▼';
+  right: 0;
+  bottom: -5px;
+  border-radius: 1px;
+}
+.status-badge .status-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+.status-badge.compact {
+  min-height: 20px;
+  padding: 2px 5px 2px 4px;
+  font-size: 8px;
+}
+.status-badge.compact .status-icon {
+  width: 13px;
+  height: 13px;
+}
+.move-status-badges {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: 7px;
+}
 .status-orbits {
   position: absolute;
   z-index: 3;
@@ -249,13 +334,14 @@
   transform: scaleX(-1);
 }
 .status-orb {
+  position: relative;
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
   border: 2px solid var(--status-color);
   border-radius: 50%;
-  color: #fff;
+  color: var(--status-color);
   background: radial-gradient(circle, color-mix(in srgb, var(--status-color) 58%, #101128), #060716 72%);
   box-shadow:
     0 0 18px var(--status-color),
@@ -273,22 +359,59 @@
   animation-delay: -1.2s;
 }
 .status-orb b {
+  display: grid;
+  place-items: center;
   font-size: 18px;
 }
+.status-orb .status-icon {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 0 4px var(--status-color));
+}
+.status-orb.positive::after,
+.status-orb.negative::after {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  color: #07091d;
+  background: var(--status-color);
+  font-size: 8px;
+  line-height: 1;
+  box-shadow: 0 0 5px #000;
+}
+.status-orb.positive::after {
+  content: '▲';
+  top: -5px;
+  right: -4px;
+  border-radius: 50%;
+}
+.status-orb.negative {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--status-color) 18%, #050611);
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+}
+.status-orb.negative::after {
+  content: '▼';
+  right: 0;
+  bottom: 0;
+  border-radius: 1px;
+}
 .status-orb.status-burning {
-  border-radius: 60% 60% 60% 12%;
-  animation: statusFlame 0.5s steps(2) infinite;
+  animation: statusBurningPulse 0.7s ease-in-out infinite alternate;
 }
-.status-orb.status-poisoned {
-  box-shadow:
-    0 0 22px #a5e85d,
-    inset 0 -10px 13px #4c7d2c;
+@media (prefers-reduced-motion: reduce) {
+  .status-orb,
+  .status-orb.status-burning {
+    animation: none !important;
+    transform: none;
+  }
 }
-.status-orb.status-rooted {
-  border-radius: 45% 45% 10% 10%;
-}
-.status-orb.status-stunned {
-  animation: statusStun 0.75s linear infinite;
+body.reduced-motion .status-orb,
+body.reduced-motion .status-orb.status-burning {
+  animation: none !important;
+  transform: none;
 }
 .fighter.has-barrier img {
   filter: drop-shadow(0 0 18px #64ecff) drop-shadow(0 24px 14px #0009);

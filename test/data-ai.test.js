@@ -21,7 +21,13 @@ import {
 } from '../src/data/team-profile.js';
 import { chooseAiAction } from '../src/battle/ai.js';
 import { createBattle, getLegalActions, resolveTurn } from '../src/battle/engine.js';
-import { NEGATIVE_STATUSES, POSITIVE_STATUSES, STATUS_DEFINITIONS } from '../src/battle/statuses.js';
+import {
+  NEGATIVE_STATUSES,
+  POSITIVE_STATUSES,
+  STATUS_DEFINITIONS,
+  STATUS_DISPLAY_ORDER,
+  statusIcon,
+} from '../src/battle/statuses.js';
 
 const SURVIVING_STATUSES = new Set([
   'focused',
@@ -323,6 +329,45 @@ test('team combo routes expose cross-creature setups and never self-credit', () 
 
 test('move status data uses exactly the eight-status contract', () => {
   assert.deepEqual(Object.keys(STATUS_DEFINITIONS), [...SURVIVING_STATUSES]);
+  assert.deepEqual(STATUS_DISPLAY_ORDER, [
+    'focused',
+    'haste',
+    'evasive',
+    'countering',
+    'marked',
+    'rooted',
+    'stunned',
+    'burning',
+  ]);
+  const expectedMetadata = {
+    focused: { positive: true, color: '#1DA1F2', iconKey: 'eye' },
+    haste: { positive: true, color: '#C6FF00', iconKey: 'wing' },
+    evasive: { positive: true, color: '#304FFE', iconKey: 'ghost' },
+    countering: { positive: true, color: '#00E0A4', iconKey: 'shield-arrow' },
+    marked: { positive: false, color: '#AD1457', iconKey: 'target-lock' },
+    stunned: { positive: false, color: '#FFEA70', iconKey: 'dizzy-stars' },
+    rooted: { positive: false, color: '#9C5B32', iconKey: 'roots' },
+    burning: { positive: false, color: '#F4511E', iconKey: 'flame' },
+  };
+  const metadata = Object.fromEntries(
+    Object.entries(STATUS_DEFINITIONS).map(([id, { positive, color, iconKey }]) => [
+      id,
+      { positive, color, iconKey },
+    ])
+  );
+  assert.deepEqual(metadata, expectedMetadata);
+  const colors = Object.values(STATUS_DEFINITIONS).map(({ color }) => color),
+    iconKeys = Object.values(STATUS_DEFINITIONS).map(({ iconKey }) => iconKey);
+  assert.equal(new Set(colors).size, 8);
+  assert.equal(new Set(iconKeys).size, 8);
+  assert.ok(colors.every((color) => /^#[0-9A-F]{6}$/.test(color)));
+  for (const [id, definition] of Object.entries(STATUS_DEFINITIONS)) {
+    const icon = statusIcon(id);
+    assert.equal((icon.match(/<svg\b/g) || []).length, 1);
+    assert.match(icon, new RegExp(`status-icon-${definition.iconKey}`));
+    assert.match(icon, /aria-hidden="true"/);
+    assert.doesNotMatch(icon, /[\uD800-\uDFFF]/);
+  }
   assert.equal(POSITIVE_STATUSES.length, 4);
   assert.equal(NEGATIVE_STATUSES.length, 4);
   for (const move of Object.values(MOVES))
@@ -436,10 +481,8 @@ test('Champion replacement scoring prefers an available Combo finisher', () => {
     state.sides.player.team[0].hp = 0;
     state.sides.player.team[1].hp = Math.round(state.sides.player.team[1].maxHp * 0.6);
     state.sides.player.surge = 100;
-    if (marked)
-      state.sides.enemy.team[0].statuses.marked = { appliedTurn: 1, remaining: 2, stacks: 1 };
-    if (cooldown)
-      state.sides.player.team[1].cooldowns.ninefold_inferno = { appliedTurn: 1, remaining: 2 };
+    if (marked) state.sides.enemy.team[0].statuses.marked = { appliedTurn: 1, remaining: 2, stacks: 1 };
+    if (cooldown) state.sides.player.team[1].cooldowns.ninefold_inferno = { appliedTurn: 1, remaining: 2 };
     return state;
   };
   assert.deepEqual(chooseAiAction(makeState(false), 'player', 'champion', 'direct'), {

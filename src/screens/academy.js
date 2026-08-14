@@ -4,6 +4,8 @@ const {
   AFFINITIES,
   AFFINITY_TRIANGLES,
   STATUS_DEFINITIONS,
+  STATUS_DISPLAY_ORDER,
+  statusIcon,
   t,
   screen,
   affinity,
@@ -35,12 +37,19 @@ function renderAcademy() {
           .join('');
       return `<section class="academy-type-triangle ${key}" aria-label="${t(`academy.triangle.${key}`)}"><h3>${t(`academy.triangle.${key}`)}</h3><p>${t(`academy.${key}Rule`)}</p><div>${relations}</div></section>`;
     }).join('');
-  const statuses = Object.entries(STATUS_DEFINITIONS)
-      .map(
-        ([id, meta]) =>
-          `<article class="academy-status ${meta.positive ? 'boon' : 'penalty'}" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}${meta.stackable ? ` <em>×${meta.maxStacks}</em>` : ''}</b><small>${t(`status.effect.${id}`)}</small></span></article>`
-      )
-      .join('');
+  const statusGroupHtml = (positive) => {
+    const polarity = positive ? 'positive' : 'negative',
+      groupId = `academy-status-${polarity}`,
+      label = t(positive ? 'status.polarity.positive' : 'status.polarity.negative'),
+      statuses = STATUS_DISPLAY_ORDER.filter((id) => STATUS_DEFINITIONS[id].positive === positive)
+        .map((id) => {
+          const meta = STATUS_DEFINITIONS[id];
+          return `<article class="academy-status ${positive ? 'boon positive' : 'penalty negative'}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}"><i>${statusIcon(id)}</i><span><em class="status-polarity-label">${positive ? '▲' : '▼'} ${label}</em><b>${t(`status.${id}`)}${meta.stackable ? ` <u>×${meta.maxStacks}</u>` : ''}</b><small>${t(`status.effect.${id}`)}</small></span></article>`;
+        })
+        .join('');
+    return `<section class="academy-status-group ${polarity}" aria-labelledby="${groupId}"><h3 id="${groupId}">${positive ? '▲' : '▼'} ${label}</h3><div class="academy-status-grid academy-status-grid-all">${statuses}</div></section>`;
+  };
+  const statuses = `<div class="academy-status-lexicon">${statusGroupHtml(true)}${statusGroupHtml(false)}</div>`;
   const icons = ['♥', '↺', '△', '3', '»', '✦', '☿', '◎'],
     core = Array.from({ length: 8 }, (_, index) => {
       const number = index + 1,
@@ -48,7 +57,7 @@ function renderAcademy() {
           number === 3
             ? `<div class="academy-affinity-track">${triangles}</div><p class="academy-core-note">${t('academy.affinityHint')}</p>`
             : number === 7
-              ? `<div class="academy-status-grid academy-status-grid-all">${statuses}</div>`
+              ? statuses
               : '';
       return `<article class="academy-core academy-core-${number}"><header><i>${icons[index]}</i><span><small>${number}/8</small><h2>${t(`academy.core.${number}.title`)}</h2></span></header><p>${t(`academy.core.${number}.desc`)}</p>${extra}</article>`;
     }).join('');

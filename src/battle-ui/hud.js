@@ -15,6 +15,10 @@ const {
   chooseAiAction,
   effectiveSpeed,
   STATUS_DEFINITIONS,
+  comboSetupStatus,
+  sortStatusIds,
+  statusBadgeHtml,
+  statusIcon,
   t,
   sprite,
   creatureName,
@@ -24,6 +28,26 @@ const {
   escapeHtml,
 } = ctx;
 const { moveArchetype } = route;
+
+function polarityLabel(meta) {
+  return `${meta.positive ? '▲' : '▼'} ${t(
+    meta.positive ? 'status.polarity.positive' : 'status.polarity.negative'
+  )}`;
+}
+
+function moveStatusBadgesHtml(move) {
+  const comboStatus = comboSetupStatus(move),
+    ids = sortStatusIds([
+      ...(move.selfStatuses || []).map(({ id }) => id),
+      ...(move.targetStatuses || []).map(({ id }) => id),
+      ...(comboStatus ? [comboStatus] : []),
+    ]);
+  return ids.length
+    ? `<span class="move-status-badges">${[...new Set(ids)]
+        .map((id) => statusBadgeHtml(id, { label: escapeHtml(t(`status.${id}`)), compact: true }))
+        .join('')}</span>`
+    : '';
+}
 
 function plannedEnemyAction() {
   const session = ctx.battleSession,
@@ -132,13 +156,16 @@ function hudHtml(side, expertMode = Boolean(ctx.save.expertMode)) {
             },
           ]
         : []),
-      ...Object.keys(c.statuses).map((id) => {
+      ...sortStatusIds(Object.keys(c.statuses)).map((id) => {
         const meta = STATUS_DEFINITIONS[id],
           status = c.statuses[id];
         return {
           id,
-          icon: meta.icon,
+          icon: statusIcon(id),
           color: meta.color,
+          iconKey: meta.iconKey,
+          positive: meta.positive,
+          lightInk: meta.lightInk,
           stacks: status.stacks || 1,
           label: `${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}${status.remaining ? ` · ${status.remaining}` : ''}`,
         };
@@ -158,7 +185,7 @@ function hudHtml(side, expertMode = Boolean(ctx.save.expertMode)) {
       .filter(Boolean)
       .join(' · ');
   const gaugeLabel = t(expertMode ? 'battle.surge' : 'battle.sigGauge');
-  return `<button type="button" class="battle-plate-toggle" data-plate-side="${side}" aria-expanded="false" aria-label="${escapeHtml(t('battle.plateOpen', { name: creatureName(c.id) }))}"><span class="plate-line plate-primary"><strong>${creatureName(c.id)}${rank ? ` <i class="battle-rank">${'★'.repeat(rank)}</i>` : ''}</strong><i class="affinity-dot" style="--affinity-color:${a.color}">${affinityIcon(c.affinity)}</i><b class="plate-hp-number">${c.hp}/${c.maxHp}</b><span class="team-dots">${teamPipsHtml(owner)}</span></span><span class="plate-line plate-meters"><span class="hp-track"><i class="hp-fill ${ratio < 0.3 ? 'low' : ''}" style="width:${Math.max(0, ratio * 100)}%"></i>${c.barrier ? `<i class="barrier-fill" style="width:${Math.min(100, (c.barrier / c.maxHp) * 100)}%"></i>` : ''}</span><span class="surge-row ${surge >= cost ? 'ready' : ''}" title="${escapeHtml(`${gaugeLabel} ${surge}/${cost}`)}"><span class="surge-caption">${gaugeLabel}</span><span class="surge-track"><i style="width:${surge}%"></i></span><b class="plate-surge-number">✦ ${surge}/${cost}</b></span><span class="plate-statuses">${visibleStatuses.map((entry) => `<i class="plate-status status-${entry.id}" style="--status-color:${entry.color}" title="${escapeHtml(visibleStatusLabel(entry))}">${entry.icon}</i>`).join('')}${overflow ? `<b class="plate-status-more">+${overflow}</b>` : ''}</span></span><span class="plate-state-text">${escapeHtml(stateText)}</span></button>${side === 'enemy' ? enemyIntentHtml() : ''}`;
+  return `<button type="button" class="battle-plate-toggle" data-plate-side="${side}" aria-expanded="false" aria-label="${escapeHtml(t('battle.plateOpen', { name: creatureName(c.id) }))}"><span class="plate-line plate-primary"><strong>${creatureName(c.id)}${rank ? ` <i class="battle-rank">${'★'.repeat(rank)}</i>` : ''}</strong><i class="affinity-dot" style="--affinity-color:${a.color}">${affinityIcon(c.affinity)}</i><b class="plate-hp-number">${c.hp}/${c.maxHp}</b><span class="team-dots">${teamPipsHtml(owner)}</span></span><span class="plate-line plate-meters"><span class="hp-track"><i class="hp-fill ${ratio < 0.3 ? 'low' : ''}" style="width:${Math.max(0, ratio * 100)}%"></i>${c.barrier ? `<i class="barrier-fill" style="width:${Math.min(100, (c.barrier / c.maxHp) * 100)}%"></i>` : ''}</span><span class="surge-row ${surge >= cost ? 'ready' : ''}" title="${escapeHtml(`${gaugeLabel} ${surge}/${cost}`)}"><span class="surge-caption">${gaugeLabel}</span><span class="surge-track"><i style="width:${surge}%"></i></span><b class="plate-surge-number">✦ ${surge}/${cost}</b></span><span class="plate-statuses">${visibleStatuses.map((entry) => (entry.id === 'barrier' ? `<i class="plate-status status-barrier" style="--status-color:${entry.color}" title="${escapeHtml(visibleStatusLabel(entry))}">${entry.icon}</i>` : `<i class="plate-status status-${entry.id} ${entry.positive ? 'positive' : 'negative'}${entry.lightInk ? ' light-ink' : ''}" data-status="${entry.id}" data-icon="${entry.iconKey}" data-polarity="${entry.positive ? 'positive' : 'negative'}" style="--status-color:${entry.color}" title="${escapeHtml(visibleStatusLabel(entry))}">${entry.icon}</i>`)).join('')}${overflow ? `<b class="plate-status-more">+${overflow}</b>` : ''}</span></span><span class="plate-state-text">${escapeHtml(stateText)}</span></button>${side === 'enemy' ? enemyIntentHtml() : ''}`;
 }
 
 function hudDetailHtml(side) {
@@ -169,27 +196,27 @@ function hudDetailHtml(side) {
     statusItems = [
       ...(c.barrier
         ? [
-            `<div class="plate-detail-status positive"><i>⬡</i><span><b>${t('battle.barrier', { amount: c.barrier })}</b></span></div>`,
+            `<div class="plate-detail-status barrier"><i>⬡</i><span><b>${t('battle.barrier', { amount: c.barrier })}</b></span></div>`,
           ]
         : []),
-      ...Object.keys(c.statuses).map((id) => {
+      ...sortStatusIds(Object.keys(c.statuses)).map((id) => {
         const meta = STATUS_DEFINITIONS[id],
           status = c.statuses[id],
           helper = status.sourceCreatureId;
-        return `<div class="plate-detail-status ${meta.positive ? 'positive' : 'negative'}" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}${status.remaining ? ` · ${status.remaining}` : ''}</b><small>${t(`status.effect.${id}`)}${helper ? ` · ${t('battle.preparedBy', { helper: creatureName(helper) })}` : ''}</small></span></div>`;
+        return `<div class="plate-detail-status ${meta.positive ? 'positive' : 'negative'}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${meta.positive ? 'positive' : 'negative'}" style="--status-color:${meta.color}"><i>${statusIcon(id)}</i><span><em class="status-polarity-label">${polarityLabel(meta)}</em><b>${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}${status.remaining ? ` · ${status.remaining}` : ''}</b><small>${t(`status.effect.${id}`)}${helper ? ` · ${t('battle.preparedBy', { helper: creatureName(helper) })}` : ''}</small></span></div>`;
       }),
     ];
   if (!ctx.save.expertMode) {
     const compactStatusItems = [
         ...(c.barrier
           ? [
-              `<div class="plate-detail-status positive"><i>⬡</i><span><b>${t('battle.barrierName')}</b></span></div>`,
+              `<div class="plate-detail-status barrier"><i>⬡</i><span><b>${t('battle.barrierName')}</b></span></div>`,
             ]
           : []),
-        ...Object.keys(c.statuses).map((id) => {
+        ...sortStatusIds(Object.keys(c.statuses)).map((id) => {
           const meta = STATUS_DEFINITIONS[id],
             status = c.statuses[id];
-          return `<div class="plate-detail-status ${meta.positive ? 'positive' : 'negative'}" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}</b></span></div>`;
+          return `<div class="plate-detail-status ${meta.positive ? 'positive' : 'negative'}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${meta.positive ? 'positive' : 'negative'}" style="--status-color:${meta.color}"><i>${statusIcon(id)}</i><span><em class="status-polarity-label">${polarityLabel(meta)}</em><b>${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}</b></span></div>`;
         }),
       ],
       compact = compactStatusItems.slice(0, 2).join(''),
@@ -260,7 +287,7 @@ function moveButton(moveId, index) {
   const advancedClasses = ctx.save.expertMode
       ? `${move.hits > 1 ? 'multi-hit' : ''} ${move.drain ? 'drain-move' : ''} ${move.priority > 0 ? 'priority-move' : ''}`
       : '',
-    context = `<span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}</span><span class="move-tags">${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo ? `<span class="tag combo-ready">COMBO +40%</span>` : ''}${preview.helperId ? `<span class="tag combo-helper-detail">${t('battle.preparedBy', { helper: creatureName(preview.helperId) })}</span>` : ''}` : ''}<span class="tag">${affinityIcon(move.affinity)} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span>`;
+    context = `<span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}${moveStatusBadgesHtml(move)}</span><span class="move-tags">${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo ? `<span class="tag combo-ready">COMBO +40%</span>` : ''}${preview.helperId ? `<span class="tag combo-helper-detail">${t('battle.preparedBy', { helper: creatureName(preview.helperId) })}</span>` : ''}` : ''}<span class="tag">${affinityIcon(move.affinity)} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span>`;
   if (ctx.save.expertMode)
     return `<button type="button" class="move-btn kind-${move.kind} ${advancedClasses} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-archetype" aria-hidden="true">${archetype}</span><span class="move-name">${move.signature ? '<i class="move-signature-mark">✦</i> ' : ''}<i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="move-figure">${dominant}${comboBadge}<span class="move-badges">${badges.join('')}</span></span>${context}</button>`;
   const effectiveness =

@@ -347,6 +347,7 @@
 
 .plate-status,
 .plate-status-more {
+  position: relative;
   display: grid;
   place-items: center;
   width: 20px;
@@ -357,6 +358,46 @@
   background: color-mix(in srgb, var(--status-color, #aebeed) 11%, #080b20);
   font-size: var(--type-battle-micro);
   font-style: normal;
+}
+.plate-status .status-icon {
+  width: 13px;
+  height: 13px;
+}
+.plate-status.positive {
+  border-style: solid;
+  border-radius: 7px;
+  color: var(--status-color);
+  background: color-mix(in srgb, var(--status-color) 14%, #080b20);
+}
+.plate-status.negative {
+  border-style: inset;
+  border-radius: 1px;
+  color: var(--status-color);
+  background: color-mix(in srgb, var(--status-color) 20%, #050611);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+.plate-status.positive::after,
+.plate-status.negative::after {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 7px;
+  height: 7px;
+  color: #07091d;
+  background: var(--status-color);
+  font-size: 5px;
+  line-height: 1;
+}
+.plate-status.positive::after {
+  content: '▲';
+  top: -2px;
+  right: -2px;
+  border-radius: 50%;
+}
+.plate-status.negative::after {
+  content: '▼';
+  right: 0;
+  bottom: 0;
 }
 
 .plate-status-more {
@@ -503,6 +544,9 @@
   color: #e8eaf5;
   font-size: var(--type-battle-micro);
   line-height: 1.2;
+}
+.battle-screen .action-line.contextual .move-effect .move-status-badges {
+  margin-block: 2px;
 }
 
 .battle-screen .action-line.contextual .move-tags {
@@ -769,6 +813,7 @@
 }
 
 .plate-detail-status {
+  position: relative;
   display: grid;
   grid-template-columns: 34px 1fr;
   gap: 9px;
@@ -778,14 +823,73 @@
   border-radius: 11px;
   background: color-mix(in srgb, var(--status-color, #73eaff) 8%, #080b20);
 }
+.plate-detail-status.positive {
+  border-style: solid;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--status-color, #73eaff) 11%, #080b20);
+}
+.plate-detail-status.negative {
+  border-style: inset;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--status-color, #ff708e) 16%, #050611);
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+}
 
 .plate-detail-status > i {
+  position: relative;
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   font-size: 18px;
   font-style: normal;
+  color: #07091d;
+  background: var(--status-color, #73eaff);
+}
+.plate-detail-status.positive > i {
+  border-radius: 11px;
+}
+.plate-detail-status.negative > i {
+  border-radius: 1px;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.plate-detail-status.light-ink > i {
+  color: #fff;
+}
+.plate-detail-status.barrier > i {
+  color: #07091d;
+  background: #73eaff;
+  clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+}
+.plate-detail-status > i .status-icon {
+  width: 22px;
+  height: 22px;
+}
+.plate-detail-status > i::after {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
+  color: #07091d;
+  background: #fff;
+  font-size: 7px;
+  line-height: 1;
+  box-shadow: 0 0 4px #0008;
+}
+.plate-detail-status.positive > i::after {
+  content: '▲';
+  top: -4px;
+  right: -4px;
+  border-radius: 50%;
+}
+.plate-detail-status.negative > i::after {
+  content: '▼';
+  right: 0;
+  bottom: 0;
+}
+.plate-detail-status .status-polarity-label {
+  margin-bottom: 1px;
 }
 
 .plate-detail-intent .intent-read {

@@ -173,7 +173,26 @@ test('the tactical academy leads with eight essentials and every current effect'
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toContainText('Brûlure');
   await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('Combo');
   await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('+40 %');
-  await page.getByRole('button', { name: /Explorer les 72 techniques/ }).first().click();
+  await expect(page.locator('.academy-status-group.positive > h3')).toHaveText('▲ AVANTAGE');
+  await expect(page.locator('.academy-status-group.negative > h3')).toHaveText('▼ MALUS');
+  await expect(page.locator('.academy-status .status-icon')).toHaveCount(8);
+  await expect(page.locator('.academy-status')).toHaveAttribute('data-icon', /.+/);
+  expect(
+    await page.locator('.academy-status').evaluateAll((cards) => cards.map((card) => card.dataset.status))
+  ).toEqual(['focused', 'haste', 'evasive', 'countering', 'marked', 'rooted', 'stunned', 'burning']);
+  expect(
+    new Set(
+      await page
+        .locator('.academy-status')
+        .evaluateAll((cards) =>
+          cards.map((card) => getComputedStyle(card).getPropertyValue('--status-color').trim())
+        )
+    ).size
+  ).toBe(8);
+  await page
+    .getByRole('button', { name: /Explorer les 72 techniques/ })
+    .first()
+    .click();
   await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeVisible();
 });
 
@@ -194,10 +213,15 @@ test('Bestiary Move Theater replays all authored techniques accessibly', async (
   await page.getByLabel('Rechercher une créature').fill('');
   const trigger = page.locator('[data-preview-move="lucid_arc"]');
   await expect(trigger).toHaveAttribute('role', 'button');
+  await expect(trigger.locator('.status-badge[data-status="marked"]')).toHaveCount(1);
+  await expect(trigger.locator('.status-badge[data-status="marked"] .status-icon-target-lock')).toHaveCount(
+    1
+  );
   await trigger.click();
   await expect(page.getByRole('dialog', { name: 'Théâtre des techniques' })).toBeVisible();
   await expect(page.locator('#fx-stage')).toHaveClass(/move-lucid_arc/);
   await expect(page.locator('.theater-battlefield .fighter img')).toHaveCount(2);
+  await expect(page.locator('.theater-head .status-badge[data-status="marked"]')).toContainText('Marqué');
   await expect(page.getByRole('button', { name: 'Fermer' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: /Rejouer/ })).toBeFocused();

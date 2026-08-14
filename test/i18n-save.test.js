@@ -30,15 +30,11 @@ test('French and English localization keys are complete and interpolation works'
 });
 test('legacy affinity ids expose the canonical type labels and parallel triangle copy', () => {
   assert.deepEqual(
-    ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map(
-      (id) => DICTIONARIES.fr[`affinity.${id}`]
-    ),
+    ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map((id) => DICTIONARIES.fr[`affinity.${id}`]),
     ['Psy', 'Combat', 'Eau', 'Feu', 'Plante', 'Ténèbres']
   );
   assert.deepEqual(
-    ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map(
-      (id) => DICTIONARIES.en[`affinity.${id}`]
-    ),
+    ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map((id) => DICTIONARIES.en[`affinity.${id}`]),
     ['Psychic', 'Fighting', 'Water', 'Fire', 'Grass', 'Dark']
   );
   for (const key of [
@@ -75,6 +71,8 @@ test('the eight kid-clear status labels are complete and dead ids are absent', (
   ];
   assert.equal(Object.keys(STATUS_DEFINITIONS).length, 8);
   for (const dictionary of Object.values(DICTIONARIES)) {
+    assert.ok(dictionary['status.polarity.positive']);
+    assert.ok(dictionary['status.polarity.negative']);
     for (const id of Object.keys(STATUS_DEFINITIONS)) {
       assert.ok(dictionary[`status.${id}`]);
       const effect = dictionary[`status.effect.${id}`];

@@ -155,10 +155,19 @@ body.reduced-motion .combo-credit-call {
   white-space: nowrap;
 }
 .combo-route > i {
+  display: grid;
+  place-items: center;
+  gap: 2px;
   color: #e3acff;
   font-size: 10px;
   font-style: normal;
   text-align: center;
+}
+.combo-route > i > span:last-child {
+  line-height: 1.05;
+}
+.combo-status-badge .status-badge-label {
+  display: none;
 }
 .combo-routes.compact .combo-route {
   grid-template-columns: 1fr 32px 1fr;

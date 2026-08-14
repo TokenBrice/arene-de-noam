@@ -23,6 +23,9 @@ const {
   previewIncomingAfterSwitch,
   chooseAiAction,
   STATUS_DEFINITIONS,
+  sortStatusIds,
+  statusBadgeHtml,
+  statusIcon,
   ArenaScene,
   params,
   testAnimationScale,
@@ -224,9 +227,9 @@ function openBattleCodex() {
   if (ctx.locked) return;
   const state = ctx.battleSession.state,
     root = screen.querySelector('#replacement-root'),
-    statusIds = [
+    statusIds = sortStatusIds([
       ...new Set(['player', 'enemy'].flatMap((side) => Object.keys(activeOf(state, side).statuses))),
-    ],
+    ]),
     boons = ctx.gauntletRun?.boons || [],
     activeRule = ctx.battleSession.quickRuleId ? quickRule(ctx.battleSession.quickRuleId) : null,
     circuit = ctx.battleSession.mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null,
@@ -235,7 +238,8 @@ function openBattleCodex() {
     ? statusIds
         .map((id) => {
           const meta = STATUS_DEFINITIONS[id];
-          return `<div class="codex-status" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}</b><small>${t(`status.effect.${id}`)}</small></span></div>`;
+          const polarity = meta.positive ? 'positive' : 'negative';
+          return `<div class="codex-status ${polarity}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}"><i>${statusIcon(id)}</i><span><em class="status-polarity-label">${meta.positive ? '▲' : '▼'} ${t(meta.positive ? 'status.polarity.positive' : 'status.polarity.negative')}</em><b>${t(`status.${id}`)}</b><small>${t(`status.effect.${id}`)}</small></span></div>`;
         })
         .join('')
     : `<p>${t('battle.codexNoStatus')}</p>`;
@@ -541,7 +545,12 @@ function openSwitch() {
     const incoming = previewIncomingAfterSwitch(state, 'player', index, plan.moveId);
     if (!incoming) return null;
     if (!ctx.save.expertMode)
-      return { icon: '⚔', text: t('battle.switchIncomingAttack'), lethal: false, read: incoming.perfectRelay };
+      return {
+        icon: '⚔',
+        text: t('battle.switchIncomingAttack'),
+        lethal: false,
+        read: incoming.perfectRelay,
+      };
     return {
       icon: incoming.lethal ? '☠' : '⚔',
       lethal: incoming.lethal,
@@ -573,10 +582,12 @@ function openSwitch() {
     .map(({ c, index, mult, forecast }) => {
       const match = mult > 1 ? 'good' : mult < 1 ? 'risky' : 'neutral',
         passive = PASSIVES[c.passive],
-        statuses = (ctx.save.expertMode ? Object.keys(c.statuses) : [])
-          .map((id) => STATUS_DEFINITIONS[id].icon)
-          .join(' ');
-      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${affinityIcon(c.affinity)}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="switch-match ${match}">${mult > 1 ? '↑ ' + t('battle.switchGood') : mult < 1 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small ${ctx.save.expertMode ? `title="${escapeHtml(t(`passive.effect.${c.passive}`))}"` : ''}>${passive.icon} ${t(`passive.${c.passive}`)}${statuses ? ` · ${statuses}` : ''}</small></button>`;
+        statusIds = ctx.save.expertMode ? sortStatusIds(Object.keys(c.statuses)) : [],
+        statusNames = statusIds.map((id) => t(`status.${id}`)).join(', '),
+        statuses = statusIds.length
+          ? `<span class="switch-statuses" aria-hidden="true">${statusIds.map((id) => statusBadgeHtml(id, { compact: true, className: 'switch-status', title: escapeHtml(t(`status.${id}`)) })).join('')}</span><span class="visually-hidden switch-status-names">${escapeHtml(statusNames)}</span>`
+          : '';
+      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${affinityIcon(c.affinity)}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="switch-match ${match}">${mult > 1 ? '↑ ' + t('battle.switchGood') : mult < 1 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small class="switch-passive" ${ctx.save.expertMode ? `title="${escapeHtml(t(`passive.effect.${c.passive}`))}"` : ''}>${passive.icon} ${t(`passive.${c.passive}`)}</small>${statuses}</button>`;
     })
     .join('');
   const switchBonusKey = state.modifiers?.includes('relay_fever')

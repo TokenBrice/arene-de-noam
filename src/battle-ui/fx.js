@@ -7,6 +7,7 @@ const {
   quickRule,
   activeOf,
   STATUS_DEFINITIONS,
+  statusIcon,
   testAnimationScale,
   t,
   screen,
@@ -148,9 +149,13 @@ function tacticalFx(event) {
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const side = event.side,
-    color = event.type === 'heal' ? '#8dffb0' : event.status === 'focused' ? '#ffd66b' : '#79e9ff';
+    meta = STATUS_DEFINITIONS[event.status],
+    color =
+      event.type === 'heal' ? '#8dffb0' : event.type === 'barrier' ? '#73eaff' : meta?.color || '#79e9ff';
   const moveClass = ctx.currentFxMove?.moveId ? `move-${ctx.currentFxMove.moveId}` : '',
     numeric = ['heal', 'barrier'].includes(event.type) && event.amount > 0,
+    statusPolarity = meta ? (meta.positive ? 'status-positive' : 'status-negative') : '',
+    statusChange = meta ? (event.applied === false ? 'status-remove' : 'status-application') : '',
     coreText =
       event.type === 'heal' && numeric
         ? `+${event.amount}`
@@ -158,10 +163,10 @@ function tacticalFx(event) {
           ? `+${event.amount} ⬡`
           : event.type === 'heal'
             ? '✦'
-            : event.status === 'focused'
-              ? '◎'
+            : meta
+              ? statusIcon(event.status)
               : '⬡';
-  stage.className = `fx-stage active tactical-fx tactical-${['heal', 'barrier'].includes(event.type) ? event.type : event.status || 'cleanse'} ${numeric ? 'tactical-numeric' : ''} ${moveClass} from-${side}`;
+  stage.className = `fx-stage active tactical-fx tactical-${['heal', 'barrier'].includes(event.type) ? event.type : event.status || 'cleanse'} ${numeric ? 'tactical-numeric' : ''} ${statusPolarity} ${statusChange} ${moveClass} from-${side}`;
   stage.style.setProperty('--fx-color', color);
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
   stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');
@@ -172,7 +177,9 @@ function tacticalFx(event) {
         d = 45 + (i % 5) * 13;
       return `<i class="fx-particle" style="--dx:${Math.cos(angle) * d}px;--dy:${Math.sin(angle) * d}px;--delay:${(i % 6) * 30}ms"></i>`;
     }
-  ).join('')}<i class="fx-core ${numeric ? 'tactical-number' : ''}">${coreText}</i></div>`;
+  ).join(
+    ''
+  )}<i class="fx-core ${numeric ? 'tactical-number' : ''}${meta?.lightInk ? ' light-ink' : ''}">${coreText}</i></div>`;
   ctx.arenaScene?.burst(color, side, event.type === 'heal' ? 1.2 : 0.8);
 }
 
@@ -298,7 +305,9 @@ function statusTickFx(event) {
         d = 45 + (i % 7) * 12;
       return `<i class="fx-particle" style="--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--delay:${(i % 6) * 24}ms"></i>`;
     }
-  ).join('')}<i class="fx-core damage-number">−${event.amount}</i></div>`;
+  ).join(
+    ''
+  )}<i class="status-tick-icon${meta?.lightInk ? ' light-ink' : ''}">${meta ? statusIcon(event.status) : ''}</i><i class="fx-core damage-number">−${event.amount}</i></div>`;
   ctx.arenaScene?.burst(meta?.color || '#fff', side, 0.8);
 }
 

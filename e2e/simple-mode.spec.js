@@ -5,7 +5,9 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   page,
 }) => {
   await installCompletedTutorial(page, { expertMode: false });
-  await page.goto('/?seed=14&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike');
+  await page.goto(
+    '/?seed=14&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
+  );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
 
@@ -28,6 +30,11 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await page.locator('[data-plate-side="enemy"]').click();
   await expect(page.locator('.plate-detail-status')).toContainText('Marqué');
   await expect(page.locator('.plate-detail-status small')).toHaveCount(0);
+  const marked = page.locator('.plate-detail-status[data-status="marked"]');
+  await expect(marked).toHaveClass(/negative/);
+  await expect(marked).toHaveAttribute('data-polarity', 'negative');
+  await expect(marked.locator('.status-icon-target-lock')).toHaveCount(1);
+  await expect(marked).toHaveCSS('--status-color', '#AD1457');
   await page.locator('[data-action="close-plate"]').click();
   await page.locator('[data-move="slowing_riddle"]').click();
   await expect(page.locator('#hud-player .plate-surge-number')).not.toContainText('30/100');
@@ -41,7 +48,9 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
     .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')).expertMode))
     .toBe(true);
 
-  await page.goto('/?seed=14&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike');
+  await page.goto(
+    '/?seed=14&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
+  );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('.battle-screen')).toHaveClass(/expert-mode/);

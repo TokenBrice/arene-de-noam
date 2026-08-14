@@ -6,7 +6,7 @@ test('boots in French, switches to complete English, and keeps a clean console',
   await page.goto('/?seed=7');
   await expect(page.getByRole('heading', { name: 'Arène de Noam' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Combat rapide/ })).toBeVisible();
-  await page.goto('/?lang=en&seed=7');
+  await page.goto('/?lang=en&seed=7&enemy=thornox,kordane,calderoc&enemyMove=toxic_spines,toxic_spines');
   await expect(page.getByRole('heading', { name: /Noam.s Arena/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Quick Battle/ })).toBeVisible();
   await page.getByRole('button', { name: /Quick Battle/ }).click();
@@ -14,9 +14,18 @@ test('boots in French, switches to complete English, and keeps a clean console',
   await expect(page.locator('.mini-stats').first()).not.toContainText('PV');
   await page.getByRole('button', { name: /Enter the/ }).click();
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
+  await page.locator('[data-move]:enabled').first().click();
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible({ timeout: 20000 });
   await page.locator('[data-action="open-switch"]').click();
   await expect(page.locator('.switch-option').first()).toContainText(/\d+\/\d+ HP/);
   await expect(page.locator('.switch-option').first()).not.toContainText('PV');
+  await page.locator('[data-switch-index]').first().click();
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
+  await page.locator('[data-action="open-switch"]').click();
+  await page.keyboard.press('Escape');
+  const burnChip = page.locator('#hud-player .plate-status.status-burning').first();
+  await expect(burnChip).toBeVisible({ timeout: 15000 });
+  await expect(burnChip.locator('.status-icon-flame')).toHaveCount(1);
   await expectNoRuntimeLeaks(runtime);
 });
 

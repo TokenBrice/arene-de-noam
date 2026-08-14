@@ -1,9 +1,4 @@
-import {
-  AFFINITIES,
-  AFFINITY_ORDER,
-  AFFINITY_TRIANGLES,
-  affinityMultiplier,
-} from '../data/affinities.js';
+import { AFFINITIES, AFFINITY_ORDER, AFFINITY_TRIANGLES, affinityMultiplier } from '../data/affinities.js';
 import { CREATURES, CREATURE_IDS } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
 import { PASSIVES } from '../data/passives.js';
@@ -19,7 +14,7 @@ import {
 import { SQUAD_PRESETS } from '../data/squads.js';
 import { QUICK_RULES, quickRule } from '../data/battle-rules.js';
 import { battleAdviceKeys } from '../data/advice.js';
-import { teamComboRoutes } from '../data/combos.js';
+import { comboSetupStatus, teamComboRoutes } from '../data/combos.js';
 import { TRAINERS, ARENAS } from '../data/trainers.js';
 import { TRIALS } from '../data/trials.js';
 import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../data/gauntlet.js';
@@ -42,7 +37,14 @@ import {
 } from '../battle/engine.js';
 import { chooseAiAction } from '../battle/ai.js';
 import { normalizeSeed, randomIndex } from '../battle/rng.js';
-import { effectiveSpeed, STATUS_DEFINITIONS } from '../battle/statuses.js';
+import {
+  effectiveSpeed,
+  STATUS_DEFINITIONS,
+  STATUS_DISPLAY_ORDER,
+  sortStatusIds,
+  statusBadgeHtml,
+  statusIcon,
+} from '../battle/statuses.js';
 import { createI18n, validateDictionaries } from '../i18n.js';
 import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave } from '../save.js';
 import { ArenaScene } from '../presentation/arena.js';
@@ -180,9 +182,10 @@ function emblemHtml(index, earned = false) {
 }
 
 function statusVisuals(creature) {
-  const entries = Object.keys(creature.statuses).map((id) => {
+  const entries = sortStatusIds(Object.keys(creature.statuses)).map((id) => {
     const meta = STATUS_DEFINITIONS[id];
-    return `<i class="status-orb status-${id}" style="--status-color:${meta.color}" title="${t(`status.${id}`)}"><b>${meta.icon}</b></i>`;
+    const polarity = meta.positive ? 'positive' : 'negative';
+    return `<i class="status-orb status-${id} ${polarity}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}" title="${escapeHtml(t(`status.${id}`))}"><b>${statusIcon(id)}</b></i>`;
   });
   if (creature.barrier > 0)
     entries.unshift(
@@ -194,7 +197,12 @@ function statusVisuals(creature) {
 function comboRoutesHtml(ids, compact = false) {
   const routes = teamComboRoutes(ids).slice(0, compact ? 2 : 4);
   if (!routes.length) return compact ? '' : `<div class="combo-routes empty">${t('combo.none')}</div>`;
-  return `<div class="combo-routes ${compact ? 'compact' : ''}">${routes.map((route) => `<div class="combo-route"><span><img src="${sprite(route.setterId)}" alt=""><small>${creatureName(route.setterId)}</small><b>${t(`move.${route.setupMoveId}`)}</b></span><i>⌖ → COMBO<br><small>+40%</small></i><span><img src="${sprite(route.finisherId)}" alt=""><small>${creatureName(route.finisherId)}</small><b>${route.signature ? '✦ ' : ''}${t(`move.${route.finishMoveId}`)}</b></span></div>`).join('')}</div>`;
+  const markedBadge = statusBadgeHtml('marked', {
+    label: escapeHtml(t('status.marked')),
+    compact: true,
+    className: 'combo-status-badge',
+  });
+  return `<div class="combo-routes ${compact ? 'compact' : ''}">${routes.map((route) => `<div class="combo-route"><span><img src="${sprite(route.setterId)}" alt=""><small>${creatureName(route.setterId)}</small><b>${t(`move.${route.setupMoveId}`)}</b></span><i>${markedBadge}<span>→ COMBO<br><small>+40%</small></span></i><span><img src="${sprite(route.finisherId)}" alt=""><small>${creatureName(route.finisherId)}</small><b>${route.signature ? '✦ ' : ''}${t(`move.${route.finishMoveId}`)}</b></span></div>`).join('')}</div>`;
 }
 
 function draftInsightHtml(candidateId) {
@@ -241,6 +249,7 @@ Object.assign(ctx, {
   quickRule,
   battleAdviceKeys,
   teamComboRoutes,
+  comboSetupStatus,
   TRAINERS,
   ARENAS,
   TRIALS,
@@ -270,6 +279,10 @@ Object.assign(ctx, {
   randomIndex,
   effectiveSpeed,
   STATUS_DEFINITIONS,
+  STATUS_DISPLAY_ORDER,
+  sortStatusIds,
+  statusBadgeHtml,
+  statusIcon,
   DEFAULT_SAVE,
   SAVE_KEY,
   persistSave,

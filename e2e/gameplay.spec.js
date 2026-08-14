@@ -14,6 +14,11 @@ test('visible tutorial teaches types, Combo, Signature, and switch, then complet
   await expect(page.getByText(/Combat craint Psy/)).toBeVisible();
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('#hud-enemy')).toContainText('Marqué');
+  const markedToken = page.locator('#hud-enemy .plate-status[data-status="marked"]');
+  await expect(markedToken).toHaveClass(/negative/);
+  await expect(markedToken.locator('.status-icon-target-lock')).toHaveCount(1);
+  await expect(markedToken).toHaveCSS('--status-color', '#AD1457');
+  await expect(page.locator('.tactical-marked')).toHaveCSS('--fx-color', '#AD1457');
   await expect(page.getByText(/Kordane est Marqué/)).toBeVisible();
   await page.locator('[data-move="slowing_riddle"]').click();
   await expect(page.locator('#hud-enemy')).not.toContainText('Marqué');
@@ -105,6 +110,10 @@ test('Relay Rush turns a voluntary switch into immediate tempo', async ({ page }
   await expect(page.locator('.relay-rush-call')).toContainText('+24 Éclat');
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await expect(page.locator('#hud-player')).toContainText('Accéléré');
+  const hasteToken = page.locator('#hud-player .plate-status[data-status="haste"]');
+  await expect(hasteToken).toHaveClass(/positive/);
+  await expect(hasteToken.locator('.status-icon-wing')).toHaveCount(1);
+  await expect(hasteToken).toHaveCSS('--status-color', '#C6FF00');
   await page.getByRole('button', { name: 'Codex du combat' }).click();
   await expect(page.locator('.quick-rule-codex')).toContainText('Relais incandescent');
 });
@@ -200,6 +209,10 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
   await expect(command).toBeDisabled();
   await page.locator('[data-move="crystal_strike"]').click();
   await expect(page.locator('#hud-player')).toContainText('Sonné', { timeout: 5000 });
+  const stunnedToken = page.locator('#hud-player .plate-status[data-status="stunned"]');
+  await expect(stunnedToken).toHaveClass(/negative/);
+  await expect(stunnedToken.locator('.status-icon-dizzy-stars')).toHaveCount(1);
+  await expect(stunnedToken).toHaveCSS('--status-color', '#FFEA70');
   await expect(command).toBeEnabled({ timeout: 5000 });
   const before = Number(
     (await page.locator('#hud-player .plate-surge-number').textContent()).match(/\d+/)[0]
@@ -321,7 +334,9 @@ test('a predicted resisted attack exposes and celebrates a Perfect Relay', async
     reducedMotion: false,
     battleSpeed: 1,
   });
-  await page.goto('/?seed=1&player=abyssar,orakyn,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike');
+  await page.goto(
+    '/?seed=1&player=abyssar,orakyn,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
+  );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('.intent-read')).toContainText('Frappe cristal');

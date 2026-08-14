@@ -17,7 +17,7 @@ test('battle plates and command dock never enter the stage at required viewports
 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
-    await page.goto('/?seed=40&animations=0');
+    await page.goto('/?seed=40&animations=0&player=orakyn,abyssar,virelia&enemy=hexalune,calderoc,farfombre');
     await page.getByRole('button', { name: /Combat rapide|Quick Battle/ }).click();
     const ensurePlanOpen = async (target) => {
       if (await target.isVisible().catch(() => false)) return;
@@ -37,6 +37,30 @@ test('battle plates and command dock never enter the stage at required viewports
     await expect(page.locator('[data-action="trainer-command"]')).toBeVisible();
     await expect(page.locator('#hud-player .affinity-icon')).toBeVisible();
     await expect(page.locator('#hud-enemy .affinity-icon')).toBeVisible();
+    await expect(page.locator('#hud-player .plate-status[data-status]')).toHaveCount(2);
+    const statusIconBounds = await page
+      .locator('#hud-player .plate-status[data-status]')
+      .evaluateAll((tokens) =>
+        tokens.map((token) => {
+          const tokenBox = token.getBoundingClientRect(),
+            iconBox = token.querySelector('.status-icon').getBoundingClientRect();
+          return {
+            tokenWidth: tokenBox.width,
+            tokenHeight: tokenBox.height,
+            inside:
+              iconBox.left >= tokenBox.left &&
+              iconBox.top >= tokenBox.top &&
+              iconBox.right <= tokenBox.right &&
+              iconBox.bottom <= tokenBox.bottom,
+          };
+        })
+      );
+    expect(statusIconBounds).toHaveLength(2);
+    for (const bounds of statusIconBounds) {
+      expect(bounds.tokenWidth).toBeGreaterThan(0);
+      expect(bounds.tokenHeight).toBeGreaterThan(0);
+      expect(bounds.inside).toBe(true);
+    }
 
     const stage = await page.locator('.battle-stage').boundingBox();
     const dock = await page.locator('.battle-command-dock').boundingBox();

@@ -245,6 +245,33 @@
   color: var(--muted);
   line-height: 1.45;
 }
+.move-list button .move-status-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 7px 0 2px;
+}
+.move-list button .status-badge {
+  display: inline-flex;
+  margin: 0;
+  color: color-mix(in srgb, var(--status-color) 82%, #fff);
+  line-height: 1;
+}
+.move-list button .status-badge-label {
+  display: inline;
+  margin: 0;
+  color: inherit;
+  line-height: 1;
+}
+.theater-status-badges {
+  justify-content: center;
+  margin: 9px 0 0;
+  pointer-events: none;
+}
+.theater-status-badges .status-badge {
+  background: color-mix(in srgb, var(--status-color) 24%, #050611);
+}
 .bestiary-tools button {
   min-height: 44px;
   padding-inline: var(--space-3);

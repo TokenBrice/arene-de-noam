@@ -55,6 +55,39 @@ body.high-contrast .status-chip.negative {
   border: 2px dashed #ff9faf;
   background: #431528;
 }
+body.high-contrast .status-badge.positive,
+body.high-contrast .plate-status.positive,
+body.high-contrast .status-orb.positive,
+body.high-contrast .plate-detail-status.positive,
+body.high-contrast .codex-status.positive,
+body.high-contrast .academy-status.positive {
+  border: 2px solid #89f4ff;
+  color: #fff;
+  background-color: #06182a;
+}
+body.high-contrast .status-badge.negative,
+body.high-contrast .plate-status.negative,
+body.high-contrast .status-orb.negative,
+body.high-contrast .plate-detail-status.negative,
+body.high-contrast .codex-status.negative,
+body.high-contrast .academy-status.negative {
+  border: 2px dashed #ff9faf;
+  color: #fff;
+  background-color: #280713;
+}
+body.high-contrast .status-badge::after,
+body.high-contrast .plate-status::after,
+body.high-contrast .status-orb::after,
+body.high-contrast .plate-detail-status > i::after,
+body.high-contrast .codex-status > i::after,
+body.high-contrast .academy-status > i::after {
+  color: #000;
+  background: #fff;
+  outline: 1px solid #000;
+}
+body.high-contrast .status-icon {
+  filter: drop-shadow(0 0 2px #000);
+}
 body.high-contrast .move-btn:disabled {
   opacity: 0.68;
   filter: grayscale(0.7);
