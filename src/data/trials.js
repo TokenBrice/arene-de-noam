@@ -1,0 +1,9 @@
+export const TRIALS=Object.freeze([
+  {id:'starstorm',nameKey:'trial.starstorm',descKey:'trial.effect.starstorm',icon:'✦',arena:'astral',difficulty:'challenger',enemyTeam:['solflare','lumivox','voltide'],modifiers:['overdrive'],colors:['#fff09b','#9a76ff']},
+  {id:'razorline',nameKey:'trial.razorline',descKey:'trial.effect.razorline',icon:'ϟ',arena:'crystal',difficulty:'champion',enemyTeam:['ferrax','pyrolynx','umbrawl'],modifiers:['high_voltage'],colors:['#85f8ff','#ff5f79']},
+  {id:'unbroken',nameKey:'trial.unbroken',descKey:'trial.effect.unbroken',icon:'⬢',arena:'tidal',difficulty:'challenger',enemyTeam:['abyssar','monolith','mossaur'],modifiers:['enemy_aegis'],colors:['#63edff','#7a86a5']},
+  {id:'eruption',nameKey:'trial.eruption',descKey:'trial.effect.eruption',icon:'♨',arena:'volcano',difficulty:'champion',enemyTeam:['calderoc','magmoth','thornox'],modifiers:['rapid_arena'],colors:['#ffe16b','#ff4c31']},
+  {id:'lastlight',nameKey:'trial.lastlight',descKey:'trial.effect.lastlight',icon:'☾',arena:'eclipse',difficulty:'challenger',enemyTeam:['hexalune','nocturnyx','mnemora'],modifiers:['player_wounded'],colors:['#f39bff','#50318b']},
+  {id:'ascension',nameKey:'trial.ascension',descKey:'trial.effect.ascension',icon:'♛',arena:'eclipse',difficulty:'champion',enemyTeam:['prismage','monolith','calderoc'],modifiers:['ascendant'],colors:['#fff4ac','#ff5fa2']},
+]);
+export const TRIAL_IDS=Object.freeze(TRIALS.map((trial)=>trial.id));

@@ -1,0 +1,16 @@
+{
+  "name": "arene-de-noam",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Arène de Noam — a deterministic 3v3 creature battle game.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:balance": "node tools/simulate-balance.mjs",
+    "test:e2e": "playwright test",
+    "serve": "python3 -m http.server 8178"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

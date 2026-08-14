@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090b22">
+  <title>Arène de Noam</title>
+  <link rel="stylesheet" href="./styles/game.css?build=epic7">
+  <link rel="stylesheet" href="./styles/scout.css?build=epic7">
+</head>
+<body>
+  <div id="game" aria-live="polite">
+    <main id="screen" class="screen boot-screen">
+      <section class="boot-card">
+        <span class="brand-glyph" aria-hidden="true">✦</span>
+        <h1>Arène de Noam</h1>
+        <p>Ouverture des portes de l’arène…</p>
+      </section>
+    </main>
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+  <script type="importmap">
+    {"imports":{"three":"./vendor/three.module.min.js"}}
+  </script>
+  <script type="module">
+    import('./src/main.js?build=epic7').catch((error) => {
+      console.error(error);
+      const screen = document.querySelector('#screen');
+      if (screen) screen.innerHTML = '<section class="boot-card error-card"><h1>Oups !</h1><p>Le jeu n’a pas pu démarrer. Recharge la page pour réessayer.</p><button onclick="location.reload()">Recharger</button></section>';
+    });
+  </script>
+</body>
+</html>

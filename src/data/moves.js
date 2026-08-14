@@ -1,0 +1,101 @@
+// Every move has a unique mechanical fingerprint. `visual` is also unique and
+// drives the cinematic layer, so even moves within an affinity read differently.
+export const MOVES = {
+  lucid_arc:          { id:'lucid_arc',owner:'orakyn',affinity:'mind',kind:'damage',power:27,priority:0,cooldown:0,targetStatuses:[{id:'marked',duration:2}],visual:'rune_arc' },
+  slowing_riddle:     { id:'slowing_riddle',owner:'orakyn',affinity:'mind',kind:'damage',power:19,priority:0,cooldown:0,targetStatuses:[{id:'slowed',duration:2}],bonusAgainst:['marked'],bonusMultiplier:1.45,visual:'riddle_prison' },
+  oracle_veil:        { id:'oracle_veil',owner:'orakyn',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,barrier:20,selfStatuses:[{id:'guarded'},{id:'focused'},{id:'evasive'}],cleanse:'all',visual:'oracle_veil',signature:true },
+
+  echo_chorus:        { id:'echo_chorus',owner:'lumivox',affinity:'mind',kind:'damage',power:12,hits:3,priority:0,cooldown:0,visual:'echo_chorus' },
+  crescendo_lock:     { id:'crescendo_lock',owner:'lumivox',affinity:'mind',kind:'damage',power:23,priority:1,cooldown:1,targetStatuses:[{id:'rooted',duration:2}],selfStatuses:[{id:'haste',duration:2}],visual:'crescendo_lock' },
+  finale_nova:        { id:'finale_nova',owner:'lumivox',affinity:'mind',kind:'damage',power:57,priority:-1,cooldown:2,bonusAgainst:['rooted','slowed'],bonusMultiplier:1.3,visual:'finale_nova',signature:true },
+
+  memory_leech:       { id:'memory_leech',owner:'mnemora',affinity:'mind',kind:'damage',power:25,priority:0,cooldown:0,drain:.5,visual:'memory_leech' },
+  forgotten_name:     { id:'forgotten_name',owner:'mnemora',affinity:'mind',kind:'damage',power:16,priority:0,cooldown:1,targetStatuses:[{id:'weakened',duration:3},{id:'silenced',duration:1}],visual:'forgotten_name' },
+  deja_vu:            { id:'deja_vu',owner:'mnemora',affinity:'neutral',kind:'support',power:0,priority:3,cooldown:2,barrier:16,selfStatuses:[{id:'evasive'},{id:'countering'},{id:'focused'}],cleanse:2,visual:'deja_vu',signature:true },
+
+  refraction_lance:   { id:'refraction_lance',owner:'prismage',affinity:'mind',kind:'damage',power:32,priority:0,cooldown:0,ignoreGuard:true,visual:'refraction_lance' },
+  mirror_maze:        { id:'mirror_maze',owner:'prismage',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:1,barrier:16,selfStatuses:[{id:'evasive'}],visual:'mirror_maze' },
+  spectrum_break:     { id:'spectrum_break',owner:'prismage',affinity:'mind',kind:'damage',power:42,priority:0,cooldown:1,purge:2,targetStatuses:[{id:'exposed'}],visual:'spectrum_break',signature:true },
+
+  crystal_strike:     { id:'crystal_strike',owner:'kordane',affinity:'force',kind:'damage',power:26,priority:0,cooldown:0,scaling:'speed',scaleAmount:.32,visual:'crystal_strike' },
+  fault_charge:       { id:'fault_charge',owner:'kordane',affinity:'force',kind:'damage',power:54,priority:0,cooldown:1,selfStatuses:[{id:'exposed'}],visual:'fault_charge',signature:true },
+  resonant_focus:     { id:'resonant_focus',owner:'kordane',affinity:'neutral',kind:'support',power:0,priority:1,cooldown:0,selfStatuses:[{id:'focused'},{id:'haste',duration:2}],visual:'resonant_focus' },
+
+  tectonic_ram:       { id:'tectonic_ram',owner:'brontusk',affinity:'force',kind:'damage',power:35,priority:-1,cooldown:3,recoil:.16,targetStatuses:[{id:'stunned',duration:1}],visual:'tectonic_ram',signature:true },
+  iron_resolve:       { id:'iron_resolve',owner:'brontusk',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,barrier:16,selfStatuses:[{id:'guarded'}],visual:'iron_resolve' },
+  seismic_reversal:   { id:'seismic_reversal',owner:'brontusk',affinity:'force',kind:'damage',power:25,priority:0,cooldown:0,scaling:'missingHp',scaleAmount:.68,visual:'seismic_reversal' },
+
+  razor_rush:         { id:'razor_rush',owner:'ferrax',affinity:'force',kind:'damage',power:10,hits:3,priority:1,cooldown:0,visual:'razor_rush' },
+  momentum_claw:      { id:'momentum_claw',owner:'ferrax',affinity:'force',kind:'damage',power:24,priority:0,cooldown:0,selfStatuses:[{id:'haste',duration:3,stacks:1}],visual:'momentum_claw' },
+  terminal_velocity:  { id:'terminal_velocity',owner:'ferrax',affinity:'force',kind:'damage',power:37,priority:0,cooldown:1,scaling:'speed',scaleAmount:.72,consume:['haste'],visual:'terminal_velocity',signature:true },
+
+  gravity_fist:       { id:'gravity_fist',owner:'monolith',affinity:'force',kind:'damage',power:30,priority:-1,cooldown:0,targetStatuses:[{id:'slowed',duration:3}],visual:'gravity_fist' },
+  fortress_protocol:  { id:'fortress_protocol',owner:'monolith',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,barrier:26,selfStatuses:[{id:'anchored',duration:3}],visual:'fortress_protocol' },
+  continental_divide: { id:'continental_divide',owner:'monolith',affinity:'force',kind:'damage',power:47,priority:-2,cooldown:2,ignoreGuard:true,bonusAgainst:['slowed'],bonusMultiplier:1.18,visual:'continental_divide',signature:true },
+
+  abyssal_surge:      { id:'abyssal_surge',owner:'abyssar',affinity:'tide',kind:'damage',power:23,priority:0,cooldown:0,barrier:8,visual:'abyssal_surge' },
+  undertow:           { id:'undertow',owner:'abyssar',affinity:'tide',kind:'damage',power:18,priority:0,cooldown:1,targetStatuses:[{id:'slowed',duration:3},{id:'rooted',duration:1}],visual:'undertow' },
+  shell_bastion:      { id:'shell_bastion',owner:'abyssar',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,barrier:40,selfStatuses:[{id:'guarded'},{id:'anchored',duration:4}],cleanse:'all',teamCleanse:1,visual:'shell_bastion',signature:true },
+
+  foam_blitz:         { id:'foam_blitz',owner:'riptalon',affinity:'tide',kind:'damage',power:21,priority:2,cooldown:0,targetStatuses:[{id:'soaked',duration:2}],visual:'foam_blitz' },
+  rip_current:        { id:'rip_current',owner:'riptalon',affinity:'tide',kind:'damage',power:28,priority:0,cooldown:0,targetStatuses:[{id:'exposed'}],selfStatuses:[{id:'haste',duration:2}],visual:'rip_current' },
+  maw_of_maelstrom:   { id:'maw_of_maelstrom',owner:'riptalon',affinity:'tide',kind:'damage',power:44,priority:0,cooldown:2,bonusAgainst:['slowed','rooted','soaked'],bonusMultiplier:1.5,visual:'maw_of_maelstrom',signature:true },
+
+  healing_rain:       { id:'healing_rain',owner:'nymbloom',affinity:'neutral',kind:'heal',power:0,priority:1,cooldown:2,teamHealRatio:.13,visual:'healing_rain' },
+  bubble_burst:       { id:'bubble_burst',owner:'nymbloom',affinity:'tide',kind:'damage',power:24,priority:0,cooldown:0,targetStatuses:[{id:'soaked',duration:3}],barrier:6,visual:'bubble_burst' },
+  tide_reversal:      { id:'tide_reversal',owner:'nymbloom',affinity:'tide',kind:'damage',power:31,priority:0,cooldown:1,drain:.35,cleanse:2,visual:'tide_reversal',signature:true },
+
+  static_wake:        { id:'static_wake',owner:'voltide',affinity:'tide',kind:'damage',power:20,priority:1,cooldown:0,targetStatuses:[{id:'charged',duration:3}],visual:'static_wake' },
+  storm_chain:        { id:'storm_chain',owner:'voltide',affinity:'tide',kind:'damage',power:11,hits:3,priority:0,cooldown:1,targetStatuses:[{id:'weakened',duration:2}],visual:'storm_chain' },
+  thunder_deluge:     { id:'thunder_deluge',owner:'voltide',affinity:'tide',kind:'damage',power:45,priority:0,cooldown:2,detonate:['charged','soaked'],detonatePower:16,targetStatuses:[{id:'stunned',duration:1}],visual:'thunder_deluge',signature:true },
+
+  cinder_burst:       { id:'cinder_burst',owner:'calderoc',affinity:'flame',kind:'damage',power:25,priority:0,cooldown:0,targetStatuses:[{id:'burning',duration:3}],visual:'cinder_burst' },
+  caldera_roar:       { id:'caldera_roar',owner:'calderoc',affinity:'flame',kind:'damage',power:59,priority:-1,cooldown:2,selfStatuses:[{id:'exposed'}],visual:'caldera_roar',signature:true },
+  furnace_heart:      { id:'furnace_heart',owner:'calderoc',affinity:'neutral',kind:'support',power:0,priority:1,cooldown:1,selfStatuses:[{id:'focused'},{id:'regenerating',duration:3}],visual:'furnace_heart' },
+
+  flash_pounce:       { id:'flash_pounce',owner:'pyrolynx',affinity:'flame',kind:'damage',power:27,priority:2,cooldown:0,scaling:'healthy',scaleAmount:.25,visual:'flash_pounce' },
+  scorch_mark:        { id:'scorch_mark',owner:'pyrolynx',affinity:'flame',kind:'damage',power:17,priority:0,cooldown:0,targetStatuses:[{id:'marked',duration:3},{id:'burning',duration:2}],visual:'scorch_mark' },
+  ninefold_inferno:   { id:'ninefold_inferno',owner:'pyrolynx',affinity:'flame',kind:'damage',power:8,hits:5,priority:0,cooldown:2,bonusAgainst:['marked'],bonusMultiplier:1.22,visual:'ninefold_inferno',signature:true },
+
+  ember_armor:        { id:'ember_armor',owner:'magmoth',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,selfStatuses:[{id:'guarded'},{id:'thorns',duration:2}],visual:'ember_armor' },
+  smoldering_charge:  { id:'smoldering_charge',owner:'magmoth',affinity:'flame',kind:'damage',power:27,priority:-1,cooldown:0,recoil:.08,targetStatuses:[{id:'burning',duration:3}],visual:'smoldering_charge' },
+  ash_rebirth:        { id:'ash_rebirth',owner:'magmoth',affinity:'neutral',kind:'heal',power:0,priority:1,cooldown:4,healRatio:.28,cleanse:'all',selfStatuses:[{id:'focused'}],visual:'ash_rebirth',signature:true },
+
+  sun_spear:          { id:'sun_spear',owner:'solflare',affinity:'flame',kind:'damage',power:36,priority:0,cooldown:0,ignoreBarrier:true,visual:'sun_spear' },
+  solar_wings:        { id:'solar_wings',owner:'solflare',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:1,selfStatuses:[{id:'haste',duration:3},{id:'focused'}],visual:'solar_wings' },
+  supernova:          { id:'supernova',owner:'solflare',affinity:'flame',kind:'damage',power:67,priority:-2,cooldown:2,recoil:.28,purge:'all',visual:'supernova',signature:true },
+
+  petal_ray:          { id:'petal_ray',owner:'virelia',affinity:'grove',kind:'damage',power:22,priority:0,cooldown:0,teamHealRatio:.055,visual:'petal_ray' },
+  seed_bloom:         { id:'seed_bloom',owner:'virelia',affinity:'neutral',kind:'heal',power:0,priority:1,cooldown:2,healRatio:.23,selfStatuses:[{id:'regenerating',duration:3}],visual:'seed_bloom' },
+  leaf_mantle:        { id:'leaf_mantle',owner:'virelia',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,teamBarrier:14,teamHealRatio:.08,selfStatuses:[{id:'guarded'}],teamCleanse:1,visual:'leaf_mantle',signature:true },
+
+  mossy_crush:        { id:'mossy_crush',owner:'mossaur',affinity:'grove',kind:'damage',power:27,priority:-1,cooldown:0,drain:.22,visual:'mossy_crush' },
+  ancient_bark:       { id:'ancient_bark',owner:'mossaur',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,barrier:30,selfStatuses:[{id:'thorns',duration:4}],visual:'ancient_bark' },
+  forest_quake:       { id:'forest_quake',owner:'mossaur',affinity:'grove',kind:'damage',power:47,priority:-2,cooldown:1,selfStatuses:[{id:'slowed',duration:2}],targetStatuses:[{id:'rooted',duration:2}],visual:'forest_quake',signature:true },
+
+  pollen_dream:       { id:'pollen_dream',owner:'florafae',affinity:'grove',kind:'damage',power:17,priority:1,cooldown:0,targetStatuses:[{id:'drowsy',duration:3}],visual:'pollen_dream' },
+  nectar_circle:      { id:'nectar_circle',owner:'florafae',affinity:'neutral',kind:'heal',power:0,priority:1,cooldown:2,teamHealRatio:.16,teamCleanse:1,visual:'nectar_circle' },
+  wild_bloom:         { id:'wild_bloom',owner:'florafae',affinity:'grove',kind:'damage',power:38,priority:0,cooldown:1,scaling:'targetStatuses',scaleAmount:.2,visual:'wild_bloom',signature:true },
+
+  toxic_spines:       { id:'toxic_spines',owner:'thornox',affinity:'grove',kind:'damage',power:19,priority:0,cooldown:0,targetStatuses:[{id:'poisoned',duration:4}],visual:'toxic_spines' },
+  bramble_trap:       { id:'bramble_trap',owner:'thornox',affinity:'grove',kind:'damage',power:15,priority:1,cooldown:1,targetStatuses:[{id:'rooted',duration:3}],selfStatuses:[{id:'thorns',duration:2}],visual:'bramble_trap' },
+  venom_harvest:      { id:'venom_harvest',owner:'thornox',affinity:'grove',kind:'damage',power:36,priority:0,cooldown:1,detonate:['poisoned'],detonatePower:22,drain:.3,visual:'venom_harvest',signature:true },
+
+  shade_spark:        { id:'shade_spark',owner:'farfombre',affinity:'shadow',kind:'damage',power:17,priority:2,cooldown:0,targetStatuses:[{id:'marked',duration:2}],visual:'shade_spark' },
+  crooked_glimmer:    { id:'crooked_glimmer',owner:'farfombre',affinity:'shadow',kind:'damage',power:15,priority:0,cooldown:1,targetStatuses:[{id:'weakened',duration:2}],selfStatuses:[{id:'evasive'}],visual:'crooked_glimmer' },
+  shadow_shed:        { id:'shadow_shed',owner:'farfombre',affinity:'neutral',kind:'support',power:0,priority:3,cooldown:4,barrier:8,selfStatuses:[{id:'guarded'},{id:'evasive'},{id:'haste',duration:2}],cleanse:'all',visual:'shadow_shed',signature:true },
+
+  sonic_gloom:        { id:'sonic_gloom',owner:'nocturnyx',affinity:'shadow',kind:'damage',power:14,hits:2,priority:0,cooldown:0,targetStatuses:[{id:'drowsy',duration:3}],visual:'sonic_gloom' },
+  midnight_lullaby:   { id:'midnight_lullaby',owner:'nocturnyx',affinity:'neutral',kind:'support',power:0,priority:1,cooldown:2,targetStatuses:[{id:'stunned',duration:1},{id:'weakened',duration:2}],visual:'midnight_lullaby' },
+  nightmare_dive:     { id:'nightmare_dive',owner:'nocturnyx',affinity:'shadow',kind:'damage',power:41,priority:0,cooldown:1,bonusAgainst:['drowsy','stunned'],bonusMultiplier:1.55,visual:'nightmare_dive',signature:true },
+
+  ambush_claw:        { id:'ambush_claw',owner:'umbrawl',affinity:'shadow',kind:'damage',power:32,priority:1,cooldown:0,scaling:'healthy',scaleAmount:.38,visual:'ambush_claw' },
+  smoke_step:         { id:'smoke_step',owner:'umbrawl',affinity:'neutral',kind:'support',power:0,priority:3,cooldown:1,selfStatuses:[{id:'evasive'},{id:'haste',duration:2}],visual:'smoke_step' },
+  eclipse_execution:  { id:'eclipse_execution',owner:'umbrawl',affinity:'shadow',kind:'damage',power:37,priority:0,cooldown:2,executeThreshold:.3,executeMultiplier:1.75,visual:'eclipse_execution',signature:true },
+
+  hex_bolt:           { id:'hex_bolt',owner:'hexalune',affinity:'shadow',kind:'damage',power:22,priority:0,cooldown:0,targetStatuses:[{id:'cursed',duration:4}],visual:'hex_bolt' },
+  fate_exchange:      { id:'fate_exchange',owner:'hexalune',affinity:'shadow',kind:'damage',power:27,priority:0,cooldown:1,drain:.7,recoil:.12,visual:'fate_exchange' },
+  moonless_omen:      { id:'moonless_omen',owner:'hexalune',affinity:'neutral',kind:'support',power:0,priority:2,cooldown:2,barrier:14,targetStatuses:[{id:'marked',duration:4},{id:'weakened',duration:3}],visual:'moonless_omen',signature:true },
+};
+
+export const MOVE_IDS = Object.freeze(Object.keys(MOVES));

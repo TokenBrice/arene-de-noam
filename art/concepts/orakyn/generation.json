@@ -1,0 +1,15 @@
+{
+  "brief": "../../briefs/orakyn.json",
+  "seed": 482731,
+  "job_id": "50294c13-49b1-4a7e-a7c9-5329c5580362",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "orakyn-candidate-1.png",
+    "orakyn-candidate-2.png",
+    "orakyn-candidate-3.png",
+    "orakyn-candidate-4.png"
+  ]
+}

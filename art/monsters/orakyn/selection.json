@@ -1,0 +1,9 @@
+{
+  "id": "orakyn",
+  "role": "mind-controller",
+  "selected_source": "../../concepts/orakyn-refined/orakyn-refined-candidate-1.png",
+  "battle_sprite": "orakyn-battle.png",
+  "facing": "right",
+  "native_size": [128, 128],
+  "notes": "Canonical style anchor. Preserve the crescent head, hovering crystal, cyan eyes, four broad ribbon-arms, indigo palette, selective outline, and compact pixel clusters in all derived views and animations."
+}

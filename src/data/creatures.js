@@ -1,0 +1,36 @@
+// The roster is deliberately built around 24 different combat fantasies. Stats are
+// intentionally asymmetric; a creature's move kit, not a shared basic attack, is
+// the main expression of its identity.
+export const CREATURES = {
+  orakyn:    { id:'orakyn', affinity:'mind', role:'controller', passive:'foresight', maxHp:90,  attack:92,  guard:76,  speed:88,  moves:['lucid_arc','slowing_riddle','oracle_veil'] },
+  lumivox:   { id:'lumivox', affinity:'mind', role:'maestro',    passive:'encore', maxHp:86,  attack:99,  guard:72,  speed:96,  moves:['echo_chorus','crescendo_lock','finale_nova'] },
+  mnemora:   { id:'mnemora', affinity:'mind', role:'mystic',     passive:'memory_silk', maxHp:98,  attack:84,  guard:82,  speed:82,  moves:['memory_leech','forgotten_name','deja_vu'] },
+  prismage:  { id:'prismage',affinity:'mind', role:'breaker',    passive:'prism_skin', maxHp:84,  attack:108, guard:70,  speed:91,  moves:['refraction_lance','mirror_maze','spectrum_break'] },
+
+  kordane:   { id:'kordane', affinity:'force',role:'duelist',    passive:'duel_oath', maxHp:100, attack:105, guard:85,  speed:100, moves:['crystal_strike','fault_charge','resonant_focus'] },
+  brontusk:  { id:'brontusk',affinity:'force',role:'vanguard',   passive:'last_bastion', maxHp:114, attack:96,  guard:94,  speed:55,  moves:['tectonic_ram','iron_resolve','seismic_reversal'] },
+  ferrax:    { id:'ferrax',  affinity:'force',role:'assassin',   passive:'razor_engine', maxHp:82,  attack:104, guard:69,  speed:124, moves:['razor_rush','momentum_claw','terminal_velocity'] },
+  monolith:  { id:'monolith',affinity:'force',role:'sentinel',   passive:'foundation', maxHp:122, attack:82,  guard:108, speed:43,  moves:['gravity_fist','fortress_protocol','continental_divide'] },
+
+  abyssar:   { id:'abyssar', affinity:'tide', role:'tank',       passive:'deep_pressure', maxHp:125, attack:76,  guard:118, speed:56,  moves:['abyssal_surge','undertow','shell_bastion'] },
+  riptalon:  { id:'riptalon',affinity:'tide', role:'assassin',   passive:'blood_in_water', maxHp:88,  attack:103, guard:70,  speed:119, moves:['foam_blitz','rip_current','maw_of_maelstrom'] },
+  nymbloom:  { id:'nymbloom',affinity:'tide', role:'healer',     passive:'spring_tide', maxHp:108, attack:72,  guard:89,  speed:78,  moves:['healing_rain','bubble_burst','tide_reversal'] },
+  voltide:   { id:'voltide', affinity:'tide', role:'disruptor',  passive:'conductor', maxHp:92,  attack:108, guard:72,  speed:102, moves:['static_wake','storm_chain','thunder_deluge'] },
+
+  calderoc:  { id:'calderoc',affinity:'flame',role:'artillery',  passive:'living_furnace', maxHp:95,  attack:120, guard:70,  speed:75,  moves:['cinder_burst','caldera_roar','furnace_heart'] },
+  pyrolynx:  { id:'pyrolynx',affinity:'flame',role:'assassin',   passive:'nine_lives', maxHp:80,  attack:112, guard:62,  speed:126, moves:['flash_pounce','scorch_mark','ninefold_inferno'] },
+  magmoth:   { id:'magmoth', affinity:'flame',role:'vanguard',   passive:'ember_cocoon', maxHp:108, attack:84,  guard:94,  speed:52,  moves:['ember_armor','smoldering_charge','ash_rebirth'] },
+  solflare:  { id:'solflare',affinity:'flame',role:'berserker',  passive:'sunborn', maxHp:91,  attack:125, guard:66,  speed:94,  moves:['sun_spear','solar_wings','supernova'] },
+
+  virelia:   { id:'virelia', affinity:'grove',role:'support',    passive:'photosynthesis', maxHp:105, attack:76,  guard:90,  speed:85,  moves:['petal_ray','seed_bloom','leaf_mantle'] },
+  mossaur:   { id:'mossaur', affinity:'grove',role:'tank',       passive:'ancient_roots', maxHp:134, attack:78,  guard:121, speed:39,  moves:['mossy_crush','ancient_bark','forest_quake'] },
+  florafae:  { id:'florafae',affinity:'grove',role:'mystic',     passive:'dream_dust', maxHp:102, attack:91,  guard:86,  speed:102, moves:['pollen_dream','nectar_circle','wild_bloom'] },
+  thornox:   { id:'thornox', affinity:'grove',role:'controller', passive:'bramblehide', maxHp:101, attack:94,  guard:91,  speed:73,  moves:['toxic_spines','bramble_trap','venom_harvest'] },
+
+  farfombre: { id:'farfombre',affinity:'shadow',role:'trickster',passive:'living_shadow',maxHp:81,  attack:86,  guard:66,  speed:104, moves:['shade_spark','crooked_glimmer','shadow_shed'] },
+  nocturnyx: { id:'nocturnyx',affinity:'shadow',role:'controller',passive:'night_terror',maxHp:94, attack:83,  guard:77,  speed:106, moves:['sonic_gloom','midnight_lullaby','nightmare_dive'] },
+  umbrawl:   { id:'umbrawl', affinity:'shadow',role:'assassin',  passive:'apex_stalker',maxHp:87,  attack:118, guard:65,  speed:115, moves:['ambush_claw','smoke_step','eclipse_execution'] },
+  hexalune:  { id:'hexalune',affinity:'shadow',role:'mystic',    passive:'ill_omen',maxHp:103, attack:90,  guard:86,  speed:80,  moves:['hex_bolt','fate_exchange','moonless_omen'] },
+};
+
+export const CREATURE_IDS = Object.freeze(Object.keys(CREATURES));

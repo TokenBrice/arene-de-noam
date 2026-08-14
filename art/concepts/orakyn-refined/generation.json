@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/orakyn-refinement.json",
+  "source": "art/concepts/orakyn/orakyn-candidate-2.png",
+  "seed": 731204,
+  "job_id": "ca42636b-01aa-401f-a86e-fec4c830de21",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "orakyn-refined-candidate-1.png",
+    "orakyn-refined-candidate-2.png",
+    "orakyn-refined-candidate-3.png",
+    "orakyn-refined-candidate-4.png"
+  ]
+}

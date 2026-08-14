@@ -1,0 +1,99 @@
+import { MOVES } from '../data/moves.js';
+import { affinityMultiplier } from '../data/affinities.js';
+import { calculateDamage } from './damage.js';
+import { activeOf, ARENA_RESONANCE, getLegalActions, previewMove, safeBattleSnapshot, signatureCostFor } from './engine.js';
+import { STATUS_DEFINITIONS } from './statuses.js';
+import { randomIndex, randomFromState } from './rng.js';
+
+function scoreMove(state, side, action, difficulty, style) {
+  const attacker = activeOf(state, side);
+  const defender = activeOf(state, side === 'player' ? 'enemy' : 'player');
+  const move = MOVES[action.moveId];
+  if (move.kind === 'damage') {
+    const forecast=previewMove(state,side,move.id),estimated=forecast.damage,affinity=forecast.affinity;
+    let score = estimated + (forecast.lethal ? 90 : 0) + (affinity === 1.5 ? 12 : affinity === .75 ? -8 : 0)-(forecast.miss?45:0);
+    if (move.targetStatuses?.length) score += move.targetStatuses.length*(difficulty === 'apprentice' ? 2 : 8);
+    if (move.selfStatuses?.some((x)=>x.id==='exposed')) score -= difficulty === 'champion' ? 9 : 3;
+    if(move.drain)score+=Math.min(attacker.maxHp-attacker.hp,estimated*move.drain)*.6;
+    if(move.recoil)score-=estimated*move.recoil*.7;
+    if(move.executeThreshold&&defender.hp/defender.maxHp<=move.executeThreshold)score+=28;
+    if(forecast.combo.length)score+=20+forecast.combo.length*5;
+    if(move.barrier)score+=Math.min(move.barrier,60-attacker.barrier)*.35;
+    if(move.signature)score+=14;
+    if(style==='speed')score+=(move.priority||0)*7+(move.scaling==='speed'?12:0);
+    if(style==='endurance')score+=(move.drain?14:0)+(move.barrier||0)*.35+(move.teamHealRatio?18:0);
+    if(style==='control')score+=(move.targetStatuses?.length||0)*9+(move.detonate?.some((id)=>defender.statuses[id])?15:0);
+    if(style==='pressure')score+=estimated*.16+(move.targetStatuses?.some((x)=>['burning','poisoned','cursed'].includes(x.id))?12:0);
+    if(style==='deception')score+=(move.selfStatuses?.some((x)=>['evasive','countering'].includes(x.id))?18:0)+(move.purge?8:0);
+    score -= move.cooldown * (difficulty === 'apprentice' ? 1 : 3);
+    return score;
+  }
+  if (move.kind === 'heal') {
+    const team=state.sides[side].team,teamMissing=team.reduce((n,c)=>n+(c.hp>0?c.maxHp-c.hp:0),0),selfMissing=attacker.maxHp-attacker.hp,relevantMissing=move.teamHealRatio?teamMissing:selfMissing,capacity=move.teamHealRatio?team.reduce((n,c)=>n+(c.hp>0?c.maxHp:0),0)*move.teamHealRatio:attacker.maxHp*(move.healRatio||0),effective=Math.min(relevantMissing,capacity);
+    let score=effective>0?18+effective*.72:-25;if(style==='endurance')score+=16;if(move.signature)score+=attacker.hp/attacker.maxHp<.42?24:-8;return score;
+  }
+  if(move.kind==='support'){
+    const team=state.sides[side].team,negativeCount=(creature)=>Object.keys(creature.statuses).filter((id)=>STATUS_DEFINITIONS[id]&&!STATUS_DEFINITIONS[id].positive).length,ownNegatives=negativeCount(attacker),teamNegatives=team.filter((c)=>c.hp>0).reduce((sum,c)=>sum+negativeCount(c),0),teamMissing=team.filter((c)=>c.hp>0).reduce((sum,c)=>sum+c.maxHp-c.hp,0),barrierValue=Math.min(move.barrier||0,60-attacker.barrier),teamBarrierValue=move.teamBarrier?team.filter((c)=>c.hp>0).reduce((sum,c)=>sum+Math.min(move.teamBarrier,60-c.barrier),0):0,teamHealValue=move.teamHealRatio?team.filter((c)=>c.hp>0).reduce((sum,c)=>sum+Math.min(c.maxHp-c.hp,c.maxHp*move.teamHealRatio),0):0;
+    let score=barrierValue*.7+teamBarrierValue*.48+teamHealValue*.62+(move.cleanse?ownNegatives*9:0)+(move.teamCleanse?teamNegatives*8:0);
+    for(const status of move.selfStatuses||[])score+=attacker.statuses[status.id]?-4:status.id==='focused'?17:status.id==='guarded'?15:10;
+    for(const status of move.targetStatuses||[])score+=defender.statuses[status.id]?-4:12;
+    if(style==='endurance')score+=(barrierValue+teamBarrierValue)*.28+12;
+    if(style==='control')score+=(move.targetStatuses?.length||0)*10;
+    if(style==='deception'&&move.selfStatuses?.some((x)=>['evasive','countering'].includes(x.id)))score+=18;
+    if(move.signature){const pressure=(1-attacker.hp/attacker.maxHp)+teamMissing/team.filter((c)=>c.hp>0).reduce((sum,c)=>sum+c.maxHp,1)+teamNegatives*.15;score+=pressure>.55?25:-15;}
+    return score+(1-attacker.hp/attacker.maxHp)*10-move.cooldown*2;
+  }
+  return 0;
+}
+
+function scoreSwitch(state, side, action, difficulty, style) {
+  if (difficulty === 'apprentice') return -10;
+  const owner = state.sides[side]; const candidate = owner.team[action.index];
+  const defender = activeOf(state, side === 'player' ? 'enemy' : 'player');
+  const outgoing = affinityMultiplier(candidate.affinity, defender.affinity);
+  const incoming = affinityMultiplier(defender.affinity, candidate.affinity);
+  const relayFever=state.modifiers?.includes('relay_fever'),hasAffordableSignature=candidate.moves.some((id)=>MOVES[id].signature&&state.sides[side].surge>=signatureCostFor(candidate)),relayReadiesSignature=relayFever&&!hasAffordableSignature&&candidate.moves.some((id)=>MOVES[id].signature&&state.sides[side].surge+24>=signatureCostFor(candidate));
+  const cadence=state.modifiers?.includes('rapid_arena')?2:4,resonanceSoon=Boolean(state.arena&&state.turn%cadence===0&&candidate.affinity===ARENA_RESONANCE[state.arena]&&activeOf(state,side).affinity!==candidate.affinity);
+  const opponentSide=side==='player'?'enemy':'player',signatureThreat=state.sides[opponentSide].surge>=signatureCostFor(defender)?defender.moves.map((id)=>MOVES[id]).find((move)=>move.signature&&move.kind==='damage'):null,signatureRead=signatureThreat?(affinityMultiplier(signatureThreat.affinity,candidate.affinity)===.75?24:affinityMultiplier(signatureThreat.affinity,candidate.affinity)===1.5?-20:0):0,primed=defender.moves.flatMap((id)=>MOVES[id].detonate||[]).some((status)=>activeOf(state,side).statuses[status]);
+  return (outgoing-1)*28 - (incoming-1)*22 + candidate.hp/candidate.maxHp*7 - 6+(hasAffordableSignature?20:0)+(relayFever?26:0)+(relayReadiesSignature?25:0)+(style==='deception'?8:0)+(resonanceSoon?difficulty==='champion'?22:12:0)+(difficulty==='champion'?signatureRead+(primed?18:0):0);
+}
+
+function flowTempoScore(state,side,action,difficulty){
+  if(action.type!=='move')return 0;const owner=state.sides[side];if(!owner.lastMoveId)return 0;if(action.moveId===owner.lastMoveId)return owner.flow>0?(difficulty==='champion'?-8:-4):0;const next=Math.min(3,owner.flow+1),move=MOVES[action.moveId];return next*2+(next===3?10+(move.cooldown>0?4:0):0);
+}
+
+export function chooseAiAction(sourceState, side='enemy', difficulty='apprentice', style='direct') {
+  const state = safeBattleSnapshot(sourceState);
+  const legal = getLegalActions(state,side);
+  if (!legal.length) throw new Error('AI has no legal action');
+  if (legal[0].type === 'replace') {
+    const scored = legal.map((action) => ({ action, score:scoreSwitch(state,side,{...action,type:'switch'},difficulty,style) }));
+    return pickBest(state,scored).action;
+  }
+  const scored = legal.map((action) => ({ action, score:action.type === 'move' ? scoreMove(state,side,action,difficulty,style)+flowTempoScore(state,side,action,difficulty) : scoreSwitch(state,side,action,difficulty,style) }));
+  if (difficulty === 'apprentice') {
+    const roll = randomFromState(state.rngState);
+    if (roll.value < .32) return legal[randomIndex(roll.state,legal.length).index];
+  }
+  if (difficulty === 'champion') {
+    for (const item of scored) {
+      if (item.action.type === 'move' && MOVES[item.action.moveId].kind === 'damage') item.score += 3;
+      if (item.action.type === 'switch' && activeOf(state,side).hp < activeOf(state,side).maxHp*.3) item.score += 13;
+      const candidate=item.action.type==='switch'?state.sides[side].team[item.action.index]:activeOf(state,side);
+      const opponent=activeOf(state,side==='player'?'enemy':'player');
+      const replyDamage=opponent.moves.map((id)=>MOVES[id]).filter((move)=>move.kind==='damage'&&!opponent.cooldowns[move.id]?.remaining).reduce((best,move)=>Math.max(best,calculateDamage(move,opponent,candidate,{}).damage),0);
+      item.score-=replyDamage*.35;
+      const lastOwnMove=[...state.history].reverse().find((event)=>event.type==='move-start'&&event.side===side)?.moveId;
+      if(item.action.type==='move'&&item.action.moveId===lastOwnMove)item.score-=4;
+      const opponentSignatureReady=state.sides[side==='player'?'enemy':'player'].surge>=signatureCostFor(opponent)&&opponent.moves.some((id)=>MOVES[id].signature);
+      if(opponentSignatureReady&&item.action.type==='move'){const move=MOVES[item.action.moveId];if(move.selfStatuses?.some((status)=>['guarded','evasive','countering'].includes(status.id)))item.score+=24;if(move.targetStatuses?.some((status)=>['weakened','silenced','drowsy','stunned'].includes(status.id)))item.score+=12;}
+    }
+  }
+  return pickBest(state,scored).action;
+}
+
+function pickBest(state, scored) {
+  const best = Math.max(...scored.map((x)=>x.score));
+  const ties = scored.filter((x)=>Math.abs(x.score-best)<1e-9);
+  return ties[randomIndex(state.rngState,ties.length).index];
+}

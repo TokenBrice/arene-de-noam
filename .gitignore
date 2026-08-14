@@ -1,0 +1,9 @@
+.dev.vars
+.env
+.env.*
+!.env.example
+node_modules/
+test-results/
+playwright-report/
+.DS_Store
+**/.DS_Store
