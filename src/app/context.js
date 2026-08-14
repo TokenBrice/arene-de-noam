@@ -146,6 +146,11 @@ function notify(message) {
 }
 
 const sound = new SoundSystem(ctx.save, () => notify(t('error.audio')));
+sound.setScreen('title');
+const unlockSound = () => void sound.unlock();
+document.addEventListener('pointerdown', unlockSound, { capture: true });
+document.addEventListener('keydown', unlockSound, { capture: true });
+document.addEventListener('visibilitychange', () => sound.handleVisibility(document.hidden));
 
 function persist() {
   ctx.save.language = i18n.lang;

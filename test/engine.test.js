@@ -526,6 +526,86 @@ test('multi-hit, barriers, drains, recoil, and damage-over-time emit semantic ev
   assert.ok(result.events.some((e) => e.type === 'status-tick' && e.status === 'burning'));
 });
 
+test('preview resolves Last Bastion barriers between Echo Chorus hits', () => {
+  const state = createBattle({
+    playerTeam: ['lumivox', 'orakyn', 'virelia'],
+    enemyTeam: ['brontusk', 'kordane', 'calderoc'],
+    seed: 801,
+  });
+  state.sides.enemy.team[0].hp = 30;
+  state.sides.enemy.team[0].barrier = 0;
+  const before = structuredClone(state),
+    preview = previewMove(state, 'player', 'echo_chorus'),
+    result = resolveTurn(
+      state,
+      { type: 'move', moveId: 'echo_chorus' },
+      { type: 'move', moveId: 'seismic_reversal' }
+    ),
+    damage = result.events
+      .filter((event) => event.type === 'damage' && event.sourceSide === 'player')
+      .reduce((sum, event) => sum + event.amount, 0);
+  assert.equal(preview.damage, damage);
+  assert.equal(preview.lethal, false);
+  assert.ok(result.state.sides.enemy.team[0].hp > 0);
+  assert.deepEqual(state, before, 'preview must not mutate the battle');
+});
+
+test('preview resolves Nine Lives once and lets later Echo Chorus hits finish the target', () => {
+  const state = createBattle({
+    playerTeam: ['lumivox', 'orakyn', 'virelia'],
+    enemyTeam: ['pyrolynx', 'kordane', 'calderoc'],
+    seed: 802,
+  });
+  state.sides.enemy.team[0].hp = 8;
+  state.sides.enemy.team[0].barrier = 0;
+  state.sides.player.team[0].speed = 999;
+  const preview = previewMove(state, 'player', 'echo_chorus'),
+    result = resolveTurn(
+      state,
+      { type: 'move', moveId: 'echo_chorus' },
+      { type: 'move', moveId: 'scorch_mark' }
+    ),
+    damage = result.events
+      .filter((event) => event.type === 'damage' && event.sourceSide === 'player')
+      .reduce((sum, event) => sum + event.amount, 0);
+  assert.equal(preview.damage, damage);
+  assert.equal(preview.lethal, true);
+  assert.equal(result.state.sides.enemy.team[0].hp, 0);
+});
+
+test('a drain move cannot resurrect its user after reflected damage knocks it out', () => {
+  const state = createBattle({
+    playerTeam: ['mnemora', 'orakyn', 'virelia'],
+    enemyTeam: ['thornox', 'kordane', 'calderoc'],
+    seed: 803,
+  });
+  const attacker = state.sides.player.team[0],
+    defender = state.sides.enemy.team[0];
+  attacker.hp = 1;
+  attacker.speed = 999;
+  defender.speed = 1;
+  defender.statuses.thorns = { appliedTurn: state.turn, remaining: 2, stacks: 1 };
+  defender.moves = ['continental_divide'];
+  state.sides.enemy.surge = 100;
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'memory_leech' },
+    { type: 'move', moveId: 'continental_divide' }
+  );
+  assert.equal(result.state.sides.player.team[0].hp, 0);
+  assert.ok(
+    result.events.some(
+      (event) => event.type === 'ko' && event.side === 'player' && event.creatureId === 'mnemora'
+    )
+  );
+  assert.equal(
+    result.events.some(
+      (event) => event.type === 'heal' && event.creatureId === 'mnemora' && event.source === 'drain'
+    ),
+    false
+  );
+});
+
 test('prepared finishers expose combo and detonation semantics', () => {
   const state = createBattle({
     playerTeam: ['thornox', 'mossaur', 'florafae'],

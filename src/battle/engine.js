@@ -428,6 +428,7 @@ function addBarrier(creature, amount, side, events) {
   });
 }
 function healCreature(creature, amount, side, events, source = 'move') {
+  if (creature.hp <= 0) return 0;
   const gained = Math.max(0, Math.min(creature.maxHp - creature.hp, Math.round(amount)));
   if (!gained) return 0;
   creature.hp += gained;
@@ -440,6 +441,17 @@ function healCreature(creature, amount, side, events, source = 'move') {
     source,
   });
   return gained;
+}
+function recordKnockout(state, side, creature, events) {
+  if (
+    creature.hp > 0 ||
+    events.some((event) => event.type === 'ko' && event.side === side && event.creatureId === creature.id)
+  )
+    return false;
+  push(events, 'ko', { side, creatureId: creature.id });
+  const remaining = consciousIndices(state, side).filter((index) => index !== state.sides[side].active);
+  if (remaining.length) state.sides[side].pendingReplacement = true;
+  return true;
 }
 function applyStatuses(creature, descriptors, state, side, events, sourceCreatureId = null) {
   for (const spec of descriptors || []) {
@@ -532,41 +544,156 @@ function scaledPower(move, attacker, defender) {
   return { power, detonated, matches, assistIds };
 }
 
-export function previewMove(state, side, moveId) {
-  const move = MOVES[moveId],
+function resolveDamageTransaction(state, side, move, events) {
+  const targetSide = otherSide(side),
     attacker = activeOf(state, side),
-    defender = activeOf(state, otherSide(side));
-  if (!move || move.kind !== 'damage') return null;
-  if (hasStatus(defender, 'evasive'))
-    return { damage: 0, absorbed: 0, raw: 0, affinity: 1, combo: [], assists: [], lethal: false, miss: true };
-  const { power, detonated, matches, assistIds } = scaledPower(move, attacker, defender),
-    result = calculateDamage(
-      { ...move, power: power * (state.modifiers?.includes('high_voltage') ? 1.18 : 1) },
-      attacker,
-      defender,
-      {
-        focused: hasStatus(attacker, 'focused'),
-        weakened: hasStatus(attacker, 'weakened'),
-        guarded: !move.ignoreGuard && hasStatus(defender, 'guarded'),
-        exposed: hasStatus(defender, 'exposed'),
-        marked: hasStatus(defender, 'marked'),
-        drowsy: hasStatus(attacker, 'drowsy'),
-        stunned: hasStatus(attacker, 'stunned'),
-      }
-    );
-  const raw = result.damage * (move.hits || 1),
-    absorbed = move.ignoreBarrier ? 0 : Math.min(defender.barrier, raw),
-    nineLives = defender.passive === 'nine_lives' && !defender.talent.nineLives;
+    defender = activeOf(state, targetSide),
+    hits = move.hits || 1;
+  if (consume(defender.statuses, 'evasive')) {
+    push(events, 'miss', { side: targetSide, sourceSide: side, creatureId: defender.id, moveId: move.id });
+    emitStatus(events, targetSide, defender, 'evasive', false);
+    return {
+      damage: 0,
+      absorbed: 0,
+      raw: 0,
+      affinity: 1,
+      combo: [],
+      assists: [],
+      lethal: false,
+      miss: true,
+    };
+  }
+  const focused = consume(attacker.statuses, 'focused'),
+    weakened = consume(attacker.statuses, 'weakened'),
+    drowsy = hasStatus(attacker, 'drowsy'),
+    stunned = hasStatus(attacker, 'stunned'),
+    guarded = move.ignoreGuard ? false : consume(defender.statuses, 'guarded'),
+    exposed = consume(defender.statuses, 'exposed'),
+    marked = hasStatus(defender, 'marked'),
+    scaled = scaledPower(move, attacker, defender),
+    combo = [...scaled.matches, ...scaled.detonated],
+    power = scaled.power * (state.modifiers?.includes('high_voltage') ? 1.18 : 1);
+  for (const helperId of scaled.assistIds) {
+    push(events, 'assist', {
+      side,
+      creatureId: helperId,
+      attackerId: attacker.id,
+      statuses: combo.filter((id) => defender.statuses[id]?.sourceCreatureId === helperId),
+    });
+    adjustSurge(state, side, 8, events, 'assist');
+  }
+  scaled.detonated.forEach((status) => {
+    delete defender.statuses[status];
+    emitStatus(events, targetSide, defender, status, false, { detonated: true });
+  });
+  let damage = 0,
+    absorbedTotal = 0,
+    raw = 0,
+    affinity = 1;
+  for (let hit = 1; hit <= hits && defender.hp > 0; hit++) {
+    const result = calculateDamage({ ...move, power }, attacker, defender, {
+      focused,
+      weakened,
+      guarded,
+      exposed,
+      marked,
+      drowsy,
+      stunned,
+    });
+    let incoming = result.damage,
+      absorbed = 0;
+    raw += result.damage;
+    affinity = result.affinity;
+    if (!move.ignoreBarrier && defender.barrier > 0) {
+      absorbed = Math.min(defender.barrier, incoming);
+      defender.barrier -= absorbed;
+      incoming -= absorbed;
+      absorbedTotal += absorbed;
+      push(events, 'barrier-hit', {
+        side: targetSide,
+        creatureId: defender.id,
+        amount: absorbed,
+        total: defender.barrier,
+      });
+    }
+    const beforeHp = defender.hp;
+    defender.hp = Math.max(0, defender.hp - incoming);
+    if (defender.hp === 0 && defender.passive === 'nine_lives' && !defender.talent.nineLives) {
+      defender.hp = 1;
+      defender.talent.nineLives = true;
+      passiveEvent(events, targetSide, defender);
+    }
+    const hpDamage = beforeHp - defender.hp;
+    damage += hpDamage;
+    push(events, 'damage', {
+      side: targetSide,
+      sourceSide: side,
+      sourceCreatureId: attacker.id,
+      creatureId: defender.id,
+      amount: hpDamage,
+      rawAmount: result.damage,
+      absorbed,
+      hit,
+      hits,
+      hp: defender.hp,
+      maxHp: defender.maxHp,
+      affinity: result.affinity,
+      moveAffinity: move.affinity,
+      combo,
+      assists: scaled.assistIds,
+    });
+    if (
+      defender.passive === 'last_bastion' &&
+      defender.hp > 0 &&
+      defender.hp / defender.maxHp <= 0.5 &&
+      !defender.talent.lastBastion
+    ) {
+      defender.talent.lastBastion = true;
+      passiveEvent(events, targetSide, defender);
+      addBarrier(defender, 16, targetSide, events);
+    }
+    if (
+      defender.passive === 'ember_cocoon' &&
+      defender.hp > 0 &&
+      defender.hp / defender.maxHp <= 0.5 &&
+      !defender.talent.emberCocoon
+    ) {
+      defender.talent.emberCocoon = true;
+      passiveEvent(events, targetSide, defender);
+      addBarrier(defender, 10, targetSide, events);
+    }
+  }
+  if (defender.hp > 0) {
+    const statuses = (move.targetStatuses || []).map((spec) => {
+      let duration = spec.duration,
+        stacks = spec.stacks;
+      if (attacker.passive === 'dream_dust' && duration) duration += 1;
+      if (attacker.passive === 'night_terror' && spec.id === 'drowsy' && duration) duration += 1;
+      if (attacker.passive === 'living_furnace' && spec.id === 'burning') stacks = (stacks || 1) + 1;
+      return { ...spec, duration, stacks };
+    });
+    applyStatuses(defender, statuses, state, targetSide, events, attacker.id);
+    if (statuses.length && attacker.passive === 'memory_silk') {
+      passiveEvent(events, side, attacker);
+      healCreature(attacker, 5, side, events, 'passive');
+    }
+  }
   return {
-    damage: Math.max(0, raw - absorbed),
-    absorbed,
+    damage,
+    absorbed: absorbedTotal,
     raw,
-    affinity: result.affinity,
-    combo: [...matches, ...detonated],
-    assists: assistIds,
-    lethal: !nineLives && raw - absorbed >= defender.hp,
+    affinity,
+    combo,
+    assists: scaled.assistIds,
+    lethal: defender.hp <= 0,
     miss: false,
   };
+}
+
+export function previewMove(state, side, moveId) {
+  const move = MOVES[moveId];
+  if (!move || move.kind !== 'damage') return null;
+  return resolveDamageTransaction(clone(state), side, move, []);
 }
 
 export function previewIncomingAfterSwitch(state, defenderSide, index, attackerMoveId) {
@@ -620,120 +747,9 @@ function executeMove(state, side, moveId, events) {
   owner.lastMoveId = moveId;
   let totalHpDamage = 0;
   if (move.kind === 'damage') {
-    if (consume(defender.statuses, 'evasive')) {
-      push(events, 'miss', { side: targetSide, sourceSide: side, creatureId: defender.id, moveId });
-      emitStatus(events, targetSide, defender, 'evasive', false);
-    } else {
-      const focused = consume(attacker.statuses, 'focused'),
-        weakened = consume(attacker.statuses, 'weakened'),
-        drowsy = hasStatus(attacker, 'drowsy'),
-        stunned = hasStatus(attacker, 'stunned');
-      const guarded = move.ignoreGuard ? false : consume(defender.statuses, 'guarded'),
-        exposed = consume(defender.statuses, 'exposed'),
-        marked = hasStatus(defender, 'marked');
-      const scaled = scaledPower(move, attacker, defender),
-        detonated = scaled.detonated,
-        power = scaled.power * (state.modifiers?.includes('high_voltage') ? 1.18 : 1);
-      for (const helperId of scaled.assistIds) {
-        push(events, 'assist', {
-          side,
-          creatureId: helperId,
-          attackerId: attacker.id,
-          statuses: [...scaled.matches, ...scaled.detonated].filter(
-            (id) => defender.statuses[id]?.sourceCreatureId === helperId
-          ),
-        });
-        adjustSurge(state, side, 8, events, 'assist');
-      }
-      detonated.forEach((status) => {
-        delete defender.statuses[status];
-        emitStatus(events, targetSide, defender, status, false, { detonated: true });
-      });
-      for (let hit = 1; hit <= (move.hits || 1) && defender.hp > 0; hit++) {
-        const result = calculateDamage({ ...move, power }, attacker, defender, {
-          focused,
-          weakened,
-          guarded,
-          exposed,
-          marked,
-          drowsy,
-          stunned,
-        });
-        let incoming = result.damage,
-          absorbed = 0;
-        if (!move.ignoreBarrier && defender.barrier > 0) {
-          absorbed = Math.min(defender.barrier, incoming);
-          defender.barrier -= absorbed;
-          incoming -= absorbed;
-          push(events, 'barrier-hit', {
-            side: targetSide,
-            creatureId: defender.id,
-            amount: absorbed,
-            total: defender.barrier,
-          });
-        }
-        const beforeHp = defender.hp;
-        defender.hp = Math.max(0, defender.hp - incoming);
-        if (defender.hp === 0 && defender.passive === 'nine_lives' && !defender.talent.nineLives) {
-          defender.hp = 1;
-          defender.talent.nineLives = true;
-          passiveEvent(events, targetSide, defender);
-        }
-        const hpDamage = beforeHp - defender.hp;
-        totalHpDamage += hpDamage;
-        push(events, 'damage', {
-          side: targetSide,
-          sourceSide: side,
-          sourceCreatureId: attacker.id,
-          creatureId: defender.id,
-          amount: hpDamage,
-          rawAmount: result.damage,
-          absorbed,
-          hit,
-          hits: move.hits || 1,
-          hp: defender.hp,
-          maxHp: defender.maxHp,
-          affinity: result.affinity,
-          moveAffinity: move.affinity,
-          combo: [...scaled.matches, ...scaled.detonated],
-          assists: scaled.assistIds,
-        });
-        if (
-          defender.passive === 'last_bastion' &&
-          defender.hp > 0 &&
-          defender.hp / defender.maxHp <= 0.5 &&
-          !defender.talent.lastBastion
-        ) {
-          defender.talent.lastBastion = true;
-          passiveEvent(events, targetSide, defender);
-          addBarrier(defender, 16, targetSide, events);
-        }
-        if (
-          defender.passive === 'ember_cocoon' &&
-          defender.hp > 0 &&
-          defender.hp / defender.maxHp <= 0.5 &&
-          !defender.talent.emberCocoon
-        ) {
-          defender.talent.emberCocoon = true;
-          passiveEvent(events, targetSide, defender);
-          addBarrier(defender, 10, targetSide, events);
-        }
-      }
-      if (defender.hp > 0) {
-        const statuses = (move.targetStatuses || []).map((spec) => {
-          let duration = spec.duration,
-            stacks = spec.stacks;
-          if (attacker.passive === 'dream_dust' && duration) duration += 1;
-          if (attacker.passive === 'night_terror' && spec.id === 'drowsy' && duration) duration += 1;
-          if (attacker.passive === 'living_furnace' && spec.id === 'burning') stacks = (stacks || 1) + 1;
-          return { ...spec, duration, stacks };
-        });
-        applyStatuses(defender, statuses, state, targetSide, events, attacker.id);
-        if (statuses.length && attacker.passive === 'memory_silk') {
-          passiveEvent(events, side, attacker);
-          healCreature(attacker, 5, side, events, 'passive');
-        }
-      }
+    const transaction = resolveDamageTransaction(state, side, move, events);
+    totalHpDamage = transaction.damage;
+    if (!transaction.miss) {
       if (
         totalHpDamage &&
         (hasStatus(defender, 'thorns') || defender.passive === 'bramblehide') &&
@@ -790,6 +806,7 @@ function executeMove(state, side, moveId, events) {
   if (move.teamBarrier)
     for (const ally of state.sides[side].team)
       if (ally.hp > 0) addBarrier(ally, move.teamBarrier, side, events);
+  recordKnockout(state, side, attacker, events);
   if (move.drain && totalHpDamage) healCreature(attacker, totalHpDamage * move.drain, side, events, 'drain');
   if (move.recoil && totalHpDamage && attacker.hp > 0) {
     const amount = Math.max(1, Math.round(totalHpDamage * move.recoil));
@@ -836,14 +853,7 @@ function executeMove(state, side, moveId, events) {
     [targetSide, defender],
     [side, attacker],
   ])
-    if (
-      creature.hp <= 0 &&
-      !events.some((e) => e.type === 'ko' && e.side === checkSide && e.creatureId === creature.id)
-    ) {
-      push(events, 'ko', { side: checkSide, creatureId: creature.id });
-      const remaining = consciousIndices(state, checkSide).filter((i) => i !== state.sides[checkSide].active);
-      if (remaining.length) state.sides[checkSide].pendingReplacement = true;
-    }
+    recordKnockout(state, checkSide, creature, events);
 }
 
 function endBattleIfNeeded(state, events) {

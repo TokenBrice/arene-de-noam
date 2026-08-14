@@ -1,0 +1,90 @@
+.results-scene {
+  --results-glow: #9c72ff;
+  isolation: isolate;
+  position: relative;
+}
+
+.results-scene--win {
+  --results-glow: #ffd76a;
+}
+
+.results-scene::before {
+  animation: resultsBackdrop 320ms ease-out both;
+  background: rgb(3 5 18 / 52%);
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: -1;
+}
+
+.results-heading {
+  animation: resultsHeading 430ms 180ms cubic-bezier(.2, .9, .25, 1.2) both;
+}
+
+.results-panel > h1.results-heading {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--results-glow) 72%, transparent),
+    0 0 32px color-mix(in srgb, var(--results-glow) 42%, transparent);
+}
+
+.results-intro {
+  animation: resultsCardIn 280ms 300ms ease-out both;
+}
+
+.results-reveal {
+  animation: resultsCardIn 330ms cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.results-reveal--1 { animation-delay: 390ms; }
+.results-reveal--2 { animation-delay: 490ms; }
+.results-reveal--3 { animation-delay: 590ms; }
+.results-reveal--4 { animation-delay: 690ms; }
+
+.results-grade {
+  animation: resultsGradeStamp 430ms 760ms cubic-bezier(.2, 1.35, .35, 1) both;
+  transform-origin: center;
+}
+
+@keyframes resultsBackdrop {
+  from { opacity: .35; }
+  to { opacity: 1; }
+}
+
+@keyframes resultsHeading {
+  from { opacity: .35; transform: scale(.88) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes resultsCardIn {
+  from { opacity: .45; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes resultsGradeStamp {
+  0% { opacity: .45; transform: scale(.84) rotate(-2deg); }
+  72% { opacity: 1; transform: scale(1.045) rotate(.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.results-scene--reduced::before,
+.results-scene--reduced .results-heading,
+.results-scene--reduced .results-intro,
+.results-scene--reduced .results-reveal,
+.results-scene--reduced .results-grade {
+  animation: resultsReducedFade 180ms ease-out both;
+}
+
+@keyframes resultsReducedFade {
+  from { opacity: .85; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-scene::before,
+  .results-scene .results-heading,
+  .results-scene .results-intro,
+  .results-scene .results-reveal,
+  .results-scene .results-grade {
+    animation: resultsReducedFade 180ms ease-out both;
+  }
+}

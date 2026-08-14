@@ -10,7 +10,7 @@
   border: 1px solid #ffffff12;
   border-radius: 7px;
   background: #ffffff08;
-  font-size: 8px;
+  font-size: var(--text-xs);
   font-weight: 900;
   letter-spacing: 0.02em;
 }
@@ -40,7 +40,7 @@
   }
   .scout-read span {
     padding: 2px 4px;
-    font-size: 6px;
+    font-size: var(--text-xs);
   }
 }
 .kit-strip {
@@ -68,14 +68,14 @@
   border-radius: 6px;
   color: #080a1c;
   background: var(--kit-color);
-  font-size: 8px;
+  font-size: var(--text-xs);
   font-style: normal;
   font-weight: 1000;
 }
 .kit-move small {
   overflow: hidden;
   color: #c7c8da;
-  font-size: 6px;
+  font-size: var(--text-xs);
   font-weight: 800;
   line-height: 1.12;
   text-overflow: ellipsis;
@@ -106,7 +106,7 @@
     height: 17px;
   }
   .kit-move small {
-    font-size: 5.5px;
+    font-size: var(--text-xs);
   }
 }
 .kit-showcase {
@@ -140,7 +140,7 @@
 }
 .kit-showcase-creature small {
   color: #ffe17e;
-  font-size: 7px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.1em;
 }
@@ -149,7 +149,7 @@
 }
 .kit-showcase-creature em {
   color: #aeafc4;
-  font-size: 8px;
+  font-size: var(--text-xs);
   font-style: normal;
 }
 .kit-showcase-moves {
@@ -187,13 +187,13 @@
 }
 .kit-showcase-moves b {
   overflow: hidden;
-  font-size: 9px;
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .kit-showcase-moves small {
   color: #b6b7ca;
-  font-size: 7px;
+  font-size: var(--text-xs);
   line-height: 1.25;
 }
 .kit-showcase-moves article.signature {
@@ -227,10 +227,10 @@
     scroll-snap-align: start;
   }
   .kit-showcase-moves b {
-    font-size: 9px;
+    font-size: var(--text-xs);
   }
   .kit-showcase-moves small {
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
 }
 .team-profile {
@@ -248,13 +248,13 @@
 }
 .team-profile > div:first-child span {
   color: #aeb0c6;
-  font-size: 7px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.13em;
 }
 .team-profile > div:first-child b {
   color: #ffe586;
-  font-size: 9px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 .profile-bars {
@@ -269,7 +269,7 @@
 }
 .profile-bars small {
   color: #b8b9ce;
-  font-size: 7px;
+  font-size: var(--text-xs);
 }
 .profile-bars i {
   height: 5px;
@@ -301,7 +301,7 @@
 }
 .profile-bars > span > b {
   color: #9496ad;
-  font-size: 7px;
+  font-size: var(--text-xs);
   text-align: right;
 }
 .profile-bars > span.dominant > b {
@@ -322,7 +322,7 @@
   border-radius: 99px;
   color: #3a2900;
   background: #ffe58d;
-  font-size: 5px;
+  font-size: var(--text-xs);
   font-style: normal;
   font-weight: 1000;
   letter-spacing: 0.08em;
@@ -344,7 +344,7 @@
 }
 .squad-presets-head > span > small {
   color: #aeb0c4;
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .remix-team-btn {
   flex: 0 0 auto;
@@ -353,7 +353,7 @@
   border-color: #74dff052 !important;
   color: #bff6ff !important;
   background: linear-gradient(120deg, #3cd7e51d, #9670ff16) !important;
-  font-size: 9px !important;
+  font-size: var(--text-xs) !important;
 }
 .remix-team-btn:hover {
   box-shadow: 0 0 18px #51d6e52c;
@@ -368,7 +368,7 @@
 }
 .selected-row.recommended-lead > span > small {
   color: #8cecf4;
-  font-size: 6px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -409,7 +409,7 @@
   color: #fff;
   background: transparent;
   font: inherit;
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .bestiary-tools input::placeholder {
   color: #8f91a8;
@@ -425,7 +425,7 @@
   border-radius: 9px;
   color: #b8b9cc;
   background: #ffffff06;
-  font-size: 7px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .bestiary-tools button.active {
@@ -436,7 +436,7 @@
 }
 .bestiary-tools > b {
   color: #ffe58c;
-  font-size: 9px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 .bestiary-card[hidden] {
@@ -455,14 +455,14 @@
     flex: 0 0 auto;
   }
   .bestiary-tools input {
-    font-size: 9px;
+    font-size: var(--text-xs);
   }
 }
 .contract-preview small {
   display: block;
   margin-top: 5px;
   color: #ffe38b;
-  font-size: 7px;
+  font-size: var(--text-xs);
   font-weight: 900;
 }
 .contract-preview.recommended {
@@ -494,7 +494,7 @@
 }
 .draft-slot b > small {
   color: #7de9f1;
-  font-size: 5px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 .gauntlet-condition > button {
@@ -527,7 +527,7 @@
 }
 .gauntlet-condition > button b > small {
   color: #74eac9;
-  font-size: 5px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 .mobile-selection-dock {
@@ -585,11 +585,11 @@
     display: grid;
   }
   .mobile-selection-dock b {
-    font-size: 9px;
+    font-size: var(--text-xs);
   }
   .mobile-selection-dock small {
     color: #aeb0c4;
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
   .mobile-selection-dock > button {
     min-height: 38px;
@@ -598,7 +598,7 @@
     border-radius: 10px;
     color: #2b2100;
     background: #ffe68d;
-    font-size: 8px;
+    font-size: var(--text-xs);
     font-weight: 1000;
     cursor: pointer;
   }
@@ -608,11 +608,11 @@
     align-items: end;
   }
   .squad-presets-head > span > small {
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
   .remix-team-btn {
     padding: 6px 8px !important;
-    font-size: 7px !important;
+    font-size: var(--text-xs) !important;
   }
 }
 .detonation-call {
@@ -652,7 +652,7 @@
 }
 .detonation-call small {
   color: #fff;
-  font-size: 8px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.24em;
 }
@@ -666,7 +666,7 @@
 }
 .detonation-call em {
   color: #fff1a3;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-style: normal;
   font-weight: 1000;
   letter-spacing: 0.2em;
@@ -732,10 +732,10 @@
     font-size: 22px;
   }
   .detonation-call small {
-    font-size: 6px;
+    font-size: var(--text-xs);
   }
   .detonation-call em {
-    font-size: 8px;
+    font-size: var(--text-xs);
   }
 }
 @media (prefers-reduced-motion: reduce) {

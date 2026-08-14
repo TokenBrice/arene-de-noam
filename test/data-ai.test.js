@@ -238,7 +238,7 @@ test('team combo routes expose cross-creature setups and never self-credit', () 
   assert.deepEqual(teamComboRoutes(['kordane', 'monolith', 'virelia']), []);
 });
 
-test('every AI difficulty always chooses legal actions without mutating state', () => {
+test('every AI difficulty chooses legal actions while mutating only the deterministic RNG cursor', () => {
   const state = createBattle({
     playerTeam: ['orakyn', 'abyssar', 'virelia'],
     enemyTeam: ['kordane', 'calderoc', 'farfombre'],
@@ -250,8 +250,35 @@ test('every AI difficulty always chooses legal actions without mutating state', 
       const action = chooseAiAction(state, 'enemy', difficulty, style);
       assert.ok(getLegalActions(state, 'enemy').some((x) => JSON.stringify(x) === JSON.stringify(action)));
     }
+  const rngState = state.rngState;
+  delete state.rngState;
+  delete before.rngState;
   assert.deepEqual(state, before);
+  assert.notEqual(rngState, 91);
   assert.equal('playerAction' in state, false);
+});
+
+test('successive tied AI decisions advance RNG and replay identically from the same seed', () => {
+  const makeTiedState = () => {
+    const state = createBattle({
+      playerTeam: ['orakyn', 'kordane', 'calderoc'],
+      enemyTeam: ['voltide', 'abyssar', 'virelia'],
+      seed: 1,
+    });
+    state.phase = 'replacement';
+    state.sides.player.pendingReplacement = true;
+    state.sides.player.team[0].hp = 0;
+    state.sides.player.team[2] = structuredClone(state.sides.player.team[1]);
+    return state;
+  };
+  const first = makeTiedState(),
+    replay = makeTiedState(),
+    decideThree = (state) =>
+      Array.from({ length: 3 }, () => chooseAiAction(state, 'player', 'champion', 'direct').index);
+  assert.deepEqual(decideThree(first), [1, 1, 2]);
+  assert.deepEqual(decideThree(replay), [1, 1, 2]);
+  assert.equal(first.rngState, replay.rngState);
+  assert.notEqual(first.rngState, 1);
 });
 
 test('Champion AI saves defensive Signatures for genuine team pressure', () => {
@@ -285,6 +312,69 @@ test('Champion AI can pivot into a resistant bench answer to a ready Signature',
   assert.deepEqual(state, before);
 });
 
+test('Champion switch scoring reads detonation setup from the candidate, not the active creature', () => {
+  const makeState = () => {
+    const state = createBattle({
+      playerTeam: ['pyrolynx', 'mnemora', 'hexalune'],
+      enemyTeam: ['voltide', 'umbrawl', 'nocturnyx'],
+      seed: 3802152333,
+      modifiers: ['relay_fever'],
+    });
+    state.turn = 4;
+    state.sides.player.surge = 30;
+    state.sides.player.team[0].hp = Math.round(state.sides.player.team[0].maxHp * 0.1);
+    return state;
+  };
+  const clean = makeState(),
+    candidatePrimed = makeState(),
+    activePrimed = makeState();
+  candidatePrimed.sides.player.team[1].statuses.charged = {
+    appliedTurn: candidatePrimed.turn,
+    remaining: 2,
+    stacks: 1,
+  };
+  activePrimed.sides.player.team[0].statuses.charged = {
+    appliedTurn: activePrimed.turn,
+    remaining: 2,
+    stacks: 1,
+  };
+  assert.deepEqual(chooseAiAction(clean, 'player', 'champion', 'deception'), {
+    type: 'switch',
+    index: 2,
+  });
+  assert.deepEqual(chooseAiAction(candidatePrimed, 'player', 'champion', 'deception'), {
+    type: 'switch',
+    index: 1,
+  });
+  assert.deepEqual(chooseAiAction(activePrimed, 'player', 'champion', 'deception'), {
+    type: 'switch',
+    index: 2,
+  });
+});
+
+test('Champion reply forecasts account for an active barrier through authoritative previews', () => {
+  const clear = createBattle({
+      playerTeam: ['lumivox', 'ferrax', 'abyssar'],
+      enemyTeam: ['lumivox', 'farfombre', 'prismage'],
+      seed: 1290640251,
+      arena: 'eclipse',
+      modifiers: ['relay_fever'],
+    }),
+    barrier = structuredClone(clear);
+  clear.sides.player.surge = 30;
+  clear.sides.player.team[0].barrier = 0;
+  barrier.sides.player.surge = 30;
+  barrier.sides.player.team[0].barrier = 60;
+  assert.deepEqual(chooseAiAction(clear, 'player', 'champion', 'champion'), {
+    type: 'switch',
+    index: 2,
+  });
+  assert.deepEqual(chooseAiAction(barrier, 'player', 'champion', 'champion'), {
+    type: 'move',
+    moveId: 'echo_chorus',
+  });
+});
+
 test('Challenger AI recognizes the extra tempo of Relay Rush', () => {
   const config = {
       playerTeam: ['orakyn', 'abyssar', 'virelia'],
@@ -299,6 +389,8 @@ test('Challenger AI recognizes the extra tempo of Relay Rush', () => {
     moveId: 'resonant_focus',
   });
   assert.deepEqual(chooseAiAction(relay, 'enemy', 'challenger', 'direct'), { type: 'switch', index: 1 });
+  assert.notEqual(relay.rngState, before.rngState);
+  before.rngState = relay.rngState;
   assert.deepEqual(relay, before);
 });
 

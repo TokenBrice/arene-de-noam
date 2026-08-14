@@ -16,7 +16,7 @@
 }
 .custom-squads > div:first-child small {
   color: var(--muted);
-  font-size: 8px;
+  font-size: var(--text-xs);
   line-height: 1.35;
 }
 .custom-squad-track {
@@ -39,11 +39,11 @@
   display: grid;
 }
 .custom-squad > span b {
-  font-size: 8px;
+  font-size: var(--text-xs);
 }
 .custom-squad > span small {
   color: #a9abc0;
-  font-size: 6px;
+  font-size: var(--text-xs);
 }
 .custom-squad-team {
   display: flex;
@@ -67,7 +67,7 @@
   right: -1px;
   top: -2px;
   color: #ffe376;
-  font-size: 8px;
+  font-size: var(--text-xs);
   text-shadow: 0 0 5px #ffd448;
 }
 .custom-squad-team img {
@@ -88,7 +88,7 @@
   border-radius: 7px;
   color: #cfd1e2;
   background: #ffffff08;
-  font-size: 6px;
+  font-size: var(--text-xs);
   font-weight: 850;
   cursor: pointer;
 }

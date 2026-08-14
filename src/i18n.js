@@ -451,6 +451,8 @@ const fr = {
   'settings.title': 'Réglages & aide',
   'settings.language': 'Langue',
   'settings.volume': 'Volume',
+  'settings.musicVolume': 'Volume de la musique',
+  'settings.sfxVolume': 'Volume des effets sonores',
   'settings.mute': 'Couper le son',
   'settings.motion': 'Mouvements réduits',
   'settings.speed': 'Vitesse des combats',
@@ -1008,6 +1010,8 @@ const en = {
   'settings.title': 'Settings & help',
   'settings.language': 'Language',
   'settings.volume': 'Volume',
+  'settings.musicVolume': 'Music volume',
+  'settings.sfxVolume': 'Sound effects volume',
   'settings.mute': 'Mute sound',
   'settings.motion': 'Reduced motion',
   'settings.speed': 'Battle speed',
@@ -1121,6 +1125,14 @@ const en = {
 // Expansion vocabulary is layered here so older copy remains easy to compare
 // while all new combat concepts stay perfectly key-parallel between languages.
 Object.assign(fr, {
+  'battle.plateOpen': 'Ouvrir les détails de {name}',
+  'battle.plateTitle': 'Détails de {name}',
+  'battle.plateHint': 'Talent, liens et état complet',
+  'battle.talent': 'Talent',
+  'battle.noStatuses': 'Aucun effet actif',
+  'battle.moveRoleHeal': 'Soin',
+  'battle.moveRoleTactic': 'Tactique',
+  'battle.exitConfirm': 'Quitter ce combat ?',
   'app.tagline': '24 créatures. 72 techniques uniques. Une équipe à inventer.',
   'title.emblems': '{count}/12 emblèmes',
   'select.subtitle': 'Choisis trois créatures aux stratégies complémentaires, puis désigne ton meneur.',
@@ -1499,6 +1511,14 @@ Object.assign(fr, {
 });
 
 Object.assign(en, {
+  'battle.plateOpen': 'Open {name} details',
+  'battle.plateTitle': '{name} details',
+  'battle.plateHint': 'Talent, bonds, and full status',
+  'battle.talent': 'Talent',
+  'battle.noStatuses': 'No active effects',
+  'battle.moveRoleHeal': 'Heal',
+  'battle.moveRoleTactic': 'Tactic',
+  'battle.exitConfirm': 'Leave this battle?',
   'app.tagline': '24 creatures. 72 unique moves. One team to invent.',
   'title.emblems': '{count}/12 emblems',
   'select.subtitle': 'Choose three creatures with complementary strategies, then pick your lead.',
@@ -1991,7 +2011,8 @@ export function createI18n(initial = 'fr') {
       document.documentElement.lang = lang;
     },
     t(key, vars = {}) {
-      const value = DICTIONARIES[lang][key] ?? `⟦${key}⟧`;
+      const fallbackLang = lang === 'fr' ? 'en' : 'fr';
+      const value = DICTIONARIES[lang][key] ?? DICTIONARIES[fallbackLang][key] ?? `⟦${key}⟧`;
       return value.replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? `{${name}}`));
     },
   };

@@ -36,6 +36,15 @@ const {
   clearBattleFx,
 } = route;
 
+function sessionIsActive(session) {
+  return Boolean(
+    session &&
+    ctx.battleSession === session &&
+    !session.cancelled &&
+    screen.classList.contains('battle-screen')
+  );
+}
+
 function eventPresentationDelay(event) {
   if (testAnimationScale === 0) return 1;
   if (ctx.save.reducedMotion) return 190 / ctx.save.battleSpeed;
@@ -69,19 +78,26 @@ function eventPresentationDelay(event) {
 }
 
 async function playEvents(events) {
+  const session = ctx.battleSession;
+  if (!sessionIsActive(session)) return;
   refreshBattle();
   await signatureClashIntro(events);
+  if (!sessionIsActive(session)) return;
   for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
     const event = events[eventIndex];
-    while (document.hidden) await wait(150);
+    while (document.hidden) {
+      await wait(150);
+      if (!sessionIsActive(session)) return;
+    }
+    if (!sessionIsActive(session)) return;
     const actorSide = event.side;
     const fighter = screen.querySelector(`#fighter-${actorSide}`);
     if (event.type === 'trainer-command') {
-      ctx.battleSession.lastLine = t('battle.commandLine', { command: t(`command.${event.command}`) });
+      session.lastLine = t('battle.commandLine', { command: t(`command.${event.command}`) });
       trainerCommandFx(event);
     }
     if (event.type === 'move-start') {
-      ctx.battleSession.lastLine = t('battle.action.move', {
+      session.lastLine = t('battle.action.move', {
         actor: creatureName(event.creatureId),
         move: t(`move.${event.moveId}`),
       });
@@ -91,18 +107,18 @@ async function playEvents(events) {
       sound.move(MOVES[event.moveId]);
     }
     if (event.type === 'assist') {
-      ctx.battleSession.lastLine = t('battle.assist', {
+      session.lastLine = t('battle.assist', {
         helper: creatureName(event.creatureId),
         actor: creatureName(event.attackerId),
       });
       assistFx(event);
     }
     if (event.type === 'perfect-relay') {
-      ctx.battleSession.lastLine = t('battle.perfectRelay', { actor: creatureName(event.creatureId) });
+      session.lastLine = t('battle.perfectRelay', { actor: creatureName(event.creatureId) });
       perfectRelayFx(event);
     }
     if (event.type === 'final-duel') {
-      ctx.battleSession.lastLine = t('battle.finalDuelLine');
+      session.lastLine = t('battle.finalDuelLine');
       finalDuelFx(event);
     }
     if (event.type === 'flow') {
@@ -117,7 +133,7 @@ async function playEvents(events) {
                 ? 'battle.flowPeakLine'
                 : 'battle.flowPeakCappedLine'
             : 'battle.flowLine';
-      ctx.battleSession.lastLine = t(flowLine, { count: event.count, surge: event.surge });
+      session.lastLine = t(flowLine, { count: event.count, surge: event.surge });
       screen.querySelector(`#hud-${event.side}`)?.classList.add('flow-flash');
       if (event.count === 3) flowCrescendoFx(event);
       else sound.ui();
@@ -129,13 +145,13 @@ async function playEvents(events) {
           : event.affinity === 0.75
             ? `↓ ${t('battle.resisted')} · `
             : '';
-      ctx.battleSession.lastLine = `${affinityNote}${event.combo?.length ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
+      session.lastLine = `${affinityNote}${event.combo?.length ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
       fighter?.classList.add('hit');
       impactMoveFx(event);
       sound.impact(MOVES[ctx.currentFxMove?.moveId], event);
     }
     if (event.type === 'heal') {
-      ctx.battleSession.lastLine = t('battle.action.heal', {
+      session.lastLine = t('battle.action.heal', {
         actor: creatureName(event.creatureId),
         amount: event.amount,
       });
@@ -143,7 +159,7 @@ async function playEvents(events) {
       sound.heal();
     }
     if (event.type === 'status') {
-      ctx.battleSession.lastLine = event.detonated
+      session.lastLine = event.detonated
         ? t('battle.detonate', { status: t(`status.${event.status}`) })
         : event.applied
           ? t('battle.action.status', {
@@ -164,7 +180,7 @@ async function playEvents(events) {
       }
     }
     if (event.type === 'barrier') {
-      ctx.battleSession.lastLine = t('battle.action.barrier', {
+      session.lastLine = t('battle.action.barrier', {
         actor: creatureName(event.creatureId),
         amount: event.amount,
       });
@@ -172,18 +188,18 @@ async function playEvents(events) {
       sound.guard();
     }
     if (event.type === 'barrier-hit') {
-      ctx.battleSession.lastLine = t('battle.action.absorb', { amount: event.amount });
+      session.lastLine = t('battle.action.absorb', { amount: event.amount });
       fighter?.classList.add('barrier-hit');
       ctx.arenaScene?.flash('hit', '#73eaff', event.side);
       sound.guard();
     }
     if (event.type === 'miss') {
-      ctx.battleSession.lastLine = t('battle.action.miss', { actor: creatureName(event.creatureId) });
+      session.lastLine = t('battle.action.miss', { actor: creatureName(event.creatureId) });
       fighter?.classList.add('dodging');
       sound.ui();
     }
     if (event.type === 'recoil') {
-      ctx.battleSession.lastLine = t('battle.action.recoil', {
+      session.lastLine = t('battle.action.recoil', {
         actor: creatureName(event.creatureId),
         amount: event.amount,
       });
@@ -192,7 +208,7 @@ async function playEvents(events) {
       sound.hit('force');
     }
     if (event.type === 'status-tick') {
-      ctx.battleSession.lastLine = t('battle.action.tick', {
+      session.lastLine = t('battle.action.tick', {
         actor: creatureName(event.creatureId),
         amount: event.amount,
         status: t(`status.${event.status}`),
@@ -202,47 +218,47 @@ async function playEvents(events) {
       sound.hit(CREATURES[event.creatureId].affinity);
     }
     if (event.type === 'surge' && event.source === 'switch' && event.amount >= 24) {
-      const incoming = activeOf(ctx.battleSession.state, event.side);
-      ctx.battleSession.lastLine = t('battle.relayRushLine', { actor: creatureName(incoming.id) });
+      const incoming = activeOf(session.state, event.side);
+      session.lastLine = t('battle.relayRushLine', { actor: creatureName(incoming.id) });
       relayRushFx(event);
       screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
     }
     if (event.type === 'surge' && event.source === 'mastery') {
-      ctx.battleSession.lastLine = t('battle.masterySpark');
+      session.lastLine = t('battle.masterySpark');
       screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
       sound.ui();
     }
     if (event.type === 'surge' && event.ready) {
-      ctx.battleSession.lastLine = t('battle.surgeReady');
+      session.lastLine = t('battle.surgeReady');
       screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
       signatureReadyFx(event);
     }
     if (event.type === 'arena-pulse') {
-      ctx.battleSession.lastLine = t('battle.arenaPulse', { arena: t(`arena.${event.arena}`) });
+      session.lastLine = t('battle.arenaPulse', { arena: t(`arena.${event.arena}`) });
       arenaPulseFx(event);
     }
     if (event.type === 'resonance') {
-      ctx.battleSession.lastLine = t('battle.resonanceLine', {
+      session.lastLine = t('battle.resonanceLine', {
         actor: creatureName(event.creatureId),
         affinity: affinityName(event.affinity),
       });
       resonanceFx(event);
     }
     if (event.type === 'ace') {
-      ctx.battleSession.lastLine = t('battle.ace', {
+      session.lastLine = t('battle.ace', {
         actor: creatureName(event.creatureId),
         ace: t(`ace.${event.ace}`),
       });
       aceFx(event);
     }
     if (event.type === 'rally') {
-      ctx.battleSession.lastLine = t('battle.rally', { actor: creatureName(event.creatureId) });
+      session.lastLine = t('battle.rally', { actor: creatureName(event.creatureId) });
       tacticalFx({ ...event, status: 'focused' });
       screen.classList.add('rally-beat');
-      sound.victory();
+      sound.rally();
     }
     if (event.type === 'passive') {
-      ctx.battleSession.lastLine = t('battle.passive', {
+      session.lastLine = t('battle.passive', {
         actor: creatureName(event.creatureId),
         passive: t(`passive.${event.passive}`),
       });
@@ -250,28 +266,28 @@ async function playEvents(events) {
       sound.guard();
     }
     if (event.type === 'switch' || event.type === 'replace') {
-      ctx.battleSession.lastLine = t('battle.action.switch', { actor: creatureName(event.creatureId) });
+      session.lastLine = t('battle.action.switch', { actor: creatureName(event.creatureId) });
       sound.ui();
     }
     if (event.type === 'ko') {
-      ctx.battleSession.lastLine = t('battle.ko', { name: creatureName(event.creatureId) });
+      session.lastLine = t('battle.ko', { name: creatureName(event.creatureId) });
       fighter?.classList.add('ko');
       screen.classList.add('ko-shock');
       sound.ko();
     }
-    if (event.type === 'battle-end' && event.reason === 'turn-cap')
-      ctx.battleSession.lastLine = t('battle.cap');
+    if (event.type === 'battle-end' && event.reason === 'turn-cap') session.lastLine = t('battle.cap');
     if (LOG_EVENT_TYPES.has(event.type)) {
-      ctx.battleSession.timeline.push({
+      session.timeline.push({
         type: event.type,
         side: event.side,
-        turn: event.turn || ctx.battleSession.state.turn,
-        text: ctx.battleSession.lastLine,
+        turn: event.turn || session.state.turn,
+        text: session.lastLine,
       });
-      if (ctx.battleSession.timeline.length > 40) ctx.battleSession.timeline.shift();
+      if (session.timeline.length > 40) session.timeline.shift();
     }
     refreshBattle();
     await wait(eventPresentationDelay(event));
+    if (!sessionIsActive(session)) return;
     fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit');
     const next = events[eventIndex + 1];
     if (

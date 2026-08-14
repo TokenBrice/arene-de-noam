@@ -77,7 +77,7 @@ test('older saves migrate and progression fields are bounded', () => {
     winStreak: 7,
     bestStreak: 3,
   });
-  assert.equal(migrated.version, 12);
+  assert.equal(migrated.version, 13);
   assert.equal(migrated.ladderVictories, 12);
   assert.deepEqual(migrated.lastTeam, DEFAULT_SAVE.lastTeam);
   assert.equal(migrated.language, 'fr');

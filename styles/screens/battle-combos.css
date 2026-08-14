@@ -269,39 +269,39 @@ body.reduced-motion .resonance-sigil {
 
 /* Camera direction follows the move grammar. The Three.js arena gets a damped
    punch while this layer composes both fighters as one dramatic shot. */
-.battlefield {
+.battle-stage-camera {
   transition:
     transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
     filter 0.25s;
 }
-.camera-player.camera-strike .battlefield {
+.camera-player.camera-strike .battle-stage-camera {
   transform: translate(1.4vw, -0.5vh) scale(1.025);
 }
-.camera-enemy.camera-strike .battlefield {
+.camera-enemy.camera-strike .battle-stage-camera {
   transform: translate(-1.4vw, 0.5vh) scale(1.025);
 }
-.camera-player.camera-rush .battlefield {
+.camera-player.camera-rush .battle-stage-camera {
   transform: translate(3vw, -1vh) scale(1.055);
 }
-.camera-enemy.camera-rush .battlefield {
+.camera-enemy.camera-rush .battle-stage-camera {
   transform: translate(-3vw, 1vh) scale(1.055);
 }
-.camera-wide .battlefield {
+.camera-wide .battle-stage-camera {
   transform: scale(0.94);
   filter: saturate(1.2);
 }
-.camera-heavy .battlefield {
+.camera-heavy .battle-stage-camera {
   transform: scale(1.075);
   filter: contrast(1.08);
 }
-.camera-ultimate .battlefield {
+.camera-ultimate .battle-stage-camera {
   transform: scale(1.12);
   filter: contrast(1.15) saturate(1.35);
 }
-.camera-heavy.camera-impact .battlefield {
+.camera-heavy.camera-impact .battle-stage-camera {
   animation: cameraCrash 0.36s cubic-bezier(0.1, 0.8, 0.2, 1);
 }
-.camera-ultimate.camera-impact .battlefield {
+.camera-ultimate.camera-impact .battle-stage-camera {
   animation: cameraUltimate 0.55s cubic-bezier(0.1, 0.8, 0.2, 1);
 }
 .camera-rush.camera-impact .fighter.hit {
@@ -336,21 +336,21 @@ body.reduced-motion .resonance-sigil {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .battlefield {
+  .battle-stage-camera {
     transform: none !important;
     filter: none !important;
   }
-  .camera-heavy.camera-impact .battlefield,
-  .camera-ultimate.camera-impact .battlefield {
+  .camera-heavy.camera-impact .battle-stage-camera,
+  .camera-ultimate.camera-impact .battle-stage-camera {
     animation: none !important;
   }
 }
-body.reduced-motion .battlefield {
+body.reduced-motion .battle-stage-camera {
   transform: none !important;
   filter: none !important;
 }
-body.reduced-motion .camera-heavy.camera-impact .battlefield,
-body.reduced-motion .camera-ultimate.camera-impact .battlefield {
+body.reduced-motion .camera-heavy.camera-impact .battle-stage-camera,
+body.reduced-motion .camera-ultimate.camera-impact .battle-stage-camera {
   animation: none !important;
 }
 

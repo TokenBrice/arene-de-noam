@@ -31,14 +31,14 @@
 }
 .contract-preview b {
   color: #eddbff;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .contract-preview span {
   color: #c7c4d8;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.4;
 }
 .contract-preview.chosen {
@@ -60,7 +60,7 @@
     left: 9px;
   }
   .contract-preview span {
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
 }
 
@@ -75,13 +75,13 @@
 }
 .trainer-ace b {
   color: #ffe89a;
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .trainer-ace span {
   color: #c7c2d7;
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.35;
 }
 .ace-codex {
@@ -137,7 +137,7 @@
 }
 .ace-reveal span {
   color: #ffe88c;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.32em;
 }
@@ -210,13 +210,13 @@
     font-size: 28px;
   }
   .ace-reveal em {
-    font-size: 9px;
+    font-size: var(--text-xs);
   }
   .ace-reveal img {
     height: 30vh;
   }
   .ace-reveal span {
-    font-size: 8px;
+    font-size: var(--text-xs);
     letter-spacing: 0.18em;
   }
 }
@@ -244,7 +244,7 @@ body.reduced-motion .ace-crown {
 .battle-log > p {
   margin: 0 0 14px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .battle-log ol {
   display: grid;
@@ -284,7 +284,7 @@ body.reduced-motion .ace-crown {
 }
 .battle-log li small {
   color: #898ba4;
-  font-size: 7px;
+  font-size: var(--text-xs);
   font-weight: 900;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -321,7 +321,7 @@ body.reduced-motion .ace-crown {
   margin: -22px -7px 1px;
   padding-left: 3px;
   color: #ffe176;
-  font-size: 8px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -337,7 +337,7 @@ body.reduced-motion .ace-crown {
     max-height: 64vh;
   }
   .battle-log li {
-    font-size: 10px;
+    font-size: var(--text-xs);
     padding: 8px;
   }
 }
@@ -352,7 +352,7 @@ body.reduced-motion .ace-crown {
   border-radius: 999px;
   color: #ffe994;
   background: #ffd04a10;
-  font-size: 7px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.08em;
   text-transform: uppercase;

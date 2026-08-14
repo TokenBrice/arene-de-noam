@@ -32,7 +32,7 @@
   border-radius: 999px;
   color: #ffe995;
   background: #ffd85d0b;
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 .league-route {
   position: relative;
@@ -108,7 +108,7 @@
   border-radius: 50%;
   color: #aeb0c7;
   background: #0a0c22;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 1000;
 }
 .league-rival.current .league-step span {
@@ -159,12 +159,12 @@
   border-radius: 999px;
   color: #cbcde0;
   background: #ffffff07;
-  font-size: 8px;
+  font-size: var(--text-xs);
   font-weight: 850;
 }
 .league-dossier > small {
   color: #9b9db4;
-  font-size: 7px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.15em;
 }
@@ -191,7 +191,7 @@
   image-rendering: pixelated;
 }
 .league-team b {
-  font-size: 8px;
+  font-size: var(--text-xs);
 }
 .league-ace {
   display: grid;
@@ -203,11 +203,11 @@
 }
 .league-ace b {
   color: #ffeaa0;
-  font-size: 9px;
+  font-size: var(--text-xs);
 }
 .league-ace span {
   color: #bbbccf;
-  font-size: 8px;
+  font-size: var(--text-xs);
   line-height: 1.35;
 }
 .league-dossier > .wide {
@@ -216,7 +216,7 @@
 .league-hidden {
   max-width: 410px;
   color: #85879d;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.5;
 }
 @media (max-width: 700px) {
@@ -253,13 +253,13 @@
     height: 48px;
   }
   .league-team b {
-    font-size: 6px;
+    font-size: var(--text-xs);
   }
   .league-meta span {
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
   .league-ace span {
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
   .league-dossier h2 {
     font-size: 24px;
@@ -347,7 +347,7 @@
 }
 .relay-rush-call small {
   color: #ffe77f;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -429,13 +429,13 @@
     height: 31vw;
   }
   .relay-rush-call small {
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
   .relay-rush-call b {
     font-size: 27px;
   }
   .relay-rush-call em {
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -500,7 +500,7 @@ body.reduced-motion .relay-rush-call img {
 }
 .flow-crescendo-call small {
   color: #ffe782;
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.24em;
 }
@@ -553,10 +553,10 @@ body.reduced-motion .relay-rush-call img {
     font-size: 25px;
   }
   .flow-crescendo-call small {
-    font-size: 7px;
+    font-size: var(--text-xs);
   }
   .flow-crescendo-call em {
-    font-size: 9px;
+    font-size: var(--text-xs);
   }
 }
 @media (prefers-reduced-motion: reduce) {

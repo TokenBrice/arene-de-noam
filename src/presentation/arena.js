@@ -104,16 +104,33 @@ export class ArenaScene {
     this.camera.lookAt(0, 0.55, 0);
     this.clock = new THREE.Clock();
     this.elapsed = 0;
+    this.animateBound = this.animate.bind(this);
+    this.onVisibilityChange = () => {
+      if (this.disposed) return;
+      if (document.hidden) {
+        cancelAnimationFrame(this.frame);
+        this.frame = undefined;
+        return;
+      }
+      // Flush the time spent hidden so the first resumed frame starts from a
+      // fresh delta rather than advancing the simulation by the whole pause.
+      this.clock.getDelta();
+      if (this.frame === undefined) this.frame = requestAnimationFrame(this.animateBound);
+    };
     this.build(this.theme);
     this.resize();
     this.onResize = () => this.resize();
     globalThis.addEventListener('resize', this.onResize);
+    this.resizeObserver =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(this.onResize) : null;
+    this.resizeObserver?.observe(canvas);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.contextLost = (event) => {
       event.preventDefault();
       canvas.dispatchEvent(new CustomEvent('arena-context-lost', { bubbles: true }));
     };
     canvas.addEventListener('webglcontextlost', this.contextLost);
-    this.animate();
+    if (!document.hidden) this.frame = requestAnimationFrame(this.animateBound);
   }
   add(object, parent = this.scene) {
     parent.add(object);
@@ -266,7 +283,7 @@ export class ArenaScene {
         )
       );
       flower.position.set(Math.cos(a) * 5.15, 0.05 + Math.sin(i) * 0.08, Math.sin(a) * 5.15);
-      this.animations.push({ object: flower, type: 'float', offset: i });
+      this.animations.push({ object: flower, type: 'float', offset: i, baseY: flower.position.y });
     }
   }
   buildTidal(t) {
@@ -334,7 +351,7 @@ export class ArenaScene {
       )
     );
     orb.position.set(0, 3.05, -5.4);
-    this.animations.push({ object: orb, type: 'float' });
+    this.animations.push({ object: orb, type: 'float', baseY: orb.position.y });
     for (let i = 0; i < 5; i++) {
       const ring = this.add(
         new THREE.Mesh(
@@ -355,7 +372,7 @@ export class ArenaScene {
       );
       const a = (i / 9) * Math.PI * 2;
       crystal.position.set(Math.cos(a) * 5.2, 1 + (i % 3) * 0.65, Math.sin(a) * 5.2);
-      this.animations.push({ object: crystal, type: 'float', offset: i });
+      this.animations.push({ object: crystal, type: 'float', offset: i, baseY: crystal.position.y });
     }
   }
   buildEclipse(t) {
@@ -492,7 +509,8 @@ export class ArenaScene {
     this.cameraKick.z = -0.42 * strength;
   }
   animate() {
-    if (this.disposed) return;
+    this.frame = undefined;
+    if (this.disposed || document.hidden) return;
     const dt = Math.min(0.04, this.clock.getDelta());
     this.elapsed += dt;
     const t = this.elapsed;
@@ -529,7 +547,7 @@ export class ArenaScene {
           o.rotation.x += dt * item.speed * (1 + this.tension);
           o.rotation.y -= dt * item.speed * 0.7 * (1 + this.tension);
         }
-        if (item.type === 'float') o.position.y += Math.sin(phase * 1.2) * 0.0018;
+        if (item.type === 'float') o.position.y = item.baseY + Math.sin(phase * 1.2) * 0.09;
         if (item.type === 'sway') o.rotation.z = Math.sin(phase * 0.65) * 0.07;
         if (item.type === 'breathe') o.scale.y = 1 + Math.sin(phase * 0.8) * (0.035 + this.tension * 0.012);
         if (item.type === 'pulse' && o.material)
@@ -553,12 +571,14 @@ export class ArenaScene {
       this.burstPoints.geometry.attributes.position.needsUpdate = true;
     }
     this.renderer.render(this.scene, this.camera);
-    this.frame = requestAnimationFrame(() => this.animate());
+    this.frame = requestAnimationFrame(this.animateBound);
   }
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
     globalThis.removeEventListener('resize', this.onResize);
+    this.resizeObserver?.disconnect();
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.canvas.removeEventListener('webglcontextlost', this.contextLost);
     this.scene.traverse((o) => {
       o.geometry?.dispose();

@@ -29,7 +29,6 @@ const {
   ArenaScene,
   params,
   testAnimationScale,
-  i18n,
   t,
   screen,
   sound,
@@ -51,7 +50,9 @@ const {
   bindCommon,
   renderTitle,
   enemyPlan,
+  plannedEnemyAction,
   hudHtml,
+  hudDetailHtml,
   moveButton,
   exchangeForecastHtml,
   tutorialEnemyAction,
@@ -60,6 +61,23 @@ const {
   completeTutorial,
   finishBattle,
 } = route;
+
+let battleSessionSequence = 0;
+
+function sessionIsActive(session) {
+  return Boolean(
+    session &&
+    ctx.battleSession === session &&
+    !session.cancelled &&
+    screen.classList.contains('battle-screen')
+  );
+}
+
+function cancelBattleSession(session) {
+  if (session) session.cancelled = true;
+  ctx.locked = false;
+  clearBattleFx();
+}
 
 function startBattle(config) {
   ctx.previousScreen = 'selection';
@@ -123,12 +141,15 @@ function startBattle(config) {
     lastLine: t('battle.yourTurn'),
     timeline: [],
     tutorialStep: config.tutorialStep ?? null,
+    sessionToken: ++battleSessionSequence,
+    cancelled: false,
   };
   renderBattle();
 }
 
 function renderBattle() {
   disposeArena();
+  const session = ctx.battleSession;
   screen.dataset.page = 'battle';
   screen.className = 'screen battle-screen';
   const trial =
@@ -139,7 +160,7 @@ function renderBattle() {
     ctx.battleSession.mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null;
   const resonance = ARENA_RESONANCE[ctx.battleSession.arena],
     resonanceMeta = AFFINITIES[resonance];
-  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate"><b>${trial ? `${trial.icon} ${t(trial.nameKey)}` : gauntlet ? `↟ ${t(gauntlet.nameKey)} · ${ctx.battleSession.gauntletStage + 1}/${GAUNTLET_STAGES.length}` : circuit ? `${circuit.condition.icon} ${t('circuit.round', { round: circuit.round })}` : t(`arena.${ctx.battleSession.arena}`)}</b><small>${trial ? t(trial.descKey) : gauntlet ? t('gauntlet.battleRule', { boons: ctx.gauntletRun?.boons.length || 0 }) : circuit ? t(`circuit.effect.${circuit.condition.id}`) : t(`arena.rule.${ctx.battleSession.arena}`)}</small>${resonanceMeta ? `<span class="arena-resonance" style="--resonance-color:${resonanceMeta.color}">${resonanceMeta.icon} ${t('arena.resonanceShort', { affinity: affinityName(resonance) })}</span>` : ''}${ctx.battleSession.contractId ? `<div class="contract-chip" id="contract-chip"></div>` : ''}</div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battlefield"><div class="fighter enemy" id="fighter-enemy"><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player"><div class="status-orbits"></div><img alt=""></div></div><div class="hud-card enemy-hud" id="hud-enemy"></div><div class="hud-card player-hud" id="hud-player"></div><div class="action-line" id="action-line"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span>${t('battle.switch')}</button></div><div id="replacement-root"></div><div id="tutorial-root"></div>`;
+  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info"><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate"><b>${trial ? `${trial.icon} ${t(trial.nameKey)}` : gauntlet ? `↟ ${t(gauntlet.nameKey)} · ${ctx.battleSession.gauntletStage + 1}/${GAUNTLET_STAGES.length}` : circuit ? `${circuit.condition.icon} ${t('circuit.round', { round: circuit.round })}` : t(`arena.${ctx.battleSession.arena}`)}</b><small>${trial ? t(trial.descKey) : gauntlet ? t('gauntlet.battleRule', { boons: ctx.gauntletRun?.boons.length || 0 }) : circuit ? t(`circuit.effect.${circuit.condition.id}`) : t(`arena.rule.${ctx.battleSession.arena}`)}</small>${resonanceMeta ? `<span class="arena-resonance" style="--resonance-color:${resonanceMeta.color}">${resonanceMeta.icon} ${t('arena.resonanceShort', { affinity: affinityName(resonance) })}</span>` : ''}${ctx.battleSession.contractId ? `<div class="contract-chip" id="contract-chip"></div>` : ''}</div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battle-plates"><div class="hud-card player-hud" id="hud-player"></div><div class="hud-card enemy-hud" id="hud-enemy"></div></div></section><section class="battle-stage" data-battle-zone="stage"><div class="battle-stage-camera"><div class="battlefield"><div class="fighter enemy" id="fighter-enemy"><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player"><div class="status-orbits"></div><img alt=""></div></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div></div></section><section class="battle-command-dock" data-battle-zone="controls"><div id="tutorial-root"></div><div class="action-line" id="action-line" role="status" aria-live="polite"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span><b>${t('battle.switch')}</b></button></div></section></div><div id="replacement-root"></div>`;
   if (ctx.battleSession.quickRuleId && ctx.battleSession.quickRuleId !== 'standard') {
     const rule = quickRule(ctx.battleSession.quickRuleId);
     screen
@@ -156,40 +177,40 @@ function renderBattle() {
   logButton.setAttribute('aria-label', t('battle.log'));
   logButton.textContent = '≡';
   screen.querySelector('[data-action="battle-help"]')?.before(logButton);
-  screen.querySelector('#action-line')?.setAttribute('role', 'status');
-  screen.querySelector('#action-line')?.setAttribute('aria-live', 'polite');
   screen
     .querySelector('.battle-tools')
     ?.insertAdjacentHTML(
       'afterbegin',
       `<button class="icon-btn trainer-command-btn" data-action="trainer-command" aria-label="${t('battle.command')}"><span>⚑</span><small>${t(`command.${ctx.battleSession.state.doctrine}`)}</small></button>`
     );
-  const fxStage = document.createElement('div');
-  fxStage.id = 'fx-stage';
-  fxStage.className = 'fx-stage';
-  fxStage.setAttribute('aria-hidden', 'true');
-  screen.querySelector('.battle-vignette').after(fxStage);
   try {
     if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
     ctx.arenaScene = new ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
       reducedMotion: ctx.save.reducedMotion,
     });
   } catch (error) {
+    cancelBattleSession(session);
+    ctx.battleSession = null;
     screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t('error.webgl')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
     bindCommon();
     return;
   }
   screen.querySelector('#arena').addEventListener('arena-context-lost', () => {
+    if (!sessionIsActive(session)) return;
+    cancelBattleSession(session);
+    ctx.battleSession = null;
     disposeArena();
     screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t('error.context')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
     bindCommon();
   });
   screen.querySelector('[data-action="toggle-mute"]').addEventListener('click', () => {
+    if (!sessionIsActive(session)) return;
     ctx.save.muted = !ctx.save.muted;
     persist();
     refreshBattle();
   });
   screen.querySelector('[data-action="battle-speed"]').addEventListener('click', () => {
+    if (!sessionIsActive(session)) return;
     ctx.save.battleSpeed = ctx.save.battleSpeed === 2 ? 1 : 2;
     persist();
     refreshBattle();
@@ -198,11 +219,13 @@ function renderBattle() {
   screen.querySelector('[data-action="battle-log"]').addEventListener('click', openBattleLog);
   screen.querySelector('[data-action="trainer-command"]').addEventListener('click', handleTrainerCommand);
   screen.querySelector('[data-action="battle-exit"]').addEventListener('click', () => {
-    if (confirm(i18n.lang === 'fr' ? 'Quitter ce combat ?' : 'Leave this battle?')) renderTitle();
+    if (!sessionIsActive(session) || !confirm(t('battle.exitConfirm'))) return;
+    cancelBattleSession(session);
+    renderTitle();
   });
   refreshBattle();
   sound.unlock();
-  battleEntrance();
+  battleEntrance(session);
 }
 
 function openBattleCodex() {
@@ -335,42 +358,102 @@ function openBattleLog() {
   root.querySelector('[data-action="close-log"]').focus();
 }
 
-async function battleEntrance() {
-  if (testAnimationScale === 0 || !ctx.battleSession) return;
+function openPlateDetails(side) {
+  if (ctx.locked || !ctx.battleSession) return;
+  const session = ctx.battleSession,
+    root = screen.querySelector('#replacement-root'),
+    trigger = screen.querySelector(`[data-plate-side="${side}"]`),
+    creature = activeOf(session.state, side);
+  if (!root || !trigger || !creature) return;
+  trigger.setAttribute('aria-expanded', 'true');
+  root.innerHTML = `<div class="replacement plate-detail-overlay"><section class="glass-panel plate-detail-card" role="dialog" aria-modal="true" aria-labelledby="plate-detail-title"><button type="button" class="codex-close icon-btn" data-action="close-plate" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.plateHint')}</span><h2 id="plate-detail-title">${t('battle.plateTitle', { name: creatureName(creature.id) })}</h2>${hudDetailHtml(side)}</section></div>`;
+  const close = () => {
+    if (!sessionIsActive(session)) return;
+    root.innerHTML = '';
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.focus();
+  };
+  root.querySelector('[data-action="close-plate"]')?.addEventListener('click', close);
+  root.querySelector('.plate-detail-overlay')?.addEventListener('click', (event) => {
+    if (event.target.classList.contains('plate-detail-overlay')) close();
+  });
+  root.querySelector('[data-action="close-plate"]')?.focus();
+}
+
+function bindBattleChoiceContext(session) {
+  const line = screen.querySelector('#action-line');
+  if (!line) return;
+  const restore = () => {
+    if (!sessionIsActive(session)) return;
+    line.classList.remove('contextual');
+    line.textContent = session.lastLine;
+  };
+  const show = (button) => {
+    if (!sessionIsActive(session)) return;
+    const source = button.querySelector('.move-context-source');
+    if (!source) return;
+    line.classList.add('contextual');
+    line.innerHTML = source.innerHTML;
+  };
+  screen.querySelectorAll('[data-move]').forEach((button) => {
+    let longPressTimer = 0;
+    button.addEventListener('pointerenter', () => show(button));
+    button.addEventListener('pointerleave', () => {
+      clearTimeout(longPressTimer);
+      if (document.activeElement !== button) restore();
+    });
+    button.addEventListener('focus', () => show(button));
+    button.addEventListener('blur', restore);
+    button.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch') return;
+      longPressTimer = window.setTimeout(() => {
+        if (!sessionIsActive(session)) return;
+        button.dataset.longPressed = 'true';
+        show(button);
+      }, 420);
+    });
+    const endLongPress = () => clearTimeout(longPressTimer);
+    button.addEventListener('pointerup', endLongPress);
+    button.addEventListener('pointercancel', endLongPress);
+  });
+}
+
+async function battleEntrance(session = ctx.battleSession) {
+  if (testAnimationScale === 0 || !sessionIsActive(session)) return;
   ctx.locked = true;
   refreshBattle();
   const stage = screen.querySelector('#fx-stage'),
-    state = ctx.battleSession.state,
+    state = session.state,
     player = activeOf(state, 'player'),
     enemy = activeOf(state, 'enemy'),
-    trainer = ['ladder', 'circuit'].includes(ctx.battleSession.mode)
-      ? TRAINERS[ctx.battleSession.trainerIndex]
-      : null,
-    trial =
-      ctx.battleSession.mode === 'trial' ? TRIALS.find((x) => x.id === ctx.battleSession.trialId) : null;
-  const gauntletTrainer =
-      ctx.battleSession.mode === 'gauntlet' ? TRAINERS[ctx.battleSession.trainerIndex] : null,
+    trainer = ['ladder', 'circuit'].includes(session.mode) ? TRAINERS[session.trainerIndex] : null,
+    trial = session.mode === 'trial' ? TRIALS.find((x) => x.id === session.trialId) : null;
+  const gauntletTrainer = session.mode === 'gauntlet' ? TRAINERS[session.trainerIndex] : null,
     rival = trainer || gauntletTrainer,
     rivalName = rival ? t(rival.nameKey) : trial ? t(trial.nameKey) : t('battle.freeRival'),
     quote = rival ? t(`style.taunt.${rival.style}`) : trial ? t(trial.descKey) : t('battle.freeTaunt'),
-    contract = CONTRACTS.find((item) => item.id === ctx.battleSession.contractId);
+    contract = CONTRACTS.find((item) => item.id === session.contractId);
   stage.className = 'fx-stage active battle-intro-fx';
   stage.innerHTML = `<div class="intro-side player"><span>${t('battle.yourTeam')}</span><img src="${sprite(player.id)}" alt=""><b>${creatureName(player.id)}</b></div><div class="intro-vs"><i>VS</i><small>${escapeHtml(quote)}</small>${contract ? `<div class="intro-contract"><em>${t('contract.mission')}</em><b>${contract.icon} ${t(`contract.${contract.id}`)}</b><span>${t(`contract.effect.${contract.id}`, { target: contract.target })}</span></div>` : ''}</div><div class="intro-side enemy"><span>${escapeHtml(rivalName)}</span><img src="${sprite(enemy.id)}" alt=""><b>${creatureName(enemy.id)}</b></div>`;
   screen.classList.add('intro-mode');
   sound.call(player.id);
-  setTimeout(() => sound.call(enemy.id), 220 / ctx.save.battleSpeed);
+  setTimeout(() => {
+    if (sessionIsActive(session)) sound.call(enemy.id);
+  }, 220 / ctx.save.battleSpeed);
   await wait((ctx.save.reducedMotion ? 300 : 1380) / ctx.save.battleSpeed);
+  if (!sessionIsActive(session)) return;
   clearBattleFx();
   ctx.locked = false;
-  if (ctx.battleSession?.state.phase === 'choice') {
-    ctx.battleSession.lastLine = t('battle.yourTurn');
+  if (session.state.phase === 'choice') {
+    session.lastLine = t('battle.yourTurn');
     refreshBattle();
   }
 }
 
 function refreshBattle() {
   if (!ctx.battleSession || !screen.classList.contains('battle-screen')) return;
-  const state = ctx.battleSession.state,
+  const session = ctx.battleSession,
+    state = session.state,
     p = activeOf(state, 'player'),
     e = activeOf(state, 'enemy');
   const cadence = state.modifiers?.includes('rapid_arena') ? 2 : 4,
@@ -436,6 +519,7 @@ function refreshBattle() {
           'afterend',
           `<div class="flow-chip flow-${owner.flow}" title="${t('battle.flowHint')}">↯ ${t('battle.flow')} ×${owner.flow}</div>`
         );
+    hud.querySelector('[data-plate-side]')?.addEventListener('click', () => openPlateDetails(side));
   }
   screen.querySelector('#moves').innerHTML = p.moves.map(moveButton).join('');
   const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
@@ -447,11 +531,16 @@ function refreshBattle() {
           .querySelector('.move-tags')
           ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan))
       );
-  screen
-    .querySelectorAll('[data-move]')
-    .forEach((b) =>
-      b.addEventListener('click', () => handlePlayerAction({ type: 'move', moveId: b.dataset.move }))
-    );
+  screen.querySelectorAll('[data-move]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.longPressed === 'true') {
+        delete b.dataset.longPressed;
+        return;
+      }
+      handlePlayerAction({ type: 'move', moveId: b.dataset.move });
+    })
+  );
+  bindBattleChoiceContext(session);
   const switchButton = screen.querySelector('[data-action="open-switch"]');
   switchButton.disabled =
     ctx.locked ||
@@ -579,75 +668,80 @@ async function handleTrainerCommand() {
     ctx.battleSession.state.sides.player.commandUsed
   )
     return;
+  const session = ctx.battleSession;
   await sound.unlock();
+  if (!sessionIsActive(session)) return;
   ctx.locked = true;
   refreshBattle();
-  const result = applyTrainerCommand(ctx.battleSession.state, 'player');
-  ctx.battleSession.state = result.state;
+  const result = applyTrainerCommand(session.state, 'player');
+  session.state = result.state;
   await playEvents(result.events);
+  if (!sessionIsActive(session)) return;
   ctx.locked = false;
-  ctx.battleSession.lastLine = t('battle.yourTurn');
+  session.lastLine = t('battle.yourTurn');
   refreshBattle();
 }
 
 async function handlePlayerAction(action) {
   if (ctx.locked) return;
+  const session = ctx.battleSession;
   await sound.unlock();
+  if (!sessionIsActive(session)) return;
   ctx.locked = true;
   refreshBattle();
-  const tutorialStep = ctx.battleSession.tutorialStep;
-  const enemyAction =
-    ctx.battleSession.mode === 'tutorial'
-      ? tutorialEnemyAction(tutorialStep)
-      : chooseAiAction(
-          ctx.battleSession.state,
-          'enemy',
-          ctx.battleSession.difficulty,
-          ctx.battleSession.style
-        );
-  if (ctx.battleSession.mode === 'tutorial') {
-    if (tutorialStep === 0 && action.type === 'move') ctx.battleSession.tutorialStep = 1;
-    else if (tutorialStep === 1 && action.moveId === 'oracle_veil') ctx.battleSession.tutorialStep = 2;
-    else if (tutorialStep === 2 && action.type === 'switch') ctx.battleSession.tutorialStep = 3;
+  const tutorialStep = session.tutorialStep;
+  const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
+  if (session.mode === 'tutorial') {
+    if (tutorialStep === 0 && action.type === 'move') session.tutorialStep = 1;
+    else if (tutorialStep === 1 && action.moveId === 'oracle_veil') session.tutorialStep = 2;
+    else if (tutorialStep === 2 && action.type === 'switch') session.tutorialStep = 3;
   }
-  const result = resolveTurn(ctx.battleSession.state, action, enemyAction);
-  ctx.battleSession.state = result.state;
+  const result = resolveTurn(session.state, action, enemyAction);
+  session.state = result.state;
   await playEvents(result.events);
+  if (!sessionIsActive(session)) return;
   ctx.locked = false;
-  if (ctx.battleSession.state.phase === 'ended') {
+  if (session.state.phase === 'ended') {
     finishBattle();
     return;
   }
-  await resolvePendingReplacements();
-  if (ctx.battleSession.state.phase !== 'ended') {
-    ctx.battleSession.lastLine = t('battle.yourTurn');
+  await resolvePendingReplacements(session);
+  if (!sessionIsActive(session)) return;
+  if (session.state.phase !== 'ended') {
+    session.lastLine = t('battle.yourTurn');
     refreshBattle();
   }
 }
 
-async function resolvePendingReplacements() {
-  let state = ctx.battleSession.state;
+async function resolvePendingReplacements(session = ctx.battleSession) {
+  if (!sessionIsActive(session)) return;
+  let state = session.state;
   if (state.sides.enemy.pendingReplacement) {
-    const action = chooseAiAction(state, 'enemy', ctx.battleSession.difficulty, ctx.battleSession.style);
+    const action = chooseAiAction(state, 'enemy', session.difficulty, session.style);
     const result = applyReplacement(state, 'enemy', action);
-    ctx.battleSession.state = result.state;
+    session.state = result.state;
     await playEvents(result.events);
-    state = ctx.battleSession.state;
+    if (!sessionIsActive(session)) return;
+    state = session.state;
   }
   if (state.sides.player.pendingReplacement) {
-    ctx.battleSession.lastLine = t('battle.chooseReplacement');
+    session.lastLine = t('battle.chooseReplacement');
     refreshBattle();
     openSwitch();
   }
 }
 
 async function handleReplacement(index) {
+  const session = ctx.battleSession;
+  if (!sessionIsActive(session)) return;
   ctx.locked = true;
-  const result = applyReplacement(ctx.battleSession.state, 'player', { type: 'replace', index });
-  ctx.battleSession.state = result.state;
+  const result = applyReplacement(session.state, 'player', { type: 'replace', index });
+  session.state = result.state;
   await playEvents(result.events);
+  if (!sessionIsActive(session)) return;
   ctx.locked = false;
-  await resolvePendingReplacements();
+  await resolvePendingReplacements(session);
+  if (!sessionIsActive(session)) return;
   refreshBattle();
 }
 
@@ -656,6 +750,7 @@ registerRoutes({
   renderBattle,
   openBattleCodex,
   openBattleLog,
+  openPlateDetails,
   battleEntrance,
   refreshBattle,
   renderTutorialTip,

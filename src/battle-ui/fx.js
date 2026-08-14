@@ -17,6 +17,15 @@ const {
   wait,
 } = ctx;
 
+function sessionIsActive(session) {
+  return Boolean(
+    session &&
+    ctx.battleSession === session &&
+    !session.cancelled &&
+    screen.classList.contains('battle-screen')
+  );
+}
+
 function beginMoveFx(event) {
   const move = MOVES[event.moveId],
     a = AFFINITIES[move.affinity],
@@ -74,6 +83,7 @@ function beginMoveFx(event) {
 }
 
 function impactMoveFx(event) {
+  const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
     fx = ctx.currentFxMove;
   if (!stage || !fx) return;
@@ -109,15 +119,18 @@ function impactMoveFx(event) {
   if (event.hp <= 0) {
     stage.classList.add('finisher-impact');
     screen.classList.add('finisher-mode');
-    ctx.battleSession.lastLine = t('battle.finisher', { move: t(`move.${fx.moveId}`) });
-    screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
+    if (!sessionIsActive(session)) return;
+    session.lastLine = t('battle.finisher', { move: t(`move.${fx.moveId}`) });
+    screen.querySelector('#action-line').textContent = session.lastLine;
   }
   const color = AFFINITIES[fx.affinity]?.color || '#ffffff';
   ctx.arenaScene?.flash(fx.strong ? 'power' : 'hit', color, event.side);
   ctx.arenaScene?.punch(event.side, fx.strong ? 1.55 : (event.hits || 1) > 1 ? 0.8 : 1);
   screen.classList.add('hit-stop');
   setTimeout(
-    () => screen.classList.remove('hit-stop'),
+    () => {
+      if (sessionIsActive(session)) screen.classList.remove('hit-stop');
+    },
     ctx.save.reducedMotion ? 20 : 72 / ctx.save.battleSpeed
   );
 }
@@ -204,8 +217,9 @@ function perfectRelayFx(event) {
 }
 
 function relayRushFx(event) {
+  const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
-    creature = activeOf(ctx.battleSession.state, event.side);
+    creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null;
   if (!stage || !creature) return;
   const a = AFFINITIES[creature.affinity];
   stage.className = `fx-stage active relay-rush-fx from-${event.side}`;
@@ -222,6 +236,7 @@ function relayRushFx(event) {
 }
 
 function flowCrescendoFx(event) {
+  const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId];
   if (!stage || !creature) return;
@@ -232,17 +247,18 @@ function flowCrescendoFx(event) {
     refreshNote = refreshed.length
       ? `${t('battle.flowRefresh')} · ${refreshed.join(' / ')}`
       : t('battle.flowPeak');
-  screen.querySelector('.flow-crescendo-call')?.remove();
+  stage.querySelector('.flow-crescendo-call')?.remove();
   call.className = `flow-crescendo-call ${event.side}`;
   call.style.setProperty('--flow-color', a.color);
   call.innerHTML = `<i>↯</i><span><small>${t('battle.flowCrescendo')}</small><b>${creatureName(creature.id)}</b><em>${surgeNote}${refreshNote}</em></span>`;
-  screen.append(call);
+  stage.append(call);
   screen.classList.add('flow-crescendo-mode');
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.25);
   sound.clash();
   setTimeout(
     () => {
+      if (!sessionIsActive(session)) return;
       call.remove();
       screen.classList.remove('flow-crescendo-mode');
     },
@@ -266,8 +282,9 @@ function trainerCommandFx(event) {
 }
 
 function signatureReadyFx(event) {
+  const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
-    creature = activeOf(ctx.battleSession.state, event.side),
+    creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null,
     signature = creature?.moves.find((id) => MOVES[id].signature);
   if (!stage || !creature || !signature) return;
   stage.classList.add('active');
@@ -282,7 +299,12 @@ function signatureReadyFx(event) {
   ctx.arenaScene?.burst(a.color, event.side, 1.15);
   sound.call(creature.id);
   sound.ui();
-  setTimeout(() => call.remove(), (ctx.save.reducedMotion ? 180 : 900) / ctx.save.battleSpeed);
+  setTimeout(
+    () => {
+      if (sessionIsActive(session)) call.remove();
+    },
+    (ctx.save.reducedMotion ? 180 : 900) / ctx.save.battleSpeed
+  );
 }
 
 function finalDuelFx(event) {
@@ -374,8 +396,9 @@ function arenaPulseFx(event) {
 }
 
 async function signatureClashIntro(events) {
+  const session = ctx.battleSession;
   const signatures = events.filter((event) => event.type === 'move-start' && MOVES[event.moveId]?.signature);
-  if (signatures.length < 2 || testAnimationScale === 0) return;
+  if (signatures.length < 2 || testAnimationScale === 0 || !sessionIsActive(session)) return;
   const stage = screen.querySelector('#fx-stage'),
     left = signatures.find((x) => x.side === 'player'),
     right = signatures.find((x) => x.side === 'enemy');
@@ -383,10 +406,11 @@ async function signatureClashIntro(events) {
   stage.className = 'fx-stage active signature-clash';
   stage.innerHTML = `<div class="clash-half player"><img src="${sprite(left.creatureId)}" alt=""><b>${t(`move.${left.moveId}`)}</b></div><div class="clash-bolt">VS</div><div class="clash-half enemy"><img src="${sprite(right.creatureId)}" alt=""><b>${t(`move.${right.moveId}`)}</b></div>`;
   screen.classList.add('clash-mode');
-  ctx.battleSession.lastLine = t('battle.signatureClash');
-  screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
+  session.lastLine = t('battle.signatureClash');
+  screen.querySelector('#action-line').textContent = session.lastLine;
   sound.clash();
   await wait((ctx.save.reducedMotion ? 260 : 1050) / ctx.save.battleSpeed);
+  if (!sessionIsActive(session)) return;
   clearBattleFx();
 }
 

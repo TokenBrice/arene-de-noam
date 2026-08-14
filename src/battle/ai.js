@@ -1,10 +1,10 @@
 import { MOVES } from '../data/moves.js';
 import { affinityMultiplier } from '../data/affinities.js';
-import { calculateDamage } from './damage.js';
 import {
   activeOf,
   ARENA_RESONANCE,
   getLegalActions,
+  previewIncomingAfterSwitch,
   previewMove,
   safeBattleSnapshot,
   signatureCostFor,
@@ -154,7 +154,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
       : 0,
     primed = defender.moves
       .flatMap((id) => MOVES[id].detonate || [])
-      .some((status) => activeOf(state, side).statuses[status]);
+      .some((status) => candidate.statuses[status]);
   return (
     (outgoing - 1) * 28 -
     (incoming - 1) * 22 +
@@ -181,6 +181,10 @@ function flowTempoScore(state, side, action, difficulty) {
 
 export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'apprentice', style = 'direct') {
   const state = safeBattleSnapshot(sourceState);
+  const finish = (action) => {
+    sourceState.rngState = state.rngState;
+    return action;
+  };
   const legal = getLegalActions(state, side);
   if (!legal.length) throw new Error('AI has no legal action');
   if (legal[0].type === 'replace') {
@@ -188,7 +192,7 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
       action,
       score: scoreSwitch(state, side, { ...action, type: 'switch' }, difficulty, style),
     }));
-    return pickBest(state, scored).action;
+    return finish(pickBest(state, scored).action);
   }
   const scored = legal.map((action) => ({
     action,
@@ -199,20 +203,30 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
   }));
   if (difficulty === 'apprentice') {
     const roll = randomFromState(state.rngState);
-    if (roll.value < 0.32) return legal[randomIndex(roll.state, legal.length).index];
+    state.rngState = roll.state;
+    if (roll.value < 0.32) {
+      const choice = randomIndex(state.rngState, legal.length);
+      state.rngState = choice.state;
+      return finish(legal[choice.index]);
+    }
   }
   if (difficulty === 'champion') {
     for (const item of scored) {
       if (item.action.type === 'move' && MOVES[item.action.moveId].kind === 'damage') item.score += 3;
       if (item.action.type === 'switch' && activeOf(state, side).hp < activeOf(state, side).maxHp * 0.3)
         item.score += 13;
-      const candidate =
-        item.action.type === 'switch' ? state.sides[side].team[item.action.index] : activeOf(state, side);
-      const opponent = activeOf(state, side === 'player' ? 'enemy' : 'player');
+      const opponentSide = side === 'player' ? 'enemy' : 'player',
+        opponent = activeOf(state, opponentSide);
       const replyDamage = opponent.moves
         .map((id) => MOVES[id])
         .filter((move) => move.kind === 'damage' && !opponent.cooldowns[move.id]?.remaining)
-        .reduce((best, move) => Math.max(best, calculateDamage(move, opponent, candidate, {}).damage), 0);
+        .reduce((best, move) => {
+          const forecast =
+            item.action.type === 'switch'
+              ? previewIncomingAfterSwitch(state, side, item.action.index, move.id)
+              : previewMove(state, opponentSide, move.id);
+          return Math.max(best, forecast?.damage || 0);
+        }, 0);
       item.score -= replyDamage * 0.35;
       const lastOwnMove = [...state.history]
         .reverse()
@@ -234,11 +248,14 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
       }
     }
   }
-  return pickBest(state, scored).action;
+  return finish(pickBest(state, scored).action);
 }
 
 function pickBest(state, scored) {
   const best = Math.max(...scored.map((x) => x.score));
   const ties = scored.filter((x) => Math.abs(x.score - best) < 1e-9);
-  return ties[randomIndex(state.rngState, ties.length).index];
+  if (ties.length === 1) return ties[0];
+  const choice = randomIndex(state.rngState, ties.length);
+  state.rngState = choice.state;
+  return ties[choice.index];
 }

@@ -25,13 +25,28 @@ const {
 } = ctx;
 const { moveArchetype } = route;
 
+function plannedEnemyAction() {
+  const session = ctx.battleSession,
+    state = session?.state;
+  if (!session || !state || state.phase !== 'choice' || session.mode === 'tutorial') return null;
+  if (session.enemyPlanCache?.state === state) return session.enemyPlanCache.action;
+  // Non-champion battles historically spend one seeded scouting choice while
+  // presenting the forecast. Keep that cadence, then lock the committed plan
+  // so every HUD consumer and resolveTurn see the exact same action.
+  if (session.difficulty !== 'champion')
+    chooseAiAction(state, 'enemy', session.difficulty || 'apprentice', session.style);
+  const action = chooseAiAction(state, 'enemy', session.difficulty || 'apprentice', session.style);
+  session.enemyPlanCache = { state, action };
+  return action;
+}
+
 function enemyIntentHtml() {
   const state = ctx.battleSession.state;
   if (ctx.locked || state.phase !== 'choice' || ctx.battleSession.mode === 'tutorial') return '';
   const level = ctx.battleSession.difficulty || 'apprentice';
   if (level === 'champion')
     return `<div class="intent-read hidden"><span>◉ ${t('battle.intent')}</span><b>${t('battle.intentHidden')}</b></div>`;
-  const action = chooseAiAction(state, 'enemy', level, ctx.battleSession.style);
+  const action = plannedEnemyAction();
   if (!action) return '';
   let icon = '↺',
     detail = t('battle.intentSwitch');
@@ -61,12 +76,7 @@ function enemyPlan() {
     ctx.battleSession.difficulty === 'champion'
   )
     return null;
-  return chooseAiAction(
-    ctx.battleSession.state,
-    'enemy',
-    ctx.battleSession.difficulty || 'apprentice',
-    ctx.battleSession.style
-  );
+  return plannedEnemyAction();
 }
 
 function teamPipsHtml(owner) {
@@ -92,18 +102,60 @@ function hudHtml(side) {
     cost = signatureCostFor(c),
     passive = PASSIVES[c.passive],
     rank = side === 'player' ? masteryRank(ctx.save.mastery[c.id] || 0) : 0;
-  return `<div class="hud-title"><strong>${creatureName(c.id)}${rank ? ` <i class="battle-rank">${'★'.repeat(rank)}</i>` : ''}</strong><span class="affinity-dot" style="background:${a.color}">${a.icon}</span><span class="talent-chip" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon} ${t(`passive.${c.passive}`)}</span><div class="team-dots">${teamPipsHtml(owner)}</div></div><div class="hp-row"><div class="hp-track"><div class="hp-fill ${ratio < 0.3 ? 'low' : ''}" style="width:${Math.max(0, ratio * 100)}%"></div>${c.barrier ? `<div class="barrier-fill" style="width:${Math.min(100, (c.barrier / c.maxHp) * 100)}%"></div>` : ''}</div><span class="hp-value">${c.hp}/${c.maxHp}${c.barrier ? ` <b>+${c.barrier}</b>` : ''}</span></div><div class="surge-row ${surge >= cost ? 'ready' : ''}"><span>✦ ${t('battle.surge')}</span><div class="surge-track"><i style="width:${surge}%"></i></div><b>${surge}/${cost}</b></div>${bondsHtml(
-    owner.team.map((x) => x.id),
-    true
-  )}<div class="status-row">${c.barrier ? `<span class="status-chip positive">⬡ ${t('battle.barrier', { amount: c.barrier })}</span>` : ''}${Object.keys(
-    c.statuses
-  )
-    .map((id) => {
-      const meta = STATUS_DEFINITIONS[id],
-        helper = c.statuses[id].sourceCreatureId;
-      return `<span class="status-chip ${meta.positive ? 'positive' : 'negative'} ${helper ? 'team-primed' : ''}" style="--status-color:${meta.color}" ${helper ? `title="${escapeHtml(t('battle.preparedBy', { name: creatureName(helper) }))}"` : ''}>${meta.icon} ${t(`status.${id}`)}${c.statuses[id].stacks > 1 ? ` ×${c.statuses[id].stacks}` : ''}${c.statuses[id].remaining ? ` · ${c.statuses[id].remaining}` : ''}${helper ? ' ↗' : ''}</span>`;
-    })
-    .join('')}</div>${side === 'enemy' ? enemyIntentHtml() : ''}`;
+  const statusEntries = [
+      ...(c.barrier
+        ? [
+            {
+              id: 'barrier',
+              icon: '⬡',
+              color: '#73eaff',
+              label: t('battle.barrier', { amount: c.barrier }),
+            },
+          ]
+        : []),
+      ...Object.keys(c.statuses).map((id) => {
+        const meta = STATUS_DEFINITIONS[id],
+          status = c.statuses[id];
+        return {
+          id,
+          icon: meta.icon,
+          color: meta.color,
+          label: `${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}${status.remaining ? ` · ${status.remaining}` : ''}`,
+        };
+      }),
+    ],
+    visibleStatuses = statusEntries.slice(0, 3),
+    overflow = Math.max(0, statusEntries.length - visibleStatuses.length),
+    stateText = [
+      passive ? `${passive.icon} ${t(`passive.${c.passive}`)}` : '',
+      ...statusEntries.map((entry) => entry.label),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  return `<button type="button" class="battle-plate-toggle" data-plate-side="${side}" aria-expanded="false" aria-label="${escapeHtml(t('battle.plateOpen', { name: creatureName(c.id) }))}"><span class="plate-line plate-primary"><strong>${creatureName(c.id)}${rank ? ` <i class="battle-rank">${'★'.repeat(rank)}</i>` : ''}</strong><i class="affinity-dot" style="--affinity-color:${a.color}">${a.icon}</i><b class="plate-hp-number">${c.hp}/${c.maxHp}</b><span class="team-dots">${teamPipsHtml(owner)}</span></span><span class="plate-line plate-meters"><span class="hp-track"><i class="hp-fill ${ratio < 0.3 ? 'low' : ''}" style="width:${Math.max(0, ratio * 100)}%"></i>${c.barrier ? `<i class="barrier-fill" style="width:${Math.min(100, (c.barrier / c.maxHp) * 100)}%"></i>` : ''}</span><span class="surge-row ${surge >= cost ? 'ready' : ''}" title="${t('battle.surge')} ${surge}/${cost}"><span class="surge-track"><i style="width:${surge}%"></i></span><b>✦ ${surge}/${cost}</b></span><span class="plate-statuses">${visibleStatuses.map((entry) => `<i class="plate-status status-${entry.id}" style="--status-color:${entry.color}" title="${escapeHtml(entry.label)}">${entry.icon}</i>`).join('')}${overflow ? `<b class="plate-status-more">+${overflow}</b>` : ''}</span></span><span class="plate-state-text">${escapeHtml(stateText)}</span></button>${side === 'enemy' ? enemyIntentHtml() : ''}`;
+}
+
+function hudDetailHtml(side) {
+  const state = ctx.battleSession.state,
+    owner = state.sides[side],
+    c = activeOf(state, side),
+    passive = PASSIVES[c.passive],
+    statuses = [
+      ...(c.barrier
+        ? [
+            `<div class="plate-detail-status positive"><i>⬡</i><span><b>${t('battle.barrier', { amount: c.barrier })}</b></span></div>`,
+          ]
+        : []),
+      ...Object.keys(c.statuses).map((id) => {
+        const meta = STATUS_DEFINITIONS[id],
+          status = c.statuses[id],
+          helper = status.sourceCreatureId;
+        return `<div class="plate-detail-status ${meta.positive ? 'positive' : 'negative'}" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}${status.remaining ? ` · ${status.remaining}` : ''}</b><small>${t(`status.effect.${id}`)}${helper ? ` · ${t('battle.preparedBy', { name: creatureName(helper) })}` : ''}</small></span></div>`;
+      }),
+    ].join('');
+  return `<article class="plate-detail-talent"><span>${passive.icon}</span><div><small>${t('battle.talent')}</small><b>${t(`passive.${c.passive}`)}</b><p>${t(`passive.effect.${c.passive}`)}</p></div></article>${bondsHtml(
+    owner.team.map((creature) => creature.id)
+  )}<div class="plate-detail-statuses">${statuses || `<p>${t('battle.noStatuses')}</p>`}</div>${side === 'enemy' ? `<div class="plate-detail-intent">${enemyIntentHtml()}</div>` : ''}`;
 }
 
 function moveButton(moveId, index) {
@@ -158,7 +210,17 @@ function moveButton(moveId, index) {
         ? { count: Math.min(3, owner.flow + 1), surge: Math.min(3, owner.flow + 1) * 2 }
         : null,
     flowReset = legal && owner.flow > 0 && owner.lastMoveId === moveId;
-  return `<button type="button" class="move-btn kind-${move.kind} ${flowRoute ? 'continues-flow' : ''} ${flowReset ? 'breaks-flow' : ''} ${move.hits > 1 ? 'multi-hit' : ''} ${move.drain ? 'drain-move' : ''} ${move.priority > 0 ? 'priority-move' : ''} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-archetype" aria-hidden="true">${archetype}</span><span class="move-name">${move.signature ? '<i>✦</i> ' : ''}${index + 1}. ${t(`move.${moveId}`)}</span><span class="move-effect">${t(`move.effect.${moveId}`)}</span><span class="move-tags">${flowRoute ? `<span class="tag flow-route">${t('battle.flowGain', { count: flowRoute.count, surge: flowRoute.surge })}</span>` : ''}${flowReset ? `<span class="tag flow-reset">${t('battle.flowReset')}</span>` : ''}${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo.length ? `<span class="tag combo-ready">✦ ${t('battle.comboReady', { count: preview.combo.length })}</span>` : ''}${preview.assists.length ? `<span class="tag team-assist-ready">↗ ${t('battle.assistReady', { name: creatureName(preview.assists[0]) })}</span>` : ''}` : ''}<span class="tag">${a.icon} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></button>`;
+  const dominant = preview?.damage
+      ? `<b>⚔ ${preview.damage}</b>`
+      : `<b>${move.kind === 'heal' ? '✚' : '✦'} ${t(move.kind === 'heal' ? 'battle.moveRoleHeal' : 'battle.moveRoleTactic')}</b>`,
+    badges = [
+      ...(cd || move.cooldown ? [`<span class="move-badge">⌛ ${cd || move.cooldown}</span>`] : []),
+      ...(move.signature ? [`<span class="move-badge signature-cost">✦ ${cost}</span>`] : []),
+    ].slice(0, 2);
+  const assistBadge = preview?.assists.length
+    ? `<span class="team-assist-ready move-assist-badge">↗ ${creatureName(preview.assists[0])}</span>`
+    : '';
+  return `<button type="button" class="move-btn kind-${move.kind} ${flowRoute ? 'continues-flow' : ''} ${flowReset ? 'breaks-flow' : ''} ${move.hits > 1 ? 'multi-hit' : ''} ${move.drain ? 'drain-move' : ''} ${move.priority > 0 ? 'priority-move' : ''} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-archetype" aria-hidden="true">${archetype}</span><span class="move-name">${move.signature ? '<i>✦</i> ' : ''}${index + 1}. ${t(`move.${moveId}`)}</span><span class="move-figure">${dominant}${assistBadge}<span class="move-badges">${badges.join('')}</span></span><span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}</span><span class="move-tags">${flowRoute ? `<span class="tag flow-route">${t('battle.flowGain', { count: flowRoute.count, surge: flowRoute.surge })}</span>` : ''}${flowReset ? `<span class="tag flow-reset">${t('battle.flowReset')}</span>` : ''}${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo.length ? `<span class="tag combo-ready">✦ ${t('battle.comboReady', { count: preview.combo.length })}</span>` : ''}${preview.assists.length ? `<span class="tag team-assist-detail">↗ ${t('battle.assistReady', { name: creatureName(preview.assists[0]) })}</span>` : ''}` : ''}<span class="tag">${a.icon} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span></button>`;
 }
 
 function exchangeForecastHtml(moveId, enemyAction) {
@@ -183,4 +245,13 @@ function exchangeForecastHtml(moveId, enemyAction) {
   }
 }
 
-registerRoutes({ enemyIntentHtml, enemyPlan, teamPipsHtml, hudHtml, moveButton, exchangeForecastHtml });
+registerRoutes({
+  enemyIntentHtml,
+  plannedEnemyAction,
+  enemyPlan,
+  teamPipsHtml,
+  hudHtml,
+  hudDetailHtml,
+  moveButton,
+  exchangeForecastHtml,
+});

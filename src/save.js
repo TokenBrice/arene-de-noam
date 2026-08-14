@@ -3,7 +3,7 @@ import { FEAT_IDS } from './data/progression.js';
 import { TRIAL_IDS } from './data/trials.js';
 
 export const SAVE_KEY = 'arene-de-noam-save';
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 export const DEFAULT_SAVE = Object.freeze({
   version: SAVE_VERSION,
   tutorialComplete: false,
@@ -29,10 +29,73 @@ export const DEFAULT_SAVE = Object.freeze({
   language: 'fr',
   muted: false,
   volume: 0.7,
+  musicVolume: 0.45,
+  sfxVolume: 0.8,
   reducedMotion: false,
   highContrast: false,
   battleSpeed: 1,
 });
+
+// v1 -> v2: arena cosmetics became a persisted collection.
+export const migrateV1 = (save) => ({
+  ...save,
+  version: 2,
+  cosmetics: Array.isArray(save.cosmetics) ? save.cosmetics : ['crystal'],
+});
+// v2 -> v3: no recoverable schema difference is known; preserve every field.
+export const migrateV2 = (save) => ({ ...save, version: 3 });
+// v3 -> v4: no recoverable schema difference is known; preserve every field.
+export const migrateV3 = (save) => ({ ...save, version: 4 });
+// v4 -> v5: no recoverable schema difference is known; preserve every field.
+export const migrateV4 = (save) => ({ ...save, version: 5 });
+// v5 -> v6: no recoverable schema difference is known; preserve every field.
+export const migrateV5 = (save) => ({ ...save, version: 6 });
+// v6 -> v7: no recoverable schema difference is known; preserve every field.
+export const migrateV6 = (save) => ({ ...save, version: 7 });
+// v7 -> v8: no recoverable schema difference is known; preserve every field.
+export const migrateV7 = (save) => ({ ...save, version: 8 });
+// v8 -> v9: no recoverable schema difference is known; preserve every field.
+export const migrateV8 = (save) => ({ ...save, version: 9 });
+// v9 -> v10: no recoverable schema difference is known; preserve every field.
+export const migrateV9 = (save) => ({ ...save, version: 10 });
+// v10 -> v11: no recoverable schema difference is known; preserve every field.
+export const migrateV10 = (save) => ({ ...save, version: 11 });
+// v11 -> v12: no recoverable schema difference is known; preserve every field.
+export const migrateV11 = (save) => ({ ...save, version: 12 });
+// v12 -> v13: split music and sound-effect levels beneath the legacy master level.
+export const migrateV12 = (save) => ({
+  ...save,
+  version: 13,
+  musicVolume: Number.isFinite(save.musicVolume) ? save.musicVolume : 0.45,
+  sfxVolume: Number.isFinite(save.sfxVolume) ? save.sfxVolume : 0.8,
+});
+
+export const SAVE_MIGRATIONS = Object.freeze([
+  migrateV1,
+  migrateV2,
+  migrateV3,
+  migrateV4,
+  migrateV5,
+  migrateV6,
+  migrateV7,
+  migrateV8,
+  migrateV9,
+  migrateV10,
+  migrateV11,
+  migrateV12,
+]);
+
+export function migrateSave(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (!Number.isInteger(value.version) || value.version < 1 || value.version > SAVE_VERSION) return null;
+  let migrated = { ...value };
+  while (migrated.version < SAVE_VERSION) {
+    const migration = SAVE_MIGRATIONS[migrated.version - 1];
+    if (!migration) return null;
+    migrated = migration(migrated);
+  }
+  return migrated;
+}
 
 function validTeam(team) {
   return (
@@ -43,12 +106,8 @@ function validTeam(team) {
   );
 }
 export function validateSave(value) {
-  if (!value || typeof value !== 'object') return null;
-  if (value.version > SAVE_VERSION) return null;
-  const migrated =
-    value.version === 1
-      ? { ...value, version: SAVE_VERSION, cosmetics: value.cosmetics || ['crystal'] }
-      : { ...value, version: SAVE_VERSION };
+  const migrated = migrateSave(value);
+  if (!migrated) return null;
   const mastery = {};
   if (migrated.mastery && typeof migrated.mastery === 'object')
     for (const id of CREATURE_IDS) {
@@ -142,68 +201,62 @@ export function validateSave(value) {
     language: migrated.language === 'en' ? 'en' : 'fr',
     muted: Boolean(migrated.muted),
     volume: Number.isFinite(migrated.volume) ? Math.min(1, Math.max(0, migrated.volume)) : 0.7,
+    musicVolume: Number.isFinite(migrated.musicVolume)
+      ? Math.min(1, Math.max(0, migrated.musicVolume))
+      : 0.45,
+    sfxVolume: Number.isFinite(migrated.sfxVolume) ? Math.min(1, Math.max(0, migrated.sfxVolume)) : 0.8,
     reducedMotion: Boolean(migrated.reducedMotion),
     highContrast: Boolean(migrated.highContrast),
     battleSpeed: migrated.battleSpeed === 2 ? 2 : 1,
   };
 }
 
-export function loadSave(storage = globalThis.localStorage) {
+function freshDefaultSave() {
+  return {
+    ...DEFAULT_SAVE,
+    lastTeam: [...DEFAULT_SAVE.lastTeam],
+    emblems: [],
+    cosmetics: ['crystal'],
+    mastery: {},
+    records: {},
+    customSquads: [null, null, null],
+    feats: [],
+    trials: [],
+  };
+}
+
+export function loadSave(storage) {
   try {
-    const raw = storage?.getItem(SAVE_KEY);
+    const source = storage === undefined ? globalThis.localStorage : storage;
+    const raw = source?.getItem?.(SAVE_KEY);
     if (!raw)
       return {
-        save: {
-          ...DEFAULT_SAVE,
-          lastTeam: [...DEFAULT_SAVE.lastTeam],
-          emblems: [],
-          cosmetics: ['crystal'],
-          mastery: {},
-          records: {},
-          feats: [],
-          trials: [],
-        },
+        save: freshDefaultSave(),
         notice: null,
       };
     const parsed = JSON.parse(raw);
     const save = validateSave(parsed);
     if (!save)
       return {
-        save: {
-          ...DEFAULT_SAVE,
-          lastTeam: [...DEFAULT_SAVE.lastTeam],
-          emblems: [],
-          cosmetics: ['crystal'],
-          mastery: {},
-          records: {},
-          feats: [],
-          trials: [],
-        },
-        notice: parsed?.version > SAVE_VERSION ? 'future' : 'corrupt',
+        save: freshDefaultSave(),
+        notice: Number.isInteger(parsed?.version) && parsed.version > SAVE_VERSION ? 'future' : 'corrupt',
       };
     return { save, notice: null };
   } catch {
     return {
-      save: {
-        ...DEFAULT_SAVE,
-        lastTeam: [...DEFAULT_SAVE.lastTeam],
-        emblems: [],
-        cosmetics: ['crystal'],
-        mastery: {},
-        records: {},
-        feats: [],
-        trials: [],
-      },
+      save: freshDefaultSave(),
       notice: 'corrupt',
     };
   }
 }
 
-export function persistSave(save, storage = globalThis.localStorage) {
+export function persistSave(save, storage) {
   const safe = validateSave(save);
   if (!safe) return false;
   try {
-    storage?.setItem(SAVE_KEY, JSON.stringify(safe));
+    const target = storage === undefined ? globalThis.localStorage : storage;
+    if (!target || typeof target.setItem !== 'function') return false;
+    target.setItem(SAVE_KEY, JSON.stringify(safe));
     return true;
   } catch {
     return false;
