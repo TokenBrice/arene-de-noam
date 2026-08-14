@@ -66,6 +66,8 @@
 }
 
 .battle-screen .battle-top > * {
+  min-width: 0;
+  max-width: 100%;
   pointer-events: auto;
 }
 
@@ -73,7 +75,9 @@
   justify-self: start;
   display: grid;
   min-height: 44px;
+  max-width: 100%;
   padding: 6px 12px;
+  overflow: hidden;
   border-color: #bac7ef26;
   background: #080b20bd;
   box-shadow: none;
@@ -87,18 +91,22 @@
 
 .battle-screen .arena-nameplate {
   position: static;
+  inset: auto;
   justify-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 44px;
   padding: 5px 12px;
   border: 1px solid #bac7ef1f;
   border-radius: 14px;
   background: #080b20a8;
   box-shadow: none;
+  transform: none;
 }
 
 .battle-screen .arena-nameplate:focus-visible {
@@ -152,6 +160,8 @@
 .battle-screen .battle-tools {
   justify-self: end;
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   gap: var(--space-1);
 }
 
@@ -196,6 +206,13 @@
   border-radius: 14px;
   background: linear-gradient(135deg, #0d1229d9, #080b1fd1);
   box-shadow: 0 7px 18px #0003;
+}
+
+.battle-screen .enemy-hud:has(.intent-read) {
+  display: grid;
+  grid-template-rows: 46px 18px;
+  height: auto;
+  min-height: 0;
 }
 
 .battle-screen .battle-plate-toggle {
@@ -379,14 +396,15 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  height: 16px;
+  height: 18px;
+  min-height: 18px;
   min-width: 0;
-  padding: 0 9px 2px;
+  padding: 0 9px;
   overflow: hidden;
   color: #d9deef;
   background: #050716b8;
   font-size: var(--type-battle-micro);
-  line-height: 14px;
+  line-height: 1.1;
 }
 
 .battle-screen .enemy-hud:has(.intent-read) .battle-plate-toggle {
@@ -835,7 +853,8 @@ body.high-contrast .battle-screen .action-line {
   .battle-screen .battle-top {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: 44px 36px;
-    gap: 5px;
+    column-gap: 5px;
+    row-gap: 0;
   }
 
   .battle-screen .turn-chip {
@@ -854,6 +873,7 @@ body.high-contrast .battle-screen .action-line {
     overflow: hidden;
     border: 0;
     background: transparent;
+    transform: none;
   }
 
   .battle-screen .arena-nameplate > :not(.contract-chip) {
@@ -896,7 +916,7 @@ body.high-contrast .battle-screen .action-line {
 
   .battle-plates {
     grid-template-columns: 1fr;
-    grid-template-rows: var(--battle-plate-h) 62px;
+    grid-template-rows: var(--battle-plate-h) auto;
     gap: 3px;
   }
 
@@ -911,7 +931,7 @@ body.high-contrast .battle-screen .action-line {
 
   .battle-screen .enemy-hud {
     grid-row: 2;
-    height: 62px;
+    height: auto;
   }
 
   .battle-screen .fighter {
@@ -1113,6 +1133,11 @@ body.high-contrast .battle-screen .action-line {
   }
 
   .battle-screen .hud-card {
+    height: 44px;
+  }
+
+  .battle-screen .enemy-hud:has(.intent-read) {
+    display: block;
     height: 44px;
   }
 

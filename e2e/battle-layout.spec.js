@@ -45,16 +45,56 @@ test('battle plates and command dock never enter the stage at required viewports
       page.locator('#hud-player').boundingBox(),
       page.locator('#hud-enemy').boundingBox(),
     ]);
+    const visibleInfoBoxes = await page.locator('.battle-info-zone *').evaluateAll((elements) =>
+      elements
+        .map((element) => {
+          const box = element.getBoundingClientRect();
+          return {
+            x: box.x,
+            y: box.y,
+            width: box.width,
+            height: box.height,
+            right: box.right,
+          };
+        })
+        .filter((box) => box.width > 0 && box.height > 0)
+    );
+    const topBoxes = await page.locator('.battle-top, .battle-top *').evaluateAll((elements) =>
+      elements
+        .map((element) => {
+          const box = element.getBoundingClientRect();
+          return { x: box.x, y: box.y, width: box.width, height: box.height };
+        })
+        .filter((box) => box.width > 0 && box.height > 0)
+    );
+    const topItems = await page.locator('.battle-top > *').evaluateAll((elements) =>
+      elements
+        .map((element) => {
+          const box = element.getBoundingClientRect();
+          return { x: box.x, y: box.y, width: box.width, height: box.height };
+        })
+        .filter((box) => box.width > 0 && box.height > 0)
+    );
 
     expect(stage).not.toBeNull();
     expect(dock).not.toBeNull();
     expect(dock.y).toBeGreaterThanOrEqual(stage.y + stage.height - 0.5);
     expect(dock.y + dock.height).toBeLessThanOrEqual(viewport.height);
     expect(intersects(stage, dock)).toBe(false);
+    for (const box of visibleInfoBoxes) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(viewport.width);
+    }
     for (const plate of plates) {
       expect(plate).not.toBeNull();
       expect(plate.y + plate.height).toBeLessThanOrEqual(stage.y + 0.5);
       expect(intersects(stage, plate)).toBe(false);
+      for (const topBox of topBoxes) expect(intersects(topBox, plate)).toBe(false);
+    }
+    for (let left = 0; left < topItems.length; left++) {
+      for (let right = left + 1; right < topItems.length; right++) {
+        expect(intersects(topItems[left], topItems[right])).toBe(false);
+      }
     }
 
     const plateNumbers = await page
@@ -72,5 +112,12 @@ test('battle plates and command dock never enter the stage at required viewports
       expect(value.clientWidth).toBeGreaterThan(0);
       expect(value.scrollWidth).toBeLessThanOrEqual(value.clientWidth);
     }
+
+    const intentSize = await page.locator('#hud-enemy .intent-read').evaluate((intent) => ({
+      clientHeight: intent.clientHeight,
+      scrollHeight: intent.scrollHeight,
+    }));
+    expect(intentSize.clientHeight).toBeGreaterThan(0);
+    expect(intentSize.scrollHeight).toBeLessThanOrEqual(intentSize.clientHeight);
   }
 });
