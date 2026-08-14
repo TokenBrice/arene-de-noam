@@ -1,0 +1,250 @@
+/* One last fighter on each side triggers a true endgame title card. */
+.flow-codex {
+  border-color: #ffd86b3b !important;
+  background: linear-gradient(120deg, #ffd54a0e, #ff72a20b) !important;
+}
+.flow-codex h3 {
+  color: #ffe385;
+}
+.final-duel-codex {
+  border-color: #ffe17738 !important;
+  background: linear-gradient(120deg, #ffce4d10, #ef4f7710) !important;
+}
+.final-duel-fx {
+  z-index: 17;
+  display: grid;
+  grid-template-columns: 1fr 180px 1fr;
+  align-items: center;
+  background: radial-gradient(circle, #401c39a8, #02030bf2 65%);
+  overflow: hidden;
+}
+.final-duel-fx::before,
+.final-duel-fx::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(110deg, transparent 44%, #fff 49%, var(--player-color) 51%, transparent 56%);
+  opacity: 0.35;
+  animation: duelSlash 0.8s ease-out forwards;
+}
+.final-duel-fx::after {
+  background: linear-gradient(70deg, transparent 44%, #fff 49%, var(--enemy-color) 51%, transparent 56%);
+  animation-delay: 0.1s;
+}
+.duel-half {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  overflow: hidden;
+}
+.duel-half::before {
+  content: '';
+  position: absolute;
+  width: 42vw;
+  height: 42vw;
+  border: 2px solid var(--player-color);
+  transform: rotate(45deg);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--player-color) 22%, transparent),
+    transparent 65%
+  );
+  box-shadow: 0 0 60px color-mix(in srgb, var(--player-color) 28%, transparent);
+}
+.duel-half.enemy::before {
+  border-color: var(--enemy-color);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--enemy-color) 22%, transparent),
+    transparent 65%
+  );
+  box-shadow: 0 0 60px color-mix(in srgb, var(--enemy-color) 28%, transparent);
+}
+.duel-half img {
+  position: relative;
+  z-index: 2;
+  width: min(34vw, 390px);
+  height: min(62vh, 500px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 30px var(--player-color));
+  animation: duelFighter 0.8s cubic-bezier(0.15, 0.85, 0.2, 1) forwards;
+}
+.duel-half.enemy img {
+  filter: drop-shadow(0 0 30px var(--enemy-color));
+  transform: scaleX(-1);
+}
+.duel-half b {
+  position: absolute;
+  z-index: 3;
+  bottom: 14%;
+  font-family: Georgia, serif;
+  font-size: clamp(22px, 4vw, 50px);
+  text-shadow: 0 3px 10px #000;
+}
+.duel-center {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.duel-center i {
+  color: #fff2a2;
+  font-size: 70px;
+  font-style: normal;
+  text-shadow: 0 0 26px #ffdb62;
+  animation: duelCross 0.7s ease-out;
+}
+.duel-center strong {
+  color: #fff4bb;
+  font-size: clamp(18px, 3vw, 32px);
+  font-weight: 1000;
+  letter-spacing: 0.14em;
+}
+.duel-center small {
+  margin-top: 5px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+.final-duel-mode .battle-top,
+.final-duel-mode .battle-controls,
+.final-duel-mode .hud-card {
+  filter: brightness(0.35);
+}
+@keyframes duelSlash {
+  0% {
+    opacity: 0;
+    transform: translateX(-60%) scale(0.5);
+  }
+  45% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(60%) scale(1.2);
+  }
+}
+@keyframes duelFighter {
+  0% {
+    opacity: 0;
+    transform: translateX(-20vw) scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(2vw) scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+.duel-half.enemy img {
+  animation-name: duelFighterEnemy;
+}
+@keyframes duelFighterEnemy {
+  0% {
+    opacity: 0;
+    transform: translateX(20vw) scaleX(-1) scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-2vw) scaleX(-1) scale(1.08);
+  }
+  100% {
+    transform: scaleX(-1);
+  }
+}
+@keyframes duelCross {
+  0% {
+    opacity: 0;
+    transform: scale(4) rotate(-40deg);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(0.9) rotate(6deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@media (max-width: 600px) {
+  .final-duel-fx {
+    grid-template-columns: 1fr 80px 1fr;
+  }
+  .duel-half img {
+    width: 42vw;
+    height: 48vh;
+  }
+  .duel-half b {
+    bottom: 20%;
+    font-size: 20px;
+  }
+  .duel-center i {
+    font-size: 42px;
+  }
+  .duel-center strong {
+    font-size: 14px;
+  }
+  .duel-center small {
+    font-size: 8px;
+  }
+}
+/* Live Battle Flow readout inside the tactical codex. */
+.flow-codex-live {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.flow-live {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 45px 42px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--flow-live-color) 34%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--flow-live-color) 8%, #080a20);
+}
+.flow-live img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 4px #0008);
+}
+.flow-live b {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-live > i {
+  display: flex;
+  gap: 3px;
+}
+.flow-live > i em {
+  width: 11px;
+  height: 4px;
+  border-radius: 4px;
+  background: #ffffff18;
+}
+.flow-live > i em.filled {
+  background: var(--flow-live-color);
+  box-shadow: 0 0 7px var(--flow-live-color);
+}
+.flow-live strong {
+  color: #ffe781;
+  font-size: 11px;
+  text-align: right;
+}
+@media (max-width: 600px) {
+  .flow-codex-live {
+    grid-template-columns: 1fr;
+  }
+  .flow-live {
+    grid-template-columns: 34px minmax(0, 1fr) 45px 42px;
+  }
+}

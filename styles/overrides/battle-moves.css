@@ -1,0 +1,93 @@
+/* Move-choice silhouettes. Kind, tempo, and multi-hit identity remain legible
+   before the player reads the detailed effect sentence. */
+.move-archetype {
+  position: absolute;
+  right: 11px;
+  top: 10px;
+  display: grid;
+  place-items: center;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--move-color) 50%, #fff3);
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--move-color) 65%, #fff);
+  background: color-mix(in srgb, var(--move-color) 14%, #0a0c25);
+  font-size: 12px;
+  font-weight: 1000;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--move-color) 18%, transparent);
+}
+.move-btn .move-name {
+  padding-right: 30px;
+}
+.move-btn.kind-support {
+  background:
+    radial-gradient(circle at 90% 12%, #71e8ff1c, transparent 37%),
+    linear-gradient(145deg, #19284ce8, #0c132fe8);
+}
+.move-btn.kind-support::before {
+  width: 7px;
+  background: linear-gradient(#d2faff, var(--move-color), #6a80ff);
+}
+.move-btn.kind-heal {
+  background:
+    radial-gradient(circle at 90% 12%, #78f6aa22, transparent 40%),
+    linear-gradient(145deg, #173e3ae8, #0b1730e8);
+}
+.move-btn.kind-heal::before {
+  width: 7px;
+  background: linear-gradient(#d1ffe0, #60e795, #40bfc4);
+}
+.move-btn.kind-heal .move-archetype {
+  color: #baffd0;
+  border-color: #73eca06b;
+  background: #45de8418;
+}
+.move-btn.multi-hit:not(.signature-move) {
+  background-image:
+    repeating-linear-gradient(135deg, transparent 0 18px, #ffffff035 18px 20px),
+    linear-gradient(145deg, #202451eb, #0f1233f0);
+}
+.move-btn.priority-move:not(.signature-move) .move-archetype {
+  clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
+  border-radius: 7px 3px 3px 7px;
+}
+.move-btn.drain-move:not(.signature-move) {
+  box-shadow: inset 0 0 24px #72ffa20b;
+}
+.signature-move .move-archetype {
+  right: 9px;
+  top: 34px;
+  color: #fff1a1;
+  border-color: #ffe06d88;
+  background: #ffd04a18;
+  box-shadow: 0 0 18px #ffd94b30;
+}
+@media (max-width: 600px) {
+  .move-archetype {
+    right: 5px;
+    top: 6px;
+    min-width: 21px;
+    height: 21px;
+    padding: 0 3px;
+    font-size: 9px;
+  }
+  .move-btn .move-name {
+    padding-right: 20px;
+  }
+  .signature-move .move-archetype {
+    right: 5px;
+    top: 27px;
+  }
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  .battle-screen .action-line {
+    top: 80px;
+    bottom: auto;
+    max-width: 190px;
+    padding: 5px 10px;
+    font-size: 10px;
+    line-height: 1.2;
+    pointer-events: none;
+  }
+}

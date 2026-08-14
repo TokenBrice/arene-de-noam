@@ -1,0 +1,571 @@
+/* League route: a replayable visual history of the authored rival ladder. */
+.league-btn {
+  border-color: #ffe47b55;
+  background: linear-gradient(130deg, #6d4b1f, #33245d) !important;
+}
+.emblem-map {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 18px;
+}
+.emblem-map:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 6px;
+}
+.emblem-map:hover .epic-emblems {
+  filter: brightness(1.15);
+}
+.league-page {
+  width: min(1120px, 100%);
+}
+.league-head {
+  align-items: end;
+}
+.league-head > strong {
+  padding: 8px 12px;
+  border: 1px solid #ffe58142;
+  border-radius: 999px;
+  color: #ffe995;
+  background: #ffd85d0b;
+  font-size: 10px;
+}
+.league-route {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin: 4px auto 34px;
+}
+.league-route::before {
+  content: '';
+  position: absolute;
+  left: 40px;
+  top: 55px;
+  bottom: 55px;
+  width: 2px;
+  background: linear-gradient(var(--gold), #746dff 65%, #ffffff15);
+}
+.league-rival {
+  position: relative;
+  display: grid;
+  grid-template-columns: 80px 126px 1fr;
+  align-items: center;
+  min-height: 210px;
+  padding: 14px 18px 14px 0;
+  border: 1px solid color-mix(in srgb, var(--rival-a) 38%, #ffffff16);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 19% 50%, color-mix(in srgb, var(--rival-a) 20%, transparent), transparent 25%),
+    linear-gradient(125deg, #202447e8, #0b0d27e8 70%);
+  box-shadow: 0 15px 42px #0005;
+  overflow: hidden;
+}
+.league-rival::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  top: -55px;
+  width: 210px;
+  height: 210px;
+  border: 1px solid color-mix(in srgb, var(--rival-b) 22%, transparent);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.league-rival.current {
+  border-color: var(--rival-a);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--rival-b) 55%, transparent),
+    0 20px 55px #0007,
+    0 0 30px color-mix(in srgb, var(--rival-a) 18%, transparent);
+}
+.league-rival.cleared {
+  background:
+    radial-gradient(circle at 19% 50%, color-mix(in srgb, var(--rival-a) 16%, transparent), transparent 24%),
+    linear-gradient(125deg, #1a2540e8, #090b20e8 70%);
+}
+.league-rival.locked {
+  filter: saturate(0.2);
+  border-style: dashed;
+  opacity: 0.58;
+}
+.league-step {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+}
+.league-step span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid #ffffff2d;
+  border-radius: 50%;
+  color: #aeb0c7;
+  background: #0a0c22;
+  font-size: 11px;
+  font-weight: 1000;
+}
+.league-rival.current .league-step span {
+  border-color: var(--rival-a);
+  color: #fff;
+  background: color-mix(in srgb, var(--rival-b) 35%, #0a0c22);
+  box-shadow: 0 0 20px var(--rival-a);
+}
+.league-rival.cleared .league-step span {
+  border-color: #ffe281;
+  color: #19152a;
+  background: #ffe281;
+}
+.league-emblem {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+}
+.league-emblem .emblem {
+  width: 106px;
+}
+.league-emblem .emblem small {
+  display: block;
+  top: 99%;
+  width: 120px;
+}
+.league-dossier {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+}
+.league-dossier h2 {
+  margin: 3px 0 5px;
+  font-family: Georgia, serif;
+  font-size: clamp(25px, 4vw, 40px);
+  line-height: 1;
+}
+.league-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.league-meta span {
+  padding: 4px 7px;
+  border: 1px solid #ffffff15;
+  border-radius: 999px;
+  color: #cbcde0;
+  background: #ffffff07;
+  font-size: 8px;
+  font-weight: 850;
+}
+.league-dossier > small {
+  color: #9b9db4;
+  font-size: 7px;
+  font-weight: 1000;
+  letter-spacing: 0.15em;
+}
+.league-team {
+  display: flex;
+  gap: 7px;
+  margin: 4px 0 9px;
+}
+.league-team > span {
+  display: grid;
+  grid-template-columns: 45px minmax(50px, 1fr);
+  align-items: center;
+  gap: 2px;
+  min-width: 105px;
+  padding: 3px 7px;
+  border: 1px solid #ffffff12;
+  border-radius: 11px;
+  background: #ffffff06;
+}
+.league-team img {
+  width: 45px;
+  height: 45px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.league-team b {
+  font-size: 8px;
+}
+.league-ace {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--rival-a);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rival-b) 16%, transparent), transparent);
+}
+.league-ace b {
+  color: #ffeaa0;
+  font-size: 9px;
+}
+.league-ace span {
+  color: #bbbccf;
+  font-size: 8px;
+  line-height: 1.35;
+}
+.league-dossier > .wide {
+  width: min(240px, 100%);
+}
+.league-hidden {
+  max-width: 410px;
+  color: #85879d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 700px) {
+  .league-head {
+    align-items: flex-start;
+  }
+  .league-rival {
+    grid-template-columns: 48px 80px 1fr;
+    min-height: 225px;
+    padding: 10px 10px 10px 0;
+  }
+  .league-route::before {
+    left: 24px;
+  }
+  .league-emblem .emblem {
+    width: 72px;
+  }
+  .league-emblem .emblem small {
+    display: none;
+  }
+  .league-team {
+    gap: 3px;
+  }
+  .league-team > span {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-width: 0;
+    flex: 1;
+    padding: 2px;
+    text-align: center;
+  }
+  .league-team img {
+    width: 100%;
+    height: 48px;
+  }
+  .league-team b {
+    font-size: 6px;
+  }
+  .league-meta span {
+    font-size: 7px;
+  }
+  .league-ace span {
+    font-size: 7px;
+  }
+  .league-dossier h2 {
+    font-size: 24px;
+  }
+  .league-step span {
+    width: 34px;
+    height: 34px;
+  }
+  .league-rival::after {
+    display: none;
+  }
+}
+.perfect-relay-mode .fighter.player,
+.perfect-relay-mode .fighter.enemy {
+  filter: brightness(0.55);
+}
+.perfect-relay-mode.relay-player .fighter.player,
+.perfect-relay-mode.relay-enemy .fighter.enemy {
+  filter: brightness(1);
+}
+.relay-rush-fx {
+  z-index: 10;
+}
+.relay-rush-fx .fx-curtain {
+  opacity: 0.74;
+  background: linear-gradient(
+    115deg,
+    #03040ee8 0 23%,
+    color-mix(in srgb, var(--fx-color) 34%, #101534) 48% 59%,
+    #03040ef2 82%
+  );
+}
+.relay-rush-lines {
+  position: absolute;
+  inset: -45%;
+  z-index: 1;
+  background:
+    repeating-linear-gradient(104deg, transparent 0 18px, #ffffff24 20px 22px, transparent 24px 41px),
+    linear-gradient(
+      100deg,
+      transparent 37%,
+      color-mix(in srgb, var(--fx-color) 75%, #fff) 49%,
+      transparent 62%
+    );
+  mix-blend-mode: screen;
+  transform: translateX(-38%);
+  animation: relayRushLines 0.62s cubic-bezier(0.15, 0.8, 0.15, 1) forwards;
+}
+.relay-rush-call {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 62px 170px minmax(210px, 340px);
+  align-items: center;
+  width: min(760px, 92vw);
+  min-height: 190px;
+  padding: 8px 26px;
+  border-block: 2px solid color-mix(in srgb, var(--fx-color) 76%, #fff);
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, #07091ee8 10% 90%, transparent);
+  filter: drop-shadow(0 0 30px var(--fx-color));
+  animation: relayRushCall 0.64s cubic-bezier(0.12, 0.88, 0.18, 1) forwards;
+}
+.relay-rush-call > i {
+  color: #fff09a;
+  font-size: 48px;
+  font-style: normal;
+  font-weight: 1000;
+  text-align: center;
+  text-shadow: 0 0 18px #ffe46b;
+}
+.relay-rush-call img {
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 20px var(--fx-color));
+  animation: relayRushCreature 0.62s ease-out both;
+}
+.relay-rush-call span {
+  display: grid;
+  min-width: 0;
+}
+.relay-rush-call small {
+  color: #ffe77f;
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.relay-rush-call b {
+  font-family: Georgia, serif;
+  font-size: clamp(32px, 5vw, 58px);
+  line-height: 1;
+}
+.relay-rush-call em {
+  margin-top: 7px;
+  color: #fff;
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 1000;
+}
+.relay-rush-mode .fighter {
+  filter: brightness(0.42) saturate(0.7);
+}
+.relay-rush-mode.relay-player .fighter.player,
+.relay-rush-mode.relay-enemy .fighter.enemy {
+  filter: brightness(1.15) saturate(1.2);
+  transform: translateY(-4px);
+}
+@keyframes relayRushLines {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) skewX(-7deg);
+  }
+  28% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(42%) skewX(-7deg);
+  }
+}
+@keyframes relayRushCall {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(0.35) skewX(-12deg);
+  }
+  38%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scaleX(1) skewX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-46%, -50%) scale(1.03);
+  }
+}
+@keyframes relayRushCreature {
+  0% {
+    opacity: 0;
+    transform: translateX(-70px) scale(0.72);
+  }
+  48% {
+    opacity: 1;
+    transform: translateX(8px) scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+@media (max-width: 600px) {
+  .relay-rush-call {
+    top: 52%;
+    grid-template-columns: 38px 31vw 1fr;
+    width: 98vw;
+    min-height: 132px;
+    padding: 6px 8px;
+  }
+  .relay-rush-call > i {
+    font-size: 31px;
+  }
+  .relay-rush-call img {
+    width: 31vw;
+    height: 31vw;
+  }
+  .relay-rush-call small {
+    font-size: 7px;
+  }
+  .relay-rush-call b {
+    font-size: 27px;
+  }
+  .relay-rush-call em {
+    font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .relay-rush-lines,
+  .relay-rush-call,
+  .relay-rush-call img {
+    animation: none;
+  }
+}
+body.reduced-motion .relay-rush-lines,
+body.reduced-motion .relay-rush-call,
+body.reduced-motion .relay-rush-call img {
+  animation: none;
+}
+.flow-crescendo-call {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  top: 43%;
+  display: grid;
+  grid-template-columns: 70px minmax(230px, 420px);
+  align-items: center;
+  width: min(570px, 86vw);
+  padding: 15px 24px;
+  border: 2px solid color-mix(in srgb, var(--flow-color) 68%, #fff);
+  border-radius: 18px;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(
+      circle at 10% 50%,
+      color-mix(in srgb, var(--flow-color) 46%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(110deg, #11183bf2, #07091df2);
+  box-shadow:
+    0 0 0 5px #ffffff0a,
+    0 0 55px color-mix(in srgb, var(--flow-color) 38%, transparent);
+  animation: flowCrescendo 0.62s cubic-bezier(0.12, 0.88, 0.18, 1) forwards;
+  overflow: hidden;
+}
+.flow-crescendo-call::after {
+  content: '';
+  position: absolute;
+  inset: -80%;
+  background: conic-gradient(transparent, #ffffff28, transparent 19%);
+  animation: flowCrescendoSpin 0.7s linear;
+}
+.flow-crescendo-call > i {
+  position: relative;
+  z-index: 1;
+  color: #ffe56e;
+  font-size: 52px;
+  font-style: normal;
+  font-weight: 1000;
+  text-align: center;
+  text-shadow: 0 0 23px #ffca43;
+}
+.flow-crescendo-call span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+}
+.flow-crescendo-call small {
+  color: #ffe782;
+  font-size: 9px;
+  font-weight: 1000;
+  letter-spacing: 0.24em;
+}
+.flow-crescendo-call b {
+  font-family: Georgia, serif;
+  font-size: clamp(27px, 4vw, 45px);
+  line-height: 1;
+}
+.flow-crescendo-call em {
+  margin-top: 5px;
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 1000;
+}
+.flow-crescendo-mode .battlefield {
+  filter: saturate(1.25) brightness(0.86);
+}
+@keyframes flowCrescendo {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(-3deg);
+  }
+  42%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.04) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+@keyframes flowCrescendoSpin {
+  to {
+    transform: rotate(160deg);
+  }
+}
+@media (max-width: 600px) {
+  .flow-crescendo-call {
+    top: 49%;
+    grid-template-columns: 45px 1fr;
+    width: 94vw;
+    padding: 11px 13px;
+  }
+  .flow-crescendo-call > i {
+    font-size: 37px;
+  }
+  .flow-crescendo-call b {
+    font-size: 25px;
+  }
+  .flow-crescendo-call small {
+    font-size: 7px;
+  }
+  .flow-crescendo-call em {
+    font-size: 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-crescendo-call,
+  .flow-crescendo-call::after {
+    animation: none;
+  }
+}
+body.reduced-motion .flow-crescendo-call,
+body.reduced-motion .flow-crescendo-call::after {
+  animation: none;
+}

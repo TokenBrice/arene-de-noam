@@ -1,0 +1,667 @@
+import { ctx, registerRoutes, route } from '../app/context.js';
+
+const {
+  AFFINITIES,
+  affinityMultiplier,
+  MOVES,
+  PASSIVES,
+  masteryRank,
+  BONDS,
+  quickRule,
+  CONTRACTS,
+  contractProgress,
+  TRAINERS,
+  ARENAS,
+  TRIALS,
+  GAUNTLET_STAGES,
+  circuitMatch,
+  createBattle,
+  activeOf,
+  resolveTurn,
+  applyReplacement,
+  applyTrainerCommand,
+  getLegalActions,
+  ARENA_RESONANCE,
+  signatureCostFor,
+  previewIncomingAfterSwitch,
+  chooseAiAction,
+  STATUS_DEFINITIONS,
+  ArenaScene,
+  params,
+  testAnimationScale,
+  i18n,
+  t,
+  screen,
+  sound,
+  LADDER_COUNT,
+  LOG_TYPE_GROUPS,
+  sprite,
+  creatureName,
+  affinity,
+  affinityName,
+  actionButton,
+  wait,
+  persist,
+  escapeHtml,
+  disposeArena,
+  statusVisuals,
+  comboRoutesHtml,
+} = ctx;
+const {
+  bindCommon,
+  renderTitle,
+  enemyPlan,
+  hudHtml,
+  moveButton,
+  exchangeForecastHtml,
+  tutorialEnemyAction,
+  clearBattleFx,
+  playEvents,
+  completeTutorial,
+  finishBattle,
+} = route;
+
+function startBattle(config) {
+  ctx.previousScreen = 'selection';
+  const seed = Number(params.get('seed')) || Math.floor(Date.now() / 1000);
+  const state = createBattle({
+    playerTeam: config.playerTeam,
+    enemyTeam: config.enemyTeam,
+    playerLead: config.playerLead,
+    enemyLead: config.enemyLead,
+    seed,
+    mode: config.mode,
+    arena: config.arena,
+    modifiers: config.modifiers,
+    doctrine: config.doctrine,
+    enemyAce: ['ladder', 'gauntlet', 'circuit'].includes(config.mode)
+      ? TRAINERS[config.trainerIndex]?.ace
+      : null,
+    masteryRanks: Object.fromEntries(
+      config.playerTeam.map((id) => [id, masteryRank(ctx.save.mastery[id] || 0)])
+    ),
+  });
+  if (config.playerCondition)
+    state.sides.player.team.forEach((creature) => {
+      const ratio = config.playerCondition[creature.id];
+      if (Number.isFinite(ratio))
+        creature.hp = Math.max(1, Math.min(creature.maxHp, Math.round(creature.maxHp * ratio)));
+    });
+  const testHp = Number(params.get('playerHp'));
+  if (testAnimationScale === 0 && Number.isFinite(testHp) && testHp > 0)
+    activeOf(state, 'player').hp = Math.min(activeOf(state, 'player').maxHp, Math.round(testHp));
+  const testEnemyHp = Number(params.get('enemyHp'));
+  if (testAnimationScale === 0 && Number.isFinite(testEnemyHp) && testEnemyHp > 0)
+    state.sides.enemy.team.forEach((creature) => {
+      creature.hp = Math.min(creature.maxHp, Math.round(testEnemyHp));
+    });
+  const testTeamHp = Number(params.get('teamHp'));
+  if (testAnimationScale === 0 && Number.isFinite(testTeamHp) && testTeamHp > 0)
+    state.sides.player.team.forEach((creature) => {
+      creature.hp = Math.min(creature.maxHp, Math.round(testTeamHp));
+    });
+  if (params.get('finalDuel') === '1')
+    for (const side of ['player', 'enemy'])
+      state.sides[side].team.forEach((creature, index) => {
+        if (index !== state.sides[side].active) creature.hp = 0;
+      });
+  const contractId =
+    config.mode === 'tutorial'
+      ? null
+      : config.contractId ||
+        CONTRACTS[
+          Math.abs(seed + (config.trainerIndex || 0) + Math.max(0, ARENAS.indexOf(config.arena))) %
+            CONTRACTS.length
+        ].id;
+  ctx.battleSession = {
+    ...config,
+    state,
+    contractId,
+    style: ['ladder', 'gauntlet', 'circuit'].includes(config.mode)
+      ? TRAINERS[config.trainerIndex]?.style || 'direct'
+      : 'direct',
+    lastLine: t('battle.yourTurn'),
+    timeline: [],
+    tutorialStep: config.tutorialStep ?? null,
+  };
+  renderBattle();
+}
+
+function renderBattle() {
+  disposeArena();
+  screen.dataset.page = 'battle';
+  screen.className = 'screen battle-screen';
+  const trial =
+    ctx.battleSession.mode === 'trial' ? TRIALS.find((x) => x.id === ctx.battleSession.trialId) : null;
+  const gauntlet =
+    ctx.battleSession.mode === 'gauntlet' ? GAUNTLET_STAGES[ctx.battleSession.gauntletStage] : null;
+  const circuit =
+    ctx.battleSession.mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null;
+  const resonance = ARENA_RESONANCE[ctx.battleSession.arena],
+    resonanceMeta = AFFINITIES[resonance];
+  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate"><b>${trial ? `${trial.icon} ${t(trial.nameKey)}` : gauntlet ? `↟ ${t(gauntlet.nameKey)} · ${ctx.battleSession.gauntletStage + 1}/${GAUNTLET_STAGES.length}` : circuit ? `${circuit.condition.icon} ${t('circuit.round', { round: circuit.round })}` : t(`arena.${ctx.battleSession.arena}`)}</b><small>${trial ? t(trial.descKey) : gauntlet ? t('gauntlet.battleRule', { boons: ctx.gauntletRun?.boons.length || 0 }) : circuit ? t(`circuit.effect.${circuit.condition.id}`) : t(`arena.rule.${ctx.battleSession.arena}`)}</small>${resonanceMeta ? `<span class="arena-resonance" style="--resonance-color:${resonanceMeta.color}">${resonanceMeta.icon} ${t('arena.resonanceShort', { affinity: affinityName(resonance) })}</span>` : ''}${ctx.battleSession.contractId ? `<div class="contract-chip" id="contract-chip"></div>` : ''}</div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battlefield"><div class="fighter enemy" id="fighter-enemy"><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player"><div class="status-orbits"></div><img alt=""></div></div><div class="hud-card enemy-hud" id="hud-enemy"></div><div class="hud-card player-hud" id="hud-player"></div><div class="action-line" id="action-line"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span>${t('battle.switch')}</button></div><div id="replacement-root"></div><div id="tutorial-root"></div>`;
+  if (ctx.battleSession.quickRuleId && ctx.battleSession.quickRuleId !== 'standard') {
+    const rule = quickRule(ctx.battleSession.quickRuleId);
+    screen
+      .querySelector('.arena-nameplate')
+      ?.insertAdjacentHTML(
+        'beforeend',
+        `<span class="quick-rule-chip">${rule.icon} ${t(`quickRule.${rule.id}`)}</span>`
+      );
+  }
+  const logButton = document.createElement('button');
+  logButton.type = 'button';
+  logButton.className = 'icon-btn';
+  logButton.dataset.action = 'battle-log';
+  logButton.setAttribute('aria-label', t('battle.log'));
+  logButton.textContent = '≡';
+  screen.querySelector('[data-action="battle-help"]')?.before(logButton);
+  screen.querySelector('#action-line')?.setAttribute('role', 'status');
+  screen.querySelector('#action-line')?.setAttribute('aria-live', 'polite');
+  screen
+    .querySelector('.battle-tools')
+    ?.insertAdjacentHTML(
+      'afterbegin',
+      `<button class="icon-btn trainer-command-btn" data-action="trainer-command" aria-label="${t('battle.command')}"><span>⚑</span><small>${t(`command.${ctx.battleSession.state.doctrine}`)}</small></button>`
+    );
+  const fxStage = document.createElement('div');
+  fxStage.id = 'fx-stage';
+  fxStage.className = 'fx-stage';
+  fxStage.setAttribute('aria-hidden', 'true');
+  screen.querySelector('.battle-vignette').after(fxStage);
+  try {
+    if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
+    ctx.arenaScene = new ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
+      reducedMotion: ctx.save.reducedMotion,
+    });
+  } catch (error) {
+    screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t('error.webgl')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
+    bindCommon();
+    return;
+  }
+  screen.querySelector('#arena').addEventListener('arena-context-lost', () => {
+    disposeArena();
+    screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t('error.context')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
+    bindCommon();
+  });
+  screen.querySelector('[data-action="toggle-mute"]').addEventListener('click', () => {
+    ctx.save.muted = !ctx.save.muted;
+    persist();
+    refreshBattle();
+  });
+  screen.querySelector('[data-action="battle-speed"]').addEventListener('click', () => {
+    ctx.save.battleSpeed = ctx.save.battleSpeed === 2 ? 1 : 2;
+    persist();
+    refreshBattle();
+  });
+  screen.querySelector('[data-action="battle-help"]').addEventListener('click', openBattleCodex);
+  screen.querySelector('[data-action="battle-log"]').addEventListener('click', openBattleLog);
+  screen.querySelector('[data-action="trainer-command"]').addEventListener('click', handleTrainerCommand);
+  screen.querySelector('[data-action="battle-exit"]').addEventListener('click', () => {
+    if (confirm(i18n.lang === 'fr' ? 'Quitter ce combat ?' : 'Leave this battle?')) renderTitle();
+  });
+  refreshBattle();
+  sound.unlock();
+  battleEntrance();
+}
+
+function openBattleCodex() {
+  if (ctx.locked) return;
+  const state = ctx.battleSession.state,
+    root = screen.querySelector('#replacement-root'),
+    statusIds = [
+      ...new Set(['player', 'enemy'].flatMap((side) => Object.keys(activeOf(state, side).statuses))),
+    ],
+    doctrine = state.doctrine || 'balanced',
+    boons = ctx.gauntletRun?.boons || [],
+    activeRule = ctx.battleSession.quickRuleId ? quickRule(ctx.battleSession.quickRuleId) : null,
+    circuit = ctx.battleSession.mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null,
+    trainerAce = state.enemyAce,
+    contract = CONTRACTS.find((item) => item.id === ctx.battleSession.contractId);
+  const activeStatuses = statusIds.length
+    ? statusIds
+        .map((id) => {
+          const meta = STATUS_DEFINITIONS[id];
+          return `<div class="codex-status" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}</b><small>${t(`status.effect.${id}`)}</small></span></div>`;
+        })
+        .join('')
+    : `<p>${t('battle.codexNoStatus')}</p>`;
+  const bonds =
+    [...new Set([...state.sides.player.bonds, ...state.sides.enemy.bonds])]
+      .map((id) => `<li><b>${BONDS[id].icon} ${t(`bond.${id}`)}</b> — ${t(`bond.effect.${id}`)}</li>`)
+      .join('') || `<li>${t('bond.none')}</li>`;
+  const veterans = state.sides.player.team
+    .filter((creature) => creature.masteryRank > 0)
+    .map(
+      (creature) =>
+        `<li><b>${'★'.repeat(creature.masteryRank)} ${creatureName(creature.id)}</b> — ${t(`mastery.perk.${creature.masteryRank}`)}</li>`
+    )
+    .join('');
+  const routes = comboRoutesHtml(
+    state.sides.player.team.map((creature) => creature.id),
+    true
+  );
+  const resonance = ARENA_RESONANCE[state.arena];
+  root.innerHTML = `<div class="replacement codex-overlay"><section class="glass-panel battle-codex" role="dialog" aria-modal="true" aria-labelledby="codex-title"><button class="codex-close icon-btn" data-action="close-codex" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.fieldState')}</span><h2 id="codex-title">${t('battle.codex')}</h2><div class="codex-grid"><article><h3>⚡ ${t('arena.ruleTitle')}</h3><b>${t(`arena.${state.arena}`)}</b><p>${t(`arena.rule.${state.arena}`)}</p>${resonance ? `<p class="resonance-note" style="--resonance-color:${AFFINITIES[resonance].color}">${AFFINITIES[resonance].icon} ${t('arena.resonance', { affinity: affinityName(resonance) })}</p>` : ''}</article><article><h3>${t('doctrine.icon.' + doctrine)} ${t('doctrine.title')}</h3><b>${t(`doctrine.${doctrine}`)}</b><p>${t(`doctrine.effect.${doctrine}`)}</p></article><article class="codex-wide flow-codex"><h3>↯ ${t('battle.flow')}</h3><p>${t('battle.flowHint')}</p></article><article class="codex-wide"><h3>↺ ${t('battle.switchRead')}</h3><p>${t('battle.perfectRelayHint')}</p></article><article class="codex-wide"><h3>⬡ ${t('bond.title')}</h3><ul>${bonds}</ul></article>${routes ? `<article class="codex-wide"><h3>↗ ${t('combo.title')}</h3>${routes}</article>` : ''}${veterans ? `<article class="codex-wide mastery-codex"><h3>★ ${t('mastery.perks')}</h3><ul>${veterans}</ul></article>` : ''}${boons.length ? `<article class="codex-wide"><h3>↟ ${t('gauntlet.boons')}</h3><ul>${boons.map((id) => `<li><b>${t(`boon.${id}`)}</b> — ${t(`boon.effect.${id}`)}</li>`).join('')}</ul></article>` : ''}<article class="codex-wide"><h3>☿ ${t('battle.activeStatuses')}</h3><div class="codex-statuses">${activeStatuses}</div></article><article class="codex-wide affinity-reminder"><h3>◈ ${t('battle.affinityCycle')}</h3><p>${t('settings.affinities')}</p></article></div></section></div>`;
+  const flowLive = ['player', 'enemy']
+    .map((side) => {
+      const owner = state.sides[side],
+        creature = activeOf(state, side),
+        affinity = AFFINITIES[creature.affinity];
+      return `<span class="flow-live ${side}" style="--flow-live-color:${affinity.color}"><img src="${sprite(creature.id)}" alt=""><b>${creatureName(creature.id)}</b><i>${Array.from({ length: 3 }, (_, index) => `<em class="${index < owner.flow ? 'filled' : ''}"></em>`).join('')}</i><strong>↯ ×${owner.flow}</strong></span>`;
+    })
+    .join('');
+  root
+    .querySelector('.flow-codex h3')
+    ?.insertAdjacentHTML('afterend', `<div class="flow-codex-live">${flowLive}</div>`);
+  root
+    .querySelector('.codex-grid')
+    ?.insertAdjacentHTML(
+      'beforeend',
+      `<article class="codex-wide final-duel-codex"><h3>⚔ ${t('battle.finalDuel')}</h3><p>${t('battle.finalDuelHint')}</p></article>`
+    );
+  root
+    .querySelector('.codex-grid')
+    ?.insertAdjacentHTML(
+      'afterbegin',
+      `<article class="codex-wide trainer-command-codex ${state.sides.player.commandUsed ? 'used' : ''}"><h3>⚑ ${t('battle.command')} · ${t(`command.${doctrine}`)}</h3><p>${t(`command.effect.${doctrine}`)}</p><strong>${state.sides.player.commandUsed ? '✓ ' + t('battle.commandUsed') : t('battle.command')}</strong></article>`
+    );
+  if (activeRule && activeRule.id !== 'standard')
+    root
+      .querySelector('.codex-grid')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        `<article class="codex-wide quick-rule-codex"><h3>${activeRule.icon} ${t('quickRule.title')}</h3><b>${t(`quickRule.${activeRule.id}`)}</b><p>${t(`quickRule.effect.${activeRule.id}`)}</p></article>`
+      );
+  if (circuit)
+    root
+      .querySelector('.codex-grid')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        `<article class="codex-wide circuit-codex"><h3>${circuit.condition.icon} ${t('circuit.condition')}</h3><b>${t(`circuit.${circuit.condition.id}`)}</b><p>${t(`circuit.effect.${circuit.condition.id}`)}</p></article>`
+      );
+  if (trainerAce)
+    root
+      .querySelector('.codex-grid')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        `<article class="codex-wide ace-codex ${state.aceTriggered ? 'triggered' : ''}"><h3>♛ ${t('ace.title')}</h3><b>${t(`ace.${trainerAce}`)}</b><p>${t(`ace.effect.${trainerAce}`)}</p></article>`
+      );
+  if (contract) {
+    const progress = Math.min(contract.target, contractProgress(contract.id, state.history));
+    root
+      .querySelector('.codex-grid')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        `<article class="codex-wide contract-codex"><h3>${contract.icon} ${t('contract.mission')}</h3><b>${t(`contract.${contract.id}`)}</b><p>${t(`contract.effect.${contract.id}`, { target: contract.target })}</p><strong>${t('contract.progress', { progress, target: contract.target })}</strong></article>`
+      );
+  }
+  const close = () => {
+    root.innerHTML = '';
+    screen.querySelector('[data-action="battle-help"]')?.focus();
+  };
+  root.querySelector('[data-action="close-codex"]').addEventListener('click', close);
+  root.querySelector('.codex-overlay').addEventListener('click', (e) => {
+    if (e.target.classList.contains('codex-overlay')) close();
+  });
+  root.querySelector('[data-action="close-codex"]').focus();
+}
+
+function openBattleLog() {
+  if (ctx.locked) return;
+  const root = screen.querySelector('#replacement-root');
+  if (!root) return;
+  const entries = [...(ctx.battleSession.timeline || [])].reverse(),
+    icons = { player: '◆', enemy: '◇' };
+  root.innerHTML = `<div class="replacement battle-log-overlay"><section class="glass-panel battle-log" role="dialog" aria-modal="true" aria-labelledby="battle-log-title"><button class="codex-close icon-btn" data-action="close-log" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.logSubtitle')}</span><h2 id="battle-log-title">${t('battle.log')}</h2><p>${t('battle.logHint')}</p><ol>${
+    entries.length
+      ? entries
+          .map((entry, index) => {
+            const turn = entry.turn || 1,
+              turnStart = index === 0 || entries[index - 1].turn !== turn;
+            return `<li class="log-${entry.side || 'field'} ${index === 0 ? 'latest' : ''} ${turnStart ? 'turn-start' : ''}" data-turn="${t('battle.turn', { turn })}"><i>${icons[entry.side] || '✦'}</i><span><small>${t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`)}</small>${escapeHtml(entry.text)}</span></li>`;
+          })
+          .join('')
+      : `<li class="empty">${t('battle.logEmpty')}</li>`
+  }</ol></section></div>`;
+  const close = () => {
+    root.innerHTML = '';
+    screen.querySelector('[data-action="battle-log"],[data-action="result-log"]')?.focus();
+  };
+  root.querySelector('[data-action="close-log"]').addEventListener('click', close);
+  root.querySelector('.battle-log-overlay').addEventListener('click', (event) => {
+    if (event.target.classList.contains('battle-log-overlay')) close();
+  });
+  root.querySelector('[data-action="close-log"]').focus();
+}
+
+async function battleEntrance() {
+  if (testAnimationScale === 0 || !ctx.battleSession) return;
+  ctx.locked = true;
+  refreshBattle();
+  const stage = screen.querySelector('#fx-stage'),
+    state = ctx.battleSession.state,
+    player = activeOf(state, 'player'),
+    enemy = activeOf(state, 'enemy'),
+    trainer = ['ladder', 'circuit'].includes(ctx.battleSession.mode)
+      ? TRAINERS[ctx.battleSession.trainerIndex]
+      : null,
+    trial =
+      ctx.battleSession.mode === 'trial' ? TRIALS.find((x) => x.id === ctx.battleSession.trialId) : null;
+  const gauntletTrainer =
+      ctx.battleSession.mode === 'gauntlet' ? TRAINERS[ctx.battleSession.trainerIndex] : null,
+    rival = trainer || gauntletTrainer,
+    rivalName = rival ? t(rival.nameKey) : trial ? t(trial.nameKey) : t('battle.freeRival'),
+    quote = rival ? t(`style.taunt.${rival.style}`) : trial ? t(trial.descKey) : t('battle.freeTaunt'),
+    contract = CONTRACTS.find((item) => item.id === ctx.battleSession.contractId);
+  stage.className = 'fx-stage active battle-intro-fx';
+  stage.innerHTML = `<div class="intro-side player"><span>${t('battle.yourTeam')}</span><img src="${sprite(player.id)}" alt=""><b>${creatureName(player.id)}</b></div><div class="intro-vs"><i>VS</i><small>${escapeHtml(quote)}</small>${contract ? `<div class="intro-contract"><em>${t('contract.mission')}</em><b>${contract.icon} ${t(`contract.${contract.id}`)}</b><span>${t(`contract.effect.${contract.id}`, { target: contract.target })}</span></div>` : ''}</div><div class="intro-side enemy"><span>${escapeHtml(rivalName)}</span><img src="${sprite(enemy.id)}" alt=""><b>${creatureName(enemy.id)}</b></div>`;
+  screen.classList.add('intro-mode');
+  sound.call(player.id);
+  setTimeout(() => sound.call(enemy.id), 220 / ctx.save.battleSpeed);
+  await wait((ctx.save.reducedMotion ? 300 : 1380) / ctx.save.battleSpeed);
+  clearBattleFx();
+  ctx.locked = false;
+  if (ctx.battleSession?.state.phase === 'choice') {
+    ctx.battleSession.lastLine = t('battle.yourTurn');
+    refreshBattle();
+  }
+}
+
+function refreshBattle() {
+  if (!ctx.battleSession || !screen.classList.contains('battle-screen')) return;
+  const state = ctx.battleSession.state,
+    p = activeOf(state, 'player'),
+    e = activeOf(state, 'enemy');
+  const cadence = state.modifiers?.includes('rapid_arena') ? 2 : 4,
+    until = cadence - ((state.turn - 1) % cadence),
+    resonance = ARENA_RESONANCE[state.arena],
+    resonanceMeta = AFFINITIES[resonance],
+    sideRatio = (side) =>
+      state.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
+      state.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
+    lastStand = ['player', 'enemy'].some(
+      (side) => state.sides[side].team.filter((c) => c.hp > 0).length === 1
+    ),
+    tension = Math.min(
+      1,
+      (state.turn - 1) / 25 +
+        (1 - Math.min(sideRatio('player'), sideRatio('enemy'))) * 0.58 +
+        (lastStand ? 0.3 : 0)
+    );
+  screen.classList.toggle('locked', ctx.locked);
+  screen.classList.toggle('arena-imminent', until === 1);
+  screen.classList.toggle('player-last-stand', state.sides.player.team.filter((c) => c.hp > 0).length === 1);
+  screen.classList.toggle('enemy-last-stand', state.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
+  screen.classList.toggle('tension-rising', tension >= 0.38);
+  screen.classList.toggle('tension-high', tension >= 0.68);
+  screen.style.setProperty('--battle-tension', tension.toFixed(2));
+  ctx.arenaScene?.setBattleState({ tension, imminent: until === 1 });
+  screen.querySelector('#turn-chip').innerHTML =
+    `<b>${t('battle.turn', { turn: state.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}${until === 1 && resonanceMeta ? ` · ${resonanceMeta.icon} +10` : ''}</small>`;
+  screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
+  for (const side of ['player', 'enemy']) {
+    const owner = state.sides[side],
+      c = activeOf(state, side),
+      fighter = screen.querySelector(`#fighter-${side}`),
+      img = fighter.querySelector('img'),
+      rank = side === 'player' ? masteryRank(ctx.save.mastery[c.id] || 0) : 0;
+    img.src = sprite(c.id);
+    img.alt = creatureName(c.id);
+    fighter.dataset.creature = c.id;
+    fighter.dataset.affinity = c.affinity;
+    fighter.style.setProperty('--mastery-rank', rank);
+    fighter.querySelector('.status-orbits').innerHTML = statusVisuals(c);
+    fighter.classList.toggle('has-barrier', c.barrier > 0);
+    fighter.classList.toggle(
+      'has-negative',
+      Object.keys(c.statuses).some((id) => !STATUS_DEFINITIONS[id].positive)
+    );
+    fighter.classList.toggle(
+      'has-positive',
+      Object.keys(c.statuses).some((id) => STATUS_DEFINITIONS[id].positive)
+    );
+    fighter.classList.toggle('mastered', rank >= 3);
+    fighter.classList.toggle('low-health', c.hp / c.maxHp <= 0.25);
+    fighter.classList.toggle(
+      'signature-ready',
+      owner.surge >= signatureCostFor(c) && c.moves.some((id) => MOVES[id].signature)
+    );
+    const hud = screen.querySelector(`#hud-${side}`);
+    hud.innerHTML = hudHtml(side);
+    if (owner.flow > 0)
+      hud
+        .querySelector('.surge-row')
+        ?.insertAdjacentHTML(
+          'afterend',
+          `<div class="flow-chip flow-${owner.flow}" title="${t('battle.flowHint')}">↯ ${t('battle.flow')} ×${owner.flow}</div>`
+        );
+  }
+  screen.querySelector('#moves').innerHTML = p.moves.map(moveButton).join('');
+  const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
+  if (forecastPlan)
+    screen
+      .querySelectorAll('[data-move]')
+      .forEach((button) =>
+        button
+          .querySelector('.move-tags')
+          ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan))
+      );
+  screen
+    .querySelectorAll('[data-move]')
+    .forEach((b) =>
+      b.addEventListener('click', () => handlePlayerAction({ type: 'move', moveId: b.dataset.move }))
+    );
+  const switchButton = screen.querySelector('[data-action="open-switch"]');
+  switchButton.disabled =
+    ctx.locked ||
+    (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 2) ||
+    !getLegalActions(state, 'player').some((action) => action.type === 'switch');
+  switchButton.onclick = openSwitch;
+  const speedButton = screen.querySelector('[data-action="battle-speed"]');
+  speedButton.textContent = `×${ctx.save.battleSpeed}`;
+  speedButton.setAttribute('aria-pressed', String(ctx.save.battleSpeed === 2));
+  const mute = screen.querySelector('[data-action="toggle-mute"]');
+  mute.textContent = ctx.save.muted ? '🔇' : '🔊';
+  mute.setAttribute('aria-pressed', String(ctx.save.muted));
+  const commandButton = screen.querySelector('[data-action="trainer-command"]');
+  if (commandButton) {
+    const used = state.sides.player.commandUsed;
+    commandButton.disabled = ctx.locked || used || state.phase !== 'choice';
+    commandButton.classList.toggle('used', used);
+    commandButton.innerHTML = `<span>${used ? '✓' : '⚑'}</span><small>${used ? t('battle.commandUsed') : t(`command.${state.doctrine}`)}</small>`;
+    commandButton.title = t(`command.effect.${state.doctrine}`);
+  }
+  const contractEl = screen.querySelector('#contract-chip');
+  if (contractEl) {
+    const contract = CONTRACTS.find((x) => x.id === ctx.battleSession.contractId),
+      progress = Math.min(contract.target, contractProgress(contract.id, state.history)),
+      complete = progress >= contract.target;
+    contractEl.classList.toggle('complete', complete);
+    contractEl.innerHTML = `<span>${contract.icon} ${t(`contract.${contract.id}`)}</span><b>${complete ? '✓' : `${progress}/${contract.target}`}</b>`;
+    contractEl.title = t(`contract.effect.${contract.id}`, { target: contract.target });
+  }
+  renderTutorialTip();
+}
+
+function renderTutorialTip() {
+  const root = screen.querySelector('#tutorial-root');
+  if (!root || ctx.battleSession.mode !== 'tutorial') {
+    if (root) root.innerHTML = '';
+    return;
+  }
+  const step = Math.min(3, ctx.battleSession.tutorialStep);
+  root.innerHTML = `<div class="tutorial-tip"><strong>${t('tutorial.title')}</strong><br>${t(`tutorial.${step + 1}`)} ${step < 3 ? `<button class="subtle-btn" data-action="skip-tutorial">${t('app.skip')}</button>` : ''}</div>`;
+  root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
+}
+
+function openSwitch() {
+  if (ctx.locked) return;
+  const state = ctx.battleSession.state,
+    legal = getLegalActions(state, 'player'),
+    foe = activeOf(state, 'enemy'),
+    options = legal
+      .filter((action) => action.type === 'switch' || action.type === 'replace')
+      .map(({ index }) => ({ c: state.sides.player.team[index], index })),
+    plan =
+      !state.sides.player.pendingReplacement && ctx.battleSession.difficulty === 'apprentice'
+        ? enemyPlan()
+        : null;
+  if (!options.length) return;
+  const forecastFor = (index) => {
+    if (!plan) return null;
+    if (plan.type === 'switch') return { icon: '↺', text: t('battle.switchIncomingSwitch'), lethal: false };
+    if (MOVES[plan.moveId]?.kind !== 'damage')
+      return { icon: '✦', text: t('battle.switchIncomingTactic'), lethal: false };
+    const incoming = previewIncomingAfterSwitch(state, 'player', index, plan.moveId);
+    if (!incoming) return null;
+    return {
+      icon: incoming.lethal ? '☠' : '⚔',
+      lethal: incoming.lethal,
+      read: incoming.perfectRelay,
+      text: incoming.miss
+        ? t('battle.switchIncomingMiss')
+        : incoming.lethal
+          ? t('battle.switchIncomingKo')
+          : incoming.absorbed
+            ? t('battle.switchIncomingShield', { damage: incoming.damage, shield: incoming.absorbed })
+            : t('battle.switchIncoming', { damage: incoming.damage }),
+    };
+  };
+  const scouted = options.map(({ c, index }) => {
+      const mult = affinityMultiplier(c.affinity, foe.affinity),
+        incoming = affinityMultiplier(foe.affinity, c.affinity),
+        forecast = forecastFor(index),
+        score =
+          (mult === 1.5 ? 24 : mult === 0.75 ? -8 : 0) +
+          (incoming === 0.75 ? 18 : incoming === 1.5 ? -20 : 0) +
+          (c.hp / c.maxHp) * 12 +
+          c.barrier * 0.18 +
+          (forecast?.read ? 38 : 0) -
+          (forecast?.lethal ? 90 : ((forecast?.damage || 0) / c.maxHp) * 36);
+      return { c, index, mult, forecast, score };
+    }),
+    recommended = scouted.slice().sort((a, b) => b.score - a.score || a.index - b.index)[0]?.index;
+  const optionHtml = scouted
+    .map(({ c, index, mult, forecast }) => {
+      const match = mult === 1.5 ? 'good' : mult === 0.75 ? 'risky' : 'neutral',
+        passive = PASSIVES[c.passive],
+        statuses = Object.keys(c.statuses)
+          .map((id) => STATUS_DEFINITIONS[id].icon)
+          .join(' ');
+      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${AFFINITIES[c.affinity].icon}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="switch-match ${match}">${mult === 1.5 ? '↑ ' + t('battle.switchGood') : mult === 0.75 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon} ${t(`passive.${c.passive}`)}${statuses ? ` · ${statuses}` : ''}</small></button>`;
+    })
+    .join('');
+  const switchBonusKey = state.modifiers?.includes('relay_fever')
+    ? 'battle.switchBonusFever'
+    : 'battle.switchBonus';
+  screen.querySelector('#replacement-root').innerHTML =
+    `<div class="replacement"><section class="glass-panel replacement-card"><span class="eyebrow">${state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchForecast')}</span><h2>${state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchTitle')}</h2><p>${state.sides.player.pendingReplacement ? t('battle.replacementHint') : t('battle.switchHint')}</p><div class="replacement-options">${optionHtml}</div>${!state.sides.player.pendingReplacement ? `<div class="switch-bonus">✦ ${t(switchBonusKey)}</div>${actionButton(t('battle.cancel'), 'cancel-switch', 'subtle-btn')}` : ''}</section></div>`;
+  screen
+    .querySelectorAll('.switch-option>span')
+    .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
+  screen.querySelectorAll('[data-switch-index]').forEach((button) =>
+    button.addEventListener('click', () => {
+      screen.querySelector('#replacement-root').innerHTML = '';
+      if (state.sides.player.pendingReplacement) handleReplacement(Number(button.dataset.switchIndex));
+      else handlePlayerAction({ type: 'switch', index: Number(button.dataset.switchIndex) });
+    })
+  );
+  screen
+    .querySelector('[data-action="cancel-switch"]')
+    ?.addEventListener('click', () => (screen.querySelector('#replacement-root').innerHTML = ''));
+}
+
+async function handleTrainerCommand() {
+  if (
+    ctx.locked ||
+    ctx.battleSession.state.phase !== 'choice' ||
+    ctx.battleSession.state.sides.player.commandUsed
+  )
+    return;
+  await sound.unlock();
+  ctx.locked = true;
+  refreshBattle();
+  const result = applyTrainerCommand(ctx.battleSession.state, 'player');
+  ctx.battleSession.state = result.state;
+  await playEvents(result.events);
+  ctx.locked = false;
+  ctx.battleSession.lastLine = t('battle.yourTurn');
+  refreshBattle();
+}
+
+async function handlePlayerAction(action) {
+  if (ctx.locked) return;
+  await sound.unlock();
+  ctx.locked = true;
+  refreshBattle();
+  const tutorialStep = ctx.battleSession.tutorialStep;
+  const enemyAction =
+    ctx.battleSession.mode === 'tutorial'
+      ? tutorialEnemyAction(tutorialStep)
+      : chooseAiAction(
+          ctx.battleSession.state,
+          'enemy',
+          ctx.battleSession.difficulty,
+          ctx.battleSession.style
+        );
+  if (ctx.battleSession.mode === 'tutorial') {
+    if (tutorialStep === 0 && action.type === 'move') ctx.battleSession.tutorialStep = 1;
+    else if (tutorialStep === 1 && action.moveId === 'oracle_veil') ctx.battleSession.tutorialStep = 2;
+    else if (tutorialStep === 2 && action.type === 'switch') ctx.battleSession.tutorialStep = 3;
+  }
+  const result = resolveTurn(ctx.battleSession.state, action, enemyAction);
+  ctx.battleSession.state = result.state;
+  await playEvents(result.events);
+  ctx.locked = false;
+  if (ctx.battleSession.state.phase === 'ended') {
+    finishBattle();
+    return;
+  }
+  await resolvePendingReplacements();
+  if (ctx.battleSession.state.phase !== 'ended') {
+    ctx.battleSession.lastLine = t('battle.yourTurn');
+    refreshBattle();
+  }
+}
+
+async function resolvePendingReplacements() {
+  let state = ctx.battleSession.state;
+  if (state.sides.enemy.pendingReplacement) {
+    const action = chooseAiAction(state, 'enemy', ctx.battleSession.difficulty, ctx.battleSession.style);
+    const result = applyReplacement(state, 'enemy', action);
+    ctx.battleSession.state = result.state;
+    await playEvents(result.events);
+    state = ctx.battleSession.state;
+  }
+  if (state.sides.player.pendingReplacement) {
+    ctx.battleSession.lastLine = t('battle.chooseReplacement');
+    refreshBattle();
+    openSwitch();
+  }
+}
+
+async function handleReplacement(index) {
+  ctx.locked = true;
+  const result = applyReplacement(ctx.battleSession.state, 'player', { type: 'replace', index });
+  ctx.battleSession.state = result.state;
+  await playEvents(result.events);
+  ctx.locked = false;
+  await resolvePendingReplacements();
+  refreshBattle();
+}
+
+registerRoutes({
+  startBattle,
+  renderBattle,
+  openBattleCodex,
+  openBattleLog,
+  battleEntrance,
+  refreshBattle,
+  renderTutorialTip,
+  openSwitch,
+  handleTrainerCommand,
+  handlePlayerAction,
+  resolvePendingReplacements,
+  handleReplacement,
+});

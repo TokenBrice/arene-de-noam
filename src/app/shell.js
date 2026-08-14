@@ -1,0 +1,203 @@
+import { ctx, registerRoutes, route } from './context.js';
+
+const {
+  AFFINITIES,
+  AFFINITY_ORDER,
+  CREATURES,
+  CREATURE_IDS,
+  FEATS,
+  previewMove,
+  i18n,
+  t,
+  screen,
+  sound,
+  sprite,
+  creatureName,
+  affinity,
+  affinityName,
+  persist,
+  draftInsightHtml,
+} = ctx;
+const {
+  renderTitle,
+  renderAcademy,
+  renderLeague,
+  renderTeamSelect,
+  renderDraft,
+  renderGauntletBoons,
+  renderTrials,
+  refreshBattle,
+  renderResults,
+  closeMoveTheater,
+  openMoveTheater,
+  renderBestiary,
+  renderSettings,
+} = route;
+
+function bindCommon() {
+  screen.querySelectorAll('[data-action="title"]').forEach((b) => b.addEventListener('click', renderTitle));
+  screen
+    .querySelectorAll('[data-action="settings"]')
+    .forEach((b) => b.addEventListener('click', () => renderSettings()));
+  screen.querySelectorAll('[data-action="toggle-mute"]').forEach((b) =>
+    b.addEventListener('click', () => {
+      ctx.save.muted = !ctx.save.muted;
+      persist();
+      sound.ui();
+      renderCurrent();
+    })
+  );
+  if (screen.dataset.page === 'settings' && !screen.querySelector('#high-contrast')) {
+    const motion = screen.querySelector('#motion')?.closest('.toggle-row');
+    motion?.insertAdjacentHTML(
+      'afterend',
+      `<div class="toggle-row contrast-row"><label for="high-contrast"><strong>${t('settings.contrast')}</strong><small>${t('settings.contrastHint')}</small></label><input id="high-contrast" type="checkbox" ${ctx.save.highContrast ? 'checked' : ''}></div>`
+    );
+    screen.querySelector('#high-contrast')?.addEventListener('change', (event) => {
+      ctx.save.highContrast = event.target.checked;
+      persist();
+    });
+  }
+  if (screen.dataset.page === 'settings' && !screen.querySelector('.gamepad-help'))
+    screen
+      .querySelector('.settings-card:last-child .cycle')
+      ?.insertAdjacentHTML('beforebegin', `<p class="gamepad-help">🎮 ${t('settings.gamepad')}</p>`);
+  if (screen.dataset.page === 'bestiary' && screen.querySelector('.feat-hall .eyebrow'))
+    screen.querySelector('.feat-hall .eyebrow').textContent =
+      `${ctx.save.feats.length}/${Object.keys(FEATS).length}`;
+  if (screen.dataset.page === 'bestiary') {
+    const emptyRecord = { battles: 0, wins: 0, damage: 0, kos: 0, signatures: 0, assists: 0 },
+      favorite = CREATURE_IDS.map((id) => ({ id, ...emptyRecord, ...(ctx.save.records?.[id] || {}) })).sort(
+        (a, b) =>
+          b.battles - a.battles ||
+          b.damage - a.damage ||
+          CREATURE_IDS.indexOf(a.id) - CREATURE_IDS.indexOf(b.id)
+      )[0],
+      favoriteAffinity = AFFINITIES[CREATURES[favorite.id].affinity],
+      hero = favorite.battles
+        ? `<section class="record-hero" style="--record-color:${favoriteAffinity.color}"><div class="record-creature"><img src="${sprite(favorite.id)}" alt=""><span><small>${t('record.favorite')}</small><h2>${creatureName(favorite.id)}</h2><p>${t('record.subtitle')}</p></span></div><div class="record-hero-stats"><span><b>${favorite.battles}</b><small>${t('record.battles')}</small></span><span><b>${favorite.wins}</b><small>${t('record.wins')}</small></span><span><b>${favorite.damage}</b><small>${t('record.damage')}</small></span><span><b>${favorite.kos}</b><small>${t('record.kos')}</small></span></div></section>`
+        : `<section class="record-hero empty"><div><span class="eyebrow">${t('record.hall')}</span><h2>${t('record.none')}</h2></div></section>`;
+    screen.querySelector('.feat-hall')?.insertAdjacentHTML('beforebegin', hero);
+    screen.querySelectorAll('.bestiary-card').forEach((card, creatureIndex) => {
+      const id = CREATURE_IDS[creatureIndex],
+        record = { ...emptyRecord, ...(ctx.save.records?.[id] || {}) };
+      card
+        .querySelector('.passive-line')
+        ?.insertAdjacentHTML(
+          'beforebegin',
+          `<div class="creature-record"><span><b>${record.battles}</b>${t('record.battles')}</span><span><b>${record.wins}</b>${t('record.wins')}</span><span><b>${record.damage}</b>${t('record.damage')}</span><span><b>${record.kos}</b>${t('record.kos')}</span><span><b>${record.signatures}</b>${t('record.signatures')}</span><span><b>${record.assists}</b>${t('record.assists')}</span></div>`
+        );
+      card.querySelectorAll('.move-list div').forEach((entry, moveIndex) => {
+        const moveId = CREATURES[id].moves[moveIndex];
+        entry.classList.add('theater-trigger');
+        entry.dataset.previewMove = moveId;
+        entry.tabIndex = 0;
+        entry.setAttribute('role', 'button');
+        entry.setAttribute('aria-label', t('bestiary.preview', { move: t(`move.${moveId}`) }));
+        entry.addEventListener('click', () => openMoveTheater(moveId));
+        entry.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openMoveTheater(moveId);
+          }
+        });
+      });
+    });
+  }
+  if (screen.dataset.page === 'bestiary' && !screen.querySelector('.bestiary-tools'))
+    installBestiaryFilters();
+  if (screen.dataset.page === 'draft' && ctx.draftRun)
+    screen
+      .querySelectorAll('[data-draft-pick]')
+      .forEach((card) => card.insertAdjacentHTML('beforeend', draftInsightHtml(card.dataset.draftPick)));
+}
+
+function installBestiaryFilters() {
+  const cards = [...screen.querySelectorAll('.bestiary-card')];
+  cards.forEach((card, index) => {
+    card.dataset.creature = CREATURE_IDS[index];
+    card.dataset.affinity = CREATURES[CREATURE_IDS[index]].affinity;
+  });
+  screen
+    .querySelector('.bestiary-grid')
+    ?.insertAdjacentHTML(
+      'beforebegin',
+      `<section class="bestiary-tools"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><div><button type="button" class="active" data-bestiary-affinity="all">24</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" style="--filter-color:${AFFINITIES[id].color}">${AFFINITIES[id].icon} ${affinityName(id)}</button>`).join('')}</div><b data-bestiary-count>24 / 24</b></section>`
+    );
+  const input = screen.querySelector('[data-bestiary-search]'),
+    count = screen.querySelector('[data-bestiary-count]');
+  let active = 'all';
+  const apply = () => {
+    const query = input.value.trim().toLocaleLowerCase(i18n.lang),
+      visible = cards.filter((card) => {
+        const show =
+          (active === 'all' || card.dataset.affinity === active) &&
+          creatureName(card.dataset.creature).toLocaleLowerCase(i18n.lang).includes(query);
+        card.hidden = !show;
+        return show;
+      });
+    count.textContent = `${visible.length} / 24`;
+  };
+  input.addEventListener('input', apply);
+  screen.querySelectorAll('[data-bestiary-affinity]').forEach((button) =>
+    button.addEventListener('click', () => {
+      active = button.dataset.bestiaryAffinity;
+      screen
+        .querySelectorAll('[data-bestiary-affinity]')
+        .forEach((item) => item.classList.toggle('active', item === button));
+      apply();
+    })
+  );
+}
+
+function renderCurrent() {
+  if (ctx.battleSession && screen.classList.contains('battle-screen')) refreshBattle();
+  else if (screen.dataset.page === 'title') renderTitle();
+  else if (screen.dataset.page === 'selection') renderTeamSelect(ctx.selection.mode);
+  else if (screen.dataset.page === 'league') renderLeague();
+  else if (screen.dataset.page === 'academy') renderAcademy();
+  else if (screen.dataset.page === 'bestiary') renderBestiary();
+  else if (screen.dataset.page === 'trials') renderTrials();
+  else if (screen.dataset.page === 'draft') renderDraft();
+  else if (screen.dataset.page === 'gauntlet-boon') renderGauntletBoons();
+  else if (screen.dataset.page === 'results') renderResults(ctx.battleSession?.state.winner === 'player');
+  else renderSettings();
+}
+
+function handleEscape() {
+  if (screen.querySelector('.move-theater')) {
+    closeMoveTheater();
+    return;
+  }
+  if (screen.querySelector('.replacement') && !ctx.battleSession?.state.sides.player.pendingReplacement) {
+    screen.querySelector('#replacement-root').innerHTML = '';
+    return;
+  }
+  if (screen.dataset.page !== 'title' && screen.dataset.page !== 'battle') renderTitle();
+}
+function trapModalTab(event) {
+  const dialog = screen.querySelector('[role="dialog"][aria-modal="true"]');
+  if (!dialog || event.key !== 'Tab') return false;
+  const items = [
+    ...dialog.querySelectorAll(
+      'button:not(:disabled),select:not(:disabled),input:not(:disabled),[tabindex="0"]'
+    ),
+  ].filter((item) => item.getBoundingClientRect().width > 0);
+  if (!items.length) {
+    event.preventDefault();
+    dialog.focus();
+    return true;
+  }
+  const first = items[0],
+    last = items.at(-1);
+  if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+  return true;
+}
+
+registerRoutes({ bindCommon, installBestiaryFilters, renderCurrent, handleEscape, trapModalTab });

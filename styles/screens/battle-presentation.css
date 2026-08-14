@@ -1,0 +1,1486 @@
+.battle-intro-fx {
+  z-index: 19;
+  display: grid !important;
+  grid-template-columns: 1fr minmax(180px, 340px) 1fr;
+  align-items: center;
+  background: linear-gradient(110deg, #172a55 0 44%, #050615 48% 52%, #531d49 56% 100%);
+  animation: introCurtain 1.38s ease forwards;
+}
+.intro-side {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  animation: introPlayer 0.72s cubic-bezier(0.12, 0.8, 0.2, 1);
+}
+.intro-side.enemy {
+  animation-name: introEnemy;
+}
+.intro-side img {
+  width: min(31vw, 390px);
+  height: min(52vh, 470px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 28px #a6dcff88);
+}
+.intro-side.enemy img {
+  transform: scaleX(-1);
+  filter: drop-shadow(0 0 28px #ff92da88);
+}
+.intro-side span {
+  color: #c7d5ff;
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: 0.24em;
+}
+.intro-side.enemy span {
+  color: #ffc6ed;
+}
+.intro-side b {
+  font-size: clamp(23px, 3vw, 45px);
+  text-shadow: 0 0 18px #fff7;
+}
+.intro-vs {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  gap: 18px;
+  text-align: center;
+}
+.intro-vs i {
+  color: #fff2a4;
+  font-size: clamp(72px, 11vw, 150px);
+  font-style: italic;
+  font-weight: 1000;
+  letter-spacing: -0.1em;
+  text-shadow:
+    6px 6px #ff4d7c,
+    -6px -6px #5b7cff,
+    0 0 30px #fff;
+  animation: introVs 0.38s steps(2) infinite;
+}
+.intro-vs small {
+  max-width: 300px;
+  padding: 10px 15px;
+  border: 1px solid #fff5;
+  border-radius: 999px;
+  color: #fff;
+  background: #050617c7;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.intro-mode .battle-vignette {
+  background: #000c;
+}
+.replacement-card > p {
+  margin: 5px auto 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.switch-option {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 235px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--text);
+  background: linear-gradient(150deg, #20254e, #0c0e29);
+  cursor: pointer;
+}
+.switch-option:hover {
+  transform: translateY(-3px);
+  border-color: #fff6;
+}
+.switch-option.matchup-good {
+  border-color: #6aef9c66;
+  background: linear-gradient(150deg, #174438, #10172e);
+}
+.switch-option.matchup-risky {
+  border-color: #ff8d9860;
+  background: linear-gradient(150deg, #412131, #151129);
+}
+.switch-portrait {
+  position: relative;
+}
+.switch-portrait img {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 10px 8px #0008);
+}
+.switch-portrait i {
+  position: absolute;
+  right: 2px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--switch-color);
+  font-style: normal;
+  box-shadow: 0 0 12px var(--switch-color);
+}
+.switch-option > span {
+  color: #d8d9e8;
+  font-size: 11px;
+}
+.switch-option > small:last-child {
+  color: var(--muted);
+  font-size: 9px;
+}
+.switch-match {
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 9px !important;
+  font-weight: 900;
+}
+.switch-match.good {
+  color: #9bffb9;
+  background: #4ede7c19;
+}
+.switch-match.risky {
+  color: #ffb0b7;
+  background: #ff54651b;
+}
+.switch-match.neutral {
+  color: #c7cae5;
+  background: #ffffff0c;
+}
+.switch-bonus {
+  margin: 12px 0;
+  color: #dcc1ff;
+  font-size: 10px;
+  font-weight: 900;
+}
+.codex-overlay {
+  overflow: auto;
+  padding: 20px;
+}
+.battle-codex {
+  position: relative;
+  width: min(880px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+.battle-codex h2 {
+  margin: 5px 0 18px;
+  font-size: 36px;
+}
+.codex-close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+}
+.codex-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+}
+.codex-grid article {
+  padding: 13px;
+  border: 1px solid #ffffff14;
+  border-radius: 14px;
+  background: #ffffff07;
+}
+.codex-grid article h3 {
+  margin: 0 0 8px;
+  color: #e3d9ff;
+  font-size: 12px;
+}
+.codex-grid article > p {
+  margin: 5px 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.codex-wide {
+  grid-column: 1/-1;
+}
+.codex-grid ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.codex-grid li b {
+  color: #e9e1ff;
+}
+.codex-statuses {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+.codex-status {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 7px;
+}
+.codex-status > i {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--status-color);
+  border-radius: 50%;
+  color: #fff;
+  background: color-mix(in srgb, var(--status-color) 24%, #0a0b20);
+  font-style: normal;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--status-color) 40%, transparent);
+}
+.codex-status span {
+  display: grid;
+}
+.codex-status b {
+  font-size: 10px;
+}
+.codex-status small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+.affinity-reminder {
+  border-color: #7deaff2e !important;
+  background: linear-gradient(90deg, #55eaff0e, #945dff0e) !important;
+}
+.signature-clash {
+  z-index: 18;
+  display: grid !important;
+  grid-template-columns: 1fr 120px 1fr;
+  align-items: center;
+  background: linear-gradient(105deg, #382065 0 47%, #fff 49% 51%, #a32635 53% 100%);
+  animation: clashCurtain 1.05s ease forwards;
+}
+.clash-half {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.clash-half.enemy {
+  transform: scaleX(-1);
+}
+.clash-half img {
+  width: min(34vw, 360px);
+  height: min(50vh, 430px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 25px #fff8);
+  animation: clashFighter 0.65s cubic-bezier(0.15, 0.8, 0.2, 1);
+}
+.clash-half b {
+  padding: 7px 15px;
+  border: 1px solid #fff6;
+  border-radius: 999px;
+  color: #fff;
+  background: #070819b8;
+  font-size: clamp(12px, 2vw, 20px);
+  text-transform: uppercase;
+}
+.clash-half.enemy b {
+  transform: scaleX(-1);
+}
+.clash-bolt {
+  z-index: 3;
+  color: #fff9b6;
+  font-size: clamp(48px, 9vw, 108px);
+  font-weight: 1000;
+  font-style: italic;
+  text-align: center;
+  text-shadow:
+    0 0 24px #fff,
+    6px 6px #ff4b67,
+    -6px -6px #785cff;
+  animation: clashVs 0.35s steps(2) infinite;
+}
+.clash-mode .battle-vignette {
+  background: #0008;
+}
+.combo-impact .fx-impact {
+  filter: drop-shadow(0 0 28px #fff177);
+}
+.combo-impact .damage-number {
+  min-width: 190px;
+  color: #fff3a8;
+  font-size: clamp(25px, 4vw, 48px);
+}
+.combo-hit .action-line {
+  color: #fff09a;
+  border-color: #ffe05f;
+  box-shadow: 0 0 25px #ffdb574c;
+  animation: comboLabel 0.35s ease;
+}
+.arena-pulse-fx {
+  z-index: 6;
+}
+.arena-pulse-fx .fx-curtain {
+  opacity: 0.72;
+  background: radial-gradient(
+    circle at 50% 48%,
+    color-mix(in srgb, var(--fx-color) 35%, transparent),
+    #02030dcc 66%
+  );
+}
+.arena-pulse-rune {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(58vmin, 520px);
+  height: min(58vmin, 520px);
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border: 3px double var(--fx-color);
+  border-radius: 50%;
+  color: #fff;
+  filter: drop-shadow(0 0 35px var(--fx-color));
+  animation: arenaRune 0.78s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
+}
+.arena-pulse-rune::before,
+.arena-pulse-rune::after {
+  content: '';
+  position: absolute;
+  inset: 10%;
+  border: 1px dashed #fff8;
+  transform: rotate(45deg);
+}
+.arena-pulse-rune::after {
+  inset: 22%;
+  border-style: solid;
+  transform: rotate(-25deg);
+}
+.arena-pulse-rune b {
+  font-size: clamp(90px, 18vw, 190px);
+  text-shadow: 0 0 35px var(--fx-color);
+}
+.arena-pulse-rune i {
+  position: absolute;
+  inset: -7%;
+  border: 8px dotted var(--fx-color);
+  border-radius: 50%;
+  animation: fxSpin 5s linear infinite;
+}
+.arena-pulse-rune span {
+  position: absolute;
+  bottom: 12%;
+  font-size: clamp(13px, 2vw, 20px);
+  font-weight: 1000;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.arena-pulse-fx .fx-aftershock {
+  display: block;
+  left: 50%;
+  top: 48%;
+}
+.arena-awake .arena-canvas {
+  filter: saturate(1.5) brightness(1.2);
+}
+.fx-sky-symbol {
+  display: none;
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 42%;
+  width: min(58vw, 620px);
+  height: min(58vw, 620px);
+  transform: translate(-50%, -50%);
+  place-items: center;
+  border: 5px double var(--fx-color);
+  border-radius: 50%;
+  color: var(--fx-color);
+  opacity: 0;
+  filter: drop-shadow(0 0 38px var(--fx-color));
+  animation: skySigil 0.8s ease forwards;
+}
+.signature .fx-sky-symbol {
+  display: grid;
+}
+.fx-sky-symbol b {
+  font-size: clamp(110px, 25vw, 260px);
+  opacity: 0.17;
+  text-shadow: 0 0 35px var(--fx-color);
+}
+.fx-sky-symbol span {
+  position: absolute;
+  inset: 8%;
+  border: 2px dashed #fff7;
+  border-radius: 18%;
+  transform: rotate(45deg);
+  animation: fxSpin 5s linear infinite;
+}
+.fx-aftershock {
+  display: none;
+  position: absolute;
+  left: var(--to-x);
+  top: var(--to-y);
+  width: 80vmax;
+  height: 80vmax;
+  margin: -40vmax;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle,
+    transparent 0 7%,
+    color-mix(in srgb, var(--fx-color) 35%, transparent) 8%,
+    transparent 9% 14%
+  );
+  opacity: 0;
+  animation: aftershock 0.7s ease-out 0.42s forwards;
+}
+.signature .fx-aftershock {
+  display: block;
+}
+.status-tick-fx .fx-curtain {
+  opacity: 0.45;
+  background: radial-gradient(circle at var(--from-x) var(--from-y), var(--fx-color), transparent 30%);
+}
+
+/* Eighteen new combat identities. Each owner supplies a unique silhouette,
+   while its three move selectors choose flight, trap/orbit, or ascension. */
+.owner-lumivox .fx-detail > i {
+  border: 4px double #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 18px var(--fx-color);
+}
+.owner-lumivox .fx-detail > i::after {
+  content: '♪';
+  color: #fff;
+}
+.owner-mnemora .fx-detail > i {
+  width: 45px;
+  height: 26px;
+  border-radius: 100% 0;
+  background: linear-gradient(135deg, #fff9, var(--fx-color));
+}
+.owner-prismage .fx-detail > i {
+  width: 30px;
+  height: 44px;
+  background: linear-gradient(135deg, #fff, var(--fx-color));
+  clip-path: polygon(50% 0, 100% 55%, 50% 100%, 0 55%);
+}
+.owner-brontusk .fx-detail > i {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: linear-gradient(135deg, #fff1a6, var(--fx-color), #3a2720);
+  clip-path: polygon(50% 0, 100% 35%, 82% 100%, 15% 86%, 0 28%);
+}
+.owner-ferrax .fx-detail > i {
+  width: 70px;
+  height: 8px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, #fff, var(--fx-color));
+  clip-path: polygon(0 35%, 100% 0, 82% 100%);
+}
+.owner-monolith .fx-detail > i {
+  width: 58px;
+  height: 42px;
+  border: 5px double var(--fx-color);
+  background: #191624;
+  border-radius: 8px;
+}
+.owner-riptalon .fx-detail > i {
+  width: 64px;
+  height: 36px;
+  border: 0;
+  border-radius: 100% 0;
+  background: linear-gradient(135deg, #fff, var(--fx-color), transparent);
+}
+.owner-nymbloom .fx-detail > i {
+  width: 34px;
+  height: 34px;
+  border: 3px solid #e9ffff;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, transparent 34%, var(--fx-color));
+}
+.owner-voltide .fx-detail > i {
+  width: 70px;
+  height: 70px;
+  border: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    #fff 43% 50%,
+    var(--fx-color) 51% 58%,
+    transparent 59%
+  );
+  clip-path: polygon(60% 0, 40% 42%, 70% 38%, 25% 100%, 43% 56%, 18% 61%);
+}
+.owner-pyrolynx .fx-detail > i {
+  width: 75px;
+  height: 20px;
+  border: 0;
+  background: linear-gradient(90deg, #fff, var(--fx-color), transparent);
+  clip-path: polygon(0 0, 100% 45%, 0 100%, 28% 50%);
+}
+.owner-magmoth .fx-detail > i {
+  width: 52px;
+  height: 40px;
+  border: 4px solid var(--fx-color);
+  border-radius: 75% 10%;
+  background: radial-gradient(circle, #ffdf75, var(--fx-color), #221117);
+}
+.owner-solflare .fx-detail > i {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#fff 0 5deg, var(--fx-color) 6deg 13deg, transparent 14deg 24deg);
+}
+.owner-mossaur .fx-detail > i {
+  width: 48px;
+  height: 36px;
+  border: 0;
+  border-radius: 70% 15%;
+  background: linear-gradient(135deg, #dcff98, var(--fx-color), #23563d);
+}
+.owner-florafae .fx-detail > i {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6ad, var(--fx-color) 24%, transparent 68%);
+  box-shadow: 0 0 20px var(--fx-color);
+}
+.owner-thornox .fx-detail > i {
+  width: 18px;
+  height: 68px;
+  border: 0;
+  background: linear-gradient(#fff, var(--fx-color), #402655);
+  clip-path: polygon(50% 0, 100% 100%, 50% 76%, 0 100%);
+}
+.owner-nocturnyx .fx-detail > i {
+  width: calc(36px + var(--detail) * 8px);
+  height: calc(36px + var(--detail) * 8px);
+  border: 5px solid var(--fx-color);
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
+.owner-umbrawl .fx-detail > i {
+  width: 90px;
+  height: 7px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--fx-color), #fff);
+  box-shadow:
+    0 13px var(--fx-color),
+    0 -13px #fff;
+  transform: skewX(-25deg);
+}
+.owner-hexalune .fx-detail > i {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--fx-color);
+  border-radius: 50% 0 50% 0;
+  transform: rotate(45deg);
+  background: radial-gradient(circle, #fff 0 14%, #160b28 16% 42%, var(--fx-color) 45%);
+}
+
+.move-echo_chorus .fx-detail > i,
+.move-memory_leech .fx-detail > i,
+.move-refraction_lance .fx-detail > i,
+.move-tectonic_ram .fx-detail > i,
+.move-razor_rush .fx-detail > i,
+.move-gravity_fist .fx-detail > i,
+.move-foam_blitz .fx-detail > i,
+.move-healing_rain .fx-detail > i,
+.move-static_wake .fx-detail > i,
+.move-flash_pounce .fx-detail > i,
+.move-ember_armor .fx-detail > i,
+.move-sun_spear .fx-detail > i,
+.move-mossy_crush .fx-detail > i,
+.move-pollen_dream .fx-detail > i,
+.move-toxic_spines .fx-detail > i,
+.move-sonic_gloom .fx-detail > i,
+.move-ambush_claw .fx-detail > i,
+.move-hex_bolt .fx-detail > i {
+  animation: identityFlight 0.66s cubic-bezier(0.2, 0.7, 0.15, 1) calc(var(--detail) * 28ms) forwards;
+}
+.move-crescendo_lock .fx-detail > i,
+.move-forgotten_name .fx-detail > i,
+.move-mirror_maze .fx-detail > i,
+.move-iron_resolve .fx-detail > i,
+.move-momentum_claw .fx-detail > i,
+.move-fortress_protocol .fx-detail > i,
+.move-rip_current .fx-detail > i,
+.move-bubble_burst .fx-detail > i,
+.move-storm_chain .fx-detail > i,
+.move-scorch_mark .fx-detail > i,
+.move-smoldering_charge .fx-detail > i,
+.move-solar_wings .fx-detail > i,
+.move-ancient_bark .fx-detail > i,
+.move-nectar_circle .fx-detail > i,
+.move-bramble_trap .fx-detail > i,
+.move-midnight_lullaby .fx-detail > i,
+.move-smoke_step .fx-detail > i,
+.move-fate_exchange .fx-detail > i {
+  left: var(--to-x);
+  top: var(--to-y);
+  animation: identityOrbit 0.78s ease calc(var(--detail) * 36ms) forwards;
+}
+.self-fx.owner-magmoth .fx-detail > i,
+.self-fx.owner-solflare .fx-detail > i,
+.self-fx.owner-umbrawl .fx-detail > i {
+  left: var(--from-x);
+  top: var(--from-y);
+}
+.move-finale_nova .fx-detail > i,
+.move-deja_vu .fx-detail > i,
+.move-spectrum_break .fx-detail > i,
+.move-seismic_reversal .fx-detail > i,
+.move-terminal_velocity .fx-detail > i,
+.move-continental_divide .fx-detail > i,
+.move-maw_of_maelstrom .fx-detail > i,
+.move-tide_reversal .fx-detail > i,
+.move-thunder_deluge .fx-detail > i,
+.move-ninefold_inferno .fx-detail > i,
+.move-ash_rebirth .fx-detail > i,
+.move-supernova .fx-detail > i,
+.move-forest_quake .fx-detail > i,
+.move-wild_bloom .fx-detail > i,
+.move-venom_harvest .fx-detail > i,
+.move-nightmare_dive .fx-detail > i,
+.move-eclipse_execution .fx-detail > i,
+.move-moonless_omen .fx-detail > i {
+  left: var(--to-x);
+  top: var(--to-y);
+  animation: identityAscend 0.92s cubic-bezier(0.15, 0.7, 0.2, 1) calc(var(--detail) * 32ms) forwards;
+}
+.move-finale_nova .fx-projectile,
+.move-continental_divide .fx-projectile,
+.move-thunder_deluge .fx-projectile,
+.move-supernova .fx-projectile,
+.move-forest_quake .fx-projectile,
+.move-eclipse_execution .fx-projectile {
+  transform: scale(1.35);
+}
+.move-ninefold_inferno .fx-projectile {
+  box-shadow:
+    -55px 15px 0 -20px #ff7348,
+    55px -15px 0 -20px #fff36b;
+}
+.move-midnight_lullaby .fx-sky-symbol b::after {
+  content: '☽';
+}
+.move-supernova .fx-sky-symbol {
+  border-width: 12px;
+  border-color: #fff;
+}
+.move-continental_divide .fx-aftershock {
+  border-radius: 0;
+  transform: scaleY(0.18) rotate(-20deg);
+}
+
+@keyframes badgeTurn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes surgeReady {
+  to {
+    filter: brightness(1.7);
+    box-shadow: 0 0 18px #fff09a;
+  }
+}
+@keyframes surgeFlash {
+  40% {
+    transform: scale(1.04);
+    box-shadow: 0 0 35px #ffe276;
+  }
+}
+@keyframes arenaRune {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.15) rotate(-40deg);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.2) rotate(12deg);
+  }
+}
+@keyframes dangerIdle {
+  to {
+    transform: translateY(-3%) scale(1.025);
+    filter: drop-shadow(0 0 28px #ff2c48) brightness(1.16);
+  }
+}
+@keyframes dangerPulse {
+  50% {
+    transform: scale(1.18);
+    opacity: 0.35;
+  }
+}
+@keyframes signatureBeacon {
+  to {
+    transform: scale(1.14) rotate(20deg);
+    filter: brightness(1.5);
+  }
+}
+@keyframes clashCurtain {
+  0% {
+    opacity: 0;
+    clip-path: inset(48% 0);
+  }
+  20%,
+  78% {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(0);
+  }
+}
+@keyframes clashFighter {
+  0% {
+    opacity: 0;
+    transform: translateX(-55%) scale(0.5);
+  }
+  65% {
+    opacity: 1;
+    transform: translateX(3%) scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes clashVs {
+  50% {
+    transform: scale(1.12) rotate(-4deg);
+  }
+}
+@keyframes comboLabel {
+  40% {
+    transform: translateX(-50%) scale(1.14);
+  }
+}
+@keyframes statusFloat {
+  50% {
+    transform: translateY(-8px) scale(1.08);
+    filter: brightness(1.35);
+  }
+}
+@keyframes statusFlame {
+  50% {
+    transform: translateY(-5px) rotate(8deg) scale(1.12);
+    filter: brightness(1.5);
+  }
+}
+@keyframes statusStun {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes barrierBreath {
+  50% {
+    transform: scale(1.035);
+    opacity: 0.55;
+  }
+}
+@keyframes statusPulse {
+  50% {
+    transform: scale(1.25);
+    opacity: 0.55;
+  }
+}
+@keyframes dodgeFx {
+  35% {
+    transform: translateX(-35%) skewX(-12deg);
+    opacity: 0.18;
+  }
+  55% {
+    transform: translateX(18%);
+    opacity: 0.65;
+  }
+}
+@keyframes barrierHit {
+  40% {
+    transform: scale(0.9);
+    filter: brightness(3);
+  }
+}
+@keyframes statusHurt {
+  25% {
+    filter: hue-rotate(90deg) brightness(2);
+    transform: translateY(5%) scale(0.95);
+  }
+}
+@keyframes skySigil {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2) rotate(-30deg);
+  }
+  55% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1) rotate(12deg);
+  }
+}
+@keyframes aftershock {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes identityFlight {
+  0% {
+    left: var(--from-x);
+    top: var(--from-y);
+    opacity: 0;
+    transform: scale(0.2) rotate(-40deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    left: var(--to-x);
+    top: calc(var(--to-y) + (var(--detail) - 5) * 10px);
+    opacity: 0;
+    transform: scale(1.35) rotate(180deg);
+  }
+}
+@keyframes identityOrbit {
+  0% {
+    opacity: 0;
+    transform: rotate(0) translateX(10px) scale(0.2);
+  }
+  48% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(280deg + var(--detail) * 15deg)) translateX(calc(55px + var(--detail) * 5px))
+      scale(1.4);
+  }
+}
+@keyframes identityAscend {
+  0% {
+    opacity: 0;
+    transform: translate(calc((var(--detail) - 5) * 16px), 80px) scale(0.2) rotate(0);
+  }
+  48% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc((var(--detail) - 5) * 24px), -110px) scale(1.8) rotate(160deg);
+  }
+}
+@keyframes resultCrown {
+  0% {
+    opacity: 0;
+    transform: scale(0.15) rotate(-90deg);
+  }
+  70% {
+    transform: scale(1.2) rotate(8deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes resultHero {
+  0% {
+    opacity: 0;
+    transform: translateY(70px) scale(0.55);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes victoryPiece {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(0) rotate(0);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(var(--distance)) rotate(680deg);
+  }
+}
+@keyframes introCurtain {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 50%);
+  }
+  15%,
+  80% {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(0);
+  }
+}
+@keyframes introPlayer {
+  0% {
+    opacity: 0;
+    transform: translateX(-70%) scale(0.6);
+  }
+  65% {
+    opacity: 1;
+    transform: translateX(4%) scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes introEnemy {
+  0% {
+    opacity: 0;
+    transform: translateX(70%) scale(0.6);
+  }
+  65% {
+    opacity: 1;
+    transform: translateX(-4%) scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes introVs {
+  50% {
+    transform: scale(1.08) rotate(-3deg);
+  }
+}
+@keyframes masteryAura {
+  to {
+    transform: scale(1.12) rotate(8deg);
+    opacity: 0.58;
+  }
+}
+@keyframes rallyLabel {
+  0% {
+    transform: translateX(-50%) scale(0.7);
+  }
+  45% {
+    transform: translateX(-50%) scale(1.18);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+@keyframes finisherSlash {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scaleX(0.3);
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(20%) scaleX(1.2);
+  }
+}
+@keyframes finisherKo {
+  0% {
+    transform: scale(0.1) rotate(-18deg);
+    opacity: 0;
+  }
+  45% {
+    transform: scale(1.35) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-3deg);
+    opacity: 0;
+  }
+}
+@keyframes koFlash {
+  0% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes lastStand {
+  to {
+    transform: translateY(-7px) scale(1.08);
+    filter: brightness(1.4);
+  }
+}
+@keyframes arenaWarning {
+  to {
+    border-color: #fff098aa;
+    box-shadow: inset 0 0 85px #ffe45a30;
+  }
+}
+
+@media (max-width: 1100px) {
+  .creature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .bestiary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .trial-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .selection-layout {
+    grid-template-columns: 1fr;
+  }
+  .creature-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .bestiary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .trainer-badge .emblem {
+    width: 90px;
+  }
+  .feat-hall {
+    grid-template-columns: 1fr;
+  }
+  .feat-gallery {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  .squad-presets {
+    grid-template-columns: 1fr;
+  }
+  .squad-presets > div:first-child {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+  }
+}
+@media (max-width: 600px) {
+  .creature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .creature-card {
+    min-height: 205px;
+  }
+  .bestiary-grid,
+  .trial-grid {
+    grid-template-columns: 1fr;
+  }
+  .trial-card {
+    min-height: 330px;
+  }
+  .trial-squad {
+    width: 100%;
+    margin-top: 10px;
+  }
+  .trial-squad b {
+    display: none;
+  }
+  .mastery-rewards {
+    grid-template-columns: 1fr;
+  }
+  .epic-emblems {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+  }
+  .emblem.ornate b {
+    font-size: 14px;
+  }
+  .arena-nameplate {
+    display: none;
+  }
+  .status-orbits {
+    top: 36%;
+    gap: 3px;
+  }
+  .status-orb {
+    width: 27px;
+    height: 27px;
+    border-width: 1px;
+  }
+  .hud-card {
+    width: 72vw;
+  }
+  .status-row {
+    max-height: 40px;
+  }
+  .status-chip {
+    font-size: 8px;
+  }
+  .talent-chip {
+    max-width: 75px;
+  }
+  .team-bonds.compact {
+    display: none;
+  }
+  .fx-sky-symbol {
+    width: 82vw;
+    height: 82vw;
+  }
+  .battle-recap {
+    grid-template-columns: 1fr;
+  }
+  .recap-mvp {
+    max-width: 260px;
+    margin: auto;
+  }
+  .recap-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .result-card {
+    padding: 18px 12px;
+  }
+  .result-team {
+    height: 130px;
+  }
+  .battle-intro-fx {
+    grid-template-columns: 1fr 95px 1fr;
+  }
+  .intro-side img {
+    width: 42vw;
+    height: 38vh;
+  }
+  .intro-vs small {
+    display: none;
+  }
+  .replacement-options {
+    grid-template-columns: 1fr 1fr;
+  }
+  .switch-option {
+    min-height: 210px;
+    padding: 8px;
+  }
+  .switch-portrait img {
+    width: 88px;
+    height: 88px;
+  }
+}
+@media (max-width: 600px) {
+  .boon-grid {
+    grid-template-columns: 1fr;
+  }
+  .boon-card {
+    min-height: 92px;
+  }
+  .boon-card > i {
+    width: 58px;
+    height: 58px;
+  }
+  .feat-gallery {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .codex-grid {
+    grid-template-columns: 1fr;
+  }
+  .codex-wide {
+    grid-column: auto;
+  }
+  .codex-statuses {
+    grid-template-columns: 1fr;
+  }
+  .battle-codex {
+    padding: 20px 14px;
+  }
+  .battle-codex h2 {
+    font-size: 28px;
+  }
+  .battle-tools {
+    gap: 4px;
+  }
+  .battle-tools .icon-btn {
+    min-width: 38px;
+    padding: 6px;
+  }
+}
+
+/* The live objective stays visible on small screens while the verbose arena
+   nameplate yields its space. */
+@media (max-width: 600px) {
+  .arena-nameplate:has(.contract-chip) {
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 38px;
+    min-width: 0;
+    padding: 0;
+    transform: translateX(-50%);
+  }
+  .arena-nameplate:has(.contract-chip) > b,
+  .arena-nameplate:has(.contract-chip) > small {
+    display: none;
+  }
+  .arena-nameplate .contract-chip {
+    max-width: 42vw;
+    margin: 0;
+    padding: 4px 7px;
+    font-size: 7px;
+  }
+  .arena-nameplate .contract-chip span {
+    max-width: 28vw;
+  }
+}
+
+/* Accessibility mode preserves the decisive state change without the full
+   screen slash, strobe, pulsing borders, or looping last-creature aura. */
+@media (prefers-reduced-motion: reduce) {
+  .finisher-impact::after,
+  .ko-shock::after,
+  .arena-imminent::after,
+  .victory-burst {
+    display: none !important;
+  }
+  .player-last-stand #fighter-player::before,
+  .enemy-last-stand #fighter-enemy::before {
+    animation: none;
+  }
+  .finisher-impact .damage-number {
+    animation: fxReduced 0.2s ease forwards !important;
+  }
+}
+body.reduced-motion .finisher-impact::after,
+body.reduced-motion .ko-shock::after,
+body.reduced-motion .arena-imminent::after,
+body.reduced-motion .victory-burst {
+  display: none !important;
+}
+body.reduced-motion .player-last-stand #fighter-player::before,
+body.reduced-motion .enemy-last-stand #fighter-enemy::before {
+  animation: none;
+}
+body.reduced-motion .finisher-impact .damage-number {
+  animation: fxReduced 0.2s ease forwards !important;
+}
+
+/* Post-battle style grade: a readable reward for tempo, survival, combos and
+   optional objectives, with a restrained arcade flourish. */
+.performance-grade {
+  --grade: #8c91ab;
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  align-items: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 12px auto;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--grade) 55%, transparent);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 50%, color-mix(in srgb, var(--grade) 22%, transparent), transparent 48%),
+    #07091bd6;
+  box-shadow: 0 0 28px color-mix(in srgb, var(--grade) 15%, transparent);
+  text-align: left;
+}
+.performance-grade.grade-c {
+  --grade: #7fd3f2;
+}
+.performance-grade.grade-b {
+  --grade: #8be795;
+}
+.performance-grade.grade-a {
+  --grade: #d19aff;
+}
+.performance-grade.grade-s {
+  --grade: #ffe477;
+}
+.grade-letter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  border-right: 1px solid #ffffff16;
+  padding-right: 10px;
+}
+.grade-letter small {
+  grid-column: 1/-1;
+  color: var(--grade);
+  font-size: 8px;
+  font-weight: 1000;
+  letter-spacing: 0.18em;
+}
+.grade-letter b {
+  color: var(--grade);
+  font-size: 49px;
+  line-height: 0.85;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--grade) 65%, transparent);
+  animation: gradeReveal 0.55s cubic-bezier(0.15, 0.85, 0.2, 1);
+}
+.grade-letter em {
+  align-self: end;
+  color: #c8cadd;
+  font-size: 9px;
+  font-style: normal;
+}
+.grade-detail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.grade-detail span {
+  padding: 4px 6px;
+  border-radius: 999px;
+  color: #bfc2d7;
+  background: #ffffff09;
+  font-size: 8px;
+}
+.grade-detail span b {
+  color: var(--grade);
+}
+.grade-detail strong {
+  width: 100%;
+  margin-top: 2px;
+  color: var(--grade);
+  font-size: 9px;
+}
+.performance-grade.compact {
+  margin: 10px auto;
+  grid-template-columns: 86px 1fr;
+}
+.performance-grade.compact .grade-letter b {
+  font-size: 38px;
+}
+@keyframes gradeReveal {
+  from {
+    opacity: 0;
+    transform: scale(2.1) rotate(-12deg);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+    filter: blur(0);
+  }
+}
+@media (max-width: 600px) {
+  .performance-grade {
+    grid-template-columns: 82px 1fr;
+    margin: 9px auto;
+  }
+  .grade-letter b {
+    font-size: 38px;
+  }
+  .grade-detail span {
+    font-size: 7px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grade-letter b {
+    animation: none;
+  }
+}
+body.reduced-motion .grade-letter b {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .result-team img,
+  .result-icon {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+body.reduced-motion .result-team img,
+body.reduced-motion .result-icon {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+/* Results are a single victory tableau on common laptop/desktop heights. */
+@media (min-width: 701px) and (min-height: 760px) {
+  .result-shell {
+    padding: 8px 0;
+  }
+  .result-card {
+    padding: 22px 34px;
+  }
+  .result-icon {
+    font-size: 48px;
+    line-height: 1;
+  }
+  .result-card h1 {
+    font-size: 52px;
+    line-height: 1;
+  }
+  .result-card > p {
+    margin: 7px 0;
+    font-size: 15px;
+  }
+  .result-card .performance-grade {
+    margin: 8px auto;
+  }
+  .result-team {
+    height: 112px;
+  }
+  .result-team img {
+    width: 112px;
+    height: 112px;
+    margin: 0 -12px;
+  }
+  .battle-recap {
+    margin: 2px 0 6px;
+  }
+  .recap-mvp {
+    grid-template-columns: 66px 1fr;
+  }
+  .recap-mvp img {
+    width: 66px;
+    height: 66px;
+  }
+  .recap-stats span {
+    padding: 5px;
+  }
+  .result-moment {
+    margin: 6px 0 !important;
+  }
+  .result-card .mastery-rewards {
+    margin: 7px 0;
+  }
+  .result-card .mastery-reward {
+    padding: 5px;
+  }
+  .result-card .feat-rewards,
+  .result-card .contract-reward {
+    margin: 7px 0;
+  }
+}
+
+.mastery-perk-line {
+  margin-top: 5px;
+  color: #ffe38d;
+  font-size: 7px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+.bestiary-card .mastery-perk-line {
+  margin-top: 7px;
+  padding: 5px 7px;
+  border: 1px solid #ffe27530;
+  border-radius: 8px;
+  background: #ffd94e0b;
+}
+.bestiary-card .mastery-perk-line.next {
+  color: #9395ae;
+  border-color: #ffffff12;
+  background: #ffffff05;
+}
+.mastery-codex {
+  border-color: #ffe48130 !important;
+  background: linear-gradient(100deg, #ffdb4d0c, #ffffff06) !important;
+}

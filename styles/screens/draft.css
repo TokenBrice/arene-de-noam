@@ -1,0 +1,298 @@
+/* Daily draft: three authored choices at a time, presented like a ceremonial
+   card reveal instead of another roster grid. */
+.draft-btn {
+  border-color: #e69bff55;
+  background: linear-gradient(130deg, #4b296c, #243467) !important;
+}
+.draft-page {
+  width: min(1120px, 100%);
+}
+.draft-head {
+  text-align: center;
+  margin: 22px auto 14px;
+}
+.draft-head h1 {
+  margin: 6px 0 4px;
+  font-size: clamp(42px, 7vw, 72px);
+  letter-spacing: -0.045em;
+}
+.draft-head p {
+  margin: 0;
+  color: var(--muted);
+}
+.draft-progress {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin: 13px 0;
+}
+.draft-progress i {
+  width: 44px;
+  height: 5px;
+  border-radius: 99px;
+  background: #ffffff14;
+}
+.draft-progress i.active {
+  background: #c491ff;
+  box-shadow: 0 0 12px #bd76ff;
+}
+.draft-progress i.done {
+  background: #ffe079;
+}
+.draft-lineup {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin: 10px 0 18px;
+}
+.draft-slot {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 58px 1fr;
+  align-items: center;
+  width: min(210px, 31vw);
+  height: 66px;
+  padding: 4px 9px;
+  border: 1px dashed #ffffff26;
+  border-radius: 15px;
+  color: #7f819b;
+  background: #ffffff05;
+}
+.draft-slot > span {
+  font-size: 9px;
+  font-weight: 1000;
+}
+.draft-slot > i {
+  font-size: 25px;
+  font-style: normal;
+  text-align: center;
+}
+.draft-slot img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.draft-slot b {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-slot.filled {
+  border-style: solid;
+  border-color: #d2adff55;
+  color: #f2ecff;
+  background: linear-gradient(120deg, #6d44a01c, #ffffff06);
+}
+.draft-offers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 940px;
+  margin: auto;
+}
+.draft-card {
+  position: relative;
+  min-height: 410px;
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--draft-color) 52%, #ffffff22);
+  border-radius: 23px;
+  color: var(--ink);
+  background:
+    radial-gradient(
+      circle at 50% 20%,
+      color-mix(in srgb, var(--draft-color) 25%, transparent),
+      transparent 45%
+    ),
+    linear-gradient(150deg, #222650, #090b24);
+  box-shadow: 0 18px 45px #0006;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 0.2s,
+    border-color 0.2s;
+}
+.draft-card:hover,
+.draft-card:focus-visible {
+  transform: translateY(-7px) scale(1.015);
+  border-color: #fff8;
+}
+.draft-card > em {
+  position: absolute;
+  z-index: 2;
+  left: 12px;
+  top: 10px;
+  color: #ffe582;
+  font-size: 8px;
+  font-style: normal;
+}
+.draft-portrait {
+  position: relative;
+  height: 192px;
+}
+.draft-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 18px 12px #0009);
+}
+.draft-portrait i {
+  position: absolute;
+  right: 6px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: #0b1025;
+  background: var(--draft-color);
+  font-style: normal;
+  font-size: 20px;
+  box-shadow: 0 0 18px var(--draft-color);
+}
+.draft-card h2 {
+  margin: 4px 0 9px;
+  font-size: 26px;
+}
+.draft-card .eyebrow {
+  font-size: 8px;
+}
+.draft-talent {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid #ffffff14;
+  border-radius: 10px;
+  background: #05071977;
+}
+.draft-talent b {
+  font-size: 10px;
+}
+.draft-talent small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+.draft-card ul {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #c8cada;
+  font-size: 9px;
+}
+.draft-final {
+  display: grid;
+  grid-template-columns: 1fr 310px;
+  gap: 18px;
+  max-width: 900px;
+  margin: auto;
+  padding: 22px;
+  border: 1px solid #d2adff3f;
+  border-radius: 23px;
+  background: linear-gradient(145deg, #252850d9, #0c0e29e6);
+  box-shadow: 0 20px 60px #0007;
+}
+.draft-final h2 {
+  font-size: 34px;
+  margin: 4px 0 8px;
+}
+.draft-final aside {
+  padding-left: 16px;
+  border-left: 1px solid #ffffff15;
+}
+.draft-rival-team {
+  display: flex;
+  gap: 5px;
+}
+.draft-rival-team span {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  padding: 6px;
+  border-radius: 12px;
+  background: #ffffff07;
+}
+.draft-rival-team img {
+  width: 95px;
+  height: 95px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.draft-rival-team b {
+  font-size: 9px;
+}
+.draft-victory {
+  margin: 8px 0;
+  padding: 9px;
+  border: 1px solid #d49cff66;
+  border-radius: 12px;
+  color: #edceff;
+  background: #bd6fff10;
+}
+@media (max-width: 700px) {
+  .draft-head {
+    margin-top: 12px;
+  }
+  .draft-head h1 {
+    font-size: 40px;
+  }
+  .draft-lineup {
+    gap: 4px;
+  }
+  .draft-slot {
+    grid-template-columns: 18px 42px 1fr;
+    height: 52px;
+    padding: 3px;
+  }
+  .draft-slot img {
+    width: 42px;
+    height: 42px;
+  }
+  .draft-slot b {
+    font-size: 8px;
+  }
+  .draft-offers {
+    grid-template-columns: 1fr;
+    max-width: 360px;
+  }
+  .draft-card {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 105px 1fr;
+    padding: 10px;
+  }
+  .draft-portrait {
+    grid-row: 1/6;
+    height: 125px;
+  }
+  .draft-card .eyebrow,
+  .draft-card h2,
+  .draft-card .draft-talent,
+  .draft-card ul {
+    grid-column: 2;
+  }
+  .draft-card h2 {
+    font-size: 21px;
+  }
+  .draft-card ul {
+    grid-template-columns: 1fr;
+  }
+  .draft-final {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+  .draft-final aside {
+    padding: 0;
+    border: 0;
+  }
+  .draft-rival-team img {
+    width: 76px;
+    height: 76px;
+  }
+}

@@ -1,0 +1,121 @@
+/* Three personal squad slots keep favorite team fantasies one tap away. */
+.custom-squads {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 3px 0 13px;
+  padding: 10px 12px;
+  border: 1px solid #7eeaff2b;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #53dff10a, #7369ff0d);
+}
+.custom-squads > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.custom-squads > div:first-child small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+.custom-squad-track {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+.custom-squad {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 70px;
+  padding: 7px 8px;
+  border: 1px solid #ffffff13;
+  border-radius: 12px;
+  background: #07091d77;
+}
+.custom-squad > span {
+  display: grid;
+}
+.custom-squad > span b {
+  font-size: 8px;
+}
+.custom-squad > span small {
+  color: #a9abc0;
+  font-size: 6px;
+}
+.custom-squad-team {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 35px;
+  color: #65677f;
+  font-size: 13px;
+}
+.custom-squad-team i {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: #10132e;
+}
+.custom-squad-team i.lead::after {
+  content: '★';
+  position: absolute;
+  right: -1px;
+  top: -2px;
+  color: #ffe376;
+  font-size: 8px;
+  text-shadow: 0 0 5px #ffd448;
+}
+.custom-squad-team img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.custom-squad-actions {
+  grid-column: 1/3;
+  display: flex;
+  gap: 4px;
+}
+.custom-squad-actions button {
+  min-height: 25px;
+  padding: 3px 7px;
+  border: 1px solid #ffffff16;
+  border-radius: 7px;
+  color: #cfd1e2;
+  background: #ffffff08;
+  font-size: 6px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.custom-squad-actions button:first-child {
+  flex: 1;
+  border-color: #72e8ff3d;
+  color: #c5f6ff;
+}
+.custom-squad-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.custom-squad.filled {
+  border-color: #76e8ff30;
+  background: linear-gradient(120deg, #64dfff0d, #ffffff06);
+}
+@media (max-width: 760px) {
+  .custom-squads {
+    grid-template-columns: 1fr;
+  }
+  .custom-squad-track {
+    display: flex;
+    overflow: auto;
+    scroll-snap-type: x mandatory;
+  }
+  .custom-squad {
+    flex: 0 0 min(240px, 78vw);
+    scroll-snap-align: start;
+  }
+}

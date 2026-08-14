@@ -1,0 +1,394 @@
+/* Cross-creature setups remember their author and answer with a short assist
+   cut-in when a teammate converts the combo. */
+.status-chip.team-primed {
+  border-color: color-mix(in srgb, var(--status-color) 55%, transparent);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--status-color) 15%, transparent);
+}
+.team-assist-ready {
+  border: 1px solid #de9dff66;
+  color: #f0cfff;
+  background: #be63ff16;
+  font-weight: 1000;
+}
+.assist-call {
+  position: absolute;
+  z-index: 20;
+  top: 47%;
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: center;
+  width: 270px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--assist-color) 70%, #fff);
+  border-radius: 0 18px 18px 0;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--assist-color) 35%, #120b2a), #080a1deb);
+  box-shadow: 0 0 35px color-mix(in srgb, var(--assist-color) 35%, transparent);
+  animation: assistCutin 0.52s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
+}
+.assist-call.player {
+  left: 0;
+}
+.assist-call.enemy {
+  right: 0;
+  border-radius: 18px 0 0 18px;
+  transform: scaleX(-1);
+}
+.assist-call img {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 8px 7px #0008);
+}
+.assist-call span {
+  display: grid;
+}
+.assist-call small {
+  color: #f2d9ff;
+  font-size: 8px;
+  font-weight: 1000;
+  letter-spacing: 0.17em;
+}
+.assist-call b {
+  font-size: 17px;
+}
+.assist-call em {
+  color: #ffe580;
+  font-size: 8px;
+  font-style: normal;
+}
+.assist-call.enemy > * {
+  transform: scaleX(-1);
+}
+.assist-mode .action-line {
+  border-color: #d988ff;
+  color: #f1ceff;
+  box-shadow: 0 0 24px #c268ff38;
+}
+@keyframes assistCutin {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-50px) skewX(-10deg);
+  }
+  45%,
+  78% {
+    opacity: 1;
+    clip-path: inset(0);
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+@media (max-width: 600px) {
+  .assist-call {
+    top: 45%;
+    grid-template-columns: 65px 1fr;
+    width: 205px;
+  }
+  .assist-call img {
+    width: 62px;
+    height: 62px;
+  }
+  .assist-call b {
+    font-size: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assist-call {
+    animation: none;
+    opacity: 1;
+  }
+}
+body.reduced-motion .assist-call {
+  animation: none;
+  opacity: 1;
+}
+
+.arena-resonance {
+  display: block;
+  width: max-content;
+  margin: 4px auto 0;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--resonance-color) 45%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--resonance-color) 70%, #fff);
+  background: color-mix(in srgb, var(--resonance-color) 10%, transparent);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.resonance-note {
+  padding: 5px 7px !important;
+  border-left: 2px solid var(--resonance-color);
+  color: #e5e6f4 !important;
+  background: color-mix(in srgb, var(--resonance-color) 8%, transparent);
+}
+.resonance-sigil {
+  position: absolute;
+  left: var(--from-x);
+  top: var(--from-y);
+  display: grid;
+  place-items: center;
+  width: 180px;
+  height: 180px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--fx-color);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--fx-color) 40%, transparent), transparent 68%);
+  box-shadow: 0 0 45px color-mix(in srgb, var(--fx-color) 60%, transparent);
+  animation: resonanceBloom 0.55s ease-out forwards;
+}
+.resonance-sigil i {
+  color: #fff;
+  font-size: 55px;
+  font-style: normal;
+  text-shadow: 0 0 22px var(--fx-color);
+}
+.resonance-sigil b,
+.resonance-sigil span {
+  position: absolute;
+  top: 69%;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+}
+.resonance-sigil span {
+  top: 80%;
+  color: #d8d9eb;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+.resonance-mode .action-line {
+  border-color: var(--fx-color);
+  box-shadow: 0 0 25px color-mix(in srgb, var(--fx-color) 40%, transparent);
+}
+@keyframes resonanceBloom {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.15) rotate(-30deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.12) rotate(4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+@media (max-width: 600px) {
+  .arena-nameplate .arena-resonance {
+    display: none;
+  }
+  .resonance-sigil {
+    width: 130px;
+    height: 130px;
+  }
+  .resonance-sigil i {
+    font-size: 40px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .resonance-sigil {
+    animation: none;
+    opacity: 1;
+  }
+}
+body.reduced-motion .resonance-sigil {
+  animation: none;
+  opacity: 1;
+}
+
+.combo-routes {
+  display: grid;
+  gap: 5px;
+}
+.combo-routes.empty {
+  padding: 7px;
+  border: 1px dashed #ffffff15;
+  border-radius: 10px;
+  color: #85879f;
+  font-size: 8px;
+  line-height: 1.4;
+}
+.combo-route {
+  display: grid;
+  grid-template-columns: 1fr 38px 1fr;
+  align-items: center;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #d696ff24;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ffffff06, #c160ff0c, #ffffff06);
+}
+.combo-route > span {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  min-width: 0;
+}
+.combo-route img {
+  grid-row: 1/3;
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.combo-route small {
+  overflow: hidden;
+  color: #9ea0b8;
+  font-size: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-route b {
+  overflow: hidden;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo-route > i {
+  color: #e3acff;
+  font-size: 10px;
+  font-style: normal;
+  text-align: center;
+}
+.combo-routes.compact .combo-route {
+  grid-template-columns: 1fr 32px 1fr;
+}
+.combo-routes.compact .combo-route img {
+  width: 22px;
+  height: 22px;
+}
+.combo-routes.compact .combo-route > span {
+  grid-template-columns: 23px 1fr;
+}
+
+/* Camera direction follows the move grammar. The Three.js arena gets a damped
+   punch while this layer composes both fighters as one dramatic shot. */
+.battlefield {
+  transition:
+    transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.25s;
+}
+.camera-player.camera-strike .battlefield {
+  transform: translate(1.4vw, -0.5vh) scale(1.025);
+}
+.camera-enemy.camera-strike .battlefield {
+  transform: translate(-1.4vw, 0.5vh) scale(1.025);
+}
+.camera-player.camera-rush .battlefield {
+  transform: translate(3vw, -1vh) scale(1.055);
+}
+.camera-enemy.camera-rush .battlefield {
+  transform: translate(-3vw, 1vh) scale(1.055);
+}
+.camera-wide .battlefield {
+  transform: scale(0.94);
+  filter: saturate(1.2);
+}
+.camera-heavy .battlefield {
+  transform: scale(1.075);
+  filter: contrast(1.08);
+}
+.camera-ultimate .battlefield {
+  transform: scale(1.12);
+  filter: contrast(1.15) saturate(1.35);
+}
+.camera-heavy.camera-impact .battlefield {
+  animation: cameraCrash 0.36s cubic-bezier(0.1, 0.8, 0.2, 1);
+}
+.camera-ultimate.camera-impact .battlefield {
+  animation: cameraUltimate 0.55s cubic-bezier(0.1, 0.8, 0.2, 1);
+}
+.camera-rush.camera-impact .fighter.hit {
+  filter: drop-shadow(0 0 30px var(--fx-color, #fff));
+}
+@keyframes cameraCrash {
+  0% {
+    transform: scale(1.075);
+  }
+  25% {
+    transform: translateY(1.4vh) scale(1.13);
+  }
+  55% {
+    transform: translateY(-0.7vh) scale(1.09);
+  }
+  100% {
+    transform: scale(1.075);
+  }
+}
+@keyframes cameraUltimate {
+  0% {
+    transform: scale(1.12);
+  }
+  22% {
+    transform: scale(1.19) rotate(0.35deg);
+  }
+  48% {
+    transform: scale(1.08) rotate(-0.25deg);
+  }
+  100% {
+    transform: scale(1.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .battlefield {
+    transform: none !important;
+    filter: none !important;
+  }
+  .camera-heavy.camera-impact .battlefield,
+  .camera-ultimate.camera-impact .battlefield {
+    animation: none !important;
+  }
+}
+body.reduced-motion .battlefield {
+  transform: none !important;
+  filter: none !important;
+}
+body.reduced-motion .camera-heavy.camera-impact .battlefield,
+body.reduced-motion .camera-ultimate.camera-impact .battlefield {
+  animation: none !important;
+}
+
+.battle-rule-preview {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 13px;
+  padding: 11px 12px;
+  border: 1px solid #ffd66b42;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #ffd66b18, #ff6a9e0c);
+  box-shadow: inset 0 0 20px #ffd66b08;
+}
+.battle-rule-preview b {
+  color: #ffe7a1;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.battle-rule-preview span {
+  color: #c9c8da;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.quick-rule-chip {
+  display: inline-flex;
+  margin: 5px 3px 0;
+  padding: 3px 7px;
+  border: 1px solid #ffd66b55;
+  border-radius: 999px;
+  background: #ffd66b18;
+  color: #ffe7a1;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.quick-rule-codex {
+  border-color: #ffd66b3b !important;
+  background: linear-gradient(120deg, #ffd66b12, #ff6a9e0b) !important;
+}

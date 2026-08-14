@@ -1,0 +1,17 @@
+:root {
+  color-scheme: dark;
+  --ink: #f8f6ff;
+  --muted: #b9b8d2;
+  --panel: rgba(15, 17, 48, 0.88);
+  --line: rgba(191, 204, 255, 0.22);
+  --gold: #ffd66b;
+  --cyan: #65e9ff;
+  --violet: #9878ff;
+  --danger: #ff6b75;
+  --ok: #74e38b;
+  font-family: Inter, ui-rounded, 'Avenir Next', system-ui, sans-serif;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}

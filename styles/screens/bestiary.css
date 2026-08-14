@@ -1,0 +1,154 @@
+/* Persistent creature careers turn the Bestiary into a personal hall of fame. */
+.record-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 20px;
+  min-height: 150px;
+  margin: -2px 0 18px;
+  padding: 12px 22px;
+  border: 1px solid color-mix(in srgb, var(--record-color) 55%, #ffffff22);
+  border-radius: 23px;
+  background:
+    radial-gradient(
+      circle at 12% 50%,
+      color-mix(in srgb, var(--record-color) 24%, transparent),
+      transparent 32%
+    ),
+    linear-gradient(120deg, #20244be8, #0b0d26e8 65%);
+  box-shadow: 0 18px 45px #0005;
+  overflow: hidden;
+}
+.record-hero::after {
+  content: '';
+  position: absolute;
+  right: 22%;
+  width: 180px;
+  height: 180px;
+  border: 1px solid color-mix(in srgb, var(--record-color) 28%, transparent);
+  transform: rotate(45deg);
+}
+.record-creature {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 135px 1fr;
+  align-items: center;
+}
+.record-creature img {
+  width: 135px;
+  height: 135px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 20px var(--record-color));
+}
+.record-creature span {
+  display: grid;
+}
+.record-creature small {
+  color: #ffe99b;
+  font-size: 8px;
+  font-weight: 1000;
+  letter-spacing: 0.2em;
+}
+.record-creature h2 {
+  margin: 2px 0;
+  font-family: Georgia, serif;
+  font-size: clamp(30px, 5vw, 50px);
+}
+.record-creature p {
+  margin: 0;
+  max-width: 440px;
+  color: #c5c6d8;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.record-hero-stats {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(2, 100px);
+  gap: 7px;
+}
+.record-hero-stats span {
+  display: grid;
+  place-items: center;
+  min-height: 57px;
+  padding: 7px;
+  border: 1px solid #ffffff16;
+  border-radius: 12px;
+  background: #07091c88;
+}
+.record-hero-stats b {
+  font-size: 19px;
+}
+.record-hero-stats small {
+  color: #aeb0c4;
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.record-hero.empty {
+  display: grid;
+  place-items: center;
+  min-height: 105px;
+  text-align: center;
+  --record-color: #8178d8;
+}
+.record-hero.empty h2 {
+  margin: 5px 0;
+  color: #d5d4e4;
+  font-size: 18px;
+}
+.creature-record {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 9px 0;
+}
+.creature-record span {
+  display: grid;
+  place-items: center;
+  min-height: 37px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--card-affinity) 22%, #ffffff10);
+  border-radius: 8px;
+  color: #9fa1b6;
+  background: #06071966;
+  font-size: 6px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.creature-record b {
+  color: #f1f0fa;
+  font-size: 10px;
+}
+.bestiary-card:has(.creature-record span:first-child b:not(:empty)) {
+  isolation: isolate;
+}
+@media (max-width: 650px) {
+  .record-hero {
+    grid-template-columns: 1fr;
+    padding: 10px 12px;
+  }
+  .record-creature {
+    grid-template-columns: 100px 1fr;
+  }
+  .record-creature img {
+    width: 100px;
+    height: 100px;
+  }
+  .record-creature h2 {
+    font-size: 30px;
+  }
+  .record-hero-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .record-hero-stats span {
+    min-width: 0;
+  }
+  .record-hero::after {
+    display: none;
+  }
+}
