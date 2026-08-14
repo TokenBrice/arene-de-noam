@@ -28,7 +28,8 @@ function scoreMove(state, side, action, difficulty, style) {
       (forecast.miss ? 45 : 0);
     if (move.targetStatuses?.length)
       score += move.targetStatuses.length * (difficulty === 'apprentice' ? 2 : 8);
-    if (move.selfStatuses?.some((x) => x.id === 'exposed')) score -= difficulty === 'champion' ? 9 : 3;
+    if (move.selfStatuses?.some((x) => x.id === 'exposed'))
+      score -= ['standard', 'champion'].includes(difficulty) ? 9 : 3;
     if (move.drain) score += Math.min(attacker.maxHp - attacker.hp, estimated * move.drain) * 0.6;
     if (move.recoil) score -= estimated * move.recoil * 0.7;
     if (move.executeThreshold && defender.hp / defender.maxHp <= move.executeThreshold) score += 28;
@@ -47,7 +48,7 @@ function scoreMove(state, side, action, difficulty, style) {
     if (style === 'control')
       score +=
         (move.targetStatuses?.length || 0) * 9 +
-        (move.detonate?.some((id) => defender.statuses[id]) ? 15 : 0);
+        (difficulty !== 'standard' && move.detonate?.some((id) => defender.statuses[id]) ? 15 : 0);
     if (style === 'pressure')
       score +=
         estimated * 0.16 +
@@ -172,7 +173,10 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (relayReadiesSignature ? 25 : 0) +
     (style === 'deception' ? 8 : 0) +
     (resonanceSoon ? (difficulty === 'champion' ? 22 : 12) : 0) +
-    (difficulty === 'champion' ? signatureRead + (primed ? 18 : 0) : 0)
+    (difficulty === 'champion' ? signatureRead + (primed ? 18 : 0) : 0) +
+    // Without a response forecast, Standard overvalues a visibly favorable
+    // matchup and pivots a little too eagerly—a readable, human mistake.
+    (difficulty === 'standard' ? 17 : 0)
   );
 }
 
@@ -188,6 +192,8 @@ function flowTempoScore(state, side, action, difficulty) {
 
 export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'apprentice', style = 'direct') {
   const state = safeBattleSnapshot(sourceState);
+  // Keep old saves and callers source-compatible while the former middle tier is renamed.
+  difficulty = difficulty === 'challenger' ? 'standard' : difficulty;
   const finish = (action) => {
     sourceState.rngState = state.rngState;
     return action;
@@ -211,29 +217,35 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
   if (difficulty === 'apprentice') {
     const roll = randomFromState(state.rngState);
     state.rngState = roll.state;
-    if (roll.value < 0.32) {
+    if (roll.value < 0.6) {
       const choice = randomIndex(state.rngState, legal.length);
       state.rngState = choice.state;
       return finish(legal[choice.index]);
     }
   }
-  if (difficulty === 'champion') {
+  if (difficulty === 'standard' || difficulty === 'champion') {
     for (const item of scored) {
       if (item.action.type === 'move' && MOVES[item.action.moveId].kind === 'damage') item.score += 3;
       if (item.action.type === 'switch' && activeOf(state, side).hp < activeOf(state, side).maxHp * 0.3)
         item.score += 13;
       const opponentSide = side === 'player' ? 'enemy' : 'player',
         opponent = activeOf(state, opponentSide);
-      const replyDamage = opponent.moves
-        .map((id) => MOVES[id])
-        .filter((move) => move.kind === 'damage' && !opponent.cooldowns[move.id]?.remaining)
-        .reduce((best, move) => {
-          const forecast =
-            item.action.type === 'switch'
-              ? previewIncomingAfterSwitch(state, side, item.action.index, move.id)
-              : previewMove(state, opponentSide, move.id);
-          return Math.max(best, forecast?.damage || 0);
-        }, 0);
+      // Standard never runs the opponent-response forecast. It uses the same
+      // tactical scoring vocabulary as Champion, but reacts only to visible
+      // board fundamentals and therefore cannot optimize a hypothetical pivot.
+      const replyDamage =
+        difficulty === 'champion'
+          ? opponent.moves
+              .map((id) => MOVES[id])
+              .filter((move) => move.kind === 'damage' && !opponent.cooldowns[move.id]?.remaining)
+              .reduce((best, move) => {
+                const forecast =
+                  item.action.type === 'switch'
+                    ? previewIncomingAfterSwitch(state, side, item.action.index, move.id)
+                    : previewMove(state, opponentSide, move.id);
+                return Math.max(best, forecast?.damage || 0);
+              }, 0)
+          : 0;
       item.score -= replyDamage * 0.35;
       const lastOwnMove = [...state.history]
         .reverse()
@@ -242,7 +254,7 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
       const opponentSignatureReady =
         state.sides[side === 'player' ? 'enemy' : 'player'].surge >= signatureCostFor(opponent) &&
         opponent.moves.some((id) => MOVES[id].signature);
-      if (opponentSignatureReady && item.action.type === 'move') {
+      if (difficulty === 'champion' && opponentSignatureReady && item.action.type === 'move') {
         const move = MOVES[item.action.moveId];
         if (move.selfStatuses?.some((status) => ['guarded', 'evasive', 'countering'].includes(status.id)))
           item.score += 24;
@@ -255,7 +267,22 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
       }
     }
   }
-  return finish(pickBest(state, scored).action);
+  const imperfection = difficulty === 'standard' ? 0.28 : difficulty === 'champion' ? 0.1 : 0;
+  return finish(pickRanked(state, scored, imperfection).action);
+}
+
+function pickRanked(state, scored, secondBestChance) {
+  if (!secondBestChance || scored.length < 2) return pickBest(state, scored);
+  const roll = randomFromState(state.rngState);
+  state.rngState = roll.state;
+  if (roll.value >= secondBestChance) return pickBest(state, scored);
+  const scores = [...new Set(scored.map((item) => item.score))].sort((a, b) => b - a),
+    secondScore = scores[1] ?? scores[0],
+    choices = scored.filter((item) => Math.abs(item.score - secondScore) < 1e-9);
+  if (choices.length === 1) return choices[0];
+  const choice = randomIndex(state.rngState, choices.length);
+  state.rngState = choice.state;
+  return choices[choice.index];
 }
 
 function pickBest(state, scored) {

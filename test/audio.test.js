@@ -77,9 +77,9 @@ test('mixer settings clamp independently and mute only the master', () => {
   assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99, finalDuel: true }), 1);
 });
 
-test('the explicit migration chain advances every historical version to v13', () => {
-  assert.equal(SAVE_VERSION, 13);
-  assert.equal(SAVE_MIGRATIONS.length, 12);
+test('the explicit migration chain advances every historical version to v14', () => {
+  assert.equal(SAVE_VERSION, 14);
+  assert.equal(SAVE_MIGRATIONS.length, 13);
   let save = { version: 1 };
   for (let index = 0; index < SAVE_MIGRATIONS.length; index++) {
     save = SAVE_MIGRATIONS[index](save);
@@ -87,8 +87,16 @@ test('the explicit migration chain advances every historical version to v13', ()
   }
   assert.equal(save.musicVolume, 0.45);
   assert.equal(save.sfxVolume, 0.8);
-  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 13);
-  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 12 }).version, 13);
+  assert.equal(save.expertMode, false);
+  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 14);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 14);
+});
+
+test('v13 saves migrate to simple mode while an explicit expert preference survives', () => {
+  assert.equal(migrateSave({ version: 13 }).expertMode, false);
+  assert.equal(migrateSave({ version: 13, expertMode: true }).expertMode, true);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, expertMode: true }).expertMode, true);
+  assert.equal(DEFAULT_SAVE.expertMode, false);
 });
 
 test('save versions are strict and persistence reports unavailable storage truthfully', () => {

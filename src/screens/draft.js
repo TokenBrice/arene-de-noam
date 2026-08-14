@@ -159,7 +159,7 @@ function renderDraft() {
       enemyLead: 0,
       mode: 'draft',
       arena: ctx.draftRun.arena,
-      difficulty: 'challenger',
+      difficulty: ctx.draftRun.difficulty || 'standard',
       trainerIndex: ctx.draftRun.trainerIndex,
       doctrine: ctx.draftRun.doctrine,
       draftSeed: ctx.draftRun.seed,

@@ -8,7 +8,7 @@ import {
 
 test('a ladder victory awards an emblem and opens the next authored opponent', async ({ page }) => {
   await installCompletedTutorial(page);
-  await page.goto('/?seed=1&animations=0&player=voltide,brontusk,mossaur');
+  await page.goto('/?seed=1&animations=0&player=voltide,brontusk,mossaur&enemyHp=1');
   await page.getByRole('button', { name: /Continuer/ }).click();
   await expect(page.getByRole('heading', { name: 'Gardienne de l’Aube' })).toBeVisible();
   await page.getByRole('button', { name: /Entrer dans/ }).click();

@@ -19,6 +19,7 @@ const {
   refreshBattle,
   beginMoveFx,
   impactMoveFx,
+  effectivenessCalloutFx,
   tacticalFx,
   detonationFx,
   assistFx,
@@ -148,6 +149,7 @@ async function playEvents(events) {
       session.lastLine = `${affinityNote}${event.combo?.length ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
       fighter?.classList.add('hit');
       impactMoveFx(event);
+      effectivenessCalloutFx(event);
       sound.impact(MOVES[ctx.currentFxMove?.moveId], event);
     }
     if (event.type === 'heal') {

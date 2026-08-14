@@ -76,11 +76,7 @@ function newSelection(mode) {
         : mode === 'gauntlet'
           ? stage.difficulty
           : mode === 'ladder'
-            ? index >= 9
-              ? 'champion'
-              : index >= 4
-                ? 'challenger'
-                : ctx.save.difficulty
+            ? TRAINERS[index].difficulty
             : ctx.save.difficulty,
     filter: 'all',
     doctrine: 'balanced',
@@ -289,7 +285,7 @@ function renderTeamSelect(mode = 'ladder') {
     readyLabel =
       mode === 'gauntlet' ? t('gauntlet.begin') : activeTrial ? t('trial.challenge') : t('select.ready');
   const difficultyControl = !['gauntlet', 'circuit', 'trial'].includes(mode)
-      ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty">${['apprentice', 'challenger', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
+      ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty">${['apprentice', 'standard', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
       : '',
     planControls = `<details class="battle-plan"><summary><span><b>${t('select.combatPlan')}</b><small>${t(`doctrine.${ctx.selection.doctrine}`)} · ${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}${contractControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div><h3>${t('doctrine.title')}</h3><div class="doctrine-picker">${doctrines}</div>${teamProfileHtml(ctx.selection.team)}<h3>${t('bond.title')}</h3>${bondsHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
     ready = actionButton(

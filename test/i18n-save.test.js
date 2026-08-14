@@ -26,6 +26,7 @@ test('save round-trips with validated ranges', () => {
     ladderVictories: 4,
     lastTeam: ['kordane', 'farfombre', 'calderoc'],
     volume: 0.4,
+    expertMode: true,
   };
   assert.equal(persistSave(changed, memory), true);
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
@@ -77,7 +78,7 @@ test('older saves migrate and progression fields are bounded', () => {
     winStreak: 7,
     bestStreak: 3,
   });
-  assert.equal(migrated.version, 13);
+  assert.equal(migrated.version, 14);
   assert.equal(migrated.ladderVictories, 12);
   assert.deepEqual(migrated.lastTeam, DEFAULT_SAVE.lastTeam);
   assert.equal(migrated.language, 'fr');
@@ -100,6 +101,7 @@ test('older saves migrate and progression fields are bounded', () => {
   assert.equal(migrated.winStreak, 7);
   assert.equal(migrated.bestStreak, 7);
   assert.equal(migrated.highContrast, false);
+  assert.equal(migrated.expertMode, false);
 });
 test('mastery ranks and progress bars follow authored thresholds', () => {
   assert.equal(masteryRank(0), 0);

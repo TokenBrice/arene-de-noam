@@ -96,14 +96,6 @@ function impactMoveFx(event) {
     core.classList.add('damage-number');
   }
   stage.querySelectorAll('.affinity-callout,.hit-chain').forEach((node) => node.remove());
-  if (event.affinity === 1.5 || event.affinity === 0.75) {
-    const kind = event.affinity === 1.5 ? 'effective' : 'resisted',
-      callout = document.createElement('b');
-    callout.className = `affinity-callout ${kind}`;
-    callout.textContent = `${event.affinity === 1.5 ? '↑' : '↓'} ${t(`battle.${kind}`)}`;
-    impact?.append(callout);
-    stage.classList.add(`affinity-${kind}`);
-  }
   if (event.hits > 1) {
     const chain = document.createElement('span');
     chain.className = `hit-chain ${event.hit === event.hits ? 'final' : ''}`;
@@ -133,6 +125,21 @@ function impactMoveFx(event) {
     },
     ctx.save.reducedMotion ? 20 : 72 / ctx.save.battleSpeed
   );
+}
+
+function effectivenessCalloutFx(event) {
+  if (event.affinity !== 1.5 && event.affinity !== 0.75) return;
+  const stage = screen.querySelector('#fx-stage'),
+    impact = stage?.querySelector('.fx-impact');
+  if (!stage || !impact) return;
+  const effective = event.affinity === 1.5,
+    kind = effective ? 'effective' : 'weak',
+    callout = document.createElement('b');
+  stage.querySelectorAll('.affinity-callout').forEach((node) => node.remove());
+  callout.className = `affinity-callout ${kind}`;
+  callout.textContent = t(effective ? 'battle.hitEffective' : 'battle.hitWeak');
+  impact.append(callout);
+  stage.classList.add(`affinity-${kind}`);
 }
 
 function tacticalFx(event) {
@@ -467,6 +474,7 @@ function clearBattleFx() {
 registerRoutes({
   beginMoveFx,
   impactMoveFx,
+  effectivenessCalloutFx,
   tacticalFx,
   detonationFx,
   assistFx,

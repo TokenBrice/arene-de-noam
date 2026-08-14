@@ -1185,6 +1185,138 @@ body.high-contrast .battle-screen .action-line {
   }
 }
 
+/* Simple mode keeps the choice surface readable at a glance. Deeper move
+   details still appear in the existing hover/focus/long-press context line. */
+.battle-screen .surge-row .surge-caption {
+  display: inline;
+  overflow: hidden;
+  max-width: 9ch;
+  color: #cbd1e8;
+  font-size: 9px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-screen.simple-mode .move-btn.simple-move {
+  position: relative;
+  grid-template-rows: 24px minmax(0, 1fr);
+  background: linear-gradient(145deg, #151a3edb, #0a0e28e5);
+}
+
+.battle-screen.simple-mode .simple-move .move-name {
+  padding-right: 31px;
+}
+
+.battle-screen.simple-mode .simple-affinity {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--move-color) 48%, #fff3);
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--move-color) 64%, #fff);
+  background: color-mix(in srgb, var(--move-color) 13%, #080b20);
+  font-size: 14px;
+}
+
+.battle-screen.simple-mode .simple-move .move-figure {
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(6px, 1vw, 12px);
+}
+
+.battle-screen.simple-mode .move-effectiveness {
+  overflow: hidden;
+  color: #69eda0;
+  font-size: clamp(13px, 1.45vw, 18px);
+  font-weight: 1000;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-screen.simple-mode .move-effectiveness.not-effective {
+  color: #929bb8;
+}
+
+.battle-screen.simple-mode .simple-signature-state {
+  color: #d7c3ff;
+  font-size: clamp(12px, 1.35vw, 17px);
+  font-weight: 1000;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.battle-screen.simple-mode .simple-signature-state.ready {
+  color: #fff19a;
+  text-shadow: 0 0 9px #ffd85a66;
+}
+
+.battle-screen.simple-mode .simple-cooldown {
+  margin-left: auto;
+}
+
+.battle-screen.simple-mode .surge-row .plate-surge-number {
+  display: none;
+}
+
+.battle-screen.simple-mode .signature-locked::after {
+  display: none;
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .battle-screen.simple-mode .move-btn.simple-move {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 18px minmax(0, 1fr);
+    align-items: stretch;
+    padding-block: 4px;
+  }
+
+  .battle-screen.simple-mode .simple-move .move-name {
+    padding-right: 24px;
+    font-size: 10px;
+  }
+
+  .battle-screen.simple-mode .simple-affinity {
+    top: 4px;
+    right: 5px;
+    width: 19px;
+    height: 19px;
+    border-radius: 6px;
+    font-size: 11px;
+  }
+
+  .battle-screen.simple-mode .move-index {
+    display: inline;
+  }
+
+  .battle-screen.simple-mode .simple-move .move-figure {
+    justify-self: stretch;
+    gap: 4px;
+    text-align: left;
+  }
+
+  .battle-screen.simple-mode .move-effectiveness,
+  .battle-screen.simple-mode .simple-signature-state {
+    font-size: 10px;
+  }
+
+  .battle-screen.simple-mode .simple-cooldown {
+    min-height: 17px;
+    padding: 1px 3px;
+    font-size: 9px;
+  }
+
+  .battle-screen .surge-row .surge-caption {
+    max-width: 9ch;
+    font-size: 8px;
+  }
+}
+
 body.reduced-motion .battle-stage-camera {
   transform: none !important;
   filter: none !important;

@@ -15,6 +15,7 @@ export function circuitMatch(wins = 0, trainerCount = 12) {
   return {
     round: round + 1,
     trainerIndex: (round * 5 + 2) % trainerCount,
+    difficulty: 'champion',
     condition: CIRCUIT_CONDITIONS[round % CIRCUIT_CONDITIONS.length],
   };
 }

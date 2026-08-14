@@ -20,7 +20,7 @@ export async function installCompletedTutorial(page, extra = {}) {
         localStorage.setItem(
           'arene-de-noam-save',
           JSON.stringify({
-            version: 12,
+            version: 14,
             tutorialComplete: true,
             ladderVictories: 0,
             emblems: [],
@@ -46,6 +46,7 @@ export async function installCompletedTutorial(page, extra = {}) {
             volume: 0.7,
             reducedMotion: true,
             highContrast: false,
+            expertMode: true,
             battleSpeed: 2,
             ...extra,
           })

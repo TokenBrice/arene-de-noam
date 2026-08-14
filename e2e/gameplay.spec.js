@@ -160,8 +160,8 @@ test('affinity advantage lands with a dedicated impact callout', async ({ page }
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('[data-move="lucid_arc"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-move="lucid_arc"]').click();
-  await expect(page.locator('.affinity-callout.effective')).toContainText('Efficace');
-  await expect(page.locator('#action-line')).toContainText('Efficace');
+  await expect(page.locator('.affinity-callout.effective')).toContainText(/efficace/i);
+  await expect(page.locator('#action-line')).toContainText(/efficace/i);
 });
 
 test('multi-hit techniques escalate through a visible hit chain', async ({ page }) => {

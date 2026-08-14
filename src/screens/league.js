@@ -20,7 +20,7 @@ function openLeagueRival(index) {
   ctx.selection.trainerIndex = index;
   ctx.selection.enemyTeam = [...trainer.team];
   ctx.selection.arena = trainer.arena;
-  ctx.selection.difficulty = index >= 9 ? 'champion' : index >= 4 ? 'challenger' : ctx.save.difficulty;
+  ctx.selection.difficulty = TRAINERS[index].difficulty;
   renderTeamSelect('ladder');
 }
 

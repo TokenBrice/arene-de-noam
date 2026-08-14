@@ -245,6 +245,7 @@
   white-space: nowrap;
   animation: affinityCallout 0.9s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
 }
+.affinity-callout.weak,
 .affinity-callout.resisted {
   color: #b8e6ff;
   text-shadow:
@@ -255,6 +256,7 @@
   color: #fff7b2;
   transform: scale(1.12);
 }
+.affinity-weak .damage-number,
 .affinity-resisted .damage-number {
   color: #c4dcf0;
   filter: saturate(0.55);
@@ -275,6 +277,20 @@
   100% {
     opacity: 0;
     transform: translate(-50%, -18px) scale(0.96);
+  }
+}
+body.reduced-motion .affinity-callout {
+  animation: affinityCalloutReduced 0.46s ease-out forwards;
+}
+@keyframes affinityCalloutReduced {
+  0%,
+  75% {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%);
   }
 }
 .hit-chain {

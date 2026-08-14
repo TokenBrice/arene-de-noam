@@ -18,6 +18,7 @@ export function createDraft(seed = 1) {
     offers: Object.freeze(offers.map((offer) => Object.freeze(offer))),
     enemyTeam: Object.freeze(order.slice(9, 12)),
     arena: DRAFT_ARENAS[state % DRAFT_ARENAS.length],
+    difficulty: 'standard',
     trainerIndex: 6 + (state % 5),
   });
 }

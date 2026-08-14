@@ -3,7 +3,7 @@ import { FEAT_IDS } from './data/progression.js';
 import { TRIAL_IDS } from './data/trials.js';
 
 export const SAVE_KEY = 'arene-de-noam-save';
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 export const DEFAULT_SAVE = Object.freeze({
   version: SAVE_VERSION,
   tutorialComplete: false,
@@ -33,6 +33,7 @@ export const DEFAULT_SAVE = Object.freeze({
   sfxVolume: 0.8,
   reducedMotion: false,
   highContrast: false,
+  expertMode: false,
   battleSpeed: 1,
 });
 
@@ -69,6 +70,12 @@ export const migrateV12 = (save) => ({
   musicVolume: Number.isFinite(save.musicVolume) ? save.musicVolume : 0.45,
   sfxVolume: Number.isFinite(save.sfxVolume) ? save.sfxVolume : 0.8,
 });
+// v13 -> v14: battle explanations became opt-in through expert mode.
+export const migrateV13 = (save) => ({
+  ...save,
+  version: 14,
+  expertMode: typeof save.expertMode === 'boolean' ? save.expertMode : false,
+});
 
 export const SAVE_MIGRATIONS = Object.freeze([
   migrateV1,
@@ -83,6 +90,7 @@ export const SAVE_MIGRATIONS = Object.freeze([
   migrateV10,
   migrateV11,
   migrateV12,
+  migrateV13,
 ]);
 
 export function migrateSave(value) {
@@ -195,9 +203,12 @@ export function validateSave(value) {
     winStreak,
     bestStreak,
     lastTeam: validTeam(migrated.lastTeam) ? [...migrated.lastTeam] : [...DEFAULT_SAVE.lastTeam],
-    difficulty: ['apprentice', 'challenger', 'champion'].includes(migrated.difficulty)
-      ? migrated.difficulty
-      : 'apprentice',
+    difficulty:
+      migrated.difficulty === 'challenger'
+        ? 'standard'
+        : ['apprentice', 'standard', 'champion'].includes(migrated.difficulty)
+          ? migrated.difficulty
+          : 'apprentice',
     language: migrated.language === 'en' ? 'en' : 'fr',
     muted: Boolean(migrated.muted),
     volume: Number.isFinite(migrated.volume) ? Math.min(1, Math.max(0, migrated.volume)) : 0.7,
@@ -207,6 +218,7 @@ export function validateSave(value) {
     sfxVolume: Number.isFinite(migrated.sfxVolume) ? Math.min(1, Math.max(0, migrated.sfxVolume)) : 0.8,
     reducedMotion: Boolean(migrated.reducedMotion),
     highContrast: Boolean(migrated.highContrast),
+    expertMode: Boolean(migrated.expertMode),
     battleSpeed: migrated.battleSpeed === 2 ? 2 : 1,
   };
 }

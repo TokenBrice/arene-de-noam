@@ -5,7 +5,7 @@ export const GAUNTLET_STAGES = Object.freeze([
     trainerIndex: 1,
     enemyTeam: ['ferrax', 'pyrolynx', 'riptalon'],
     arena: 'crystal',
-    difficulty: 'challenger',
+    difficulty: 'standard',
     modifiers: [],
   },
   {
@@ -14,7 +14,7 @@ export const GAUNTLET_STAGES = Object.freeze([
     trainerIndex: 8,
     enemyTeam: ['voltide', 'riptalon', 'solflare'],
     arena: 'tidal',
-    difficulty: 'challenger',
+    difficulty: 'standard',
     modifiers: ['rapid_arena'],
   },
   {
@@ -23,7 +23,7 @@ export const GAUNTLET_STAGES = Object.freeze([
     trainerIndex: 11,
     enemyTeam: ['prismage', 'monolith', 'calderoc'],
     arena: 'eclipse',
-    difficulty: 'champion',
+    difficulty: 'standard',
     modifiers: ['ascendant'],
   },
 ]);
