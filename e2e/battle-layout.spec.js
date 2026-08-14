@@ -28,16 +28,13 @@ test('battle plates and command dock never enter the stage at required viewports
     const ruleSelect = page.getByLabel(/Règle du duel|Duel rule/);
     await ensurePlanOpen(ruleSelect);
     await ruleSelect.selectOption('fortress_duel');
-    const doctrine = page.locator('[data-doctrine="assault"]');
-    await ensurePlanOpen(doctrine);
-    await doctrine.click();
     await page.getByRole('button', { name: /Entrer dans|Enter the/ }).click();
 
     await expect(page.locator('.battle-stage')).toBeVisible();
     await expect(page.locator('.intent-read')).toBeVisible();
     await expect(page.locator('#hud-player')).toContainText(/Barrière|Barrier/);
-    await expect(page.locator('#hud-player')).toContainText(/Marqué|Marked/);
     await expect(page.locator('#hud-enemy')).toContainText(/Barrière|Barrier/);
+    await expect(page.locator('[data-action="trainer-command"]')).toBeVisible();
 
     const stage = await page.locator('.battle-stage').boundingBox();
     const dock = await page.locator('.battle-command-dock').boundingBox();

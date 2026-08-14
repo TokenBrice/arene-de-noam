@@ -16,8 +16,8 @@ const {
 } = ctx;
 const { bindCommon, startBattle, renderResults } = route;
 
-function startGauntlet(team, lead, doctrine) {
-  ctx.gauntletRun = { team: [...team], lead, doctrine, stage: 0, boons: [], condition: null };
+function startGauntlet(team, lead) {
+  ctx.gauntletRun = { team: [...team], lead, stage: 0, boons: [], condition: null };
   startGauntletStage();
 }
 function startGauntletStage() {
@@ -36,7 +36,6 @@ function startGauntletStage() {
     trainerIndex: stage.trainerIndex,
     gauntletStage: ctx.gauntletRun.stage,
     modifiers: [...stage.modifiers, ...boonModifiers],
-    doctrine: ctx.gauntletRun.doctrine,
     playerCondition: ctx.gauntletRun.condition,
   });
 }
@@ -60,9 +59,8 @@ function advanceGauntlet() {
 
 function performanceHtml(grade, compact = false) {
   if (!grade) return '';
-  const parts = Object.entries(grade.breakdown)
-    .filter(([, score]) => score > 0)
-    .map(([key, score]) => `<span>${t(`grade.${key}`)} <b>+${score}</b></span>`)
+  const parts = ['victory', 'tempo', 'survival']
+    .map((key) => `<span>${t(`grade.${key}`)} <b>+${grade.breakdown[key] || 0}</b></span>`)
     .join('');
   return `<div class="performance-grade grade-${grade.letter.toLowerCase()} ${compact ? 'compact' : ''}"><div class="grade-letter"><small>${t('grade.title')}</small><b>${grade.letter}</b><em>${grade.score}/100</em></div><div class="grade-detail">${parts}${grade.bonusXp ? `<strong>★ ${t('grade.bonus', { xp: grade.bonusXp })}</strong>` : ''}</div></div>`;
 }
@@ -83,11 +81,8 @@ function renderGauntletBoons() {
         .join('') || '',
     feats = ctx.pendingRewards?.newFeats.length
       ? `<div class="feat-rewards"><strong>${t('feat.unlocked')}</strong>${ctx.pendingRewards.newFeats.map((id) => `<div><b>${FEATS[id].icon} ${t(`feat.${id}`)}</b><span>${t(`feat.effect.${id}`)}</span></div>`).join('')}</div>`
-      : '',
-    contractReward = ctx.pendingRewards?.contractComplete
-      ? `<div class="contract-reward">☑ <b>${t('contract.complete')}</b><span>${t('contract.masteryBonus')}</span></div>`
       : '';
-  screen.innerHTML = `<div class="shell">${topbar()}<div class="gauntlet-reward"><section class="glass-panel"><span class="eyebrow">${t('gauntlet.roundClear', { round: ctx.gauntletRun.stage, total: GAUNTLET_STAGES.length })}</span><h1>${t('gauntlet.chooseBoon')}</h1><p>${t('gauntlet.chooseBoonHint')}</p>${performanceHtml(ctx.pendingRewards?.grade, true)}${contractReward}<div class="mastery-rewards">${mastery}</div>${feats}<div class="boon-grid">${available.map((boon) => `<button type="button" class="boon-card" data-boon="${boon.id}"><i>${boon.icon}</i><span><b>${t(`boon.${boon.id}`)}</b><small>${t(`boon.effect.${boon.id}`)}</small></span></button>`).join('')}</div><div class="next-gauntlet"><span>${t('gauntlet.next')}</span><b>${t(next.nameKey)} · ${t(`arena.${next.arena}`)}</b><div>${next.enemyTeam.map((id) => `<img src="${sprite(id)}" alt="${creatureName(id)}">`).join('')}</div></div></section></div></div>`;
+  screen.innerHTML = `<div class="shell">${topbar()}<div class="gauntlet-reward"><section class="glass-panel"><span class="eyebrow">${t('gauntlet.roundClear', { round: ctx.gauntletRun.stage, total: GAUNTLET_STAGES.length })}</span><h1>${t('gauntlet.chooseBoon')}</h1><p>${t('gauntlet.chooseBoonHint')}</p>${performanceHtml(ctx.pendingRewards?.grade, true)}<div class="mastery-rewards">${mastery}</div>${feats}<div class="boon-grid">${available.map((boon) => `<button type="button" class="boon-card" data-boon="${boon.id}"><i>${boon.icon}</i><span><b>${t(`boon.${boon.id}`)}</b><small>${t(`boon.effect.${boon.id}`)}</small></span></button>`).join('')}</div><div class="next-gauntlet"><span>${t('gauntlet.next')}</span><b>${t(next.nameKey)} · ${t(`arena.${next.arena}`)}</b><div>${next.enemyTeam.map((id) => `<img src="${sprite(id)}" alt="${creatureName(id)}">`).join('')}</div></div></section></div></div>`;
   const scoutedLead = bestLeadIndex(ctx.gauntletRun.team, next.enemyTeam),
     camp = `<div class="gauntlet-condition"><div><span class="eyebrow">${t('gauntlet.camp')}</span><small>${t('gauntlet.campHint')}</small></div>${ctx.gauntletRun.team
       .map((id, index) => {

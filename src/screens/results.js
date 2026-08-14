@@ -9,10 +9,9 @@ const {
   masteryProgress,
   masteryRank,
   performanceGrade,
+  battleAchievementSignals,
   quickRule,
   battleAdviceKeys,
-  CONTRACTS,
-  contractProgress,
   TRAINERS,
   TRIALS,
   t,
@@ -51,36 +50,15 @@ function completeTutorial() {
   notify(t('tutorial.done'));
 }
 
-function gradeBattle(state, win, contractComplete = false) {
-  const playerDamage = state.history.filter(
-    (event) => event.type === 'damage' && event.sourceSide === 'player'
-  );
+function gradeBattle(state, win) {
   return performanceGrade({
     win,
     turns: state.turn,
     survivors: state.sides.player.team.filter((creature) => creature.hp > 0).length,
-    contractComplete,
-    combos: playerDamage.filter((event) => event.combo?.length).length,
-    signatures: state.history.filter(
-      (event) => event.type === 'move-start' && event.side === 'player' && MOVES[event.moveId]?.signature
-    ).length,
-    contributors: new Set(
-      state.history
-        .filter((event) => event.type === 'move-start' && event.side === 'player')
-        .map((event) => event.creatureId)
-    ).size,
-    crescendos: state.history.filter(
-      (event) => event.type === 'flow' && event.side === 'player' && event.count === 3
-    ).length,
   });
 }
 
-function awardBattleProgress(
-  state,
-  win,
-  contractComplete = false,
-  grade = gradeBattle(state, win, contractComplete)
-) {
+function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
   const mastery = [],
     newFeats = [],
     uses = {};
@@ -89,12 +67,7 @@ function awardBattleProgress(
       uses[event.creatureId] = (uses[event.creatureId] || 0) + 1;
   for (const creature of state.sides.player.team) {
     const before = ctx.save.mastery[creature.id] || 0,
-      gain =
-        1 +
-        (win ? 2 : 0) +
-        (contractComplete ? 2 : 0) +
-        grade.bonusXp +
-        Math.min(2, Math.floor((uses[creature.id] || 0) / 3)),
+      gain = 1 + (win ? 2 : 0) + grade.bonusXp + Math.min(2, Math.floor((uses[creature.id] || 0) / 3)),
       after = Math.min(999, before + gain);
     ctx.save.mastery[creature.id] = after;
     mastery.push({
@@ -147,20 +120,15 @@ function awardBattleProgress(
       assists: Math.min(99999, previous.assists + assists),
     };
   }
-  const candidates = [];
-  if (state.history.some((e) => e.type === 'move-start' && e.side === 'player' && MOVES[e.moveId]?.signature))
-    candidates.push('first_signature');
+  const signals = battleAchievementSignals(state.history),
+    candidates = [];
+  if (signals.signature) candidates.push('first_signature');
   if (win && !state.history.some((e) => e.type === 'ko' && e.side === 'player')) candidates.push('flawless');
-  if (win && state.turn <= 10) candidates.push('blitz');
+  if (win && (state.turn <= 10 || signals.onslaught)) candidates.push('blitz');
   if (win && state.sides.player.team.some((c) => c.hp > 0 && c.hp / c.maxHp <= 0.12))
     candidates.push('survivor');
-  if (
-    win &&
-    state.history.filter(
-      (e) => e.type === 'status' && e.side === 'enemy' && e.applied && e.source !== 'arena'
-    ).length >= 5
-  )
-    candidates.push('tactician');
+  if (win && signals.guardian) candidates.push('survivor');
+  if (signals.tactician) candidates.push('tactician');
   if (win && new Set(state.sides.player.team.map((c) => c.affinity)).size === 3) candidates.push('harmony');
   if (win && state.history.filter((e) => e.type === 'arena-pulse').length >= 2)
     candidates.push('arena_master');
@@ -168,7 +136,6 @@ function awardBattleProgress(
   if (state.history.some((e) => e.type === 'perfect-relay' && e.side === 'player'))
     candidates.push('perfect_relay');
   if (state.history.some((e) => e.type === 'assist' && e.side === 'player')) candidates.push('team_assist');
-  if (win && contractComplete) candidates.push('contract_hero');
   if (win && state.history.some((e) => e.type === 'final-duel')) candidates.push('final_duelist');
   for (const id of candidates)
     if (!ctx.save.feats.includes(id)) {
@@ -185,7 +152,7 @@ function awardBattleProgress(
   return {
     mastery,
     newFeats,
-    contractComplete,
+    achievementSignals: signals,
     grade,
     streak: { current: ctx.save.winStreak, best: ctx.save.bestStreak, broken: win ? 0 : previousStreak },
   };
@@ -198,9 +165,7 @@ function finishBattle() {
     return;
   }
   const win = state.winner === 'player',
-    contract = CONTRACTS.find((x) => x.id === ctx.battleSession.contractId),
-    contractComplete = Boolean(contract && contractProgress(contract.id, state.history) >= contract.target),
-    grade = gradeBattle(state, win, contractComplete);
+    grade = gradeBattle(state, win);
   if (win && ctx.battleSession.mode === 'ladder') {
     const index = ctx.battleSession.trainerIndex;
     if (index === ctx.save.ladderVictories && ctx.save.ladderVictories < LADDER_COUNT) {
@@ -216,13 +181,12 @@ function finishBattle() {
   if (win && ctx.battleSession.mode === 'draft') ctx.save.draftWins = Math.min(9999, ctx.save.draftWins + 1);
   if (win && ctx.battleSession.mode === 'circuit')
     ctx.save.circuitWins = Math.min(9999, ctx.save.circuitWins + 1);
-  if (contractComplete) ctx.save.contractsCompleted = Math.min(9999, ctx.save.contractsCompleted + 1);
   if (
     !ctx.save.bestGrade ||
     PERFORMANCE_GRADES.indexOf(grade.letter) > PERFORMANCE_GRADES.indexOf(ctx.save.bestGrade)
   )
     ctx.save.bestGrade = grade.letter;
-  ctx.pendingRewards = awardBattleProgress(state, win, contractComplete, grade);
+  ctx.pendingRewards = awardBattleProgress(state, win, grade);
   persist();
   if (win && ctx.battleSession.mode === 'gauntlet') {
     setTimeout(advanceGauntlet, 450 / ctx.save.battleSpeed);
@@ -263,7 +227,6 @@ function battleRecap(state) {
     signatures: state.history.filter(
       (e) => e.type === 'move-start' && e.side === 'player' && MOVES[e.moveId]?.signature
     ).length,
-    crescendos: state.history.filter((e) => e.type === 'flow' && e.side === 'player' && e.count === 3).length,
     mvp: { id: mvp[0], damage: mvp[1] },
     contributions,
   };
@@ -283,9 +246,7 @@ function adjustBattleTeam() {
     trainerIndex: session.trainerIndex || 0,
     arena: session.arena,
     difficulty: session.difficulty,
-    doctrine: session.doctrine || 'balanced',
     quickRule: session.quickRuleId || 'standard',
-    contractId: session.contractId || 'random',
     circuitCondition: session.circuitCondition || base.circuitCondition,
     trialId: session.trialId,
     modifiers: [...(session.modifiers || [])],
@@ -322,14 +283,11 @@ function renderResults(win) {
     ctx.pendingRewards?.mastery
       .map(
         (reward) =>
-          `<div class="mastery-reward ${reward.afterRank > reward.beforeRank ? 'rank-up' : ''}"><img src="${sprite(reward.id)}" alt=""><span><b>${creatureName(reward.id)} · ${t('mastery.rank', { rank: reward.afterRank })}</b><i><u style="width:${reward.progress.ratio * 100}%"></u></i><small>+${reward.gain} ${t('mastery.xp')}${reward.afterRank > reward.beforeRank ? ` · ✦ ${t('mastery.rankUp')} · ${t(`mastery.perk.${reward.afterRank}`)}` : ''}</small></span></div>`
+          `<div class="mastery-reward ${reward.afterRank > reward.beforeRank ? 'rank-up' : ''}"><img src="${sprite(reward.id)}" alt=""><span><b>${creatureName(reward.id)} · ${t('mastery.rank', { rank: reward.afterRank })}</b><i><u style="width:${reward.progress.ratio * 100}%"></u></i><small>+${reward.gain} ${t('mastery.xp')}${reward.afterRank > reward.beforeRank ? ` · ✦ ${t('mastery.rankUp')}` : ''}</small></span></div>`
       )
       .join('') || '';
   const feats = ctx.pendingRewards?.newFeats.length
     ? `<div class="feat-rewards"><strong>${t('feat.unlocked')}</strong>${ctx.pendingRewards.newFeats.map((id) => `<div><b>${FEATS[id].icon} ${t(`feat.${id}`)}</b><span>${t(`feat.effect.${id}`)}</span></div>`).join('')}</div>`
-    : '';
-  const contractReward = ctx.pendingRewards?.contractComplete
-    ? `<div class="contract-reward">☑ <b>${t('contract.complete')}</b><span>${t('contract.masteryBonus')}</span></div>`
     : '';
   const streak = ctx.pendingRewards?.streak,
     streakReward =
@@ -346,7 +304,7 @@ function renderResults(win) {
   const celebration = win
     ? `<div class="victory-burst" aria-hidden="true">${Array.from({ length: 36 }, (_, i) => `<i style="--piece:${i};--angle:${i * 137.5}deg;--distance:${150 + (i % 7) * 28}px;--delay:${(i % 9) * 45}ms"></i>`).join('')}</div>`
     : '';
-  screen.innerHTML = `<div class="shell result-page results-scene results-scene--${win ? 'win' : 'loss'}${ctx.save.reducedMotion ? ' results-scene--reduced' : ''}">${topbar()}${celebration}<div class="result-shell results-stage"><section class="glass-panel result-card ${win ? 'won' : 'lost'} results-panel"><div class="result-icon results-heading">${win ? '✦' : '◇'}</div><h1 class="results-heading">${win ? t('result.victory') : t('result.defeat')}</h1><p class="results-intro">${win ? t('result.victoryText') : t('result.defeatText')}</p><div class="results-grade">${performanceHtml(ctx.pendingRewards?.grade)}</div><div class="results-reveal results-reveal--1">${streakReward}<div class="result-team">${team.map((c) => `<img class="${c.hp <= 0 ? 'fallen' : ''}" src="${sprite(c.id)}" alt="${creatureName(c.id)}">`).join('')}</div></div><div class="battle-recap results-reveal results-reveal--2"><div class="recap-mvp"><img src="${sprite(recap.mvp.id)}" alt=""><span><small>${t('result.mvp')}</small><b>${creatureName(recap.mvp.id)}</b><em>${t('result.mvpDamage', { damage: recap.mvp.damage })}</em></span></div><div class="recap-stats"><span><b>${recap.dealt}</b><small>${t('result.dealt')}</small></span><span><b>${recap.taken}</b><small>${t('result.taken')}</small></span><span><b>${recap.healed}</b><small>${t('result.healed')}</small></span><span><b>${recap.absorbed}</b><small>${t('result.absorbed')}</small></span><span><b>${recap.combos}</b><small>${t('result.combos')}</small></span><span><b>${recap.signatures}</b><small>${t('result.signatures')}</small></span><span class="crescendo-stat"><b>↯ ${recap.crescendos}</b><small>${t('result.crescendos')}</small></span></div></div><div class="results-reveal results-reveal--3">${contributionReport}<p class="result-moment"><strong>${t('result.moment')} :</strong> ${biggest ? `${creatureName(biggest.sourceCreatureId)} · ${biggest.amount} PV` : '—'}<br>${t('result.turns', { turns: state.turn })}</p>${contractReward}<div class="mastery-rewards">${mastery}</div>${feats}${progress}</div><div class="result-actions results-reveal results-reveal--4">${actionButton(`≡ ${t('result.chronicle')}`, 'result-log', 'subtle-btn')}${actionButton(win && ctx.battleSession.mode === 'gauntlet' ? t('gauntlet.again') : t('result.rematch'), 'rematch')}${win && ctx.battleSession.mode === 'ladder' && ctx.save.ladderVictories < LADDER_COUNT ? actionButton(t('result.next'), 'next-battle', 'primary-btn') : ''}${win && ctx.battleSession.mode === 'circuit' ? actionButton(t('circuit.next'), 'next-circuit', 'primary-btn') : ''}${actionButton(t('result.title'), 'title')}</div></section></div><div id="replacement-root"></div></div>`;
+  screen.innerHTML = `<div class="shell result-page results-scene results-scene--${win ? 'win' : 'loss'}${ctx.save.reducedMotion ? ' results-scene--reduced' : ''}">${topbar()}${celebration}<div class="result-shell results-stage"><section class="glass-panel result-card ${win ? 'won' : 'lost'} results-panel"><div class="result-icon results-heading">${win ? '✦' : '◇'}</div><h1 class="results-heading">${win ? t('result.victory') : t('result.defeat')}</h1><p class="results-intro">${win ? t('result.victoryText') : t('result.defeatText')}</p><div class="results-grade">${performanceHtml(ctx.pendingRewards?.grade)}</div><div class="results-reveal results-reveal--1">${streakReward}<div class="result-team">${team.map((c) => `<img class="${c.hp <= 0 ? 'fallen' : ''}" src="${sprite(c.id)}" alt="${creatureName(c.id)}">`).join('')}</div></div><div class="battle-recap results-reveal results-reveal--2"><div class="recap-mvp"><img src="${sprite(recap.mvp.id)}" alt=""><span><small>${t('result.mvp')}</small><b>${creatureName(recap.mvp.id)}</b><em>${t('result.mvpDamage', { damage: recap.mvp.damage })}</em></span></div><div class="recap-stats"><span><b>${recap.dealt}</b><small>${t('result.dealt')}</small></span><span><b>${recap.taken}</b><small>${t('result.taken')}</small></span><span><b>${recap.healed}</b><small>${t('result.healed')}</small></span><span><b>${recap.absorbed}</b><small>${t('result.absorbed')}</small></span><span><b>${recap.combos}</b><small>${t('result.combos')}</small></span><span><b>${recap.signatures}</b><small>${t('result.signatures')}</small></span></div></div><div class="results-reveal results-reveal--3">${contributionReport}<p class="result-moment"><strong>${t('result.moment')} :</strong> ${biggest ? `${creatureName(biggest.sourceCreatureId)} · ${biggest.amount} PV` : '—'}<br>${t('result.turns', { turns: state.turn })}</p><div class="mastery-rewards">${mastery}</div>${feats}${progress}</div><div class="result-actions results-reveal results-reveal--4">${actionButton(`≡ ${t('result.chronicle')}`, 'result-log', 'subtle-btn')}${actionButton(win && ctx.battleSession.mode === 'gauntlet' ? t('gauntlet.again') : t('result.rematch'), 'rematch')}${win && ctx.battleSession.mode === 'ladder' && ctx.save.ladderVictories < LADDER_COUNT ? actionButton(t('result.next'), 'next-battle', 'primary-btn') : ''}${win && ctx.battleSession.mode === 'circuit' ? actionButton(t('circuit.next'), 'next-circuit', 'primary-btn') : ''}${actionButton(t('result.title'), 'title')}</div></section></div><div id="replacement-root"></div></div>`;
   const moment = screen.querySelector('.result-moment');
   if (moment) moment.innerHTML = moment.innerHTML.replace(/\bPV\b/, t('battle.hpUnit'));
   if (['ladder', 'quick', 'circuit', 'trial'].includes(ctx.battleSession.mode))

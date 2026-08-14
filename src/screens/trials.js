@@ -34,7 +34,6 @@ function openTrialPreparation(index) {
     trainerIndex: 0,
     arena: trial.arena,
     difficulty: trial.difficulty,
-    doctrine: 'balanced',
     trialId: trial.id,
     modifiers: [...trial.modifiers],
   };

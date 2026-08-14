@@ -37,11 +37,9 @@ function renderAcademy() {
       .join('');
   const mechanics = [
     ['✦', t('battle.surge'), t('academy.surge')],
-    ['↯', t('battle.flow'), t('battle.flowHint')],
     ['⚑', t('battle.command'), t('academy.command')],
     ['↺', t('battle.switchRead'), t('battle.perfectRelayHint')],
     ['↗', t('battle.teamAssist'), t('academy.assist')],
-    ['☑', t('contract.mission'), t('academy.contract')],
     ['⚔', t('battle.finalDuel'), t('battle.finalDuelHint')],
   ]
     .map(

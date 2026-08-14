@@ -64,12 +64,9 @@ test('expanded roster filters all 24 creatures and exposes authored kits', async
   await expect(page.locator('.profile-bars > span')).toHaveCount(4);
   await expect(page.locator('.selected-row.recommended-lead')).toHaveCount(1);
   await expect(page.locator('.selected-row.recommended-lead')).toContainText('Meneur conseillé');
-  await expect(page.locator('.contract-preview')).toContainText('Conseillé pour ce trio');
   await page.locator('[data-squad="storm_circuit"]').click();
-  await expect(page.locator('[data-doctrine="ambush"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.team-profile')).toContainText('Contrôle');
-  await expect(page.locator(".doctrine-card.recommended")).toHaveCount(1);
-  await expect(page.locator('#contract-select option').filter({ hasText: '★' })).toHaveCount(1);
+  await expect(page.locator('[data-doctrine], #contract-select, .team-bonds')).toHaveCount(0);
   await page.locator('[data-filter="shadow"]').click();
   await expect(page.locator('[data-creature]')).toHaveCount(4);
   await page.locator('[data-creature="hexalune"]').click();
@@ -79,7 +76,7 @@ test('expanded roster filters all 24 creatures and exposes authored kits', async
   await expect(page.getByText('Moisson de venin').first()).toBeVisible();
 });
 
-test('smart remix composes a fresh legal trio with a lead and matching doctrine', async ({ page }) => {
+test('smart remix composes a fresh legal trio with a scouted lead', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
@@ -89,14 +86,14 @@ test('smart remix composes a fresh legal trio with a lead and matching doctrine'
   await page.getByRole('button', { name: /Remixer le trio/ }).click();
   await expect(page.locator('.creature-card.selected')).toHaveCount(3);
   await expect(page.locator('.creature-card.lead')).toHaveCount(1);
-  await expect(page.locator('.doctrine-card.active')).toHaveClass(/recommended/);
+  await expect(page.locator('[data-doctrine], .team-bonds')).toHaveCount(0);
   const after = await page
     .locator('.creature-card.selected')
     .evaluateAll((cards) => cards.map((card) => card.dataset.creature).join(','));
   expect(after).not.toBe(before);
 });
 
-test('three personal squad slots save, reload, and clear a team doctrine', async ({ page }) => {
+test('three personal squad slots save, reload, and clear a team with its lead', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
@@ -106,7 +103,9 @@ test('three personal squad slots save, reload, and clear a team doctrine', async
   await page.locator('[data-squad="worldbreakers"]').click();
   await page.locator('[data-custom-load="0"]').click();
   await expect(page.locator('[data-creature="voltide"]')).toHaveClass(/selected/);
-  await expect(page.locator('[data-doctrine="ambush"]')).toHaveAttribute('aria-pressed', 'true');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
+  expect(stored.version).toBe(15);
+  expect(stored.customSquads[0]).toEqual({ team: ['voltide', 'nymbloom', 'riptalon'], lead: 0 });
   await page.reload();
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await expect(page.locator('.custom-squad').first().locator('img')).toHaveCount(3);
@@ -144,6 +143,7 @@ test('the feat hall reveals earned high-skill accomplishments', async ({ page })
   await expect(page.locator('.feat-hall .eyebrow')).toHaveText('5/12');
   await expect(page.locator('.feat-hall')).toContainText('Lecture parfaite');
   await expect(page.locator('.feat-hall')).toContainText('Cœur du duel');
+  await expect(page.locator('.feat-hall')).toContainText('historique');
 });
 
 test('the tactical academy explains the affinity cycle, master plays, and every status', async ({ page }) => {
@@ -154,7 +154,9 @@ test('the tactical academy explains the affinity cycle, master plays, and every 
   await expect(page.locator('.academy-affinity')).toHaveCount(6);
   await expect(page.locator('.academy-affinity').first()).toContainText('Esprit');
   await expect(page.locator('.academy-affinity').first().locator('u')).toHaveAttribute('aria-label', 'Force');
-  await expect(page.locator('.academy-mechanic')).toHaveCount(7);
+  await expect(page.locator('.academy-mechanic')).toHaveCount(5);
+  await expect(page.locator('.academy-mechanics')).toContainText('Coup de pouce');
+  await expect(page.locator('.academy-mechanics')).toContainText('20 Éclat');
   await expect(page.locator('.academy-status')).toHaveCount(8);
   await expect(page.locator('.academy-status.boon')).toHaveCount(4);
   await expect(page.locator('.academy-status.penalty')).toHaveCount(4);
@@ -212,22 +214,19 @@ test('mythic trials expose six rule-bending encounters and launch with modifiers
   expect(saved.difficulty).toBe('apprentice');
 });
 
-test('battle doctrines expose explicit tradeoffs and change the live opening', async ({ page }) => {
+test('removed loadout systems stay absent and battle opens at neutral Surge', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=63&animations=0');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('[data-doctrine]')).toHaveCount(4);
-  await page.locator('[data-doctrine="assault"]').click();
+  await expect(page.locator('[data-doctrine], #contract-select, .team-bonds')).toHaveCount(0);
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('#hud-player')).toContainText('65/100');
-  await expect(page.locator('#hud-player')).toContainText('Marqué');
+  await expect(page.locator('#hud-player')).toContainText('30/100');
 });
 
 test('the gauntlet carries a chosen boon into its second escalating battle', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=9&animations=0&player=mossaur,magmoth,monolith');
   await page.getByRole('button', { name: 'Traversée' }).click();
-  await page.locator('[data-doctrine="bastion"]').click();
   await page.getByRole('button', { name: /Commencer la Traversée/ }).click();
   await playVisibleBattle(page);
   await expect(page.getByRole('heading', { name: 'Choisis une faveur' })).toBeVisible();
@@ -241,7 +240,7 @@ test('the gauntlet carries a chosen boon into its second escalating battle', asy
   await page.locator('[data-gauntlet-lead="0"]').click();
   await page.locator('[data-boon="surge"]').click();
   await expect(page.getByText(/Couloir des Tempêtes · 2\/3/)).toBeVisible();
-  await expect(page.locator('#hud-player')).toContainText('60/100');
+  await expect(page.locator('#hud-player')).toContainText('55/100');
   await expect(page.locator('#hud-player')).toContainText('54/134');
 });
 
@@ -262,15 +261,14 @@ test('daily draft offers three rounds of distinct choices then reveals a rival',
   await expect(page.getByText('RIVAL RÉVÉLÉ')).toBeVisible();
   await expect(page.locator('.draft-rival-team img')).toHaveCount(3);
   await expect(page.locator('.team-profile .profile-bars > span')).toHaveCount(4);
-  await expect(page.locator('.doctrine-card.recommended')).toHaveCount(1);
+  await expect(page.locator('[data-doctrine], .team-bonds')).toHaveCount(0);
   await expect(page.locator('.draft-slot.recommended')).toHaveCount(1);
   await page.locator('[data-draft-lead="2"]').click();
   await expect(page.locator('[data-draft-lead="2"]')).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('[data-doctrine="assault"]').click();
   await page.getByRole('button', { name: 'Entrer dans l’arène' }).click();
   await expect(page.locator('#arena')).toBeVisible();
   await expect(page.locator('#fighter-player')).toHaveAttribute('data-creature', chosen[2]);
-  await expect(page.locator('#hud-player')).toContainText('65/100');
+  await expect(page.locator('#hud-player')).toContainText('30/100');
 });
 
 test('required viewports avoid horizontal clipping and survive rotation', async ({ page }) => {
@@ -295,7 +293,8 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   expect(planBox.y).toBeGreaterThanOrEqual(-1);
   expect(planBox.y).toBeLessThan(844);
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('#contract-chip')).toBeVisible();
+  await expect(page.locator('.arena-nameplate')).toBeVisible();
+  await expect(page.locator('#contract-chip')).toHaveCount(0);
   const boxes = await page.locator('.battle-controls button').evaluateAll((buttons) =>
     buttons.map((button) => {
       const r = button.getBoundingClientRect();

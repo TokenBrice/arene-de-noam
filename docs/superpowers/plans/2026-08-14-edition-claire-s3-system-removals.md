@@ -497,3 +497,10 @@ Acceptance criteria:
 - Grade input and breakdown contain only victory, turns, and survivors.
 - v14 custom squads migrate to team+lead; all progression and legacy Contract history/feat survive v15.
 - FR/EN keys are symmetric, no removed key is referenced, all unit/E2E suites are green, and Signature cadence remains within one action of the current median after Stage 1 rebase.
+
+## Implementation deviations (2026-08-14)
+
+- The flat Éclat table was implemented unchanged; no calibration adjustment was needed. The balance simulator now reports and gates the plan's Signature reference explicitly: 0.7–2.6 uses per side-battle and a median first use between actions 3 and 5 (the stated 1–2 uses / fourth-action baseline expanded by ±30%).
+- Champion resistant-switch scoring was raised from 24 to 44 after the hidden opening bonuses disappeared. This preserves the surviving behavior that a Champion pivots into a resistant bench answer against a ready Signature; it adds no new mechanic or information advantage.
+- The repository's progression E2E file is `e2e/progression-responsive.spec.js`, not `e2e/progression.spec.js`; the planned rewrites were applied to the existing file.
+- Playwright execution remains delegated to the orchestrator because it is sandbox-blocked here. All edited E2E files pass static JavaScript parsing, and their positive selectors were checked against the generated DOM/templates.

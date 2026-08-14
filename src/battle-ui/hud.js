@@ -21,7 +21,6 @@ const {
   affinity,
   affinityName,
   escapeHtml,
-  bondsHtml,
 } = ctx;
 const { moveArchetype } = route;
 
@@ -30,14 +29,16 @@ function plannedEnemyAction() {
     state = session?.state;
   if (!session || !state || state.phase !== 'choice' || session.mode === 'tutorial') return null;
   if (session.enemyPlanCache?.state === state) return session.enemyPlanCache.action;
-  // Test-only hook: force the enemy's first committed move via ?enemyMove=<id>.
-  const forcedMove = ctx.params.get('enemyMove');
-  if (forcedMove && !session.forcedEnemyMoveUsed) {
+  // Test-only hook: force one move, or a comma-separated move sequence.
+  const forcedMoves = (ctx.params.get('enemyMove') || '').split(',').filter(Boolean),
+    forcedIndex = session.forcedEnemyMoveCount || 0,
+    forcedMove = forcedMoves[forcedIndex];
+  if (forcedMove) {
     const legal = getLegalActions(state, 'enemy').find(
       (option) => option.type === 'move' && option.moveId === forcedMove
     );
     if (legal) {
-      session.forcedEnemyMoveUsed = true;
+      session.forcedEnemyMoveCount = forcedIndex + 1;
       session.enemyPlanCache = { state, action: legal };
       return legal;
     }
@@ -111,7 +112,7 @@ function teamPipsHtml(owner) {
     .join('');
 }
 
-function hudHtml(side) {
+function hudHtml(side, expertMode = Boolean(ctx.save.expertMode)) {
   const state = ctx.battleSession.state,
     owner = state.sides[side],
     c = activeOf(state, side),
@@ -143,7 +144,7 @@ function hudHtml(side) {
         };
       }),
     ],
-    statusLimit = ctx.save.expertMode
+    statusLimit = expertMode
       ? window.innerWidth <= 700 && window.innerHeight >= window.innerWidth
         ? 2
         : 3
@@ -156,7 +157,7 @@ function hudHtml(side) {
     ]
       .filter(Boolean)
       .join(' · ');
-  const gaugeLabel = t(ctx.save.expertMode ? 'battle.surge' : 'battle.sigGauge');
+  const gaugeLabel = t(expertMode ? 'battle.surge' : 'battle.sigGauge');
   return `<button type="button" class="battle-plate-toggle" data-plate-side="${side}" aria-expanded="false" aria-label="${escapeHtml(t('battle.plateOpen', { name: creatureName(c.id) }))}"><span class="plate-line plate-primary"><strong>${creatureName(c.id)}${rank ? ` <i class="battle-rank">${'★'.repeat(rank)}</i>` : ''}</strong><i class="affinity-dot" style="--affinity-color:${a.color}">${a.icon}</i><b class="plate-hp-number">${c.hp}/${c.maxHp}</b><span class="team-dots">${teamPipsHtml(owner)}</span></span><span class="plate-line plate-meters"><span class="hp-track"><i class="hp-fill ${ratio < 0.3 ? 'low' : ''}" style="width:${Math.max(0, ratio * 100)}%"></i>${c.barrier ? `<i class="barrier-fill" style="width:${Math.min(100, (c.barrier / c.maxHp) * 100)}%"></i>` : ''}</span><span class="surge-row ${surge >= cost ? 'ready' : ''}" title="${escapeHtml(`${gaugeLabel} ${surge}/${cost}`)}"><span class="surge-caption">${gaugeLabel}</span><span class="surge-track"><i style="width:${surge}%"></i></span><b class="plate-surge-number">✦ ${surge}/${cost}</b></span><span class="plate-statuses">${visibleStatuses.map((entry) => `<i class="plate-status status-${entry.id}" style="--status-color:${entry.color}" title="${escapeHtml(entry.label)}">${entry.icon}</i>`).join('')}${overflow ? `<b class="plate-status-more">+${overflow}</b>` : ''}</span></span><span class="plate-state-text">${escapeHtml(stateText)}</span></button>${side === 'enemy' ? enemyIntentHtml() : ''}`;
 }
 
@@ -178,9 +179,7 @@ function hudDetailHtml(side) {
         return `<div class="plate-detail-status ${meta.positive ? 'positive' : 'negative'}" style="--status-color:${meta.color}"><i>${meta.icon}</i><span><b>${t(`status.${id}`)}${status.stacks > 1 ? ` ×${status.stacks}` : ''}${status.remaining ? ` · ${status.remaining}` : ''}</b><small>${t(`status.effect.${id}`)}${helper ? ` · ${t('battle.preparedBy', { name: creatureName(helper) })}` : ''}</small></span></div>`;
       }),
     ].join('');
-  return `<article class="plate-detail-talent"><span>${passive.icon}</span><div><small>${t('battle.talent')}</small><b>${t(`passive.${c.passive}`)}</b><p>${t(`passive.effect.${c.passive}`)}</p></div></article>${bondsHtml(
-    owner.team.map((creature) => creature.id)
-  )}<div class="plate-detail-statuses">${statuses || `<p>${t('battle.noStatuses')}</p>`}</div>${side === 'enemy' ? `<div class="plate-detail-intent">${enemyIntentHtml()}</div>` : ''}`;
+  return `<article class="plate-detail-talent"><span>${passive.icon}</span><div><small>${t('battle.talent')}</small><b>${t(`passive.${c.passive}`)}</b><p>${t(`passive.effect.${c.passive}`)}</p></div></article><div class="plate-detail-statuses">${statuses || `<p>${t('battle.noStatuses')}</p>`}</div>${side === 'enemy' ? `<div class="plate-detail-intent">${enemyIntentHtml()}</div>` : ''}`;
 }
 
 function moveButton(moveId, index) {
@@ -230,11 +229,6 @@ function moveButton(moveId, index) {
       : '';
   const preview = previewMove(state, 'player', moveId);
   const archetype = moveArchetype(move);
-  const flowRoute =
-      legal && owner.lastMoveId && owner.lastMoveId !== moveId
-        ? { count: Math.min(3, owner.flow + 1), surge: Math.min(3, owner.flow + 1) * 2 }
-        : null,
-    flowReset = legal && owner.flow > 0 && owner.lastMoveId === moveId;
   const dominant = preview?.damage
       ? `<b>⚔ ${preview.damage}</b>`
       : `<b>${move.kind === 'heal' ? '✚' : '✦'} ${t(move.kind === 'heal' ? 'battle.moveRoleHeal' : 'battle.moveRoleTactic')}</b>`,
@@ -246,9 +240,9 @@ function moveButton(moveId, index) {
     ? `<span class="team-assist-ready move-assist-badge">↗ ${creatureName(preview.assists[0])}</span>`
     : '';
   const advancedClasses = ctx.save.expertMode
-      ? `${flowRoute ? 'continues-flow' : ''} ${flowReset ? 'breaks-flow' : ''} ${move.hits > 1 ? 'multi-hit' : ''} ${move.drain ? 'drain-move' : ''} ${move.priority > 0 ? 'priority-move' : ''}`
+      ? `${move.hits > 1 ? 'multi-hit' : ''} ${move.drain ? 'drain-move' : ''} ${move.priority > 0 ? 'priority-move' : ''}`
       : '',
-    context = `<span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}</span><span class="move-tags">${flowRoute ? `<span class="tag flow-route">${t('battle.flowGain', { count: flowRoute.count, surge: flowRoute.surge })}</span>` : ''}${flowReset ? `<span class="tag flow-reset">${t('battle.flowReset')}</span>` : ''}${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo.length ? `<span class="tag combo-ready">✦ ${t('battle.comboReady', { count: preview.combo.length })}</span>` : ''}${preview.assists.length ? `<span class="tag team-assist-detail">↗ ${t('battle.assistReady', { name: creatureName(preview.assists[0]) })}</span>` : ''}` : ''}<span class="tag">${a.icon} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span>`;
+    context = `<span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}</span><span class="move-tags">${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo.length ? `<span class="tag combo-ready">✦ ${t('battle.comboReady', { count: preview.combo.length })}</span>` : ''}${preview.assists.length ? `<span class="tag team-assist-detail">↗ ${t('battle.assistReady', { name: creatureName(preview.assists[0]) })}</span>` : ''}` : ''}<span class="tag">${a.icon} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span>`;
   if (ctx.save.expertMode)
     return `<button type="button" class="move-btn kind-${move.kind} ${advancedClasses} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-archetype" aria-hidden="true">${archetype}</span><span class="move-name">${move.signature ? '<i class="move-signature-mark">✦</i> ' : ''}<i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="move-figure">${dominant}${assistBadge}<span class="move-badges">${badges.join('')}</span></span>${context}</button>`;
   const effectiveness =

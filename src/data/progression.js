@@ -19,30 +19,36 @@ export function masteryProgress(xp = 0) {
 }
 
 export const PERFORMANCE_GRADES = Object.freeze(['D', 'C', 'B', 'A', 'S']);
-export function performanceGrade({
-  win = false,
-  turns = 40,
-  survivors = 0,
-  contractComplete = false,
-  combos = 0,
-  signatures = 0,
-  contributors = 1,
-  crescendos = 0,
-} = {}) {
-  const tempo = win ? (turns <= 10 ? 18 : turns <= 16 ? 12 : turns <= 24 ? 6 : 0) : 0;
-  const survival = Math.min(18, Math.max(0, survivors) * (win ? 6 : 2));
-  const style = Math.min(
-    18,
-    Math.max(0, combos) * 4 +
-      Math.max(0, signatures) * 5 +
-      Math.max(0, contributors - 1) * 2 +
-      Math.max(0, crescendos) * 3
-  );
-  const contract = contractComplete ? 10 : 0;
-  const score = Math.min(100, (win ? 45 : 18) + tempo + survival + style + contract);
+export function performanceGrade({ win = false, turns = 40, survivors = 0 } = {}) {
+  const victory = win ? 50 : 0;
+  const tempo = !win ? 0 : turns <= 10 ? 20 : turns <= 16 ? 15 : turns <= 24 ? 10 : turns <= 32 ? 5 : 0;
+  const survival = Math.min(30, Math.max(0, survivors) * 10);
+  const score = Math.min(100, victory + tempo + survival);
   const letter = score >= 88 ? 'S' : score >= 74 ? 'A' : score >= 58 ? 'B' : score >= 40 ? 'C' : 'D';
   const bonusXp = letter === 'S' ? 3 : letter === 'A' ? 2 : letter === 'B' ? 1 : 0;
-  return { letter, score, bonusXp, breakdown: { tempo, survival, style, contract } };
+  return { letter, score, bonusXp, breakdown: { victory, tempo, survival } };
+}
+
+export function battleAchievementSignals(history = []) {
+  const playerDamage = history
+      .filter((event) => event.type === 'damage' && event.sourceSide === 'player')
+      .reduce((total, event) => total + event.amount, 0),
+    enemyStatuses = history.filter(
+      (event) =>
+        event.type === 'status' && event.side === 'enemy' && event.applied && event.source !== 'arena'
+    ).length,
+    guardianValue = history
+      .filter((event) => ['barrier', 'heal'].includes(event.type) && event.side === 'player')
+      .reduce((total, event) => total + event.amount, 0);
+  return {
+    onslaught: playerDamage >= 150,
+    tactician: enemyStatuses >= 5,
+    signature: history.some(
+      (event) => event.type === 'surge' && event.side === 'player' && event.source === 'signature'
+    ),
+    guardian: guardianValue >= 55,
+    relay: history.filter((event) => event.type === 'switch' && event.side === 'player').length >= 2,
+  };
 }
 
 export const FEATS = Object.freeze({

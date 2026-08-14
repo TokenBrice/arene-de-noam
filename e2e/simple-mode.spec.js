@@ -27,17 +27,17 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await page.getByRole('button', { name: /Entrer dans/ }).click();
 
   await expect(page.locator('.battle-screen')).toHaveClass(/simple-mode/);
+  await expect(page.locator('#hud-player .surge-caption')).toHaveText('Signature');
   await expect(page.locator('[data-move="lucid_arc"] .move-effectiveness.effective')).toContainText('▲');
   await expect(page.locator('[data-move] .move-archetype')).toHaveCount(0);
   await expect(page.locator('[data-move] .move-assist-badge')).toHaveCount(0);
   await expect(page.locator('[data-move] .combo-ready:visible')).toHaveCount(0);
-  await expect(page.locator('.arena-resonance')).toHaveCount(0);
-  await expect(page.locator('#contract-chip')).toHaveCount(0);
+  await expect(page.locator('.arena-resonance, #contract-chip, .flow-chip')).toHaveCount(0);
 
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('[data-move="slowing_riddle"]')).toBeEnabled();
   await page.locator('[data-move="slowing_riddle"]').click();
-  await expect(page.locator('#hud-player .flow-chip')).toHaveCount(0);
+  await expect(page.locator("#hud-player .plate-surge-number")).not.toContainText("30/100");
 
   await page.goto('/');
   await page.getByRole('button', { name: /Réglages/ }).click();
@@ -51,7 +51,11 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('.battle-screen')).toHaveClass(/expert-mode/);
+  await expect(page.locator('#hud-player .surge-caption')).toHaveText('Éclat');
   await expect(page.locator('[data-move] .move-archetype').first()).toBeVisible();
-  await expect(page.locator('.arena-resonance')).toBeVisible();
-  await expect(page.locator('#contract-chip')).toBeVisible();
+  await expect(page.locator('.arena-resonance, #contract-chip, .flow-chip')).toHaveCount(0);
+  await expect(page.locator('[data-move] .move-archetype').first()).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')).version))
+    .toBe(15);
 });

@@ -1127,9 +1127,6 @@
   .talent-chip {
     max-width: 75px;
   }
-  .team-bonds.compact {
-    display: none;
-  }
   .fx-sky-symbol {
     width: 82vw;
     height: 82vw;
@@ -1212,33 +1209,6 @@
   }
 }
 
-/* The live objective stays visible on small screens while the verbose arena
-   nameplate yields its space. */
-@media (max-width: 600px) {
-  .arena-nameplate:has(.contract-chip) {
-    display: block;
-    position: absolute;
-    left: 50%;
-    top: 38px;
-    min-width: 0;
-    padding: 0;
-    transform: translateX(-50%);
-  }
-  .arena-nameplate:has(.contract-chip) > b,
-  .arena-nameplate:has(.contract-chip) > small {
-    display: none;
-  }
-  .arena-nameplate .contract-chip {
-    max-width: 42vw;
-    margin: 0;
-    padding: 4px 7px;
-    font-size: 7px;
-  }
-  .arena-nameplate .contract-chip span {
-    max-width: 28vw;
-  }
-}
-
 /* Accessibility mode preserves the decisive state change without the full
    screen slash, strobe, pulsing borders, or looping last-creature aura. */
 @media (prefers-reduced-motion: reduce) {
@@ -1270,8 +1240,7 @@ body.reduced-motion .finisher-impact .damage-number {
   animation: fxReduced 0.2s ease forwards !important;
 }
 
-/* Post-battle style grade: a readable reward for tempo, survival, combos and
-   optional objectives, with a restrained arcade flourish. */
+/* Post-battle grade: three kid-clear reasons, with a restrained arcade flourish. */
 .performance-grade {
   --grade: #8c91ab;
   display: grid;
@@ -1335,6 +1304,11 @@ body.reduced-motion .finisher-impact .damage-number {
   gap: 5px;
 }
 .grade-detail span {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 5px;
+  min-width: 76px;
   padding: 4px 6px;
   border-radius: 999px;
   color: #bfc2d7;
@@ -1455,32 +1429,7 @@ body.reduced-motion .result-icon {
   .result-card .mastery-reward {
     padding: 5px;
   }
-  .result-card .feat-rewards,
-  .result-card .contract-reward {
+  .result-card .feat-rewards {
     margin: 7px 0;
   }
-}
-
-.mastery-perk-line {
-  margin-top: 5px;
-  color: #ffe38d;
-  font-size: 7px;
-  font-weight: 850;
-  line-height: 1.25;
-}
-.bestiary-card .mastery-perk-line {
-  margin-top: 7px;
-  padding: 5px 7px;
-  border: 1px solid #ffe27530;
-  border-radius: 8px;
-  background: #ffd94e0b;
-}
-.bestiary-card .mastery-perk-line.next {
-  color: #9395ae;
-  border-color: #ffffff12;
-  background: #ffffff05;
-}
-.mastery-codex {
-  border-color: #ffe48130 !important;
-  background: linear-gradient(100deg, #ffdb4d0c, #ffffff06) !important;
 }

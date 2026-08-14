@@ -220,7 +220,9 @@ const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.AREN
 let rng = balanceSeed,
   totalTurns = 0,
   turnSamples = [],
-  caps = 0;
+  caps = 0,
+  signatureUses = 0,
+  firstSignatureActions = [];
 
 for (let game = 0; game < samples; game++) {
   const player = drawTeam(rng);
@@ -234,6 +236,12 @@ for (let game = 0; game < samples; game++) {
   totalTurns += result.turn;
   turnSamples.push(result.turn);
   caps += result.reason === 'turn-cap' ? 1 : 0;
+  for (const side of ['player', 'enemy']) {
+    const actions = result.history.filter((event) => event.type === 'move-start' && event.side === side),
+      firstSignature = actions.findIndex((event) => MOVES[event.moveId]?.signature);
+    signatureUses += actions.filter((event) => MOVES[event.moveId]?.signature).length;
+    if (firstSignature >= 0) firstSignatureActions.push(firstSignature + 1);
+  }
   recordSide(stats, player.team, playerWon);
   recordSide(stats, enemy.team, enemyWon);
   recordSide(archetypes, [teamProfile(player.team).dominant], playerWon);
@@ -275,6 +283,9 @@ console.log(
 console.log(
   `Pacing: average turns ${(totalTurns / samples).toFixed(1)}; p90 ${percentile(turnSamples, 0.9)}; turn-cap decisions ${percent(caps / samples, 1)} (${caps}/${samples}).`
 );
+console.log(
+  `Signature cadence: ${(signatureUses / (samples * 2)).toFixed(2)} uses per side-battle; median first use on that side's action ${median(firstSignatureActions)}; ${percent(firstSignatureActions.length / (samples * 2), 1)} of sides used one.`
+);
 console.log(`Creature win-rate range: ${percent(ranked.at(-1).rate, 1)}–${percent(ranked[0].rate, 1)}.`);
 console.log(
   `Team archetypes: ${PROFILE_AXES.map((axis) => {
@@ -304,10 +315,24 @@ checkNaiveRamp();
 checkTtkProfile();
 
 const averageTurns = totalTurns / samples,
-  capShare = caps / samples;
+  capShare = caps / samples,
+  signaturesPerSide = signatureUses / (samples * 2),
+  medianFirstSignature = median(firstSignatureActions);
 if (averageTurns < 12 || averageTurns > 16 || capShare >= 0.05)
   throw new Error(
     `Pacing outside targets: average turns ${averageTurns.toFixed(1)}, turn-cap share ${percent(capShare, 1)}`
+  );
+
+// Stage 3's pre-change reference was one to two Signatures per side and a first
+// selectable Signature around the fourth action. The expanded bounds are ±30%.
+if (
+  signaturesPerSide < 0.7 ||
+  signaturesPerSide > 2.6 ||
+  medianFirstSignature < 3 ||
+  medianFirstSignature > 5
+)
+  throw new Error(
+    `Signature cadence outside Stage 3 reference: ${signaturesPerSide.toFixed(2)} uses per side-battle, median first action ${medianFirstSignature}`
   );
 
 if (high.length || low.length)

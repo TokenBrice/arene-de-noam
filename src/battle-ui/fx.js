@@ -242,46 +242,14 @@ function relayRushFx(event) {
   sound.ui();
 }
 
-function flowCrescendoFx(event) {
-  const session = ctx.battleSession;
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId];
-  if (!stage || !creature) return;
-  const a = AFFINITIES[creature.affinity],
-    call = document.createElement('div'),
-    surgeNote = event.surge ? `+${event.surge} ${t('battle.surge')} · ` : '',
-    refreshed = (event.refreshed || []).map((id) => t(`move.${id}`)),
-    refreshNote = refreshed.length
-      ? `${t('battle.flowRefresh')} · ${refreshed.join(' / ')}`
-      : t('battle.flowPeak');
-  stage.querySelector('.flow-crescendo-call')?.remove();
-  call.className = `flow-crescendo-call ${event.side}`;
-  call.style.setProperty('--flow-color', a.color);
-  call.innerHTML = `<i>↯</i><span><small>${t('battle.flowCrescendo')}</small><b>${creatureName(creature.id)}</b><em>${surgeNote}${refreshNote}</em></span>`;
-  stage.append(call);
-  screen.classList.add('flow-crescendo-mode');
-  ctx.arenaScene?.flash('power', a.color, event.side);
-  ctx.arenaScene?.burst(a.color, event.side, 1.25);
-  sound.clash();
-  setTimeout(
-    () => {
-      if (!sessionIsActive(session)) return;
-      call.remove();
-      screen.classList.remove('flow-crescendo-mode');
-    },
-    ctx.save.reducedMotion ? 220 : Math.max(700, 620 / ctx.save.battleSpeed)
-  );
-}
-
 function trainerCommandFx(event) {
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId],
-    a = AFFINITIES[creature.affinity],
-    icons = { balanced: '◇', assault: '⚔', bastion: '⬡', ambush: '◐' };
+    a = AFFINITIES[creature.affinity];
   if (!stage) return;
   stage.className = `fx-stage active trainer-command-fx command-${event.command}`;
   stage.style.setProperty('--fx-color', a.color);
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="command-stripe"><i>${icons[event.command]}</i><span><small>${t('battle.command')}</small><b>${t(`command.${event.command}`)}</b><em>${creatureName(event.creatureId)}</em></span><img src="${sprite(event.creatureId)}" alt=""></div><div class="fx-aftershock"></div>`;
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="command-stripe"><i>⚑</i><span><small>${t('battle.command')}</small><b>${t('command.coach')}</b><em>${creatureName(event.creatureId)}</em></span><img src="${sprite(event.creatureId)}" alt=""></div><div class="fx-aftershock"></div>`;
   screen.classList.add('command-mode');
   ctx.arenaScene?.flash('power', a.color, 'player');
   ctx.arenaScene?.burst(a.color, 'player', 1.25);
@@ -322,26 +290,12 @@ function finalDuelFx(event) {
   stage.className = 'fx-stage active final-duel-fx';
   stage.style.setProperty('--player-color', AFFINITIES[player.affinity].color);
   stage.style.setProperty('--enemy-color', AFFINITIES[enemy.affinity].color);
-  stage.innerHTML = `<div class="duel-half player"><img src="${sprite(player.id)}" alt=""><b>${creatureName(player.id)}</b></div><div class="duel-center"><i>⚔</i><strong>${t('battle.finalDuel')}</strong><small>+12 ${t('battle.surge')}</small></div><div class="duel-half enemy"><img src="${sprite(enemy.id)}" alt=""><b>${creatureName(enemy.id)}</b></div>`;
+  stage.innerHTML = `<div class="duel-half player"><img src="${sprite(player.id)}" alt=""><b>${creatureName(player.id)}</b></div><div class="duel-center"><i>⚔</i><strong>${t('battle.finalDuel')}</strong></div><div class="duel-half enemy"><img src="${sprite(enemy.id)}" alt=""><b>${creatureName(enemy.id)}</b></div>`;
   screen.classList.add('final-duel-mode');
   ctx.arenaScene?.flash('power', '#fff09a', 'enemy');
   ctx.arenaScene?.burst(AFFINITIES[player.affinity].color, 'player', 1.6);
   ctx.arenaScene?.burst(AFFINITIES[enemy.affinity].color, 'enemy', 1.6);
   sound.clash();
-}
-
-function resonanceFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    a = AFFINITIES[event.affinity];
-  if (!stage) return;
-  stage.className = `fx-stage active resonance-fx resonance-${event.affinity} from-${event.side}`;
-  stage.style.setProperty('--fx-color', a.color);
-  stage.style.setProperty('--from-x', event.side === 'player' ? '23%' : '77%');
-  stage.style.setProperty('--from-y', event.side === 'player' ? '68%' : '30%');
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="resonance-sigil"><i>${a.icon}</i><b>${t('battle.resonance')}</b><span>${creatureName(event.creatureId)}</span></div><div class="fx-source-aura">${Array.from({ length: 5 }, (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 55}ms"></i>`).join('')}</div>`;
-  screen.classList.add('resonance-mode');
-  ctx.arenaScene?.burst(a.color, event.side, 1.3);
-  sound.resonance(event.affinity);
 }
 
 function aceFx(event) {
@@ -454,10 +408,8 @@ function clearBattleFx() {
     'intro-mode',
     'rally-beat',
     'assist-mode',
-    'resonance-mode',
     'perfect-relay-mode',
     'relay-rush-mode',
-    'flow-crescendo-mode',
     'relay-player',
     'relay-enemy',
     'final-duel-mode',
@@ -482,11 +434,9 @@ registerRoutes({
   assistFx,
   perfectRelayFx,
   relayRushFx,
-  flowCrescendoFx,
   trainerCommandFx,
   signatureReadyFx,
   finalDuelFx,
-  resonanceFx,
   aceFx,
   statusTickFx,
   arenaPulseFx,

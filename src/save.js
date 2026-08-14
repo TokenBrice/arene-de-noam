@@ -3,7 +3,7 @@ import { FEAT_IDS } from './data/progression.js';
 import { TRIAL_IDS } from './data/trials.js';
 
 export const SAVE_KEY = 'arene-de-noam-save';
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 export const DEFAULT_SAVE = Object.freeze({
   version: SAVE_VERSION,
   tutorialComplete: false,
@@ -76,6 +76,16 @@ export const migrateV13 = (save) => ({
   version: 14,
   expertMode: typeof save.expertMode === 'boolean' ? save.expertMode : false,
 });
+// v14 -> v15: doctrines no longer belong to saved squads.
+export const migrateV14 = (save) => ({
+  ...save,
+  version: 15,
+  customSquads: Array.isArray(save.customSquads)
+    ? save.customSquads.map((squad) =>
+        squad && typeof squad === 'object' ? { team: squad.team, lead: squad.lead } : squad
+      )
+    : save.customSquads,
+});
 
 export const SAVE_MIGRATIONS = Object.freeze([
   migrateV1,
@@ -91,6 +101,7 @@ export const SAVE_MIGRATIONS = Object.freeze([
   migrateV11,
   migrateV12,
   migrateV13,
+  migrateV14,
 ]);
 
 export function migrateSave(value) {
@@ -145,9 +156,6 @@ export function validateSave(value) {
     return {
       team: [...squad.team],
       lead: Number.isInteger(squad.lead) && squad.lead >= 0 && squad.lead < 3 ? squad.lead : 0,
-      doctrine: ['balanced', 'assault', 'bastion', 'ambush'].includes(squad.doctrine)
-        ? squad.doctrine
-        : 'balanced',
     };
   });
   const winStreak = Number.isInteger(migrated.winStreak)

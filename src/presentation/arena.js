@@ -121,8 +121,7 @@ export class ArenaScene {
     this.resize();
     this.onResize = () => this.resize();
     globalThis.addEventListener('resize', this.onResize);
-    this.resizeObserver =
-      typeof ResizeObserver === 'function' ? new ResizeObserver(this.onResize) : null;
+    this.resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(this.onResize) : null;
     this.resizeObserver?.observe(canvas);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.contextLost = (event) => {

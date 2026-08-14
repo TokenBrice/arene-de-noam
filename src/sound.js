@@ -1078,28 +1078,6 @@ export class SoundSystem {
     });
   }
 
-  resonance(affinity = 'neutral') {
-    const freq =
-      { mind: 440, force: 132, tide: 294, flame: 196, grove: 349, shadow: 110, neutral: 262 }[affinity] ||
-      262;
-    [1, 1.5, 2].forEach((ratio, index) =>
-      this.patch({
-        seed: `resonance:${affinity}:${index}`,
-        freq: freq * ratio,
-        endFreq: freq * ratio * 1.22,
-        duration: 0.48 - index * 0.04,
-        wave: index ? 'triangle' : 'sine',
-        gain: index ? 0.027 : 0.04,
-        delay: index * 0.06,
-        noiseGain: index ? 0.003 : 0.012,
-        noiseFreq: 2500,
-        filterStart: 700,
-        filterEnd: 3100,
-        reverb: 0.52,
-      })
-    );
-  }
-
   clash() {
     this.duck(0.2, 0.5);
     this.patch({

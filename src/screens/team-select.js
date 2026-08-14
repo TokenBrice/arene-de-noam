@@ -11,7 +11,6 @@ const {
   SQUAD_PRESETS,
   QUICK_RULES,
   quickRule,
-  CONTRACTS,
   TRAINERS,
   ARENAS,
   TRIALS,
@@ -19,7 +18,6 @@ const {
   circuitMatch,
   PROFILE_AXES,
   bestLeadIndex,
-  recommendedDoctrine,
   remixTeam,
   teamProfile,
   params,
@@ -37,7 +35,6 @@ const {
   escapeHtml,
   disposeArena,
   emblemHtml,
-  bondsHtml,
   comboRoutesHtml,
   topbar,
 } = ctx;
@@ -79,9 +76,7 @@ function newSelection(mode) {
             ? TRAINERS[index].difficulty
             : ctx.save.difficulty,
     filter: 'all',
-    doctrine: 'balanced',
     quickRule: 'standard',
-    contractId: 'random',
     circuitCondition: mode === 'circuit' ? circuit.condition.id : null,
   };
 }
@@ -148,7 +143,7 @@ function creatureCard(id, selected, lead, enemy = ctx.selection?.enemyTeam || []
         return `<span class="kit-move kind-${move.kind} ${move.signature ? 'signature' : ''}" style="--kit-color:${color}" title="${escapeHtml(`${t(`move.${moveId}`)} — ${t(`move.effect.${moveId}`)}`)}"><i>${moveArchetype(move)}</i><small>${t(`move.${moveId}`)}</small></span>`;
       })
       .join('');
-  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-dot" style="background:${a.color}">${a.icon}</span><span>${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div>${rank ? `<div class="mastery-perk-line">★ ${t(`mastery.perk.${rank}`)}</div>` : ''}</button>`;
+  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-dot" style="background:${a.color}">${a.icon}</span><span>${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
 }
 
 function kitShowcaseHtml(id) {
@@ -174,14 +169,7 @@ function renderTeamSelect(mode = 'ladder') {
     circuit = mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null,
     activeTrial = mode === 'trial' ? TRIALS.find((trial) => trial.id === ctx.selection.trialId) : null,
     ranked = ['ladder', 'circuit'].includes(mode);
-  const matchup = teamMatchup(ctx.selection.team, ctx.selection.enemyTeam),
-    squadProfile = teamProfile(ctx.selection.team),
-    recommendedContract = {
-      pressure: 'onslaught',
-      control: 'tactician',
-      sustain: 'guardian',
-      tempo: 'relay',
-    }[squadProfile.dominant];
+  const matchup = teamMatchup(ctx.selection.team, ctx.selection.enemyTeam);
   const visibleIds =
     ctx.selection.filter === 'all'
       ? CREATURE_IDS
@@ -203,11 +191,6 @@ function renderTeamSelect(mode = 'ladder') {
     mode === 'quick'
       ? `<div class="field"><label for="arena-select">${t('select.arena')}</label><select id="arena-select">${ARENAS.map((id) => `<option value="${id}" ${ctx.selection.arena === id ? 'selected' : ''}>${t(`arena.${id}`)}</option>`).join('')}</select></div><div class="field"><label for="quick-rule">${t('quickRule.title')}</label><select id="quick-rule">${QUICK_RULES.map((rule) => `<option value="${rule.id}" ${ctx.selection.quickRule === rule.id ? 'selected' : ''}>${rule.icon} ${t(`quickRule.${rule.id}`)}</option>`).join('')}</select></div><div class="battle-rule-preview"><b>${quickRule(ctx.selection.quickRule).icon} ${t(`quickRule.${ctx.selection.quickRule}`)}</b><span>${t(`quickRule.effect.${ctx.selection.quickRule}`)}</span></div>`
       : '';
-  const chosenContract = CONTRACTS.find((contract) => contract.id === ctx.selection.contractId),
-    contractControl =
-      mode !== 'gauntlet'
-        ? `<div class="field contract-field"><label for="contract-select">${t('contract.choose')}</label><select id="contract-select"><option value="random" ${ctx.selection.contractId === 'random' ? 'selected' : ''}>◇ ${t('contract.random')}</option>${CONTRACTS.map((contract) => `<option value="${contract.id}" ${ctx.selection.contractId === contract.id ? 'selected' : ''}>${contract.id === recommendedContract ? '★ ' : ''}${contract.icon} ${t(`contract.${contract.id}`)}</option>`).join('')}</select></div><div class="contract-preview ${chosenContract ? 'chosen' : 'random'} ${chosenContract?.id === recommendedContract ? 'recommended' : ''}">${chosenContract ? `<b>${chosenContract.id === recommendedContract ? '★ ' : ''}${chosenContract.icon} ${t(`contract.${chosenContract.id}`)}</b><span>${t(`contract.effect.${chosenContract.id}`, { target: chosenContract.target })}</span>` : `<b>◇ ${t('contract.random')}</b><span>${t('contract.randomHint')}</span><small>★ ${t('contract.suggested', { contract: t(`contract.${recommendedContract}`) })}</small>`}</div>`
-        : '';
   const enemyRows =
     `<p class="meta-row">✦ ${t(`arena.${ctx.selection.arena}`)}</p>` +
     ctx.selection.enemyTeam
@@ -226,13 +209,6 @@ function renderTeamSelect(mode = 'ladder') {
           `<div class="selected-row ${index === scoutedLead ? 'recommended-lead' : ''}"><img src="${sprite(id)}" alt=""><span>${creatureName(id)}${index === scoutedLead ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</span><button class="icon-btn" data-lead-index="${index}" aria-label="${t('select.chooseLead')}">${ctx.selection.lead === index ? '★' : '☆'}</button></div>`
       )
       .join('');
-  const recommended = recommendedDoctrine(ctx.selection.team);
-  const doctrines = ['balanced', 'assault', 'bastion', 'ambush']
-    .map(
-      (id) =>
-        `<button type="button" class="doctrine-card ${ctx.selection.doctrine === id ? 'active' : ''} ${recommended === id ? 'recommended' : ''}" data-doctrine="${id}" aria-pressed="${ctx.selection.doctrine === id}">${recommended === id ? `<em>${t('profile.recommended')}</em>` : ''}<b>${t(`doctrine.icon.${id}`)} ${t(`doctrine.${id}`)}</b><small>${t(`doctrine.effect.${id}`)}</small></button>`
-    )
-    .join('');
   const presets = `<section class="squad-presets"><div class="squad-presets-head"><span><b class="eyebrow">${t('squad.title')}</b><small>${t('squad.hint')}</small></span>${actionButton(`⟳ ${t('squad.remix')}`, 'remix-team', 'subtle-btn remix-team-btn')}</div><div class="squad-preset-track">${SQUAD_PRESETS.map(
     (preset) => {
       const active = preset.team.every((id, i) => ctx.selection.team[i] === id);
@@ -243,7 +219,7 @@ function renderTeamSelect(mode = 'ladder') {
     { length: 3 },
     (_, slot) => {
       const squad = ctx.save.customSquads?.[slot];
-      return `<article class="custom-squad ${squad ? 'filled' : 'empty'}"><span><b>${t('loadout.slot', { slot: slot + 1 })}</b><small>${squad ? t(`doctrine.${squad.doctrine}`) : t('loadout.empty')}</small></span><div class="custom-squad-team">${squad ? squad.team.map((id, index) => `<i class="${index === squad.lead ? 'lead' : ''}"><img src="${sprite(id)}" alt="${creatureName(id)}"></i>`).join('') : '◇ ◇ ◇'}</div><div class="custom-squad-actions">${squad ? `<button type="button" data-custom-load="${slot}">${t('loadout.load')}</button><button type="button" data-custom-save="${slot}">${t('loadout.replace')}</button><button type="button" data-custom-clear="${slot}" aria-label="${t('loadout.clear')}">×</button>` : `<button type="button" data-custom-save="${slot}" ${ctx.selection.team.length === 3 ? '' : 'disabled'}>${t('loadout.save')}</button>`}</div></article>`;
+      return `<article class="custom-squad ${squad ? 'filled' : 'empty'}"><span><b>${t('loadout.slot', { slot: slot + 1 })}</b><small>${squad ? t('select.lead') : t('loadout.empty')}</small></span><div class="custom-squad-team">${squad ? squad.team.map((id, index) => `<i class="${index === squad.lead ? 'lead' : ''}"><img src="${sprite(id)}" alt="${creatureName(id)}"></i>`).join('') : '◇ ◇ ◇'}</div><div class="custom-squad-actions">${squad ? `<button type="button" data-custom-load="${slot}">${t('loadout.load')}</button><button type="button" data-custom-save="${slot}">${t('loadout.replace')}</button><button type="button" data-custom-clear="${slot}" aria-label="${t('loadout.clear')}">×</button>` : `<button type="button" data-custom-save="${slot}" ${ctx.selection.team.length === 3 ? '' : 'disabled'}>${t('loadout.save')}</button>`}</div></article>`;
     }
   ).join('')}</div></section>`;
   const circuitBanner = circuit
@@ -287,7 +263,7 @@ function renderTeamSelect(mode = 'ladder') {
   const difficultyControl = !['gauntlet', 'circuit', 'trial'].includes(mode)
       ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty">${['apprentice', 'standard', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
       : '',
-    planControls = `<details class="battle-plan"><summary><span><b>${t('select.combatPlan')}</b><small>${t(`doctrine.${ctx.selection.doctrine}`)} · ${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}${contractControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div><h3>${t('doctrine.title')}</h3><div class="doctrine-picker">${doctrines}</div>${teamProfileHtml(ctx.selection.team)}<h3>${t('bond.title')}</h3>${bondsHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
+    planControls = `<details class="battle-plan"><summary><span><b>${t('select.combatPlan')}</b><small>${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div>${teamProfileHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
     ready = actionButton(
       readyLabel,
       'start-battle',
@@ -300,7 +276,7 @@ function renderTeamSelect(mode = 'ladder') {
     .querySelector('.selection-layout')
     ?.insertAdjacentHTML(
       'afterend',
-      `<nav class="mobile-selection-dock" aria-label="${t('select.plan')}"><div>${ctx.selection.team.map((id, index) => `<i class="${ctx.selection.lead === index ? 'lead' : ''}"><img src="${sprite(id)}" alt="${creatureName(id)}"></i>`).join('')}</div><span><b>${t('select.selected', { count: ctx.selection.team.length })}</b><small>${t(`doctrine.${ctx.selection.doctrine}`)}</small></span><button type="button" data-action="open-plan">${t('select.plan')} ↑</button></nav>`
+      `<nav class="mobile-selection-dock" aria-label="${t('select.plan')}"><div>${ctx.selection.team.map((id, index) => `<i class="${ctx.selection.lead === index ? 'lead' : ''}"><img src="${sprite(id)}" alt="${creatureName(id)}"></i>`).join('')}</div><span><b>${t('select.selected', { count: ctx.selection.team.length })}</b><small>${t(`arena.${ctx.selection.arena}`)}</small></span><button type="button" data-action="open-plan">${t('select.plan')} ↑</button></nav>`
     );
   const difficultyField = screen.querySelector('#difficulty')?.closest('.field');
   difficultyField?.insertAdjacentHTML(
@@ -346,18 +322,11 @@ function renderTeamSelect(mode = 'ladder') {
       renderTeamSelect(mode);
     })
   );
-  screen.querySelectorAll('[data-doctrine]').forEach((button) =>
-    button.addEventListener('click', () => {
-      ctx.selection.doctrine = button.dataset.doctrine;
-      renderTeamSelect(mode);
-    })
-  );
   screen.querySelectorAll('[data-squad]').forEach((button) =>
     button.addEventListener('click', () => {
       const preset = SQUAD_PRESETS.find((x) => x.id === button.dataset.squad);
       ctx.selection.team = [...preset.team];
       ctx.selection.lead = preset.lead;
-      ctx.selection.doctrine = preset.doctrine;
       ctx.selection.filter = 'all';
       renderTeamSelect(mode);
     })
@@ -371,7 +340,6 @@ function renderTeamSelect(mode = 'ladder') {
       remix = remixTeam(ctx.selection.enemyTeam, seed + attempt++);
     ctx.selection.team = remix.team;
     ctx.selection.lead = remix.lead;
-    ctx.selection.doctrine = remix.doctrine;
     ctx.selection.filter = 'all';
     sound.ui();
     renderTeamSelect(mode);
@@ -383,7 +351,6 @@ function renderTeamSelect(mode = 'ladder') {
       if (!squad) return;
       ctx.selection.team = [...squad.team];
       ctx.selection.lead = squad.lead;
-      ctx.selection.doctrine = squad.doctrine;
       ctx.selection.filter = 'all';
       sound.ui();
       renderTeamSelect(mode);
@@ -395,7 +362,7 @@ function renderTeamSelect(mode = 'ladder') {
       const slot = Number(button.dataset.customSave);
       ctx.save.customSquads = Array.from({ length: 3 }, (_, index) =>
         index === slot
-          ? { team: [...ctx.selection.team], lead: ctx.selection.lead, doctrine: ctx.selection.doctrine }
+          ? { team: [...ctx.selection.team], lead: ctx.selection.lead }
           : ctx.save.customSquads?.[index] || null
       );
       persist();
@@ -435,10 +402,6 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.selection.quickRule = e.target.value;
     renderTeamSelect(mode);
   });
-  screen.querySelector('#contract-select')?.addEventListener('change', (e) => {
-    ctx.selection.contractId = e.target.value;
-    renderTeamSelect(mode);
-  });
   screen.querySelector('[data-action="random-enemy"]')?.addEventListener('click', () => {
     ctx.selection.enemyTeam = randomDistinct(3, ctx.selection.enemyTeam.join('').length + Date.now());
     renderTeamSelect(mode);
@@ -447,7 +410,7 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.save.lastTeam = [...ctx.selection.team];
     if (['quick', 'ladder'].includes(mode)) ctx.save.difficulty = ctx.selection.difficulty;
     persist();
-    if (mode === 'gauntlet') startGauntlet(ctx.selection.team, ctx.selection.lead, ctx.selection.doctrine);
+    if (mode === 'gauntlet') startGauntlet(ctx.selection.team, ctx.selection.lead);
     else
       startBattle({
         playerTeam: ctx.selection.team,
@@ -458,8 +421,6 @@ function renderTeamSelect(mode = 'ladder') {
         arena: ctx.selection.arena,
         difficulty: ctx.selection.difficulty,
         trainerIndex: ctx.selection.trainerIndex,
-        doctrine: ctx.selection.doctrine,
-        contractId: ctx.selection.contractId === 'random' ? null : ctx.selection.contractId,
         quickRuleId: mode === 'quick' ? ctx.selection.quickRule : null,
         circuitCondition: ctx.selection.circuitCondition,
         trialId: ctx.selection.trialId,

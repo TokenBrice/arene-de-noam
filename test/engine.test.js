@@ -4,6 +4,7 @@ import {
   activeOf,
   applyReplacement,
   applyTrainerCommand,
+  canUseTrainerCommand,
   createBattle,
   getLegalActions,
   previewIncomingAfterSwitch,
@@ -202,86 +203,78 @@ test('team Surge locks signatures until earned, then spends on a cinematic move'
   assert.ok(result.state.sides.player.surge < 20, 'the enemy reply may rebuild only a sliver of Surge');
 });
 
-test('alternating techniques builds Battle Flow while repetition breaks it', () => {
-  let state = createBattle({
-    playerTeam: ['orakyn', 'abyssar', 'virelia'],
-    enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+test('flat Surge gains cover damage, support, misses, HP loss, and barrier absorption', () => {
+  const supportState = createBattle({
+    playerTeam: ['kordane', 'abyssar', 'virelia'],
+    enemyTeam: ['orakyn', 'calderoc', 'farfombre'],
     seed: 83,
   });
-  state.sides.player.team[0].attack = 1;
-  state.sides.enemy.team[0].attack = 1;
+  supportState.sides.player.surge = 0;
   let result = resolveTurn(
-    state,
+    supportState,
+    { type: 'move', moveId: 'resonant_focus' },
+    { type: 'move', moveId: 'lucid_arc' }
+  );
+  assert.ok(
+    result.events.some((event) => event.type === 'surge' && event.side === 'player' && event.amount === 25)
+  );
+
+  const missState = make();
+  missState.sides.player.surge = 0;
+  activeOf(missState, 'enemy').statuses.evasive = { appliedTurn: 0, stacks: 1 };
+  result = resolveTurn(
+    missState,
     { type: 'move', moveId: 'lucid_arc' },
     { type: 'move', moveId: 'crystal_strike' }
   );
-  state = result.state;
-  const before = state.sides.player.surge;
+  assert.ok(result.events.some((event) => event.type === 'miss' && event.sourceSide === 'player'));
+  assert.ok(
+    result.events.some((event) => event.type === 'surge' && event.side === 'player' && event.amount === 20)
+  );
+
+  const damageState = make();
+  damageState.sides.player.surge = 0;
+  damageState.sides.enemy.surge = 0;
+  activeOf(damageState, 'enemy').barrier = 12;
   result = resolveTurn(
-    state,
-    { type: 'move', moveId: 'slowing_riddle' },
+    damageState,
+    { type: 'move', moveId: 'lucid_arc' },
     { type: 'move', moveId: 'crystal_strike' }
   );
-  state = result.state;
-  const flow = result.events.find((event) => event.type === 'flow' && event.side === 'player');
-  assert.equal(flow.count, 1);
-  assert.equal(flow.surge, 2);
-  assert.ok(state.sides.player.surge >= before + 2);
-  result = resolveTurn(
-    state,
-    { type: 'move', moveId: 'slowing_riddle' },
-    { type: 'move', moveId: 'crystal_strike' }
+  const playerHit = result.events.find((event) => event.type === 'damage' && event.sourceSide === 'player');
+  assert.ok(
+    result.events.some((event) => event.type === 'surge' && event.side === 'player' && event.amount === 20)
   );
-  assert.equal(result.state.sides.player.flow, 0);
+  assert.ok(
+    result.events.some(
+      (event) =>
+        event.type === 'surge' &&
+        event.side === 'enemy' &&
+        event.source === 'resolve' &&
+        event.amount === Math.round(playerHit.amount * 0.25)
+    )
+  );
+  assert.ok(playerHit.absorbed > 0);
   assert.equal(
-    result.events.some((event) => event.type === 'flow' && event.side === 'player'),
+    result.events.some((event) => event.type === 'flow'),
     false
   );
 });
 
-test('Battle Flow crescendo trims active cooldowns and reports the refreshed kit', () => {
+test('mastery ranks never change combat stats, openings, or Signature cost', () => {
   const state = createBattle({
-    playerTeam: ['orakyn', 'abyssar', 'virelia'],
-    enemyTeam: ['kordane', 'calderoc', 'farfombre'],
-    seed: 183,
-  });
-  state.sides.player.surge = 100;
-  state.sides.player.lastMoveId = 'lucid_arc';
-  state.sides.player.flow = 2;
-  state.sides.player.team[0].cooldowns.lucid_arc = { remaining: 2, appliedTurn: state.turn };
-  const result = resolveTurn(
-      state,
-      { type: 'move', moveId: 'oracle_veil' },
-      { type: 'move', moveId: 'crystal_strike' }
-    ),
-    flow = result.events.find((event) => event.type === 'flow' && event.side === 'player');
-  assert.equal(flow.count, 3);
-  assert.deepEqual(flow.refreshed, ['lucid_arc', 'oracle_veil']);
-  assert.equal(result.state.sides.player.team[0].cooldowns.lucid_arc.remaining, 1);
-  assert.equal(result.state.sides.player.team[0].cooldowns.oracle_veil.remaining, 1);
-  assert.equal(state.sides.player.team[0].cooldowns.lucid_arc.remaining, 2);
-});
-
-test('veteran mastery grants explicit player-only rank perks', () => {
-  let state = createBattle({
     playerTeam: ['orakyn', 'solflare', 'virelia'],
     enemyTeam: ['kordane', 'calderoc', 'farfombre'],
     seed: 19,
     masteryRanks: { orakyn: 5, solflare: 5, virelia: 2 },
   });
-  assert.equal(state.sides.player.team[0].barrier, 6);
-  assert.equal(state.sides.player.team[2].barrier, 6);
-  assert.ok(state.sides.player.team[0].maxHp > CREATURES.orakyn.maxHp);
-  assert.equal(state.sides.enemy.team[0].masteryRank, 0);
-  assert.equal(state.sides.player.surge, 50, 'rank 4 lead adds five Surge after the harmony bond');
-  assert.equal(signatureCostFor(state.sides.player.team[0]), 90);
-  assert.equal(signatureCostFor(state.sides.player.team[1]), 70);
-  const result = resolveTurn(state, { type: 'switch', index: 1 }, { type: 'move', moveId: 'resonant_focus' });
-  state = result.state;
-  assert.ok(
-    result.events.some((event) => event.type === 'surge' && event.source === 'mastery' && event.amount === 5)
-  );
-  assert.equal(state.sides.player.surge, 65, 'switch and first-entry mastery bonuses both apply');
+  assert.equal(state.sides.player.team[0].barrier, 0);
+  assert.equal(state.sides.player.team[2].barrier, 0);
+  assert.equal(state.sides.player.team[0].maxHp, CREATURES.orakyn.maxHp);
+  assert.equal('masteryRank' in state.sides.player.team[0], false);
+  assert.equal(state.sides.player.surge, 30);
+  assert.equal(signatureCostFor(state.sides.player.team[0]), 100);
+  assert.equal(signatureCostFor(state.sides.player.team[1]), 80);
 });
 
 test('arena powers awaken every fourth turn and remain deterministic', () => {
@@ -305,10 +298,14 @@ test('arena powers awaken every fourth turn and remain deterministic', () => {
       result.events.some((e) => e.type === 'arena-pulse' && e.arena === arena),
       `${arena} pulse is emitted`
     );
+    assert.equal(
+      result.events.some((event) => event.type === 'resonance'),
+      false
+    );
   }
 });
 
-test('arena resonance rewards a matching active creature at a telegraphed pulse', () => {
+test('matching arena affinity grants no hidden Surge at a pulse', () => {
   const state = createBattle({
     playerTeam: ['kordane', 'orakyn', 'virelia'],
     enemyTeam: ['monolith', 'calderoc', 'farfombre'],
@@ -323,20 +320,13 @@ test('arena resonance rewards a matching active creature at a telegraphed pulse'
     { type: 'move', moveId: 'crystal_strike' },
     { type: 'move', moveId: 'gravity_fist' }
   );
-  assert.ok(
-    result.events.some(
-      (event) => event.type === 'resonance' && event.side === 'player' && event.affinity === 'force'
-    )
+  assert.equal(
+    result.events.some((event) => event.type === 'resonance'),
+    false
   );
-  assert.ok(
-    result.events.some(
-      (event) => event.type === 'resonance' && event.side === 'enemy' && event.affinity === 'force'
-    )
-  );
-  assert.ok(
-    result.events.some(
-      (event) => event.type === 'surge' && event.source === 'resonance' && event.amount === 10
-    )
+  assert.equal(
+    result.events.some((event) => event.type === 'surge' && event.source === 'resonance'),
+    false
   );
 });
 
@@ -347,11 +337,7 @@ test('innate talents create creature-specific opening, survival, and signature r
     seed: 29,
   });
   assert.ok(state.sides.player.team[0].statuses.focused, 'Orakyn foresees its opening');
-  assert.equal(
-    state.sides.enemy.team[0].barrier,
-    20,
-    'Monolith combines its foundation with the team bulwark'
-  );
+  assert.equal(state.sides.enemy.team[0].barrier, 14, 'Monolith receives only its innate Foundation barrier');
   state.sides.player.active = 1;
   state.sides.player.surge = 80;
   assert.ok(
@@ -394,29 +380,29 @@ test('innate talents create creature-specific opening, survival, and signature r
   assert.ok(getLegalActions(rooted.state, 'enemy').some((action) => action.type === 'switch'));
 });
 
-test('team bonds alter openings without adding hidden randomness', () => {
+test('team composition never alters neutral openings', () => {
   const hunters = createBattle({
     playerTeam: ['ferrax', 'pyrolynx', 'riptalon'],
     enemyTeam: ['orakyn', 'kordane', 'virelia'],
     seed: 44,
   });
-  assert.equal(hunters.sides.player.surge, 45);
-  assert.ok(hunters.sides.player.team[0].statuses.haste);
-  assert.deepEqual(hunters.sides.player.bonds, ['harmony', 'huntpack']);
+  assert.equal(hunters.sides.player.surge, 30);
+  assert.equal(hunters.sides.player.team[0].statuses.haste, undefined);
+  assert.equal('bonds' in hunters.sides.player, false);
   const grove = createBattle({
     playerTeam: ['thornox', 'mossaur', 'florafae'],
     enemyTeam: ['orakyn', 'kordane', 'virelia'],
     seed: 44,
   });
-  assert.equal(grove.sides.player.surge, 40);
-  assert.ok(grove.sides.player.team[0].statuses.focused);
-  assert.ok(grove.sides.enemy.team[0].statuses.marked);
+  assert.equal(grove.sides.player.surge, 30);
+  assert.equal(grove.sides.player.team[0].statuses.focused, undefined);
+  assert.equal(grove.sides.enemy.team[0].statuses.marked, undefined);
   const bulwark = createBattle({
     playerTeam: ['abyssar', 'nymbloom', 'virelia'],
     enemyTeam: ['orakyn', 'kordane', 'farfombre'],
     seed: 44,
   });
-  assert.ok(bulwark.sides.player.team.every((c) => c.barrier === 6));
+  assert.ok(bulwark.sides.player.team.every((c) => c.barrier === 0));
 });
 
 test('trial modifiers produce explicit high-stakes battle variants', () => {
@@ -445,89 +431,43 @@ test('trial modifiers produce explicit high-stakes battle variants', () => {
   assert.ok(state.sides.enemy.team.every((c) => c.barrier >= 18));
 });
 
-test('battle doctrines trade opening safety for tempo without affecting the enemy', () => {
+test('obsolete doctrine input is ignored and openings remain neutral', () => {
   const base = {
     playerTeam: ['orakyn', 'abyssar', 'virelia'],
     enemyTeam: ['kordane', 'calderoc', 'farfombre'],
     seed: 58,
   };
-  let state = createBattle({ ...base, doctrine: 'assault' });
-  assert.equal(state.sides.player.surge, 65);
-  assert.ok(state.sides.player.team[0].statuses.marked);
-  assert.equal(state.sides.enemy.surge, 45);
-  state = createBattle({ ...base, doctrine: 'bastion' });
-  assert.equal(state.sides.player.surge, 35);
-  assert.ok(state.sides.player.team.every((c) => c.barrier >= 10));
-  state = createBattle({ ...base, doctrine: 'ambush' });
-  assert.ok(state.sides.player.team[0].statuses.focused);
-  assert.ok(state.sides.player.team[0].statuses.haste);
-  assert.ok(state.sides.player.team.slice(1).every((c) => c.hp < c.maxHp));
-  state = createBattle({ ...base, doctrine: 'unknown' });
-  assert.equal(state.doctrine, 'balanced');
+  const state = createBattle({ ...base, doctrine: 'assault' });
+  assert.equal(state.sides.player.surge, 30);
+  assert.equal(state.sides.enemy.surge, 30);
+  assert.equal('doctrine' in state, false);
+  assert.ok(state.sides.player.team.every((creature) => creature.hp === creature.maxHp));
 });
 
-test('each doctrine grants one immutable once-per-battle Trainer Command', () => {
+test('Coach is conditional, immutable, complete, free, and once per battle', () => {
   const base = {
     playerTeam: ['orakyn', 'abyssar', 'virelia'],
     enemyTeam: ['kordane', 'calderoc', 'farfombre'],
     seed: 58,
   };
-  for (const doctrine of ['balanced', 'assault', 'bastion', 'ambush']) {
-    const state = createBattle({ ...base, doctrine }),
-      before = structuredClone(state);
-    if (doctrine === 'balanced') {
-      activeOf(state, 'player').hp -= 20;
-      activeOf(state, 'player').statuses.stunned = { appliedTurn: state.turn, remaining: 2, stacks: 1 };
-      activeOf(state, 'player').statuses.burning = { appliedTurn: state.turn, remaining: 2, stacks: 1 };
-    }
-    const result = applyTrainerCommand(state);
-    assert.deepEqual(
-      state,
-      doctrine === 'balanced'
-        ? {
-            ...before,
-            sides: {
-              ...before.sides,
-              player: {
-                ...before.sides.player,
-                team: before.sides.player.team.map((c, i) =>
-                  i
-                    ? c
-                    : {
-                        ...c,
-                        hp: c.hp - 20,
-                        statuses: {
-                          ...c.statuses,
-                          stunned: { appliedTurn: state.turn, remaining: 2, stacks: 1 },
-                          burning: { appliedTurn: state.turn, remaining: 2, stacks: 1 },
-                        },
-                      }
-                ),
-              },
-            },
-          }
-        : before
-    );
-    assert.equal(result.state.sides.player.commandUsed, true);
-    assert.ok(result.events.some((event) => event.type === 'trainer-command' && event.command === doctrine));
-    if (doctrine === 'balanced')
-      assert.equal(
-        Object.keys(activeOf(result.state, 'player').statuses).filter((id) =>
-          ['marked', 'stunned', 'rooted', 'burning'].includes(id)
-        ).length,
-        1
-      );
-    if (doctrine === 'assault') {
-      assert.ok(result.state.sides.player.surge > state.sides.player.surge);
-      assert.ok(activeOf(result.state, 'player').statuses.marked);
-    }
-    if (doctrine === 'bastion') {
-      assert.equal(activeOf(result.state, 'player').barrier, 35);
-      assert.deepEqual(Object.keys(activeOf(result.state, 'player').statuses), ['focused']);
-    }
-    if (doctrine === 'ambush') assert.ok(activeOf(result.state, 'player').statuses.focused);
-    assert.throws(() => applyTrainerCommand(result.state), /not available/);
-  }
+  const state = createBattle(base);
+  assert.equal(canUseTrainerCommand(state), false);
+  assert.throws(() => applyTrainerCommand(state), /not available/);
+  const penalized = structuredClone(state);
+  activeOf(penalized, 'player').statuses.stunned = { appliedTurn: 1, remaining: 2, stacks: 1 };
+  activeOf(penalized, 'player').statuses.burning = { appliedTurn: 1, remaining: 2, stacks: 2 };
+  activeOf(penalized, 'player').statuses.focused = { appliedTurn: 1, stacks: 1 };
+  const before = structuredClone(penalized),
+    result = applyTrainerCommand(penalized);
+  assert.deepEqual(penalized, before);
+  assert.equal(result.state.turn, before.turn);
+  assert.equal(result.state.phase, 'choice');
+  assert.equal(result.state.sides.player.commandUsed, true);
+  assert.equal(result.state.sides.player.surge, before.sides.player.surge + 15);
+  assert.deepEqual(Object.keys(activeOf(result.state, 'player').statuses), ['focused']);
+  assert.ok(result.events.some((event) => event.type === 'trainer-command' && event.command === 'coach'));
+  assert.equal(result.events.filter((event) => event.type === 'status' && !event.applied).length, 2);
+  assert.throws(() => applyTrainerCommand(result.state), /not available/);
 });
 
 test('gauntlet boons accumulate explicit player-only advantages', () => {
@@ -537,12 +477,12 @@ test('gauntlet boons accumulate explicit player-only advantages', () => {
     seed: 59,
     modifiers: ['player_surge', 'player_aegis', 'player_vitality', 'player_focus'],
   });
-  assert.equal(state.sides.player.surge, 70);
+  assert.equal(state.sides.player.surge, 55);
   assert.ok(state.sides.player.team.every((c) => c.barrier >= 12));
   assert.ok(state.sides.player.team.every((c) => c.maxHp > CREATURES[c.id].maxHp));
   assert.ok(state.sides.player.team[0].statuses.focused);
   assert.ok(state.sides.enemy.team[0].statuses.marked);
-  assert.equal(state.sides.enemy.surge, 45);
+  assert.equal(state.sides.enemy.surge, 30);
 });
 
 test('multi-hit, barriers, drains, recoil, and damage-over-time emit semantic events', () => {
@@ -963,8 +903,8 @@ test('knockout skips the second move and requires a free replacement', () => {
   const beforeSurge = result.state.sides.enemy.surge,
     replaced = applyReplacement(result.state, 'enemy', replacement);
   assert.equal(replaced.state.phase, 'choice');
-  assert.equal(replaced.state.sides.enemy.surge, Math.min(100, beforeSurge + 18));
-  assert.ok(activeOf(replaced.state, 'enemy').statuses.focused);
+  assert.equal(replaced.state.sides.enemy.surge, beforeSurge);
+  assert.equal(activeOf(replaced.state, 'enemy').statuses.focused, undefined);
   assert.ok(replaced.events.some((e) => e.type === 'rally'));
 });
 
@@ -1004,10 +944,8 @@ test('the last fighters enter one symmetric Final Duel exactly once', () => {
   assert.equal(result.events.filter((event) => event.type === 'final-duel').length, 1);
   assert.equal(result.state.finalDuelTriggered, true);
   assert.equal(
-    result.events.filter(
-      (event) => event.type === 'surge' && event.source === 'final-duel' && event.amount === 12
-    ).length,
-    2
+    result.events.some((event) => event.type === 'surge' && event.source === 'final-duel'),
+    false
   );
   const again = resolveTurn(
     result.state,

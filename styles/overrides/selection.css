@@ -307,31 +307,6 @@
 .profile-bars > span.dominant > b {
   color: #ffe78d;
 }
-.doctrine-card {
-  position: relative;
-}
-.doctrine-card.recommended {
-  border-color: #ffe37642;
-}
-.doctrine-card.recommended > em {
-  position: absolute;
-  top: -6px;
-  right: 5px;
-  padding: 2px 5px;
-  border: 1px solid #ffe89055;
-  border-radius: 99px;
-  color: #3a2900;
-  background: #ffe58d;
-  font-size: var(--text-xs);
-  font-style: normal;
-  font-weight: 1000;
-  letter-spacing: 0.08em;
-  box-shadow: 0 0 9px #ffe17244;
-}
-.doctrine-card.recommended.active > em {
-  color: #211500;
-  background: #fff0a7;
-}
 .squad-presets-head {
   display: flex;
   align-items: center;
@@ -457,17 +432,6 @@
   .bestiary-tools input {
     font-size: var(--text-xs);
   }
-}
-.contract-preview small {
-  display: block;
-  margin-top: 5px;
-  color: #ffe38b;
-  font-size: var(--text-xs);
-  font-weight: 900;
-}
-.contract-preview.recommended {
-  border-color: #ffe27b60;
-  box-shadow: inset 2px 0 #ffe27b;
 }
 .draft-slot[data-draft-lead] {
   color: #f2ecff;
@@ -846,9 +810,6 @@ body.reduced-motion .battle-vignette {
 @media (max-width: 700px) {
   .battle-plan {
     margin-top: var(--space-3);
-  }
-  .battle-plan-body .doctrine-picker {
-    grid-template-columns: 1fr;
   }
   .battle-plan-body .field,
   .battle-plan-body select {

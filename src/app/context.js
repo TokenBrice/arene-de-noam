@@ -5,36 +5,29 @@ import { PASSIVES } from '../data/passives.js';
 import {
   FEATS,
   PERFORMANCE_GRADES,
+  battleAchievementSignals,
   masteryProgress,
   masteryRank,
   performanceGrade,
 } from '../data/progression.js';
-import { BONDS, teamBonds } from '../data/synergies.js';
 import { SQUAD_PRESETS } from '../data/squads.js';
 import { QUICK_RULES, quickRule } from '../data/battle-rules.js';
 import { battleAdviceKeys } from '../data/advice.js';
-import { CONTRACTS, contractProgress } from '../data/contracts.js';
 import { teamComboRoutes } from '../data/combos.js';
 import { TRAINERS, ARENAS } from '../data/trainers.js';
 import { TRIALS } from '../data/trials.js';
 import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../data/gauntlet.js';
 import { createDraft, dailyDraftSeed } from '../data/draft.js';
 import { circuitMatch } from '../data/circuit.js';
-import {
-  PROFILE_AXES,
-  bestLeadIndex,
-  recommendedDoctrine,
-  remixTeam,
-  teamProfile,
-} from '../data/team-profile.js';
+import { PROFILE_AXES, bestLeadIndex, remixTeam, teamProfile } from '../data/team-profile.js';
 import {
   createBattle,
   activeOf,
   resolveTurn,
   applyReplacement,
   applyTrainerCommand,
+  canUseTrainerCommand,
   getLegalActions,
-  ARENA_RESONANCE,
   SIGNATURE_COST,
   signatureCostFor,
   previewMove,
@@ -65,7 +58,6 @@ const LADDER_COUNT = TRAINERS.length;
 const LOG_EVENT_TYPES = new Set([
   'move-start',
   'trainer-command',
-  'flow',
   'assist',
   'perfect-relay',
   'final-duel',
@@ -78,7 +70,6 @@ const LOG_EVENT_TYPES = new Set([
   'recoil',
   'status-tick',
   'arena-pulse',
-  'resonance',
   'ace',
   'rally',
   'passive',
@@ -89,7 +80,6 @@ const LOG_EVENT_TYPES = new Set([
 const LOG_TYPE_GROUPS = {
   'move-start': 'move',
   'trainer-command': 'talent',
-  flow: 'move',
   assist: 'assist',
   'perfect-relay': 'switch',
   'final-duel': 'rally',
@@ -102,7 +92,6 @@ const LOG_TYPE_GROUPS = {
   'barrier-hit': 'defense',
   miss: 'dodge',
   'arena-pulse': 'arena',
-  resonance: 'arena',
   ace: 'ace',
   rally: 'rally',
   passive: 'talent',
@@ -190,14 +179,6 @@ function statusVisuals(creature) {
   return entries.join('');
 }
 
-function bondsHtml(ids, compact = false) {
-  const bonds = teamBonds(ids);
-  if (!bonds.length && compact) return '';
-  return bonds.length
-    ? `<div class="team-bonds ${compact ? 'compact' : ''}">${bonds.map((id) => `<span title="${escapeHtml(t(`bond.effect.${id}`))}"><b>${BONDS[id].icon} ${t(`bond.${id}`)}</b>${compact ? '' : `<small>${t(`bond.effect.${id}`)}</small>`}</span>`).join('')}</div>`
-    : `<div class="team-bonds empty"><span>${t('bond.none')}</span></div>`;
-}
-
 function comboRoutesHtml(ids, compact = false) {
   const routes = teamComboRoutes(ids).slice(0, compact ? 2 : 4);
   if (!routes.length) return compact ? '' : `<div class="combo-routes empty">${t('combo.none')}</div>`;
@@ -207,15 +188,12 @@ function comboRoutesHtml(ids, compact = false) {
 function draftInsightHtml(candidateId) {
   const before = [...(ctx.draftRun?.team || [])],
     after = [...before, candidateId],
-    oldBonds = teamBonds(before),
-    newBonds = teamBonds(after).filter((id) => !oldBonds.includes(id)),
     routeKey = (routeItem) =>
       `${routeItem.setterId}:${routeItem.setupMoveId}:${routeItem.finisherId}:${routeItem.finishMoveId}`,
     oldRoutes = new Set(teamComboRoutes(before).map(routeKey)),
     newRoutes = teamComboRoutes(after).filter((routeItem) => !oldRoutes.has(routeKey(routeItem))),
     newAffinity = !before.some((id) => CREATURES[id].affinity === CREATURES[candidateId].affinity);
   const tags = [
-    ...newBonds.map((id) => `${BONDS[id].icon} ${t('draft.newBond', { bond: t(`bond.${id}`) })}`),
     ...(newRoutes.length ? [`↗ ${t('draft.newRoutes', { count: newRoutes.length })}`] : []),
     ...(newAffinity && before.length
       ? [
@@ -243,14 +221,11 @@ Object.assign(ctx, {
   masteryProgress,
   masteryRank,
   performanceGrade,
-  BONDS,
-  teamBonds,
+  battleAchievementSignals,
   SQUAD_PRESETS,
   QUICK_RULES,
   quickRule,
   battleAdviceKeys,
-  CONTRACTS,
-  contractProgress,
   teamComboRoutes,
   TRAINERS,
   ARENAS,
@@ -262,7 +237,6 @@ Object.assign(ctx, {
   circuitMatch,
   PROFILE_AXES,
   bestLeadIndex,
-  recommendedDoctrine,
   remixTeam,
   teamProfile,
   createBattle,
@@ -270,8 +244,8 @@ Object.assign(ctx, {
   resolveTurn,
   applyReplacement,
   applyTrainerCommand,
+  canUseTrainerCommand,
   getLegalActions,
-  ARENA_RESONANCE,
   SIGNATURE_COST,
   signatureCostFor,
   previewMove,
@@ -309,7 +283,6 @@ Object.assign(ctx, {
   disposeArena,
   emblemHtml,
   statusVisuals,
-  bondsHtml,
   comboRoutesHtml,
   draftInsightHtml,
   topbar,

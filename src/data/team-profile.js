@@ -1,7 +1,6 @@
 import { CREATURES } from './creatures.js';
 import { MOVES } from './moves.js';
 import { affinityMultiplier } from './affinities.js';
-import { teamBonds } from './synergies.js';
 import { teamComboRoutes } from './combos.js';
 import { normalizeSeed, randomFromState } from '../battle/rng.js';
 
@@ -54,12 +53,6 @@ export function teamProfile(ids = []) {
   return { ...scores, dominant };
 }
 
-export function recommendedDoctrine(ids = []) {
-  return { pressure: 'assault', control: 'balanced', sustain: 'bastion', tempo: 'ambush' }[
-    teamProfile(ids).dominant
-  ];
-}
-
 export function bestLeadIndex(ids = [], enemyIds = []) {
   const score = (id) =>
     enemyIds.reduce(
@@ -98,12 +91,11 @@ export function remixTeam(enemyIds = [], seed = 1) {
         rngState = roll.state;
         const score =
           affinities.size * 9 +
-          teamBonds(team).length * 15 +
           Math.min(4, teamComboRoutes(team).length) * 5 +
           matchup * 2 +
           roll.value * REMIX_DITHER_MAX;
         if (!best || score > best.score) best = { team, score };
       }
   const team = best?.team || ids.slice(0, 3);
-  return { team, lead: bestLeadIndex(team, enemyIds), doctrine: recommendedDoctrine(team) };
+  return { team, lead: bestLeadIndex(team, enemyIds) };
 }

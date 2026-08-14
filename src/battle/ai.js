@@ -2,7 +2,6 @@ import { MOVES } from '../data/moves.js';
 import { affinityMultiplier } from '../data/affinities.js';
 import {
   activeOf,
-  ARENA_RESONANCE,
   BARRIER_CAP,
   getLegalActions,
   previewIncomingAfterSwitch,
@@ -136,13 +135,6 @@ function scoreSwitch(state, side, action, difficulty, style) {
       candidate.moves.some(
         (id) => MOVES[id].signature && state.sides[side].surge + 24 >= signatureCostFor(candidate)
       );
-  const cadence = state.modifiers?.includes('rapid_arena') ? 2 : 4,
-    resonanceSoon = Boolean(
-      state.arena &&
-      state.turn % cadence === 0 &&
-      candidate.affinity === ARENA_RESONANCE[state.arena] &&
-      activeOf(state, side).affinity !== candidate.affinity
-    );
   const opponentSide = side === 'player' ? 'enemy' : 'player',
     signatureThreat =
       state.sides[opponentSide].surge >= signatureCostFor(defender)
@@ -150,7 +142,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
         : null,
     signatureRead = signatureThreat
       ? affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 0.5
-        ? 24
+        ? 44
         : affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 2
           ? -20
           : 0
@@ -168,22 +160,11 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (relayReadiesSignature ? 25 : 0) +
     (style === 'deception' ? 8 : 0) +
     (lastOwnDecision?.type === 'switch' ? -30 : 0) +
-    (resonanceSoon ? (difficulty === 'champion' ? 22 : 12) : 0) +
     (difficulty === 'champion' ? signatureRead + (primed ? 18 : 0) : 0) +
     // Without a response forecast, Standard overvalues a visibly favorable
     // matchup and pivots a little too eagerly—a readable, human mistake.
     (difficulty === 'standard' ? 17 : 0)
   );
-}
-
-function flowTempoScore(state, side, action, difficulty) {
-  if (action.type !== 'move') return 0;
-  const owner = state.sides[side];
-  if (!owner.lastMoveId) return 0;
-  if (action.moveId === owner.lastMoveId) return owner.flow > 0 ? (difficulty === 'champion' ? -8 : -4) : 0;
-  const next = Math.min(3, owner.flow + 1),
-    move = MOVES[action.moveId];
-  return next * 2 + (next === 3 ? 10 + (move.cooldown > 0 ? 4 : 0) : 0);
 }
 
 export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'apprentice', style = 'direct') {
@@ -207,7 +188,7 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
     action,
     score:
       action.type === 'move'
-        ? scoreMove(state, side, action, difficulty, style) + flowTempoScore(state, side, action, difficulty)
+        ? scoreMove(state, side, action, difficulty, style)
         : scoreSwitch(state, side, action, difficulty, style),
   }));
   if (difficulty === 'apprentice') {

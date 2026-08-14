@@ -25,11 +25,9 @@ const {
   assistFx,
   perfectRelayFx,
   relayRushFx,
-  flowCrescendoFx,
   trainerCommandFx,
   signatureReadyFx,
   finalDuelFx,
-  resonanceFx,
   aceFx,
   statusTickFx,
   arenaPulseFx,
@@ -69,8 +67,6 @@ function eventPresentationDelay(event) {
   if (event.type === 'assist') return 480 / ctx.save.battleSpeed;
   if (event.type === 'perfect-relay') return 620 / ctx.save.battleSpeed;
   if (event.type === 'final-duel') return 1050 / ctx.save.battleSpeed;
-  if (event.type === 'resonance') return 560 / ctx.save.battleSpeed;
-  if (event.type === 'flow') return (event.count === 3 ? 620 : 220) / ctx.save.battleSpeed;
   if (event.type === 'ace') return 1050 / ctx.save.battleSpeed;
   if (event.type === 'ko') return 700 / ctx.save.battleSpeed;
   if (['heal', 'status', 'barrier', 'barrier-hit', 'miss', 'recoil', 'status-tick'].includes(event.type))
@@ -121,23 +117,6 @@ async function playEvents(events) {
     if (event.type === 'final-duel') {
       session.lastLine = t('battle.finalDuelLine');
       finalDuelFx(event);
-    }
-    if (event.type === 'flow') {
-      const refreshed = Boolean(event.refreshed?.length),
-        flowLine =
-          event.count === 3
-            ? refreshed
-              ? event.surge
-                ? 'battle.flowCrescendoLine'
-                : 'battle.flowCrescendoCappedLine'
-              : event.surge
-                ? 'battle.flowPeakLine'
-                : 'battle.flowPeakCappedLine'
-            : 'battle.flowLine';
-      session.lastLine = t(flowLine, { count: event.count, surge: event.surge });
-      screen.querySelector(`#hud-${event.side}`)?.classList.add('flow-flash');
-      if (event.count === 3) flowCrescendoFx(event);
-      else sound.ui();
     }
     if (event.type === 'damage') {
       const affinityNote =
@@ -225,11 +204,6 @@ async function playEvents(events) {
       relayRushFx(event);
       screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
     }
-    if (event.type === 'surge' && event.source === 'mastery') {
-      session.lastLine = t('battle.masterySpark');
-      screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
-      sound.ui();
-    }
     if (event.type === 'surge' && event.ready) {
       session.lastLine = t('battle.surgeReady');
       screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
@@ -238,13 +212,6 @@ async function playEvents(events) {
     if (event.type === 'arena-pulse') {
       session.lastLine = t('battle.arenaPulse', { arena: t(`arena.${event.arena}`) });
       arenaPulseFx(event);
-    }
-    if (event.type === 'resonance') {
-      session.lastLine = t('battle.resonanceLine', {
-        actor: creatureName(event.creatureId),
-        affinity: affinityName(event.affinity),
-      });
-      resonanceFx(event);
     }
     if (event.type === 'ace') {
       session.lastLine = t('battle.ace', {
@@ -255,7 +222,6 @@ async function playEvents(events) {
     }
     if (event.type === 'rally') {
       session.lastLine = t('battle.rally', { actor: creatureName(event.creatureId) });
-      tacticalFx({ ...event, status: 'focused' });
       screen.classList.add('rally-beat');
       sound.rally();
     }
@@ -303,7 +269,6 @@ async function playEvents(events) {
         'status-tick',
         'arena-pulse',
         'rally',
-        'resonance',
         'ace',
         'final-duel',
       ].includes(event.type) ||

@@ -537,21 +537,6 @@
   font-size: var(--text-xs);
   text-transform: uppercase;
 }
-.recap-stats .crescendo-stat {
-  grid-column: 1/-1;
-  grid-template-columns: auto 1fr;
-  justify-content: start;
-  column-gap: 8px;
-  border-color: #ffd96b4a;
-  background: linear-gradient(90deg, #ffd75718, #ff6fa410);
-}
-.recap-stats .crescendo-stat b {
-  color: #ffe27c;
-}
-.recap-stats .crescendo-stat small {
-  justify-self: start;
-  color: #f0d9e4;
-}
 .result-moment {
   font-size: 12px !important;
 }

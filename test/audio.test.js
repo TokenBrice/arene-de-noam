@@ -77,9 +77,9 @@ test('mixer settings clamp independently and mute only the master', () => {
   assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99, finalDuel: true }), 1);
 });
 
-test('the explicit migration chain advances every historical version to v14', () => {
-  assert.equal(SAVE_VERSION, 14);
-  assert.equal(SAVE_MIGRATIONS.length, 13);
+test('the explicit migration chain advances every historical version to v15', () => {
+  assert.equal(SAVE_VERSION, 15);
+  assert.equal(SAVE_MIGRATIONS.length, 14);
   let save = { version: 1 };
   for (let index = 0; index < SAVE_MIGRATIONS.length; index++) {
     save = SAVE_MIGRATIONS[index](save);
@@ -88,8 +88,15 @@ test('the explicit migration chain advances every historical version to v14', ()
   assert.equal(save.musicVolume, 0.45);
   assert.equal(save.sfxVolume, 0.8);
   assert.equal(save.expertMode, false);
-  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 14);
-  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 14);
+  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 15);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 15);
+  assert.deepEqual(
+    migrateSave({
+      version: 14,
+      customSquads: [{ team: ['orakyn', 'abyssar', 'virelia'], lead: 1, doctrine: 'ambush' }],
+    }).customSquads[0],
+    { team: ['orakyn', 'abyssar', 'virelia'], lead: 1 }
+  );
 });
 
 test('v13 saves migrate to simple mode while an explicit expert preference survives', () => {

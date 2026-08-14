@@ -1,11 +1,4 @@
 /* One last fighter on each side triggers a true endgame title card. */
-.flow-codex {
-  border-color: #ffd86b3b !important;
-  background: linear-gradient(120deg, #ffd54a0e, #ff72a20b) !important;
-}
-.flow-codex h3 {
-  color: #ffe385;
-}
 .final-duel-codex {
   border-color: #ffe17738 !important;
   background: linear-gradient(120deg, #ffce4d10, #ef4f7710) !important;
@@ -104,12 +97,6 @@
   font-weight: 1000;
   letter-spacing: 0.14em;
 }
-.duel-center small {
-  margin-top: 5px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 900;
-}
 .final-duel-mode .battle-top,
 .final-duel-mode .battle-controls,
 .final-duel-mode .hud-card {
@@ -187,64 +174,5 @@
   }
   .duel-center strong {
     font-size: 14px;
-  }
-  .duel-center small {
-    font-size: 8px;
-  }
-}
-/* Live Battle Flow readout inside the tactical codex. */
-.flow-codex-live {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-}
-.flow-live {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 45px 42px;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 8px;
-  border: 1px solid color-mix(in srgb, var(--flow-live-color) 34%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--flow-live-color) 8%, #080a20);
-}
-.flow-live img {
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 3px 4px #0008);
-}
-.flow-live b {
-  overflow: hidden;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.flow-live > i {
-  display: flex;
-  gap: 3px;
-}
-.flow-live > i em {
-  width: 11px;
-  height: 4px;
-  border-radius: 4px;
-  background: #ffffff18;
-}
-.flow-live > i em.filled {
-  background: var(--flow-live-color);
-  box-shadow: 0 0 7px var(--flow-live-color);
-}
-.flow-live strong {
-  color: #ffe781;
-  font-size: 11px;
-  text-align: right;
-}
-@media (max-width: 600px) {
-  .flow-codex-live {
-    grid-template-columns: 1fr;
-  }
-  .flow-live {
-    grid-template-columns: 34px minmax(0, 1fr) 45px 42px;
   }
 }

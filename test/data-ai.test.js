@@ -3,12 +3,11 @@ import assert from 'node:assert/strict';
 import { CREATURES, CREATURE_IDS } from '../src/data/creatures.js';
 import { MOVES } from '../src/data/moves.js';
 import { PASSIVES, PASSIVE_IDS } from '../src/data/passives.js';
-import { BONDS, teamBonds } from '../src/data/synergies.js';
 import { TRIALS } from '../src/data/trials.js';
 import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../src/data/gauntlet.js';
 import { SQUAD_PRESETS } from '../src/data/squads.js';
 import { QUICK_RULES, quickRule } from '../src/data/battle-rules.js';
-import { CONTRACTS, contractProgress } from '../src/data/contracts.js';
+import { battleAchievementSignals } from '../src/data/progression.js';
 import { teamComboRoutes } from '../src/data/combos.js';
 import { TRAINERS } from '../src/data/trainers.js';
 import { CIRCUIT_CONDITIONS, circuitMatch } from '../src/data/circuit.js';
@@ -17,7 +16,6 @@ import {
   PROFILE_AXES,
   REMIX_DITHER_MAX,
   bestLeadIndex,
-  recommendedDoctrine,
   remixTeam,
   teamProfile,
 } from '../src/data/team-profile.js';
@@ -56,18 +54,14 @@ test('every creature owns one named innate talent', () => {
   for (const id of CREATURE_IDS) assert.ok(PASSIVES[CREATURES[id].passive]);
 });
 
-test('team bonds reward distinct composition fantasies', () => {
-  assert.deepEqual(teamBonds(['ferrax', 'pyrolynx', 'riptalon']), ['harmony', 'huntpack']);
-  assert.ok(teamBonds(['thornox', 'mossaur', 'florafae']).includes('convergence'));
-  assert.ok(teamBonds(['abyssar', 'nymbloom', 'virelia']).includes('bulwark'));
-  assert.ok(teamBonds(['orakyn', 'mnemora', 'hexalune']).includes('spellweave'));
-  for (const ids of [
-    ['ferrax', 'pyrolynx', 'riptalon'],
-    ['thornox', 'mossaur', 'florafae'],
-  ])
-    for (const id of teamBonds(ids)) assert.ok(BONDS[id]);
-  assert.equal(teamBonds(['orakyn']).includes('convergence'), false);
-  assert.equal(teamBonds(['orakyn', 'lumivox']).includes('convergence'), false);
+test('composition has no mechanical bond data or battle opening effects', () => {
+  const state = createBattle({
+    playerTeam: ['ferrax', 'pyrolynx', 'riptalon'],
+    enemyTeam: ['thornox', 'mossaur', 'florafae'],
+  });
+  assert.equal(state.sides.player.surge, 30);
+  assert.equal(state.sides.enemy.surge, 30);
+  assert.equal('bonds' in state.sides.player, false);
 });
 
 test('all moves have unique mechanical and visual identities', () => {
@@ -208,15 +202,15 @@ test('the daily Draft publishes Standard as its default AI tier', () => {
   assert.equal(createDraft(20260814).difficulty, 'standard');
 });
 
-test('eight signature squads are legal, distinct, and demonstrate multiple doctrines', () => {
+test('eight signature squads are legal, distinct, and contain only team and lead setup', () => {
   assert.equal(SQUAD_PRESETS.length, 8);
   assert.equal(new Set(SQUAD_PRESETS.map((x) => x.team.join(','))).size, 8);
-  assert.ok(new Set(SQUAD_PRESETS.map((x) => x.doctrine)).size >= 4);
   SQUAD_PRESETS.forEach((preset) => {
     assert.equal(preset.team.length, 3);
     assert.equal(new Set(preset.team).size, 3);
     preset.team.forEach((id) => assert.ok(CREATURES[id]));
     assert.ok(preset.team[preset.lead]);
+    assert.equal('doctrine' in preset, false);
   });
 });
 
@@ -231,7 +225,6 @@ test('the Team Compass exposes bounded and distinct squad identities', () => {
   assert.equal(teamProfile(['florafae', 'thornox', 'mnemora']).dominant, 'tempo');
   assert.equal(teamProfile(['orakyn', 'abyssar', 'virelia']).dominant, 'sustain');
   assert.deepEqual(teamProfile([]), { pressure: 0, control: 0, sustain: 0, tempo: 0, dominant: 'pressure' });
-  assert.equal(recommendedDoctrine(['ferrax', 'pyrolynx', 'riptalon']), 'ambush');
 });
 
 test('smart remix builds deterministic tactical trios and scouts their lead', () => {
@@ -246,7 +239,7 @@ test('smart remix builds deterministic tactical trios and scouts their lead', ()
   assert.equal(new Set(first.team).size, 3);
   first.team.forEach((id) => assert.ok(CREATURES[id]));
   assert.equal(first.lead, bestLeadIndex(first.team, enemy));
-  assert.equal(first.doctrine, recommendedDoctrine(first.team));
+  assert.deepEqual(Object.keys(first).sort(), ['lead', 'team']);
   assert.ok(alternatives.size >= 3, 'different remix seeds should explore the roster');
   assert.ok(REMIX_DITHER_MAX <= 5, 'random dither must not outweigh tactical scoring');
 });
@@ -280,22 +273,31 @@ test('six quick battle rules are symmetric, distinct, and engine-backed', () => 
   assert.ok(switched.state.sides.player.team[1].statuses.haste);
 });
 
-test('five combat contracts track only their intended semantic events', () => {
-  assert.equal(CONTRACTS.length, 5);
+test('five silent battle achievement signals track only their intended semantic events', () => {
   const history = [
-    { type: 'damage', sourceSide: 'player', amount: 60 },
+    { type: 'damage', sourceSide: 'player', amount: 150 },
     { type: 'damage', sourceSide: 'enemy', amount: 90 },
-    { type: 'status', side: 'enemy', applied: true },
+    ...Array.from({ length: 5 }, () => ({ type: 'status', side: 'enemy', applied: true })),
     { type: 'surge', side: 'player', source: 'signature' },
-    { type: 'heal', side: 'player', amount: 20 },
-    { type: 'barrier-hit', side: 'player', amount: 15 },
+    { type: 'heal', side: 'player', amount: 30 },
+    { type: 'barrier', side: 'player', amount: 25 },
+    { type: 'switch', side: 'player' },
     { type: 'switch', side: 'player' },
   ];
-  assert.equal(contractProgress('onslaught', history), 60);
-  assert.equal(contractProgress('tactician', history), 1);
-  assert.equal(contractProgress('signature', history), 1);
-  assert.equal(contractProgress('guardian', history), 35);
-  assert.equal(contractProgress('relay', history), 1);
+  assert.deepEqual(battleAchievementSignals(history), {
+    onslaught: true,
+    tactician: true,
+    signature: true,
+    guardian: true,
+    relay: true,
+  });
+  assert.deepEqual(battleAchievementSignals([]), {
+    onslaught: false,
+    tactician: false,
+    signature: false,
+    guardian: false,
+    relay: false,
+  });
 });
 
 test('team combo routes expose cross-creature setups and never self-credit', () => {
@@ -529,29 +531,6 @@ test('Standard and Champion select their second-ranked action at their seeded im
   };
   assert.deepEqual(outcomes('standard'), [284, 716]);
   assert.deepEqual(outcomes('champion'), [1000]);
-});
-
-test('Standard AI rotates its kit to cash out a Flow crescendo', () => {
-  const state = createBattle({
-    playerTeam: ['monolith', 'mossaur', 'abyssar'],
-    enemyTeam: ['orakyn', 'abyssar', 'virelia'],
-    seed: 51,
-  });
-  state.rngState = 123456789;
-  assert.deepEqual(chooseAiAction(state, 'enemy', 'standard', 'direct'), {
-    type: 'move',
-    moveId: 'lucid_arc',
-  });
-  state.sides.enemy.lastMoveId = 'lucid_arc';
-  state.sides.enemy.flow = 2;
-  state.rngState = 123456789;
-  const before = structuredClone(state);
-  assert.deepEqual(chooseAiAction(state, 'enemy', 'standard', 'direct'), {
-    type: 'move',
-    moveId: 'slowing_riddle',
-  });
-  before.rngState = state.rngState;
-  assert.deepEqual(state, before);
 });
 
 test('Champion AI has no hidden late-turn urgency branch', () => {

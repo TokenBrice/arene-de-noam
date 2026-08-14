@@ -1,9 +1,9 @@
 import { CREATURES } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
-import { teamBonds } from '../data/synergies.js';
 import { calculateDamage } from './damage.js';
 import { randomFromState } from './rng.js';
 import {
+  NEGATIVE_STATUSES,
   applyStatus,
   cleanse,
   effectiveSpeed,
@@ -16,14 +16,7 @@ import {
 export const TURN_CAP = 40;
 export const SIGNATURE_COST = 100;
 export const BARRIER_CAP = 35;
-export const ARENA_RESONANCE = Object.freeze({
-  crystal: 'force',
-  grove: 'grove',
-  tidal: 'tide',
-  volcano: 'flame',
-  astral: 'mind',
-  eclipse: 'shadow',
-});
+export const SURGE_GAINS = Object.freeze({ damageMove: 20, supportMove: 25, directHpRatio: 0.25 });
 export const BATTLE_MODIFIERS = Object.freeze([
   'overdrive',
   'high_voltage',
@@ -38,23 +31,17 @@ export const BATTLE_MODIFIERS = Object.freeze([
   'player_vitality',
   'player_focus',
 ]);
-export const BATTLE_DOCTRINES = Object.freeze(['balanced', 'assault', 'bastion', 'ambush']);
 export function signatureCostFor(creature) {
-  const base = creature?.passive === 'sunborn' ? 80 : SIGNATURE_COST;
-  return Math.max(60, base - (creature?.masteryRank >= 5 ? 10 : 0));
+  return creature?.passive === 'sunborn' ? 80 : SIGNATURE_COST;
 }
 
-function makeCombatant(id, rank = 0) {
+function makeCombatant(id) {
   const base = CREATURES[id];
   if (!base) throw new Error(`Unknown creature: ${id}`);
-  const masteryRank = Math.max(0, Math.min(5, Math.floor(Number(rank) || 0))),
-    maxHp = masteryRank >= 3 ? Math.round(base.maxHp * 1.04) : base.maxHp;
   return {
     ...base,
-    maxHp,
-    hp: maxHp,
-    barrier: masteryRank >= 2 ? 6 : 0,
-    masteryRank,
+    hp: base.maxHp,
+    barrier: 0,
     statuses: {},
     cooldowns: {},
     talent: {},
@@ -76,23 +63,17 @@ export function createBattle({
   mode = 'quick',
   arena = null,
   modifiers = [],
-  doctrine = 'balanced',
-  masteryRanks = {},
   enemyAce = null,
 }) {
   assertTeam(playerTeam);
   assertTeam(enemyTeam);
   if (!playerTeam[playerLead] || !enemyTeam[enemyLead]) throw new Error('Invalid lead');
-  const playerBonds = teamBonds(playerTeam),
-    enemyBonds = teamBonds(enemyTeam);
   const activeModifiers = [...new Set(modifiers.filter((id) => BATTLE_MODIFIERS.includes(id)))];
-  const activeDoctrine = BATTLE_DOCTRINES.includes(doctrine) ? doctrine : 'balanced';
   const state = {
     version: 7,
     mode,
     arena,
     modifiers: activeModifiers,
-    doctrine: activeDoctrine,
     enemyAce,
     aceTriggered: false,
     finalDuelTriggered: false,
@@ -103,24 +84,17 @@ export function createBattle({
     rngState: Number(seed) >>> 0 || 1,
     sides: {
       player: {
-        team: playerTeam.map((id) => makeCombatant(id, masteryRanks[id])),
+        team: playerTeam.map((id) => makeCombatant(id)),
         active: playerLead,
         pendingReplacement: false,
-        surge:
-          30 + (playerBonds.includes('harmony') ? 15 : 0) + (playerBonds.includes('convergence') ? 10 : 0),
-        bonds: playerBonds,
-        lastMoveId: null,
-        flow: 0,
+        surge: 30,
         commandUsed: false,
       },
       enemy: {
         team: enemyTeam.map((id) => makeCombatant(id)),
         active: enemyLead,
         pendingReplacement: false,
-        surge: 30 + (enemyBonds.includes('harmony') ? 15 : 0) + (enemyBonds.includes('convergence') ? 10 : 0),
-        bonds: enemyBonds,
-        lastMoveId: null,
-        flow: 0,
+        surge: 30,
         commandUsed: false,
       },
     },
@@ -150,36 +124,9 @@ export function createBattle({
     state.sides.player.surge = Math.min(100, state.sides.player.surge + 25);
   if (activeModifiers.includes('player_aegis'))
     state.sides.player.team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 12)));
-  for (const side of ['player', 'enemy']) {
-    const owner = state.sides[side],
-      active = activeOf(state, side);
-    if (owner.bonds.includes('bulwark'))
-      owner.team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 6)));
-    if (owner.bonds.includes('huntpack')) applyStatus(active, 'haste', state.turn, 2);
-    if (owner.bonds.includes('convergence')) applyStatus(active, 'focused', state.turn, null);
-  }
-  if (playerBonds.includes('spellweave'))
-    applyStatus(activeOf(state, 'enemy'), 'marked', state.turn, 2, 1, activeOf(state, 'player').id);
-  if (enemyBonds.includes('spellweave'))
-    applyStatus(activeOf(state, 'player'), 'marked', state.turn, 2, 1, activeOf(state, 'enemy').id);
   if (activeModifiers.includes('player_focus')) {
     applyStatus(activeOf(state, 'player'), 'focused', state.turn, null);
     applyStatus(activeOf(state, 'enemy'), 'marked', state.turn, 2, 1, activeOf(state, 'player').id);
-  }
-  if (activeDoctrine === 'assault') {
-    state.sides.player.surge = Math.min(100, state.sides.player.surge + 20);
-    applyStatus(activeOf(state, 'player'), 'marked', state.turn, null);
-  }
-  if (activeDoctrine === 'bastion') {
-    state.sides.player.surge = Math.max(0, state.sides.player.surge - 10);
-    state.sides.player.team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 10)));
-  }
-  if (activeDoctrine === 'ambush') {
-    applyStatus(activeOf(state, 'player'), 'focused', state.turn, null);
-    applyStatus(activeOf(state, 'player'), 'haste', state.turn, 2);
-    state.sides.player.team.forEach((c, i) => {
-      if (i !== playerLead) c.hp = Math.max(1, Math.round(c.maxHp * 0.88));
-    });
   }
   enterTalent(state, 'player');
   enterTalent(state, 'enemy');
@@ -236,10 +183,6 @@ function passiveEvent(events, side, creature) {
 function enterTalent(state, side, events = null) {
   const creature = activeOf(state, side),
     foe = activeOf(state, otherSide(side));
-  if (side === 'player' && creature.masteryRank >= 4 && !creature.talent.masteryEntry) {
-    creature.talent.masteryEntry = true;
-    adjustSurge(state, side, 5, events || [], 'mastery');
-  }
   if (creature.passive === 'foresight' && !creature.talent.entry) {
     applyStatus(creature, 'focused', state.turn, null);
     creature.talent.entry = true;
@@ -305,8 +248,6 @@ function triggerFinalDuel(state, events) {
     playerCreatureId: state.sides.player.team[player[0]].id,
     enemyCreatureId: state.sides.enemy.team[enemy[0]].id,
   });
-  adjustSurge(state, 'player', 12, events, 'final-duel');
-  adjustSurge(state, 'enemy', 12, events, 'final-duel');
 }
 function triggerAce(state, events) {
   if (!state.enemyAce || state.aceTriggered || consciousIndices(state, 'enemy').length !== 1) return;
@@ -397,9 +338,7 @@ function resolveSwitch(state, side, action, events, replacement = false) {
         activeOf(state, side).id
       );
   } else {
-    adjustSurge(state, side, 18, events, 'rally');
-    applyStatus(activeOf(state, side), 'focused', state.turn, null);
-    push(events, 'rally', { side, creatureId: activeOf(state, side).id, surge: 18 });
+    push(events, 'rally', { side, creatureId: activeOf(state, side).id });
     if (side === 'enemy') triggerAce(state, events);
   }
 }
@@ -473,42 +412,29 @@ function removeAndEmit(creature, ids, count, side, events) {
   return removed;
 }
 
+export function canUseTrainerCommand(state, side = 'player') {
+  const owner = state?.sides?.[side],
+    creature = owner ? activeOf(state, side) : null;
+  return Boolean(
+    state?.phase === 'choice' &&
+    owner &&
+    !owner.commandUsed &&
+    !owner.pendingReplacement &&
+    creature?.hp > 0 &&
+    NEGATIVE_STATUSES.some((id) => hasStatus(creature, id))
+  );
+}
+
 export function applyTrainerCommand(inputState, side = 'player') {
-  if (
-    inputState.phase !== 'choice' ||
-    !inputState.sides[side] ||
-    inputState.sides[side].commandUsed ||
-    inputState.sides[side].pendingReplacement
-  )
-    throw new Error('Trainer command is not available');
+  if (!canUseTrainerCommand(inputState, side)) throw new Error('Trainer command is not available');
   const state = clone(inputState),
     events = [],
     owner = state.sides[side],
-    creature = activeOf(state, side),
-    command = side === 'player' ? state.doctrine : 'balanced';
+    creature = activeOf(state, side);
   owner.commandUsed = true;
-  push(events, 'trainer-command', { side, creatureId: creature.id, command });
-  if (command === 'balanced') {
-    removeAndEmit(creature, 'negative', 1, side, events);
-    if (!healCreature(creature, creature.maxHp * 0.12, side, events, 'command'))
-      addBarrier(creature, 8, side, events);
-  }
-  if (command === 'assault') {
-    adjustSurge(state, side, 25, events, 'command');
-    applyStatuses(creature, [{ id: 'marked' }], state, side, events, creature.id);
-  }
-  if (command === 'bastion') {
-    addBarrier(creature, 28, side, events);
-  }
-  if (command === 'ambush')
-    applyStatuses(
-      creature,
-      [{ id: 'focused' }, { id: 'haste', duration: 3 }],
-      state,
-      side,
-      events,
-      creature.id
-    );
+  push(events, 'trainer-command', { side, creatureId: creature.id, command: 'coach' });
+  removeAndEmit(creature, 'negative', 'all', side, events);
+  adjustSurge(state, side, 15, events, 'command');
   events.forEach((event) => (event.turn ??= state.turn));
   state.history.push(...events);
   return { state, events };
@@ -739,23 +665,6 @@ function executeMove(state, side, moveId, events) {
   }
   push(events, 'move-start', { side, creatureId: attacker.id, moveId });
   if (move.signature) adjustSurge(state, side, -signatureCostFor(attacker), events, 'signature');
-  const owner = state.sides[side];
-  if (owner.lastMoveId && owner.lastMoveId !== moveId) {
-    owner.flow = Math.min(3, owner.flow + 1);
-    const gained = adjustSurge(state, side, owner.flow * 2, events, 'flow'),
-      refreshed = [];
-    if (owner.flow === 3) {
-      for (const [id, cooldown] of Object.entries(attacker.cooldowns)) {
-        if ((cooldown?.remaining || 0) <= 0) continue;
-        cooldown.remaining -= 1;
-        refreshed.push(id);
-        if (cooldown.remaining <= 0) delete attacker.cooldowns[id];
-      }
-    }
-    if (gained || owner.flow === 3)
-      push(events, 'flow', { side, creatureId: attacker.id, count: owner.flow, surge: gained, refreshed });
-  } else if (owner.lastMoveId === moveId) owner.flow = 0;
-  owner.lastMoveId = moveId;
   let totalHpDamage = 0;
   if (move.kind === 'damage') {
     const transaction = resolveDamageTransaction(state, side, move, events);
@@ -839,23 +748,19 @@ function executeMove(state, side, moveId, events) {
   if (move.kind === 'damage' && attacker.passive === 'razor_engine') {
     applyStatuses(attacker, [{ id: 'haste', duration: 2 }], state, side, events);
   }
-  if (!move.signature) adjustSurge(state, side, move.kind === 'damage' ? 14 : 22, events, move.kind);
+  if (!move.signature)
+    adjustSurge(
+      state,
+      side,
+      move.kind === 'damage' ? SURGE_GAINS.damageMove : SURGE_GAINS.supportMove,
+      events,
+      move.kind
+    );
   if ((move.hits || 1) > 1 && attacker.passive === 'encore') adjustSurge(state, side, 8, events, 'passive');
   if (totalHpDamage) {
-    if (!move.signature) adjustSurge(state, side, totalHpDamage * 0.12, events, 'pressure');
-    adjustSurge(state, targetSide, totalHpDamage * 0.3, events, 'resolve');
+    adjustSurge(state, targetSide, totalHpDamage * SURGE_GAINS.directHpRatio, events, 'resolve');
   }
-  if (move.cooldown > 0) {
-    const crescendo = owner.flow === 3,
-      remaining = Math.max(0, move.cooldown - (crescendo ? 1 : 0));
-    if (crescendo) {
-      const flowEvent = [...events]
-        .reverse()
-        .find((event) => event.type === 'flow' && event.side === side && event.count === 3);
-      if (flowEvent && !flowEvent.refreshed.includes(move.id)) flowEvent.refreshed.push(move.id);
-    }
-    if (remaining > 0) attacker.cooldowns[move.id] = { remaining, appliedTurn: state.turn };
-  }
+  if (move.cooldown > 0) attacker.cooldowns[move.id] = { remaining: move.cooldown, appliedTurn: state.turn };
   for (const [checkSide, creature] of [
     [targetSide, defender],
     [side, attacker],
@@ -930,15 +835,6 @@ function arenaPulse(state, events) {
     if (state.arena === 'eclipse' && !hasStatus(creature, 'marked')) {
       applyStatus(creature, 'marked', state.turn, 3);
       emitStatus(events, side, creature, 'marked', true, { remaining: 3, source: 'arena' });
-    }
-    if (creature.affinity === ARENA_RESONANCE[state.arena]) {
-      push(events, 'resonance', {
-        side,
-        creatureId: creature.id,
-        arena: state.arena,
-        affinity: creature.affinity,
-      });
-      adjustSurge(state, side, 10, events, 'resonance');
     }
   }
 }

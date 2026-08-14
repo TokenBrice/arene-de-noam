@@ -10,7 +10,6 @@ const {
   createDraft,
   dailyDraftSeed,
   bestLeadIndex,
-  recommendedDoctrine,
   normalizeSeed,
   randomIndex,
   params,
@@ -24,7 +23,6 @@ const {
   actionButton,
   persist,
   disposeArena,
-  bondsHtml,
   comboRoutesHtml,
   topbar,
   draftInsightHtml,
@@ -45,7 +43,7 @@ function randomDistinct(count, seed) {
 
 function startDraft() {
   const seed = Number(params.get('seed')) || dailyDraftSeed();
-  ctx.draftRun = { ...createDraft(seed), team: [], round: 0, lead: 0, doctrine: 'balanced' };
+  ctx.draftRun = { ...createDraft(seed), team: [], round: 0, lead: 0 };
   renderDraft();
 }
 
@@ -73,14 +71,7 @@ function renderDraft() {
   screen.dataset.page = 'draft';
   screen.className = 'screen';
   const complete = ctx.draftRun.round >= ctx.draftRun.offers.length,
-    offer = complete ? [] : ctx.draftRun.offers[ctx.draftRun.round],
-    recommended = complete ? recommendedDoctrine(ctx.draftRun.team) : null,
-    doctrines = ['balanced', 'assault', 'bastion', 'ambush']
-      .map(
-        (id) =>
-          `<button type="button" class="doctrine-card ${ctx.draftRun.doctrine === id ? 'active' : ''} ${recommended === id ? 'recommended' : ''}" data-doctrine="${id}" aria-pressed="${ctx.draftRun.doctrine === id}">${recommended === id ? `<em>${t('profile.recommended')}</em>` : ''}<b>${t(`doctrine.icon.${id}`)} ${t(`doctrine.${id}`)}</b><small>${t(`doctrine.effect.${id}`)}</small></button>`
-      )
-      .join('');
+    offer = complete ? [] : ctx.draftRun.offers[ctx.draftRun.round];
   const scoutedDraftLead = complete ? bestLeadIndex(ctx.draftRun.team, ctx.draftRun.enemyTeam) : -1,
     lineup = Array.from({ length: 3 }, (_, index) => {
       const id = ctx.draftRun.team[index];
@@ -98,7 +89,7 @@ function renderDraft() {
     })
     .join('');
   const reveal = complete
-    ? `<section class="draft-final"><div><span class="eyebrow">${t('draft.rival')}</span><h2>${t(`arena.${ctx.draftRun.arena}`)}</h2><div class="draft-rival-team">${ctx.draftRun.enemyTeam.map((id) => `<span><img src="${sprite(id)}" alt=""><b>${creatureName(id)}</b></span>`).join('')}</div><div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.draftRun.arena}`)}</span></div></div><aside><h3>${t('doctrine.title')}</h3><div class="doctrine-picker">${doctrines}</div>${teamProfileHtml(ctx.draftRun.team)}<h3>${t('bond.title')}</h3>${bondsHtml(ctx.draftRun.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.draftRun.team, true)}${actionButton(t('draft.enter'), 'draft-battle', 'primary-btn wide')}</aside></section>`
+    ? `<section class="draft-final"><div><span class="eyebrow">${t('draft.rival')}</span><h2>${t(`arena.${ctx.draftRun.arena}`)}</h2><div class="draft-rival-team">${ctx.draftRun.enemyTeam.map((id) => `<span><img src="${sprite(id)}" alt=""><b>${creatureName(id)}</b></span>`).join('')}</div><div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.draftRun.arena}`)}</span></div></div><aside>${teamProfileHtml(ctx.draftRun.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.draftRun.team, true)}${actionButton(t('draft.enter'), 'draft-battle', 'primary-btn wide')}</aside></section>`
     : '';
   const carousel = complete
     ? ''
@@ -143,12 +134,6 @@ function renderDraft() {
       renderDraft();
     })
   );
-  screen.querySelectorAll('[data-doctrine]').forEach((button) =>
-    button.addEventListener('click', () => {
-      ctx.draftRun.doctrine = button.dataset.doctrine;
-      renderDraft();
-    })
-  );
   screen.querySelector('[data-action="draft-battle"]')?.addEventListener('click', () => {
     ctx.save.lastTeam = [...ctx.draftRun.team];
     persist();
@@ -161,7 +146,6 @@ function renderDraft() {
       arena: ctx.draftRun.arena,
       difficulty: ctx.draftRun.difficulty || 'standard',
       trainerIndex: ctx.draftRun.trainerIndex,
-      doctrine: ctx.draftRun.doctrine,
       draftSeed: ctx.draftRun.seed,
     });
   });

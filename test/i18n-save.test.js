@@ -63,9 +63,10 @@ test('save round-trips with validated ranges', () => {
   assert.equal(persistSave(changed, memory), true);
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
 });
-test('personal squad slots preserve only legal teams, leads, and doctrines', () => {
+test('v14 personal squad slots migrate to legal teams and leads only', () => {
   const save = validateSave({
     ...DEFAULT_SAVE,
+    version: 14,
     customSquads: [
       { team: ['orakyn', 'kordane', 'virelia'], lead: 2, doctrine: 'ambush' },
       { team: ['orakyn', 'orakyn', 'bad'], lead: 9, doctrine: 'broken' },
@@ -75,13 +76,11 @@ test('personal squad slots preserve only legal teams, leads, and doctrines', () 
   assert.deepEqual(save.customSquads[0], {
     team: ['orakyn', 'kordane', 'virelia'],
     lead: 2,
-    doctrine: 'ambush',
   });
   assert.equal(save.customSquads[1], null);
   assert.deepEqual(save.customSquads[2], {
     team: ['abyssar', 'mossaur', 'monolith'],
     lead: 0,
-    doctrine: 'balanced',
   });
 });
 test('corrupt and future saves fall back safely', () => {
@@ -101,7 +100,7 @@ test('older saves migrate and progression fields are bounded', () => {
       orakyn: { battles: 200000, wins: -2, damage: 20000000, kos: 4, signatures: 3, assists: 2 },
       bad: { battles: 5 },
     },
-    feats: ['blitz', 'bad'],
+    feats: ['blitz', 'contract_hero', 'bad'],
     gauntletWins: 4000,
     draftWins: 30000,
     circuitWins: 20000,
@@ -110,7 +109,7 @@ test('older saves migrate and progression fields are bounded', () => {
     winStreak: 7,
     bestStreak: 3,
   });
-  assert.equal(migrated.version, 14);
+  assert.equal(migrated.version, 15);
   assert.equal(migrated.ladderVictories, 12);
   assert.deepEqual(migrated.lastTeam, DEFAULT_SAVE.lastTeam);
   assert.equal(migrated.language, 'fr');
@@ -124,7 +123,7 @@ test('older saves migrate and progression fields are bounded', () => {
     assists: 2,
   });
   assert.equal(migrated.records.bad, undefined);
-  assert.deepEqual(migrated.feats, ['blitz']);
+  assert.deepEqual(migrated.feats, ['blitz', 'contract_hero']);
   assert.equal(migrated.gauntletWins, 999);
   assert.equal(migrated.draftWins, 9999);
   assert.equal(migrated.circuitWins, 9999);
@@ -141,26 +140,18 @@ test('mastery ranks and progress bars follow authored thresholds', () => {
   assert.equal(masteryRank(999), 5);
   assert.deepEqual(masteryProgress(4), { rank: 1, current: 0, needed: 6, ratio: 0 });
 });
-test('performance grades reward fast, stylish, complete victories', () => {
-  const plain = performanceGrade({ win: true, turns: 24, survivors: 2 }),
-    rotating = performanceGrade({ win: true, turns: 24, survivors: 2, crescendos: 2 });
-  const epic = performanceGrade({
-    win: true,
-    turns: 9,
-    survivors: 3,
-    contractComplete: true,
-    combos: 2,
-    signatures: 1,
-    contributors: 3,
-    crescendos: 1,
-  });
-  assert.equal(plain.letter, 'B');
-  assert.equal(plain.bonusXp, 1);
-  assert.equal(rotating.score, plain.score + 6);
+test('performance grades use only victory, turns, and survivors', () => {
+  const plain = performanceGrade({ win: true, turns: 24, survivors: 2 });
+  const epic = performanceGrade({ win: true, turns: 9, survivors: 3 });
+  assert.equal(plain.letter, 'A');
+  assert.equal(plain.score, 80);
+  assert.deepEqual(plain.breakdown, { victory: 50, tempo: 10, survival: 20 });
+  assert.equal(plain.bonusXp, 2);
   assert.equal(epic.letter, 'S');
   assert.equal(epic.score, 100);
   assert.equal(epic.bonusXp, 3);
   assert.equal(performanceGrade({ win: false, turns: 30, survivors: 0 }).letter, 'D');
+  assert.equal(performanceGrade({ win: true, turns: 40, survivors: 1 }).letter, 'B');
 });
 test('all twelve feats have stable ids, collection totals, and localized reveal copy', () => {
   const count = Object.keys(FEATS).length;

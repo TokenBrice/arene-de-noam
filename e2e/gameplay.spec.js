@@ -35,8 +35,7 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   await page.getByLabel('Arène').selectOption('eclipse');
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('#arena')).toBeVisible();
-  await expect(page.locator('#contract-chip')).toBeVisible();
-  await expect(page.locator('#contract-chip')).toContainText(/\d+\/\d+|✓/);
+  await expect(page.locator('#contract-chip, .flow-chip, .arena-resonance')).toHaveCount(0);
   await playVisibleBattle(page);
   await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
   await expect(page.locator('.performance-grade')).toBeVisible();
@@ -49,7 +48,10 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   ).toEqual(['1', '1', '1']);
   await expect(page.locator('.battle-recap')).toBeVisible();
   await expect(page.getByText('CRÉATURE DU MATCH')).toBeVisible();
-  await expect(page.locator('.crescendo-stat')).toContainText('Crescendos · Panache');
+  await expect(page.locator('.performance-grade .grade-detail > span')).toHaveCount(3);
+  await expect(page.locator('.performance-grade')).toContainText('Victoire');
+  await expect(page.locator('.performance-grade')).toContainText('Tours');
+  await expect(page.locator('.performance-grade')).toContainText('Survivants');
   await expect(page.locator('.squad-report article')).toHaveCount(3);
   await expect(page.locator('.squad-report')).toContainText('RAPPORT DU TRIO');
   await expect(page.locator('.squad-report')).toContainText('actions');
@@ -179,20 +181,30 @@ test('multi-hit techniques escalate through a visible hit chain', async ({ page 
   await expect(page.locator('.hit-chain')).toHaveAttribute('data-hit', /1|2|3/);
 });
 
-test('a doctrine grants one cinematic free Trainer Command per battle', async ({ page }) => {
+test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once per battle', async ({
+  page,
+}) => {
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
-  await page.goto('/?seed=14');
+  await page.goto(
+    '/?seed=14&player=kordane,abyssar,virelia&enemy=orakyn,calderoc,farfombre&enemyMove=slowing_riddle'
+  );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('[data-doctrine="bastion"]').click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   const command = page.getByRole('button', { name: 'Ordre du dresseur' });
+  await expect(command).toBeDisabled();
+  await page.locator('[data-move="crystal_strike"]').click();
+  await expect(page.locator('#hud-player')).toContainText('Sonné', { timeout: 5000 });
   await expect(command).toBeEnabled({ timeout: 5000 });
+  const before = Number(
+    (await page.locator('#hud-player .plate-surge-number').textContent()).match(/\d+/)[0]
+  );
   await command.click();
   await expect(page.locator('.trainer-command-fx')).toBeVisible();
-  await expect(page.locator('.trainer-command-fx')).toContainText('Tenir la ligne');
-  await expect(page.locator('.tactical-number')).toContainText(/\+\d+ ⬡/);
+  await expect(page.locator('.trainer-command-fx')).toContainText('Coup de pouce');
   await expect(command).toBeDisabled({ timeout: 5000 });
-  await expect(page.locator('#hud-player')).toContainText('Barrière');
+  await expect(page.locator('#hud-player')).not.toContainText('Sonné');
+  const after = Number((await page.locator('#hud-player .plate-surge-number').textContent()).match(/\d+/)[0]);
+  expect(after - before).toBe(15);
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.getByRole('button', { name: 'Codex du combat' }).click();
   await expect(page.locator('.trainer-command-codex.used')).toContainText('Ordre donné');
@@ -209,39 +221,38 @@ test('restorative techniques display their recovered HP at the creature', async 
   await page.locator('.trial-card').nth(4).getByRole('button', { name: 'Relever l’épreuve' }).click();
   await expect(page.getByRole('heading', { name: 'Dernière Lueur' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Relever l’épreuve' }).click();
-  const command = page.getByRole('button', { name: 'Ordre du dresseur' });
-  await expect(command).toBeEnabled({ timeout: 5000 });
-  await command.click();
+  await page.locator('[data-move="bubble_burst"]').click();
+  await expect(page.locator('[data-move="healing_rain"]')).toBeEnabled({ timeout: 5000 });
+  await page.locator('[data-move="healing_rain"]').click();
   await expect(page.locator('.tactical-heal .tactical-number')).toContainText(/^\+\d+$/);
 });
 
 test('reaching full Surge triggers a creature-specific Signature-ready cut-in', async ({ page }) => {
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
-  await page.goto('/?seed=14');
+  await page.goto(
+    '/?seed=14&player=solflare,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=resonant_focus'
+  );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('[data-doctrine="assault"]').click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  const command = page.getByRole('button', { name: 'Ordre du dresseur' });
-  await expect(command).toBeEnabled({ timeout: 5000 });
-  await command.click();
-  await expect(page.locator('[data-move="lucid_arc"]')).toBeEnabled({ timeout: 5000 });
-  await page.locator('[data-move="lucid_arc"]').click();
+  for (let action = 0; action < 3; action++) {
+    await expect(page.locator('[data-move="sun_spear"]')).toBeEnabled({ timeout: 5000 });
+    await page.locator('[data-move="sun_spear"]').click();
+  }
   await expect(page.locator('.signature-ready-call.player')).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('.signature-ready-call.player')).toContainText('Voile oracle');
+  await expect(page.locator('.signature-ready-call.player')).toContainText('Supernova');
 });
 
-test('a chosen tactical contract is previewed and carried into battle', async ({ page }) => {
+test('removed pre-battle systems leave no selection, intro, HUD, or codex surface', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=40&animations=0');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('.contract-preview')).toContainText('Le contrat sera révélé');
-  await page.getByLabel('Contrat tactique').selectOption('signature');
-  await expect(page.locator('.contract-preview.chosen')).toContainText('Éclat suprême');
-  await expect(page.locator('.contract-preview.chosen')).toContainText('Technique Signature');
+  await expect(page.locator('[data-doctrine], #contract-select, .contract-preview, .team-bonds')).toHaveCount(
+    0
+  );
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('#contract-chip')).toContainText('Éclat suprême');
+  await expect(page.locator('.intro-contract, #contract-chip, .flow-chip, .arena-resonance')).toHaveCount(0);
   await page.getByRole('button', { name: 'Codex du combat' }).click();
-  await expect(page.locator('.contract-codex')).toContainText('Éclat suprême');
+  await expect(page.locator('.contract-codex, .flow-codex, .resonance-codex')).toHaveCount(0);
 });
 
 test('roster cards scout favorable targets and threats in the revealed rival trio', async ({ page }) => {
@@ -328,6 +339,7 @@ test('the last two creatures receive a full-screen Final Duel stinger', async ({
   await expect(page.locator('.final-duel-fx')).toBeVisible();
   await expect(page.locator('.final-duel-fx')).toContainText('DUEL FINAL');
   await expect(page.locator('.final-duel-fx')).toContainText('Kordane');
+  await expect(page.locator('.final-duel-fx')).not.toContainText(/\+12|Éclat/);
   await expect(page.locator('#action-line')).toContainText('DUEL FINAL');
 });
 
@@ -356,27 +368,23 @@ test('battle codex explains live rules and closes with Escape', async ({ page })
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await page.getByRole('button', { name: 'Codex du combat' }).click();
-  await expect(page.locator('.flow-codex-live .flow-live')).toHaveCount(2);
-  await expect(page.locator('.flow-codex-live')).toContainText('↯ ×0');
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByText('Pouvoir de l’arène')).toBeVisible();
   await expect(page.getByText('Cycle des affinités')).toBeVisible();
-  await expect(page.locator('.flow-codex')).toContainText(
-    'À ×3, toutes les recharges actives diminuent de 1 tour'
-  );
-  await expect(page.locator('.contract-codex')).toContainText('CONTRAT DU COMBAT');
+  await expect(page.locator('.trainer-command-codex')).toContainText('Coup de pouce');
+  await expect(page.getByText(/technique offensive donne 20 Éclat/)).toBeVisible();
+  await expect(page.locator('.flow-codex, .contract-codex, .resonance-codex')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('versus intro clearly presents the active combat contract', async ({ page }) => {
+test('versus intro stays focused on the teams and arena', async ({ page }) => {
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
   await page.goto('/?seed=32');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('.intro-contract')).toBeVisible();
-  await expect(page.locator('.intro-contract')).toContainText('CONTRAT DU COMBAT');
-  await expect(page.locator('.intro-contract')).toContainText(/dégâts|malus|Signature|changements/);
+  await expect(page.locator('.battle-intro-fx')).toBeVisible();
+  await expect(page.locator('.intro-contract')).toHaveCount(0);
 });
 
 test('battle chronicle records semantic events and opens from the keyboard', async ({ page }) => {
@@ -395,50 +403,17 @@ test('battle chronicle records semantic events and opens from the keyboard', asy
   await expect(page.locator('.battle-log')).toHaveCount(0);
 });
 
-test('alternating techniques creates visible Battle Flow and repetition breaks it', async ({ page }) => {
+test('flat Surge is deterministic and has no sequence UI', async ({ page }) => {
   await installCompletedTutorial(page);
-  await page.goto('/?seed=83&animations=0');
+  await page.goto('/?seed=83&animations=0&enemy=kordane,calderoc,farfombre&enemyMove=resonant_focus');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
+  const meter = page.locator('#hud-player .plate-surge-number');
+  await expect(meter).toContainText('30/100');
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('[data-move="slowing_riddle"]')).toBeEnabled();
-  await expect(page.locator('[data-move="slowing_riddle"] .flow-route')).toContainText('×1 · +2 Éclat');
-  await page.locator('[data-move="slowing_riddle"]').click();
-  await expect(page.locator('#hud-player .flow-chip')).toContainText('Enchaînement ×1');
-  await expect(page.locator('[data-move="lucid_arc"] .flow-route')).toContainText('×2 · +4 Éclat');
-  await expect(page.locator('[data-move="slowing_riddle"] .flow-reset')).toContainText(
-    'Brise l’Enchaînement'
-  );
-  await expect(page.getByText(/ENCHAÎNEMENT ×1|À toi de jouer/)).toBeVisible();
-  await page.locator('[data-move="slowing_riddle"]').click();
-  await expect(page.locator('#hud-player .flow-chip')).toHaveCount(0);
-});
-
-test('Battle Flow crescendo visibly rewards rotating through a creature kit', async ({ page }) => {
-  await installCompletedTutorial(page, {
-    lastTeam: ['kordane', 'orakyn', 'virelia'],
-    reducedMotion: false,
-    battleSpeed: 2,
-  });
-  await page.goto('/?seed=183&player=kordane,orakyn,virelia&enemy=monolith,lumivox,mossaur');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByLabel('Difficulté').selectOption('apprentice');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
-  for (const moveId of ['resonant_focus', 'crystal_strike', 'resonant_focus']) {
-    await expect(page.locator(`[data-move="${moveId}"]`)).toBeEnabled({ timeout: 10000 });
-    await page.locator(`[data-move="${moveId}"]`).click();
-  }
-  const finalMove = page.locator('[data-move="fault_charge"]'),
-    crescendo = page.locator('.flow-crescendo-call');
-  await expect(finalMove).toBeEnabled({ timeout: 10000 });
-  await Promise.all([
-    expect(crescendo).toBeVisible({ timeout: 10000 }),
-    expect(crescendo).toContainText('Recharges −1', { timeout: 10000 }),
-    expect(crescendo).toContainText('Charge de faille', { timeout: 10000 }),
-    finalMove.click(),
-  ]);
-  await expect(crescendo).not.toContainText('+0');
-  await expect(page.locator('#hud-player .flow-chip')).toContainText('Enchaînement ×3');
+  await expect(meter).toContainText(/\b50\/100\b/);
+  await expect(page.locator('.flow-route, .flow-reset, .flow-chip, .flow-crescendo-call')).toHaveCount(0);
 });
 
 test('two ready signature moves trigger the full-screen clash intro', async ({ page }) => {
@@ -461,27 +436,24 @@ test('two ready signature moves trigger the full-screen clash intro', async ({ p
 
 test('a switched teammate converts a setup with a visible assist cut-in', async ({ page }) => {
   await installCompletedTutorial(page, {
-    lastTeam: ['thornox', 'lumivox', 'virelia'],
+    lastTeam: ['nymbloom', 'virelia', 'abyssar'],
     reducedMotion: false,
     battleSpeed: 2,
   });
-  await page.goto('/?seed=45&player=thornox,lumivox,virelia&enemy=farfombre,nocturnyx,hexalune');
+  await page.goto(
+    '/?seed=68&player=nymbloom,virelia,abyssar&enemy=monolith,kordane,brontusk&enemyMove=gravity_fist,gravity_fist,gravity_fist'
+  );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('[data-doctrine="assault"]').click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await page.locator('[data-move="toxic_spines"]').click();
-  await expect(page.locator('[data-move="toxic_spines"]')).toBeEnabled({ timeout: 5000 });
-  await page.locator('[data-move="toxic_spines"]').click();
-  await expect(page.locator('[data-move="bramble_trap"]')).toBeEnabled({ timeout: 5000 });
-  await page.locator('[data-move="bramble_trap"]').click();
+  await page.locator('[data-move="bubble_burst"]').click();
   await expect(page.locator('[data-action="open-switch"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-action="open-switch"]').click();
-  await page.getByRole('button', { name: /Lumivox/ }).click();
-  await expect(page.locator('[data-move="finale_nova"]')).toBeEnabled({ timeout: 5000 });
-  await expect(page.locator('.team-assist-ready')).toContainText('Thornox');
-  await page.locator('[data-move="finale_nova"]').click();
+  await page.getByRole('button', { name: /Virelia/ }).click();
+  await expect(page.locator('[data-move="petal_ray"]')).toBeEnabled({ timeout: 5000 });
+  await expect(page.locator('[data-move="petal_ray"] .team-assist-ready')).toContainText('Nymbloom');
+  await page.locator('[data-move="petal_ray"]').click();
   await expect(page.locator('.assist-call')).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('.assist-call')).toContainText('Thornox');
+  await expect(page.locator('.assist-call')).toContainText('Nymbloom');
 });
 
 test.describe('touch controls', () => {
@@ -513,6 +485,7 @@ test('knockout opens a free replacement selector before the next choice', async 
   await expect(page.getByRole('heading', { name: /Choisis une relève/ })).toBeVisible();
   const replacement = page.locator('[data-switch-index]').first();
   await replacement.click();
+  await expect(page.locator('#action-line')).toContainText('mène la riposte');
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
 });
 
@@ -528,5 +501,5 @@ test('a defeat produces evidence-based trainer analysis', async ({ page }) => {
   await page.getByRole('button', { name: /Ajuster l’équipe/ }).click();
   await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
   await expect(page.locator('.enemy-list')).toContainText('Orakyn');
-  await expect(page.locator('.contract-preview.chosen')).toBeVisible();
+  await expect(page.locator('.contract-preview, [data-doctrine], .team-bonds')).toHaveCount(0);
 });
