@@ -1,0 +1,12 @@
+{
+  "id": "orakyn-rich",
+  "seed": 731205,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "assets/monsters/orakyn/battle.png",
+  "variant_count": 4,
+  "description": "Redraw this exact creature in ornate high-detail fantasy pixel art matching a premium creature-battler roster: dense cluster shading, luminous cyan rim lighting, subtle dithered gradients across the indigo carapace, and a softly glowing forehead crystal with light spill. Preserve the identity completely: crescent owl-like head, severe glowing cyan eyes, hovering forehead crystal shards, four broad ribbon-mantis arms, long tapered patterned rear mantle, indigo-cyan-pale-violet palette, three-quarter battle pose, transparent background. Replace the current flat fills and thick uniform outlines with richer interior detail, selective darker outline weight, and small luminous runic accents along the arms. Keep the silhouette clean and readable at small size. Do not add legs, wings, clothing, held objects, text, logos, or resemblance to any existing franchise character."
+}

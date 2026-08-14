@@ -1,0 +1,20 @@
+{
+  "brief": "../../briefs/orakyn-rich.json",
+  "source": "assets/monsters/orakyn/battle.png",
+  "seed": 731205,
+  "job_id": "a8da43d4-a7d3-4792-96c1-914d476a1d9a",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "orakyn-rich-candidate-1.png",
+    "orakyn-rich-candidate-2.png",
+    "orakyn-rich-candidate-3.png",
+    "orakyn-rich-candidate-4.png",
+    "orakyn-rich-candidate-5.png",
+    "orakyn-rich-candidate-6.png",
+    "orakyn-rich-candidate-7.png",
+    "orakyn-rich-candidate-8.png"
+  ]
+}

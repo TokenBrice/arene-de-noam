@@ -1,0 +1,12 @@
+{
+  "id": "orakyn-rich-2",
+  "seed": 731206,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/concepts/orakyn-rich/orakyn-rich-candidate-3.png",
+  "variant_count": 4,
+  "description": "Push this creature's rendering much further toward ornate premium fantasy pixel art while preserving its exact identity and pose: crescent owl-like head, glowing cyan eyes, hovering forehead crystal, four ribbon-mantis arms, long tapered rear mantle, indigo-cyan-pale-violet palette, transparent background. Dramatically increase interior detail density: intricate dithered shading across every surface, layered carapace plating with highlights, bright luminous cyan runes and energy veins along the arms and mantle, radiant multi-shard crystal halo above the head with strong light spill onto the face, and crisp violet rim lighting along the silhouette. The creature should feel like a legendary psychic monarch rendered with the same richness as an ornate stained-glass illustration, while staying clean readable pixel art. Do not change the pose or palette family, and do not add text, logos, or resemblance to any existing franchise character."
+}

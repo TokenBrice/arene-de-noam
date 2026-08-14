@@ -1,0 +1,20 @@
+{
+  "brief": "../../briefs/orakyn-rich-2.json",
+  "source": "art/concepts/orakyn-rich/orakyn-rich-candidate-3.png",
+  "seed": 731206,
+  "job_id": "164c4a43-8e3b-45e3-828e-ca055a22cecc",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "orakyn-rich-2-candidate-1.png",
+    "orakyn-rich-2-candidate-2.png",
+    "orakyn-rich-2-candidate-3.png",
+    "orakyn-rich-2-candidate-4.png",
+    "orakyn-rich-2-candidate-5.png",
+    "orakyn-rich-2-candidate-6.png",
+    "orakyn-rich-2-candidate-7.png",
+    "orakyn-rich-2-candidate-8.png"
+  ]
+}

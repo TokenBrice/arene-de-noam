@@ -1,0 +1,20 @@
+{
+  "brief": "../../briefs/farfombre-rich.json",
+  "source": "assets/monsters/farfombre/battle.png",
+  "seed": 442817,
+  "job_id": "87073c63-5bd1-4889-8797-9ced3f90db3e",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "farfombre-rich-candidate-1.png",
+    "farfombre-rich-candidate-2.png",
+    "farfombre-rich-candidate-3.png",
+    "farfombre-rich-candidate-4.png",
+    "farfombre-rich-candidate-5.png",
+    "farfombre-rich-candidate-6.png",
+    "farfombre-rich-candidate-7.png",
+    "farfombre-rich-candidate-8.png"
+  ]
+}

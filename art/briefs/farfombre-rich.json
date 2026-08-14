@@ -1,0 +1,12 @@
+{
+  "id": "farfombre-rich",
+  "seed": 442817,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "assets/monsters/farfombre/battle.png",
+  "variant_count": 4,
+  "description": "Redraw this exact shadow lantern-squid creature in ornate high-detail fantasy pixel art matching a premium creature-battler roster: strong readable silhouette, dense cluster shading, and a single dominant warm golden lantern glow as the focal point with light spilling onto the surrounding tentacles. Preserve the identity: hooded squid-like shadow body, curling tentacles, small glowing lantern held above the head, deep plum-violet and umber palette with warm gold accents, battle pose, transparent background. Fix its current problems: raise contrast so the dark body reads clearly against dark backgrounds via violet rim light, remove any faint duplicate or ghost shapes beside the creature, and make the creature larger within the canvas so it fills the frame like its roster companions. Keep edges crisp pixel art. Do not add text, logos, or resemblance to any existing franchise character."
+}
