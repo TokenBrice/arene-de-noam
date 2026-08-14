@@ -10,7 +10,7 @@ export function battleAdviceKeys(state, win = false) {
     if (!tips.includes(key)) tips.push(key);
   };
   if (state.aceTriggered) add('ace');
-  if (damage.length && damage.filter((event) => event.affinity === 0.75).length / damage.length >= 0.25)
+  if (damage.length && damage.filter((event) => event.affinity === 0.5).length / damage.length >= 0.25)
     add('affinity');
   if (state.turn >= 5 && !history.some((event) => event.type === 'switch' && event.side === 'player'))
     add('switch');

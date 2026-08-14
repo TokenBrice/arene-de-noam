@@ -3,6 +3,7 @@ import { affinityMultiplier } from '../data/affinities.js';
 import {
   activeOf,
   ARENA_RESONANCE,
+  BARRIER_CAP,
   getLegalActions,
   LATE_TURN_PRESSURE,
   previewIncomingAfterSwitch,
@@ -24,7 +25,7 @@ function scoreMove(state, side, action, difficulty, style) {
     let score =
       estimated +
       (forecast.lethal ? 90 : 0) +
-      (affinity === 1.5 ? 12 : affinity === 0.75 ? -8 : 0) -
+      (affinity === 2 ? 12 : affinity === 0.5 ? -8 : 0) -
       (forecast.miss ? 45 : 0);
     if (move.targetStatuses?.length)
       score += move.targetStatuses.length * (difficulty === 'apprentice' ? 2 : 8);
@@ -34,7 +35,7 @@ function scoreMove(state, side, action, difficulty, style) {
     if (move.recoil) score -= estimated * move.recoil * 0.7;
     if (move.executeThreshold && defender.hp / defender.maxHp <= move.executeThreshold) score += 28;
     if (forecast.combo.length) score += 20 + forecast.combo.length * 5;
-    if (move.barrier) score += Math.min(move.barrier, 60 - attacker.barrier) * 0.35;
+    if (move.barrier) score += Math.min(move.barrier, Math.max(0, BARRIER_CAP - attacker.barrier)) * 0.35;
     if (move.signature) score += 14;
     if (
       difficulty === 'champion' &&
@@ -83,9 +84,11 @@ function scoreMove(state, side, action, difficulty, style) {
       ownNegatives = negativeCount(attacker),
       teamNegatives = team.filter((c) => c.hp > 0).reduce((sum, c) => sum + negativeCount(c), 0),
       teamMissing = team.filter((c) => c.hp > 0).reduce((sum, c) => sum + c.maxHp - c.hp, 0),
-      barrierValue = Math.min(move.barrier || 0, 60 - attacker.barrier),
+      barrierValue = Math.min(move.barrier || 0, Math.max(0, BARRIER_CAP - attacker.barrier)),
       teamBarrierValue = move.teamBarrier
-        ? team.filter((c) => c.hp > 0).reduce((sum, c) => sum + Math.min(move.teamBarrier, 60 - c.barrier), 0)
+        ? team
+            .filter((c) => c.hp > 0)
+            .reduce((sum, c) => sum + Math.min(move.teamBarrier, Math.max(0, BARRIER_CAP - c.barrier)), 0)
         : 0,
       teamHealValue = move.teamHealRatio
         ? team
@@ -154,9 +157,9 @@ function scoreSwitch(state, side, action, difficulty, style) {
         ? defender.moves.map((id) => MOVES[id]).find((move) => move.signature && move.kind === 'damage')
         : null,
     signatureRead = signatureThreat
-      ? affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 0.75
+      ? affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 0.5
         ? 24
-        : affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 1.5
+        : affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 2
           ? -20
           : 0
       : 0,
@@ -267,7 +270,7 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
       }
     }
   }
-  const imperfection = difficulty === 'standard' ? 0.28 : difficulty === 'champion' ? 0.1 : 0;
+  const imperfection = difficulty === 'standard' ? 0.28 : 0;
   return finish(pickRanked(state, scored, imperfection).action);
 }
 

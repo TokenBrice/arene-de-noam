@@ -30,6 +30,18 @@ function plannedEnemyAction() {
     state = session?.state;
   if (!session || !state || state.phase !== 'choice' || session.mode === 'tutorial') return null;
   if (session.enemyPlanCache?.state === state) return session.enemyPlanCache.action;
+  // Test-only hook: force the enemy's first committed move via ?enemyMove=<id>.
+  const forcedMove = ctx.params.get('enemyMove');
+  if (forcedMove && !session.forcedEnemyMoveUsed) {
+    const legal = getLegalActions(state, 'enemy').find(
+      (option) => option.type === 'move' && option.moveId === forcedMove
+    );
+    if (legal) {
+      session.forcedEnemyMoveUsed = true;
+      session.enemyPlanCache = { state, action: legal };
+      return legal;
+    }
+  }
   // Non-champion battles historically spend one seeded scouting choice while
   // presenting the forecast. Keep that cadence, then lock the committed plan
   // so every HUD consumer and resolveTurn see the exact same action.
@@ -182,11 +194,11 @@ function moveButton(moveId, index) {
     mult = move.power ? affinityMultiplier(move.affinity, enemy.affinity) : 1;
   let label = t('battle.neutral'),
     cls = '';
-  if (mult === 1.5) {
+  if (mult > 1) {
     label = t('battle.effective');
     cls = 'good';
   }
-  if (mult === 0.75) {
+  if (mult < 1) {
     label = t('battle.resisted');
     cls = 'risky';
   }
@@ -240,9 +252,9 @@ function moveButton(moveId, index) {
   if (ctx.save.expertMode)
     return `<button type="button" class="move-btn kind-${move.kind} ${advancedClasses} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-archetype" aria-hidden="true">${archetype}</span><span class="move-name">${move.signature ? '<i class="move-signature-mark">✦</i> ' : ''}<i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="move-figure">${dominant}${assistBadge}<span class="move-badges">${badges.join('')}</span></span>${context}</button>`;
   const effectiveness =
-      mult === 1.5
+      mult > 1
         ? `<strong class="move-effectiveness effective">▲ ${t('battle.effective')}</strong>`
-        : mult === 0.75
+        : mult < 1
           ? `<strong class="move-effectiveness not-effective">▼ ${t('battle.notEffective')}</strong>`
           : '',
     signatureState = move.signature

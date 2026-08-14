@@ -128,11 +128,11 @@ function impactMoveFx(event) {
 }
 
 function effectivenessCalloutFx(event) {
-  if (event.affinity !== 1.5 && event.affinity !== 0.75) return;
+  if (!event.affinity || event.affinity === 1) return;
   const stage = screen.querySelector('#fx-stage'),
     impact = stage?.querySelector('.fx-impact');
   if (!stage || !impact) return;
-  const effective = event.affinity === 1.5,
+  const effective = event.affinity > 1,
     kind = effective ? 'effective' : 'weak',
     callout = document.createElement('b');
   stage.querySelectorAll('.affinity-callout').forEach((node) => node.remove());
@@ -405,10 +405,12 @@ function arenaPulseFx(event) {
 async function signatureClashIntro(events) {
   const session = ctx.battleSession;
   const signatures = events.filter((event) => event.type === 'move-start' && MOVES[event.moveId]?.signature);
-  if (signatures.length < 2 || testAnimationScale === 0 || !sessionIsActive(session)) return;
-  const stage = screen.querySelector('#fx-stage'),
-    left = signatures.find((x) => x.side === 'player'),
-    right = signatures.find((x) => x.side === 'enemy');
+  const committed = session?.committedClash;
+  if (session) session.committedClash = null;
+  const left = committed?.left || signatures.find((x) => x.side === 'player'),
+    right = committed?.right || signatures.find((x) => x.side === 'enemy');
+  if ((!committed && signatures.length < 2) || testAnimationScale === 0 || !sessionIsActive(session)) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage || !left || !right) return;
   stage.className = 'fx-stage active signature-clash';
   stage.innerHTML = `<div class="clash-half player"><img src="${sprite(left.creatureId)}" alt=""><b>${t(`move.${left.moveId}`)}</b></div><div class="clash-bolt">VS</div><div class="clash-half enemy"><img src="${sprite(right.creatureId)}" alt=""><b>${t(`move.${right.moveId}`)}</b></div>`;

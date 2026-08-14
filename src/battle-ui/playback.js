@@ -141,9 +141,9 @@ async function playEvents(events) {
     }
     if (event.type === 'damage') {
       const affinityNote =
-        event.affinity === 1.5
+        event.affinity > 1
           ? `↑ ${t('battle.effective')} · `
-          : event.affinity === 0.75
+          : event.affinity < 1
             ? `↓ ${t('battle.resisted')} · `
             : '';
       session.lastLine = `${affinityNote}${event.combo?.length ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;

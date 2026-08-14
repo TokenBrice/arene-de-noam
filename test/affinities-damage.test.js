@@ -8,7 +8,7 @@ import { CREATURES } from '../src/data/creatures.js';
 test('all affinity pairings follow the single six-affinity cycle', () => {
   for (let a = 0; a < AFFINITY_ORDER.length; a++)
     for (let d = 0; d < AFFINITY_ORDER.length; d++) {
-      const expected = d === (a + 1) % 6 ? 1.5 : d === (a + 5) % 6 ? 0.75 : 1;
+      const expected = d === (a + 1) % 6 ? 2 : d === (a + 5) % 6 ? 0.5 : 1;
       assert.equal(affinityMultiplier(AFFINITY_ORDER[a], AFFINITY_ORDER[d]), expected);
     }
   for (const affinity of AFFINITY_ORDER) assert.equal(affinityMultiplier('neutral', affinity), 1);
@@ -21,7 +21,7 @@ test('damage is deterministic and applies focus, guard, exposure, weakness, and 
   const a = calculateDamage(move, attacker, defender),
     b = calculateDamage(move, attacker, defender);
   assert.deepEqual(a, b);
-  assert.equal(a.affinity, 1.5);
+  assert.deepEqual(a, { damage: 53, affinity: 2, status: 1 });
   assert.ok(calculateDamage(move, attacker, defender, { focused: true }).damage > a.damage);
   assert.ok(calculateDamage(move, attacker, defender, { guarded: true }).damage < a.damage);
   assert.ok(calculateDamage(move, attacker, defender, { exposed: true }).damage > a.damage);

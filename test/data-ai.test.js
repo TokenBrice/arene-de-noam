@@ -70,6 +70,50 @@ test('all moves have unique mechanical and visual identities', () => {
   );
 });
 
+test('move sustain stays inside the decisive-fight budget', () => {
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.values(MOVES)
+        .filter((move) => move.barrier)
+        .map((move) => [move.id, move.barrier])
+    ),
+    {
+      oracle_veil: 10,
+      deja_vu: 9,
+      mirror_maze: 9,
+      iron_resolve: 9,
+      fortress_protocol: 14,
+      abyssal_surge: 4,
+      shell_bastion: 22,
+      bubble_burst: 3,
+      ancient_bark: 17,
+      shadow_shed: 4,
+      moonless_omen: 8,
+    }
+  );
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.values(MOVES)
+        .filter((move) => move.healRatio)
+        .map((move) => [move.id, move.healRatio])
+    ),
+    { ash_rebirth: 0.18, seed_bloom: 0.15 }
+  );
+  assert.ok(Object.values(MOVES).every((move) => !move.drain || move.drain <= 0.25));
+  assert.ok(
+    Object.values(MOVES).every(
+      (move) => !move.selfStatuses?.some((status) => status.id === 'evasive') || (move.barrier || 0) <= 10
+    )
+  );
+  assert.equal(MOVES.leaf_mantle.teamBarrier, 7);
+  assert.deepEqual(
+    [MOVES.petal_ray, MOVES.healing_rain, MOVES.leaf_mantle, MOVES.nectar_circle].map(
+      (move) => move.teamHealRatio
+    ),
+    [0.03, 0.065, 0.04, 0.08]
+  );
+});
+
 test('every creature owns exactly one mechanically meaningful Signature', () => {
   for (const id of CREATURE_IDS) {
     const signatures = CREATURES[id].moves.map((moveId) => MOVES[moveId]).filter((move) => move.signature);
@@ -116,7 +160,7 @@ test('six mythic trials have legal teams and distinct rule sets', () => {
     assert.equal(trial.enemyTeam.length, 3);
     trial.enemyTeam.forEach((id) => assert.ok(CREATURES[id]));
     assert.ok(trial.modifiers.length);
-    assert.equal(trial.difficulty, 'standard');
+    assert.equal(trial.difficulty, 'champion');
   }
 });
 
@@ -399,11 +443,9 @@ test('Standard AI cannot inspect a player action committed outside its safe snap
 
 test('Champion reply forecasts account for an active barrier through authoritative previews', () => {
   const clear = createBattle({
-      playerTeam: ['lumivox', 'ferrax', 'abyssar'],
-      enemyTeam: ['lumivox', 'farfombre', 'prismage'],
-      seed: 1290640251,
-      arena: 'eclipse',
-      modifiers: ['relay_fever'],
+      playerTeam: ['orakyn', 'lumivox', 'mnemora'],
+      enemyTeam: ['farfombre', 'prismage', 'kordane'],
+      seed: 1,
     }),
     barrier = structuredClone(clear);
   clear.sides.player.surge = 30;
@@ -411,14 +453,14 @@ test('Champion reply forecasts account for an active barrier through authoritati
   clear.sides.player.team[0].barrier = 0;
   barrier.sides.player.surge = 30;
   barrier.rngState = 123456789;
-  barrier.sides.player.team[0].barrier = 60;
+  barrier.sides.player.team[0].barrier = 35;
   assert.deepEqual(chooseAiAction(clear, 'player', 'champion', 'champion'), {
     type: 'switch',
     index: 2,
   });
   assert.deepEqual(chooseAiAction(barrier, 'player', 'champion', 'champion'), {
     type: 'move',
-    moveId: 'echo_chorus',
+    moveId: 'slowing_riddle',
   });
   clear.rngState = 123456789;
   barrier.rngState = 123456789;
@@ -448,7 +490,7 @@ test('Standard and Champion select their second-ranked action at their seeded im
     return [...counts.values()].sort((a, b) => a - b);
   };
   assert.deepEqual(outcomes('standard'), [284, 716]);
-  assert.deepEqual(outcomes('champion'), [100, 900]);
+  assert.deepEqual(outcomes('champion'), [1000]);
 });
 
 test('Standard AI rotates its kit to cash out a Flow crescendo', () => {
@@ -476,8 +518,8 @@ test('Standard AI rotates its kit to cash out a Flow crescendo', () => {
 
 test('Champion AI converts late-turn pressure into finishing aggression', () => {
   const pressure = createBattle({
-      playerTeam: ['brontusk', 'ferrax', 'monolith'],
-      enemyTeam: ['mossaur', 'florafae', 'thornox'],
+      playerTeam: ['kordane', 'lumivox', 'mnemora'],
+      enemyTeam: ['orakyn', 'prismage', 'brontusk'],
       seed: 6,
     }),
     baseline = structuredClone(pressure);
@@ -488,10 +530,10 @@ test('Champion AI converts late-turn pressure into finishing aggression', () => 
   baseline.lateTurnPressure = false;
   assert.deepEqual(chooseAiAction(baseline, 'player', 'champion', 'champion'), {
     type: 'move',
-    moveId: 'iron_resolve',
+    moveId: 'resonant_focus',
   });
   assert.deepEqual(chooseAiAction(pressure, 'player', 'champion', 'champion'), {
     type: 'move',
-    moveId: 'seismic_reversal',
+    moveId: 'crystal_strike',
   });
 });

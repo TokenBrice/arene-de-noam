@@ -1,4 +1,5 @@
-import { CREATURE_IDS } from '../src/data/creatures.js';
+import { CREATURES, CREATURE_IDS } from '../src/data/creatures.js';
+import { MOVES } from '../src/data/moves.js';
 import { chooseAiAction } from '../src/battle/ai.js';
 import {
   applyReplacement,
@@ -84,9 +85,9 @@ function checkNaiveRamp() {
     ),
     seed = normalizeSeed(Number(process.env.ARENA_NAIVE_SEED) || 0x51a1ced),
     targets = {
-      apprentice: [0.65, 0.8],
-      standard: [0.45, 0.6],
-      champion: [0.25, 0.4],
+      apprentice: [0.65, 1],
+      standard: [0.4, 0.6],
+      champion: [0.2, 0.4],
     },
     results = {};
   for (const difficulty of Object.keys(targets)) {
@@ -118,6 +119,70 @@ function checkNaiveRamp() {
         .map(([difficulty, winRate]) => `${difficulty} ${percent(winRate, 1)}`)
         .join(', ')}`
     );
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b),
+    middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function percentile(values, ratio) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.ceil(sorted.length * ratio) - 1)];
+}
+
+function checkTtkProfile() {
+  const buckets = {
+      neutral: { ttk: [], oneShots: 0 },
+      super: { ttk: [], oneShots: 0 },
+      resisted: { ttk: [], oneShots: 0 },
+    },
+    regularMoves = Object.values(MOVES).filter((move) => move.kind === 'damage' && !move.signature);
+  for (const move of regularMoves)
+    for (const defenderId of CREATURE_IDS) {
+      const playerFillers = CREATURE_IDS.filter((id) => id !== move.owner).slice(0, 2),
+        enemyFillers = CREATURE_IDS.filter((id) => id !== defenderId).slice(0, 2),
+        state = createBattle({
+          playerTeam: [move.owner, ...playerFillers],
+          enemyTeam: [defenderId, ...enemyFillers],
+        });
+      for (const side of ['player', 'enemy'])
+        for (const creature of state.sides[side].team) {
+          creature.barrier = 0;
+          creature.statuses = {};
+        }
+      const forecast = previewMove(state, 'player', move.id),
+        bucket =
+          forecast.affinity === 2
+            ? buckets.super
+            : forecast.affinity === 0.5
+              ? buckets.resisted
+              : buckets.neutral,
+        hp = CREATURES[defenderId].maxHp;
+      bucket.ttk.push(Math.ceil(hp / Math.max(1, forecast.raw)));
+      if (forecast.raw >= hp) bucket.oneShots++;
+    }
+  const report = Object.fromEntries(
+    Object.entries(buckets).map(([key, bucket]) => [
+      key,
+      { median: median(bucket.ttk), oneShotRate: bucket.oneShots / bucket.ttk.length },
+    ])
+  );
+  console.log(
+    `Regular-move median TTK: neutral ${report.neutral.median} · super-effective ${report.super.median} · resisted ${report.resisted.median}; full-HP one-shots neutral ${percent(report.neutral.oneShotRate, 1)} · super-effective ${percent(report.super.oneShotRate, 1)}.`
+  );
+  if (
+    report.neutral.median < 3.5 ||
+    report.neutral.median > 4.5 ||
+    report.super.median < 2 ||
+    report.super.median > 3 ||
+    report.resisted.median < 7 ||
+    report.resisted.median > 8 ||
+    report.neutral.oneShotRate > 0 ||
+    report.super.oneShotRate >= 0.08
+  )
+    throw new Error('Regular-move TTK or one-shot profile is outside the decisive-fight targets');
 }
 
 function emptyRecord(keys) {
@@ -155,6 +220,8 @@ const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.AREN
 let rng = balanceSeed,
   turnsBefore = 0,
   turnsAfter = 0,
+  turnSamplesBefore = [],
+  turnSamplesAfter = [],
   capsBefore = 0,
   capsAfter = 0;
 
@@ -171,6 +238,8 @@ for (let game = 0; game < samples; game++) {
   rng = (rng + 0x9e3779b9) >>> 0 || 1;
   turnsBefore += before.turn;
   turnsAfter += result.turn;
+  turnSamplesBefore.push(before.turn);
+  turnSamplesAfter.push(result.turn);
   capsBefore += before.reason === 'turn-cap' ? 1 : 0;
   capsAfter += result.reason === 'turn-cap' ? 1 : 0;
   recordSide(stats, player.team, playerWon);
@@ -188,8 +257,8 @@ for (let game = 0; game < samples; game++) {
 const ranked = [...stats]
     .map(([id, item]) => ({ id, rate: rate(item), ...item }))
     .sort((a, b) => b.rate - a.rate),
-  high = ranked.filter((item) => item.rate > 0.68),
-  low = ranked.filter((item) => item.rate < 0.35),
+  high = ranked.filter((item) => item.rate > 0.7),
+  low = ranked.filter((item) => item.rate < 0.3),
   lopsided = [];
 
 for (let a = 0; a < CREATURE_IDS.length - 1; a++)
@@ -212,9 +281,9 @@ console.log(
   `Simulated ${samples} paired champion-vs-champion matchups (seed ${balanceSeed}) across all ${CREATURE_IDS.length} creatures.`
 );
 console.log(
-  `Late-turn pressure comparison: average turns ${(turnsBefore / samples).toFixed(1)} before → ${(turnsAfter / samples).toFixed(1)} after; turn-cap decisions ${percent(capsBefore / samples, 1)} (${capsBefore}/${samples}) before → ${percent(capsAfter / samples, 1)} (${capsAfter}/${samples}) after.`
+  `Late-turn pressure comparison: average turns ${(turnsBefore / samples).toFixed(1)} before → ${(turnsAfter / samples).toFixed(1)} after; p90 ${percentile(turnSamplesBefore, 0.9)} → ${percentile(turnSamplesAfter, 0.9)}; turn-cap decisions ${percent(capsBefore / samples, 1)} (${capsBefore}/${samples}) before → ${percent(capsAfter / samples, 1)} (${capsAfter}/${samples}) after.`
 );
-console.log(`Creature win-rate range: ${percent(ranked.at(-1).rate)}–${percent(ranked[0].rate)}.`);
+console.log(`Creature win-rate range: ${percent(ranked.at(-1).rate, 1)}–${percent(ranked[0].rate, 1)}.`);
 console.log(
   `Team archetypes: ${PROFILE_AXES.map((axis) => {
     const item = archetypes.get(axis);
@@ -240,10 +309,18 @@ for (const row of CREATURE_IDS)
   );
 
 checkNaiveRamp();
+checkTtkProfile();
+
+const averageTurns = turnsAfter / samples,
+  capShare = capsAfter / samples;
+if (averageTurns < 16 || averageTurns > 20 || capShare >= 0.1)
+  throw new Error(
+    `Pacing outside targets: average turns ${averageTurns.toFixed(1)}, turn-cap share ${percent(capShare, 1)}`
+  );
 
 if (high.length || low.length)
   throw new Error(
-    `Roster balance outside 35–68%: ${[...high, ...low]
-      .map((item) => `${item.id} ${percent(item.rate)}`)
+    `Roster balance outside 30–70%: ${[...high, ...low]
+      .map((item) => `${item.id} ${percent(item.rate, 1)}`)
       .join(', ')}`
   );

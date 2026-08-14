@@ -60,8 +60,8 @@ export function bestLeadIndex(ids = [], enemyIds = []) {
     enemyIds.reduce(
       (total, enemyId) =>
         total +
-        (affinityMultiplier(CREATURES[id]?.affinity, CREATURES[enemyId]?.affinity) === 1.5 ? 3 : 0) -
-        (affinityMultiplier(CREATURES[enemyId]?.affinity, CREATURES[id]?.affinity) === 1.5 ? 2 : 0),
+        (affinityMultiplier(CREATURES[id]?.affinity, CREATURES[enemyId]?.affinity) === 2 ? 3 : 0) -
+        (affinityMultiplier(CREATURES[enemyId]?.affinity, CREATURES[id]?.affinity) === 2 ? 2 : 0),
       0
     ) +
     (CREATURES[id]?.speed || 0) / 1000;
@@ -83,8 +83,8 @@ export function remixTeam(enemyIds = [], seed = 1) {
               enemyIds.reduce(
                 (sum, enemyId) =>
                   sum +
-                  (affinityMultiplier(CREATURES[id].affinity, CREATURES[enemyId]?.affinity) === 1.5 ? 3 : 0) -
-                  (affinityMultiplier(CREATURES[enemyId]?.affinity, CREATURES[id].affinity) === 1.5 ? 2 : 0),
+                  (affinityMultiplier(CREATURES[id].affinity, CREATURES[enemyId]?.affinity) === 2 ? 3 : 0) -
+                  (affinityMultiplier(CREATURES[enemyId]?.affinity, CREATURES[id].affinity) === 2 ? 2 : 0),
                 0
               ),
             0

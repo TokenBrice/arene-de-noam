@@ -15,7 +15,7 @@ export function affinityMultiplier(attack, defense) {
   const a = AFFINITY_ORDER.indexOf(attack);
   const d = AFFINITY_ORDER.indexOf(defense);
   if (a < 0 || d < 0) throw new Error(`Unknown affinity: ${attack}/${defense}`);
-  if ((a + 1) % AFFINITY_ORDER.length === d) return 1.5;
-  if ((a - 1 + AFFINITY_ORDER.length) % AFFINITY_ORDER.length === d) return 0.75;
+  if ((a + 1) % AFFINITY_ORDER.length === d) return 2;
+  if ((a - 1 + AFFINITY_ORDER.length) % AFFINITY_ORDER.length === d) return 0.5;
   return 1;
 }

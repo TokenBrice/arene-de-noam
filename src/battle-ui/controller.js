@@ -106,15 +106,15 @@ function startBattle(config) {
         creature.hp = Math.max(1, Math.min(creature.maxHp, Math.round(creature.maxHp * ratio)));
     });
   const testHp = Number(params.get('playerHp'));
-  if (testAnimationScale === 0 && Number.isFinite(testHp) && testHp > 0)
+  if (Number.isFinite(testHp) && testHp > 0)
     activeOf(state, 'player').hp = Math.min(activeOf(state, 'player').maxHp, Math.round(testHp));
   const testEnemyHp = Number(params.get('enemyHp'));
-  if (testAnimationScale === 0 && Number.isFinite(testEnemyHp) && testEnemyHp > 0)
+  if (Number.isFinite(testEnemyHp) && testEnemyHp > 0)
     state.sides.enemy.team.forEach((creature) => {
       creature.hp = Math.min(creature.maxHp, Math.round(testEnemyHp));
     });
   const testTeamHp = Number(params.get('teamHp'));
-  if (testAnimationScale === 0 && Number.isFinite(testTeamHp) && testTeamHp > 0)
+  if (Number.isFinite(testTeamHp) && testTeamHp > 0)
     state.sides.player.team.forEach((creature) => {
       creature.hp = Math.min(creature.maxHp, Math.round(testTeamHp));
     });
@@ -638,8 +638,8 @@ function openSwitch() {
         incoming = affinityMultiplier(foe.affinity, c.affinity),
         forecast = forecastFor(index),
         score =
-          (mult === 1.5 ? 24 : mult === 0.75 ? -8 : 0) +
-          (incoming === 0.75 ? 18 : incoming === 1.5 ? -20 : 0) +
+          (mult > 1 ? 24 : mult < 1 ? -8 : 0) +
+          (incoming < 1 ? 18 : incoming > 1 ? -20 : 0) +
           (c.hp / c.maxHp) * 12 +
           c.barrier * 0.18 +
           (forecast?.read ? 38 : 0) -
@@ -712,6 +712,16 @@ async function handlePlayerAction(action) {
     else if (tutorialStep === 1 && action.moveId === 'oracle_veil') session.tutorialStep = 2;
     else if (tutorialStep === 2 && action.type === 'switch') session.tutorialStep = 3;
   }
+  if (
+    action?.type === 'move' &&
+    MOVES[action.moveId]?.signature &&
+    enemyAction?.type === 'move' &&
+    MOVES[enemyAction.moveId]?.signature
+  )
+    session.committedClash = {
+      left: { creatureId: activeOf(session.state, 'player').id, moveId: action.moveId },
+      right: { creatureId: activeOf(session.state, 'enemy').id, moveId: enemyAction.moveId },
+    };
   const result = resolveTurn(session.state, action, enemyAction);
   session.state = result.state;
   await playEvents(result.events);

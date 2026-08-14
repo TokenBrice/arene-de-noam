@@ -92,8 +92,8 @@ function teamMatchup(team, enemy) {
   for (const a of team)
     for (const b of enemy) {
       const m = affinityMultiplier(CREATURES[a].affinity, CREATURES[b].affinity);
-      if (m === 1.5) good++;
-      if (m === 0.75) risky++;
+      if (m > 1) good++;
+      if (m < 1) risky++;
     }
   return { good, risky };
 }
@@ -109,8 +109,8 @@ function creatureMatchup(id, enemy) {
     risk = 0;
   for (const foeId of enemy) {
     const foe = CREATURES[foeId].affinity;
-    if (affinityMultiplier(own, foe) === 1.5) good++;
-    if (affinityMultiplier(foe, own) === 1.5) risk++;
+    if (affinityMultiplier(own, foe) > 1) good++;
+    if (affinityMultiplier(foe, own) > 1) risk++;
   }
   return { good, risk, edge: good - risk };
 }

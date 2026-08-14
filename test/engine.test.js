@@ -119,7 +119,7 @@ test('a resisted predicted attack rewards a symmetric Perfect Relay', () => {
     }),
     before = state.sides.player.surge,
     forecast = previewIncomingAfterSwitch(state, 'player', 1, 'crystal_strike');
-  assert.equal(forecast.affinity, 0.75);
+  assert.equal(forecast.affinity, 0.5);
   assert.equal(forecast.perfectRelay, true);
   const result = resolveTurn(state, { type: 'switch', index: 1 }, { type: 'move', moveId: 'crystal_strike' });
   assert.ok(result.events.some((event) => event.type === 'perfect-relay' && event.side === 'player'));
@@ -166,6 +166,7 @@ test('cooldowns last exact future selection phases and statuses refresh/consume'
     'exposure is consumed by a damaging hit'
   );
   state.sides.player.team[0].statuses.slowed = { remaining: 2, appliedTurn: state.turn };
+  state.sides.player.team[0].attack = 1;
   result = resolveTurn(
     state,
     { type: 'move', moveId: 'crystal_strike' },
@@ -211,6 +212,8 @@ test('alternating techniques builds Battle Flow while repetition breaks it', () 
     enemyTeam: ['kordane', 'calderoc', 'farfombre'],
     seed: 83,
   });
+  state.sides.player.team[0].attack = 1;
+  state.sides.enemy.team[0].attack = 1;
   let result = resolveTurn(
     state,
     { type: 'move', moveId: 'lucid_arc' },
@@ -533,7 +536,7 @@ test('preview resolves Last Bastion barriers between Echo Chorus hits', () => {
     enemyTeam: ['brontusk', 'kordane', 'calderoc'],
     seed: 801,
   });
-  state.sides.enemy.team[0].hp = 30;
+  state.sides.enemy.team[0].hp = 60;
   state.sides.enemy.team[0].barrier = 0;
   const before = structuredClone(state),
     preview = previewMove(state, 'player', 'echo_chorus'),
@@ -884,8 +887,8 @@ test('late-turn pressure rises from turn 29, ignores barriers, and leaves the be
   const state = make();
   state.turn = LATE_TURN_PRESSURE.startTurn;
   state.sides.player.surge = 100;
-  state.sides.player.team[0].barrier = 60;
-  state.sides.enemy.team[0].barrier = 60;
+  state.sides.player.team[0].barrier = 35;
+  state.sides.enemy.team[0].barrier = 35;
   const playerBenchHp = state.sides.player.team[1].hp,
     enemyBenchHp = state.sides.enemy.team[1].hp,
     result = resolveTurn(
@@ -901,8 +904,8 @@ test('late-turn pressure rises from turn 29, ignores barriers, and leaves the be
     assert.equal(event.ratio, 0.02);
     assert.equal(event.amount, Math.round(event.maxHp * 0.02));
   }
-  assert.equal(result.state.sides.player.team[0].barrier, 60);
-  assert.equal(result.state.sides.enemy.team[0].barrier, 60);
+  assert.equal(result.state.sides.player.team[0].barrier, 35);
+  assert.equal(result.state.sides.enemy.team[0].barrier, 35);
   assert.equal(result.state.sides.player.team[1].hp, playerBenchHp);
   assert.equal(result.state.sides.enemy.team[1].hp, enemyBenchHp);
 
@@ -940,7 +943,7 @@ test('late-turn pressure caps at 10% and cannot directly knock out a fighter', (
   const state = make();
   state.turn = TURN_CAP;
   state.sides.player.team[0].hp = 2;
-  state.sides.player.team[0].barrier = 60;
+  state.sides.player.team[0].barrier = 35;
   const result = resolveTurn(
       state,
       { type: 'move', moveId: 'lucid_arc' },
@@ -953,7 +956,7 @@ test('late-turn pressure caps at 10% and cannot directly knock out a fighter', (
   assert.equal(pressure.amount, 1);
   assert.equal(pressure.hp, 1);
   assert.equal(result.state.sides.player.team[0].hp, 1);
-  assert.equal(result.state.sides.player.team[0].barrier, 60);
+  assert.equal(result.state.sides.player.team[0].barrier, 35);
   assert.equal(
     result.events.some(
       (event) => event.type === 'ko' && event.side === 'player' && event.creatureId === 'orakyn'

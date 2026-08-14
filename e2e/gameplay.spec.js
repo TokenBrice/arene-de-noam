@@ -190,7 +190,7 @@ test('a doctrine grants one cinematic free Trainer Command per battle', async ({
   await command.click();
   await expect(page.locator('.trainer-command-fx')).toBeVisible();
   await expect(page.locator('.trainer-command-fx')).toContainText('Tenir la ligne');
-  await expect(page.locator('.tactical-number')).toContainText('+20');
+  await expect(page.locator('.tactical-number')).toContainText(/\+\d+ ⬡/);
   await expect(command).toBeDisabled({ timeout: 5000 });
   await expect(page.locator('#hud-player')).toContainText('Protégé');
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
@@ -204,7 +204,7 @@ test('restorative techniques display their recovered HP at the creature', async 
     reducedMotion: false,
     battleSpeed: 1,
   });
-  await page.goto('/?seed=52');
+  await page.goto('/?seed=61&enemyMove=supernova');
   await page.getByRole('button', { name: 'Épreuves' }).click();
   await page.locator('.trial-card').nth(4).getByRole('button', { name: 'Relever l’épreuve' }).click();
   await expect(page.getByRole('heading', { name: 'Dernière Lueur' }).first()).toBeVisible();
@@ -447,7 +447,7 @@ test('two ready signature moves trigger the full-screen clash intro', async ({ p
     reducedMotion: false,
     battleSpeed: 1,
   });
-  await page.goto('/?seed=61');
+  await page.goto('/?seed=61&enemyMove=supernova');
   await page.getByRole('button', { name: 'Épreuves' }).click();
   await page.getByRole('button', { name: 'Relever l’épreuve' }).first().click();
   await page.getByRole('button', { name: 'Relever l’épreuve' }).click();

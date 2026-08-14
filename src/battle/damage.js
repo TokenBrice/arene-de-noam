@@ -16,7 +16,6 @@ export function calculateDamage(
   } = {}
 ) {
   const affinity = affinityMultiplier(move.affinity, defender.affinity);
-  const sameAffinity = move.affinity !== 'neutral' && move.affinity === attacker.affinity ? 1.15 : 1;
   const status =
     (focused ? 1.3 : 1) *
     (weakened ? 0.75 : 1) *
@@ -28,7 +27,7 @@ export function calculateDamage(
     bonus;
   const damage = Math.max(
     1,
-    Math.round(((move.power * attacker.attack) / defender.guard) * 0.55 * affinity * sameAffinity * status)
+    Math.round(((move.power * attacker.attack) / defender.guard) * 0.9 * affinity * status)
   );
-  return { damage, affinity, sameAffinity, status };
+  return { damage, affinity, status };
 }

@@ -11,7 +11,7 @@ test('post-defeat coaching prioritizes observed tactical leaks', () => {
       ...Array.from({ length: 4 }, () => ({
         type: 'damage',
         sourceSide: 'player',
-        affinity: 0.75,
+        affinity: 0.5,
         combo: [],
       })),
       { type: 'status', side: 'player', applied: true },

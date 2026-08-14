@@ -22,6 +22,7 @@ export const LATE_TURN_PRESSURE = Object.freeze({
   minimumHp: 1,
 });
 export const SIGNATURE_COST = 100;
+export const BARRIER_CAP = 35;
 export const ARENA_RESONANCE = Object.freeze({
   crystal: 'force',
   grove: 'grove',
@@ -139,7 +140,7 @@ export function createBattle({
   if (activeModifiers.includes('enemy_aegis')) state.sides.enemy.team.forEach((c) => (c.barrier = 18));
   if (activeModifiers.includes('dual_aegis'))
     for (const side of ['player', 'enemy'])
-      state.sides[side].team.forEach((c) => (c.barrier = Math.min(60, c.barrier + 18)));
+      state.sides[side].team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 18)));
   if (activeModifiers.includes('player_wounded'))
     state.sides.player.team.forEach((c) => (c.hp = Math.max(1, Math.round(c.maxHp * 0.72))));
   if (activeModifiers.includes('ascendant'))
@@ -157,11 +158,12 @@ export function createBattle({
   if (activeModifiers.includes('player_surge'))
     state.sides.player.surge = Math.min(100, state.sides.player.surge + 25);
   if (activeModifiers.includes('player_aegis'))
-    state.sides.player.team.forEach((c) => (c.barrier = Math.min(60, c.barrier + 12)));
+    state.sides.player.team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 12)));
   for (const side of ['player', 'enemy']) {
     const owner = state.sides[side],
       active = activeOf(state, side);
-    if (owner.bonds.includes('bulwark')) owner.team.forEach((c) => (c.barrier = Math.min(60, c.barrier + 6)));
+    if (owner.bonds.includes('bulwark'))
+      owner.team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 6)));
     if (owner.bonds.includes('huntpack')) applyStatus(active, 'haste', state.turn, 2);
     if (owner.bonds.includes('convergence')) applyStatus(active, 'focused', state.turn, null);
   }
@@ -179,7 +181,7 @@ export function createBattle({
   }
   if (activeDoctrine === 'bastion') {
     state.sides.player.surge = Math.max(0, state.sides.player.surge - 10);
-    state.sides.player.team.forEach((c) => (c.barrier = Math.min(60, c.barrier + 10)));
+    state.sides.player.team.forEach((c) => (c.barrier = Math.min(BARRIER_CAP, c.barrier + 10)));
   }
   if (activeDoctrine === 'ambush') {
     applyStatus(activeOf(state, 'player'), 'focused', state.turn, null);
@@ -257,14 +259,15 @@ function enterTalent(state, side, events = null) {
     passiveEvent(events, side, creature);
   }
   if (creature.passive === 'foundation' && !creature.talent.entry) {
-    creature.barrier = Math.min(60, creature.barrier + 14);
+    const before = creature.barrier;
+    creature.barrier = Math.min(BARRIER_CAP, creature.barrier + 14);
     creature.talent.entry = true;
     passiveEvent(events, side, creature);
     if (events)
       push(events, 'barrier', {
         side,
         creatureId: creature.id,
-        amount: 14,
+        amount: creature.barrier - before,
         total: creature.barrier,
         source: 'passive',
       });
@@ -428,7 +431,7 @@ function addBarrier(creature, amount, side, events) {
   if (!amount) return;
   if (creature.passive === 'prism_skin') amount += 6;
   const before = creature.barrier;
-  creature.barrier = Math.min(60, creature.barrier + amount);
+  creature.barrier = Math.min(BARRIER_CAP, creature.barrier + amount);
   push(events, 'barrier', {
     side,
     creatureId: creature.id,
@@ -713,7 +716,7 @@ export function previewIncomingAfterSwitch(state, defenderSide, index, attackerM
     return null;
   resolveSwitch(snapshot, defenderSide, { type: 'switch', index }, events, false);
   const forecast = previewMove(snapshot, attackerSide, attackerMoveId);
-  return forecast ? { ...forecast, perfectRelay: forecast.affinity === 0.75 } : null;
+  return forecast ? { ...forecast, perfectRelay: forecast.affinity === 0.5 } : null;
 }
 
 export function previewMoveOrder(state, side, moveId, otherMoveId) {
@@ -903,11 +906,11 @@ function arenaPulse(state, events) {
   for (const side of ['player', 'enemy']) {
     const creature = activeOf(state, side);
     if (creature.hp <= 0) continue;
-    if (state.arena === 'crystal') addBarrier(creature, 8, side, events);
-    if (state.arena === 'grove') healCreature(creature, creature.maxHp * 0.08, side, events, 'arena');
+    if (state.arena === 'crystal') addBarrier(creature, 5, side, events);
+    if (state.arena === 'grove') healCreature(creature, creature.maxHp * 0.05, side, events, 'arena');
     if (state.arena === 'tidal') {
       removeAndEmit(creature, 'negative', 1, side, events);
-      addBarrier(creature, 5, side, events);
+      addBarrier(creature, 3, side, events);
     }
     if (state.arena === 'volcano') {
       const amount = Math.max(1, Math.round(creature.maxHp * 0.05));
@@ -993,7 +996,7 @@ function tickEnd(state, events) {
             });
           }
         if (creature.hp > 0 && hasStatus(creature, 'regenerating'))
-          healCreature(creature, creature.maxHp * 0.06, side, events, 'regeneration');
+          healCreature(creature, creature.maxHp * 0.04, side, events, 'regeneration');
         if (creature.hp <= 0) {
           push(events, 'ko', { side, creatureId: creature.id });
           const remaining = consciousIndices(state, side).filter((i) => i !== state.sides[side].active);
@@ -1035,7 +1038,7 @@ export function resolveTurn(inputState, playerAction, enemyAction) {
         actions[targetSide].type === 'switch' && move.kind === 'damage'
           ? previewMove(state, side, move.id)
           : null;
-    if (forecast?.affinity === 0.75) {
+    if (forecast?.affinity === 0.5) {
       const defender = activeOf(state, targetSide);
       push(events, 'perfect-relay', {
         side: targetSide,
