@@ -199,7 +199,7 @@ body.high-contrast .turn-chip {
 }
 .move-theater {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-theater);
   inset: 0;
   overflow: hidden;
   background: #02030b;
@@ -381,9 +381,6 @@ body.high-contrast .turn-chip {
 }
 .difficulty-preview.difficulty-apprentice {
   border-left: 3px solid #78e8ff;
-}
-.difficulty-preview.difficulty-challenger {
-  border-left: 3px solid #d59aff;
 }
 .difficulty-preview.difficulty-champion {
   border-left: 3px solid #ffe070;

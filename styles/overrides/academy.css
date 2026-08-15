@@ -1,5 +1,5 @@
 /* Tactical academy */
-.menu {
+.academy-page .menu {
   gap: 15px;
 }
 
@@ -130,7 +130,7 @@
   .menu-primary button {
     min-height: 60px;
   }
-  .menu {
+  .academy-page .menu {
     gap: 13px;
   }
   .menu-group {
