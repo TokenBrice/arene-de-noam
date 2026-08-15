@@ -30,6 +30,17 @@ test('French and English localization keys are complete and interpolation works'
   assert.deepEqual(Object.keys(DICTIONARIES.fr).sort(), Object.keys(DICTIONARIES.en).sort());
   assert.equal(createI18n('en').t('battle.turn', { turn: 7 }), 'Turn 7');
 });
+test('live dictionary values are not shadowed by duplicate definitions', () => {
+  for (const [key, fr, en] of [
+    ['status.effect.marked', 'Combo consomme Marqué +40 % dégâts.', 'Combo consumes Marked: +40% damage.'],
+    ['move.effect.petal_ray', 'Inflige des dégâts et rend 3 % des PV à l’équipe.', "Deals damage and restores 3% of the team's HP."],
+    ['advice.title', 'Conseils de l’entraîneur', 'Coach Tips'],
+    ['battle.switchIncoming', 'Dégâts prévus : {damage}', 'Predicted damage: {damage}'],
+  ]) {
+    assert.equal(DICTIONARIES.fr[key], fr, `fr ${key}`);
+    assert.equal(DICTIONARIES.en[key], en, `en ${key}`);
+  }
+});
 test('save failure copy is available in both locales', () => {
   assert.equal(typeof DICTIONARIES.fr['app.saveFailed'], 'string');
   assert.equal(typeof DICTIONARIES.en['app.saveFailed'], 'string');
@@ -56,8 +67,8 @@ test('legacy affinity ids expose the canonical type labels and parallel triangle
   }
   assert.match(DICTIONARIES.fr['settings.affinities'], /×2.*×0,5.*×1/);
   assert.match(DICTIONARIES.en['settings.affinities'], /×2.*×0\.5.*×1/);
-  assert.match(DICTIONARIES.fr['academy.affinityHint'], /Entre les deux triangles : ×1/);
-  assert.match(DICTIONARIES.en['academy.affinityHint'], /Between triangles: ×1/);
+  assert.match(DICTIONARIES.fr['academy.affinityHint'], /Entre les triangles, c’est ×1/);
+  assert.match(DICTIONARIES.en['academy.affinityHint'], /Between the triangles, it is ×1/);
 });
 test('the eight kid-clear status labels are complete and dead ids are absent', () => {
   const dead = [
