@@ -52,9 +52,42 @@ function currentMusicScreen() {
 function bindCommon() {
   sound.setScreen(currentMusicScreen());
   screen.querySelectorAll('[data-action="title"]').forEach((b) => b.addEventListener('click', renderTitle));
+  const settingsBackRoutes = {
+    title: renderTitle,
+    selection: () => renderTeamSelect(ctx.selection?.mode),
+    bestiary: renderBestiary,
+    academy: renderAcademy,
+    league: renderLeague,
+    trials: renderTrials,
+    draft: renderDraft,
+    'gauntlet-boon': renderGauntletBoons,
+    results: () => {
+      const session = ctx.settingsBattleSession;
+      ctx.settingsBattleSession = null;
+      if (!session) {
+        renderTitle();
+        return;
+      }
+      ctx.battleSession = session;
+      renderResults(session.state.winner === 'player');
+    },
+  };
+  if (screen.dataset.page === 'settings') {
+    screen.querySelectorAll('.topbar > [data-action]').forEach((button) => {
+      if (!button.classList.contains('subtle-btn') || button.dataset.action === 'title') return;
+      const handler = settingsBackRoutes[button.dataset.action] || renderTitle;
+      button.addEventListener('click', handler);
+    });
+  }
   screen
     .querySelectorAll('[data-action="settings"]')
-    .forEach((b) => b.addEventListener('click', () => renderSettings()));
+    .forEach((b) =>
+      b.addEventListener('click', () => {
+        ctx.settingsReturn = screen.dataset.page || 'title';
+        ctx.settingsBattleSession = ctx.battleSession;
+        renderSettings();
+      })
+    );
   screen.querySelectorAll('[data-action="toggle-mute"]').forEach((b) =>
     b.addEventListener('click', () => {
       ctx.save.muted = !ctx.save.muted;
@@ -210,21 +243,33 @@ const SCREEN_TRANSITION_PAGES = {
   renderBattle: 'battle',
 };
 function transitionScreen(render, targetPage) {
-  const samePage = !screen.dataset.page || screen.dataset.page === targetPage;
-  if (testAnimationScale === 0 || ctx.save.reducedMotion || samePage) {
+  const pageChanged = Boolean(screen.dataset.page) && targetPage !== screen.dataset.page;
+  if (testAnimationScale === 0 || ctx.save.reducedMotion || !pageChanged) {
     render();
-    return;
+  } else {
+    render();
+    screen.classList.add('screen-entering');
+    const veil = document.createElement('i');
+    veil.className = 'screen-transition-veil';
+    veil.setAttribute('aria-hidden', 'true');
+    document.body.append(veil);
+    setTimeout(() => {
+      veil.remove();
+      screen.classList.remove('screen-entering');
+    }, 340);
   }
+  if (pageChanged) {
+    screen.scrollTo(0, 0);
+    const heading = screen.querySelector('h1');
+    heading?.setAttribute('tabindex', '-1');
+    heading?.focus({ preventScroll: true });
+  }
+}
+export function rerenderPreservingFocus(render) {
+  const active = document.activeElement;
+  const key = active?.dataset?.focusKey ?? null;
   render();
-  screen.classList.add('screen-entering');
-  const veil = document.createElement('i');
-  veil.className = 'screen-transition-veil';
-  veil.setAttribute('aria-hidden', 'true');
-  document.body.append(veil);
-  setTimeout(() => {
-    veil.remove();
-    screen.classList.remove('screen-entering');
-  }, 340);
+  if (key) ctx.screen.querySelector(`[data-focus-key="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
 }
 export function installScreenTransitions() {
   for (const [name, page] of Object.entries(SCREEN_TRANSITION_PAGES)) {
@@ -279,5 +324,4 @@ function trapModalTab(event) {
   }
   return true;
 }
-
-registerRoutes({ bindCommon, installBestiaryFilters, renderCurrent, handleEscape, trapModalTab });
+registerRoutes({ bindCommon, installBestiaryFilters, renderCurrent, handleEscape, trapModalTab, rerenderPreservingFocus });

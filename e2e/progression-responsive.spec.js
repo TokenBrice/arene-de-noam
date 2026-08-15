@@ -370,3 +370,52 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   await expect(page.getByText('Tour 1')).toBeVisible();
   await expect(page.locator('[data-move]').first()).toBeVisible();
 });
+
+test('navigation and control rerenders preserve keyboard focus', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+
+  const difficulty = page.locator('#difficulty');
+  await difficulty.focus();
+  await difficulty.selectOption('champion');
+  await expect(page.locator('#difficulty')).toBeFocused();
+
+  await page.locator('#screen').evaluate((node) => node.scrollTo(0, node.scrollHeight));
+  await page.locator('[data-action="title"]').first().click();
+  await page.getByRole('button', { name: /Bestiaire/ }).click();
+  await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeFocused();
+  await expect(page.locator('#screen')).toHaveJSProperty('scrollTop', 0);
+
+  await page.locator('[data-action="settings"]').click();
+  const language = page.locator('[data-lang="en"]');
+  await language.focus();
+  await language.click();
+  await expect(page.locator('[data-lang="en"]')).toBeFocused();
+});
+
+test('cold boot does not steal focus during initial title render', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await expect(page.locator('.screen-transition-veil')).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+});
+
+test('custom slot clearing restores focus to its replacement save control', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.locator('[data-squad="storm_circuit"]').click();
+  await page.locator('[data-custom-save="0"]').click();
+  const clear = page.locator('[data-custom-clear="0"]');
+  await clear.click();
+  await expect(page.locator('[data-custom-save="0"]')).toBeFocused();
+});
+
+test('final draft pick hands focus to its lead control', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?seed=20260814&animations=0');
+  await page.getByRole('button', { name: 'Draft du jour' }).click();
+  for (let round = 0; round < 3; round++) await page.locator('[data-draft-pick]').first().click();
+  await expect(page.locator('[data-focus-key="draft-lead-2"]')).toBeFocused();
+});

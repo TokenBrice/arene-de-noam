@@ -14,7 +14,7 @@ const {
   disposeArena,
   topbar,
 } = ctx;
-const { bindCommon, startBattle, renderResults } = route;
+const { bindCommon, startBattle, renderResults, rerenderPreservingFocus } = route;
 
 function startGauntlet(team, lead) {
   ctx.gauntletRun = { team: [...team], lead, stage: 0, boons: [], condition: null };
@@ -87,7 +87,7 @@ function renderGauntletBoons() {
     camp = `<div class="gauntlet-condition"><div><span class="eyebrow">${t('gauntlet.camp')}</span><small>${t('gauntlet.campHint')}</small></div>${ctx.gauntletRun.team
       .map((id, index) => {
         const ratio = ctx.gauntletRun.condition?.[id] || 1;
-        return `<button type="button" class="${ctx.gauntletRun.lead === index ? 'lead' : ''} ${scoutedLead === index ? 'recommended' : ''}" data-gauntlet-lead="${index}" aria-pressed="${ctx.gauntletRun.lead === index}"><img src="${sprite(id)}" alt=""><b>${creatureName(id)}${scoutedLead === index ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</b><i><u style="width:${ratio * 100}%"></u></i><em>${Math.round(ratio * 100)}%</em></button>`;
+        return `<button type="button" class="${ctx.gauntletRun.lead === index ? 'lead' : ''} ${scoutedLead === index ? 'recommended' : ''}" data-gauntlet-lead="${index}" data-focus-key="gauntlet-lead-${index}" aria-pressed="${ctx.gauntletRun.lead === index}"><img src="${sprite(id)}" alt=""><b>${creatureName(id)}${scoutedLead === index ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</b><i><u style="width:${ratio * 100}%"></u></i><em>${Math.round(ratio * 100)}%</em></button>`;
       })
       .join('')}</div>`;
   screen.querySelector('.boon-grid')?.insertAdjacentHTML('beforebegin', camp);
@@ -96,7 +96,7 @@ function renderGauntletBoons() {
     button.addEventListener('click', () => {
       ctx.gauntletRun.lead = Number(button.dataset.gauntletLead);
       sound.ui();
-      renderGauntletBoons();
+      rerenderPreservingFocus(() => renderGauntletBoons());
     })
   );
   screen.querySelectorAll('[data-boon]').forEach((button) =>

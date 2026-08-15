@@ -580,7 +580,10 @@ body.high-contrast [data-bestiary-class] {
 }
 .field select,
 .field input[type='range'] {
-  width: 100%;
+  inline-size: 100%;
+}
+.field input[type='range'] {
+  min-inline-size: 140px;
 }
 .field select {
   min-height: 44px;

@@ -44,7 +44,7 @@ const {
   comboRoutesHtml,
   topbar,
 } = ctx;
-const { bindCommon, randomDistinct, startGauntlet, startBattle } = route;
+const { bindCommon, randomDistinct, startGauntlet, startBattle, rerenderPreservingFocus } = route;
 
 function newSelection(mode) {
   const circuit = circuitMatch(ctx.save.circuitWins, LADDER_COUNT),
@@ -197,11 +197,11 @@ function renderTeamSelect(mode = 'ladder') {
     )}</div></div><div class="filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><div class="class-tabs"><button class="class-tab ${ctx.selection.filterClass === 'all' ? 'active' : ''}" data-class-filter="all" aria-label="${t('filter.allClasses')}" aria-pressed="${ctx.selection.filterClass === 'all'}">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button class="class-tab ${ctx.selection.filterClass === id ? 'active' : ''}" data-class-filter="${id}" aria-pressed="${ctx.selection.filterClass === id}" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`;
   const quickEnemyControls =
     mode === 'quick'
-      ? `<div class="enemy-picker" aria-label="${t('select.enemy')}">${CREATURE_IDS.map((id) => `<button type="button" class="icon-btn ${ctx.selection.enemyTeam.includes(id) ? 'active' : ''}" data-enemy-pick="${id}" aria-label="${creatureName(id)}" aria-pressed="${ctx.selection.enemyTeam.includes(id)}"><img src="${sprite(id)}" alt=""></button>`).join('')}</div>${actionButton(t('app.random'), 'random-enemy', 'subtle-btn wide')}`
+      ? `<div class="enemy-picker" aria-label="${t('select.enemy')}">${CREATURE_IDS.map((id) => `<button type="button" class="icon-btn ${ctx.selection.enemyTeam.includes(id) ? 'active' : ''}" data-enemy-pick="${id}" data-focus-key="enemy-${id}" aria-label="${creatureName(id)}" aria-pressed="${ctx.selection.enemyTeam.includes(id)}"><img src="${sprite(id)}" alt=""></button>`).join('')}</div>${actionButton(t('app.random'), 'random-enemy', 'subtle-btn wide', 'data-focus-key="enemy-random"')}`
       : '';
   const arenaControl =
     mode === 'quick'
-      ? `<div class="field"><label for="arena-select">${t('select.arena')}</label><select id="arena-select">${ARENAS.map((id) => `<option value="${id}" ${ctx.selection.arena === id ? 'selected' : ''}>${t(`arena.${id}`)}</option>`).join('')}</select></div><div class="field"><label for="quick-rule">${t('quickRule.title')}</label><select id="quick-rule">${QUICK_RULES.map((rule) => `<option value="${rule.id}" ${ctx.selection.quickRule === rule.id ? 'selected' : ''}>${rule.icon} ${t(`quickRule.${rule.id}`)}</option>`).join('')}</select></div><div class="battle-rule-preview"><b>${quickRule(ctx.selection.quickRule).icon} ${t(`quickRule.${ctx.selection.quickRule}`)}</b><span>${t(`quickRule.effect.${ctx.selection.quickRule}`)}</span></div>`
+      ? `<div class="field"><label for="arena-select">${t('select.arena')}</label><select id="arena-select" data-focus-key="arena">${ARENAS.map((id) => `<option value="${id}" ${ctx.selection.arena === id ? 'selected' : ''}>${t(`arena.${id}`)}</option>`).join('')}</select></div><div class="field"><label for="quick-rule">${t('quickRule.title')}</label><select id="quick-rule" data-focus-key="rule">${QUICK_RULES.map((rule) => `<option value="${rule.id}" ${ctx.selection.quickRule === rule.id ? 'selected' : ''}>${rule.icon} ${t(`quickRule.${rule.id}`)}</option>`).join('')}</select></div><div class="battle-rule-preview"><b>${quickRule(ctx.selection.quickRule).icon} ${t(`quickRule.${ctx.selection.quickRule}`)}</b><span>${t(`quickRule.effect.${ctx.selection.quickRule}`)}</span></div>`
       : '';
   const enemyRows =
     `<p class="meta-row">✦ ${t(`arena.${ctx.selection.arena}`)}</p>` +
@@ -218,20 +218,20 @@ function renderTeamSelect(mode = 'ladder') {
     selectedRows = ctx.selection.team
       .map(
         (id, index) =>
-          `<div class="selected-row ${index === scoutedLead ? 'recommended-lead' : ''}"><img src="${sprite(id)}" alt=""><span>${creatureName(id)}${index === scoutedLead ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</span><button class="icon-btn" data-lead-index="${index}" aria-label="${t('select.chooseLead')}">${ctx.selection.lead === index ? '★' : '☆'}</button></div>`
+          `<div class="selected-row ${index === scoutedLead ? 'recommended-lead' : ''}"><img src="${sprite(id)}" alt=""><span>${creatureName(id)}${index === scoutedLead ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</span><button class="icon-btn" data-lead-index="${index}" data-focus-key="lead-${index}" aria-label="${t('select.chooseLead')}">${ctx.selection.lead === index ? '★' : '☆'}</button></div>`
       )
       .join('');
-  const presets = `<section class="squad-presets"><div class="squad-presets-head"><span><b class="eyebrow">${t('squad.title')}</b><small>${t('squad.hint')}</small></span>${actionButton(`⟳ ${t('squad.remix')}`, 'remix-team', 'subtle-btn remix-team-btn')}</div><div class="squad-preset-track">${SQUAD_PRESETS.map(
+  const presets = `<section class="squad-presets"><div class="squad-presets-head"><span><b class="eyebrow">${t('squad.title')}</b><small>${t('squad.hint')}</small></span>${actionButton(`⟳ ${t('squad.remix')}`, 'remix-team', 'subtle-btn remix-team-btn', 'data-focus-key="remix"')}</div><div class="squad-preset-track">${SQUAD_PRESETS.map(
     (preset) => {
       const active = preset.team.every((id, i) => ctx.selection.team[i] === id);
-      return `<button type="button" class="squad-preset ${active ? 'active' : ''}" data-squad="${preset.id}" aria-pressed="${active}"><i>${preset.icon}</i><span><b>${t(`squad.${preset.id}`)}</b><small>${t(`squad.effect.${preset.id}`)}</small></span><div>${preset.team.map((id) => `<img src="${sprite(id)}" alt="">`).join('')}</div></button>`;
+      return `<button type="button" class="squad-preset ${active ? 'active' : ''}" data-squad="${preset.id}" data-focus-key="preset-${preset.id}" aria-pressed="${active}"><i>${preset.icon}</i><span><b>${t(`squad.${preset.id}`)}</b><small>${t(`squad.effect.${preset.id}`)}</small></span><div>${preset.team.map((id) => `<img src="${sprite(id)}" alt="">`).join('')}</div></button>`;
     }
   ).join('')}</div></section>`;
   const customSquads = `<section class="custom-squads"><div><span class="eyebrow">${t('loadout.title')}</span><small>${t('loadout.hint')}</small></div><div class="custom-squad-track">${Array.from(
     { length: 3 },
     (_, slot) => {
       const squad = ctx.save.customSquads?.[slot];
-      return `<article class="custom-squad ${squad ? 'filled' : 'empty'}"><span><b>${t('loadout.slot', { slot: slot + 1 })}</b><small>${squad ? t('select.lead') : t('loadout.empty')}</small></span><div class="custom-squad-team">${squad ? squad.team.map((id, index) => `<i class="${index === squad.lead ? 'lead' : ''}"><img src="${sprite(id)}" alt="${creatureName(id)}"></i>`).join('') : '◇ ◇ ◇'}</div><div class="custom-squad-actions">${squad ? `<button type="button" data-custom-load="${slot}">${t('loadout.load')}</button><button type="button" data-custom-save="${slot}">${t('loadout.replace')}</button><button type="button" data-custom-clear="${slot}" aria-label="${t('loadout.clear')}">×</button>` : `<button type="button" data-custom-save="${slot}" ${ctx.selection.team.length === 3 ? '' : 'disabled'}>${t('loadout.save')}</button>`}</div></article>`;
+      return `<article class="custom-squad ${squad ? 'filled' : 'empty'}"><span><b>${t('loadout.slot', { slot: slot + 1 })}</b><small>${squad ? t('select.lead') : t('loadout.empty')}</small></span><div class="custom-squad-team">${squad ? squad.team.map((id, index) => `<i class="${index === squad.lead ? 'lead' : ''}"><img src="${sprite(id)}" alt="${creatureName(id)}"></i>`).join('') : '◇ ◇ ◇'}</div><div class="custom-squad-actions">${squad ? `<button type="button" data-custom-load="${slot}" data-focus-key="custom-load-${slot}">${t('loadout.load')}</button><button type="button" data-custom-save="${slot}" data-focus-key="custom-save-${slot}">${t('loadout.replace')}</button><button type="button" data-custom-clear="${slot}" data-focus-key="custom-clear-${slot}" aria-label="${t('loadout.clear')}">×</button>` : `<button type="button" data-custom-save="${slot}" data-focus-key="custom-save-${slot}" ${ctx.selection.team.length === 3 ? '' : 'disabled'}>${t('loadout.save')}</button>`}</div></article>`;
     }
   ).join('')}</div></section>`;
   const circuitBanner = circuit
@@ -273,7 +273,7 @@ function renderTeamSelect(mode = 'ladder') {
     readyLabel =
       mode === 'gauntlet' ? t('gauntlet.begin') : activeTrial ? t('trial.challenge') : t('select.ready');
   const difficultyControl = !['gauntlet', 'circuit', 'trial'].includes(mode)
-      ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty">${['apprentice', 'standard', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
+      ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty" data-focus-key="difficulty">${['apprentice', 'standard', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
       : '',
     planControls = `<details class="battle-plan"><summary><span><b>${t('select.combatPlan')}</b><small>${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div>${teamProfileHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
     ready = actionButton(
@@ -356,7 +356,7 @@ function renderTeamSelect(mode = 'ladder') {
       ctx.selection.lead = preset.lead;
       ctx.selection.filterAffinity = 'all';
       ctx.selection.filterClass = 'all';
-      renderTeamSelect(mode);
+      rerenderPreservingFocus(() => renderTeamSelect(mode));
     })
   );
   screen.querySelector('[data-action="remix-team"]')?.addEventListener('click', () => {
@@ -371,7 +371,7 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.selection.filterAffinity = 'all';
     ctx.selection.filterClass = 'all';
     sound.ui();
-    renderTeamSelect(mode);
+    rerenderPreservingFocus(() => renderTeamSelect(mode));
     notify(t('squad.remixed'));
   });
   screen.querySelectorAll('[data-custom-load]').forEach((button) =>
@@ -383,7 +383,7 @@ function renderTeamSelect(mode = 'ladder') {
       ctx.selection.filterAffinity = 'all';
       ctx.selection.filterClass = 'all';
       sound.ui();
-      renderTeamSelect(mode);
+      rerenderPreservingFocus(() => renderTeamSelect(mode));
     })
   );
   screen.querySelectorAll('[data-custom-save]').forEach((button) =>
@@ -397,7 +397,7 @@ function renderTeamSelect(mode = 'ladder') {
       );
       persist();
       notify(t('loadout.saved'));
-      renderTeamSelect(mode);
+      rerenderPreservingFocus(() => renderTeamSelect(mode));
     })
   );
   screen.querySelectorAll('[data-custom-clear]').forEach((button) =>
@@ -407,7 +407,8 @@ function renderTeamSelect(mode = 'ladder') {
         index === slot ? null : ctx.save.customSquads?.[index] || null
       );
       persist();
-      renderTeamSelect(mode);
+      rerenderPreservingFocus(() => renderTeamSelect(mode));
+      screen.querySelector(`[data-focus-key="custom-save-${slot}"]`)?.focus({ preventScroll: true });
     })
   );
   screen.querySelectorAll('[data-enemy-pick]').forEach((button) =>
@@ -417,24 +418,24 @@ function renderTeamSelect(mode = 'ladder') {
       if (index >= 0) ctx.selection.enemyTeam.splice(index, 1);
       else if (ctx.selection.enemyTeam.length < 3) ctx.selection.enemyTeam.push(id);
       else notify(t('select.selected', { count: 3 }));
-      renderTeamSelect(mode);
+      rerenderPreservingFocus(() => renderTeamSelect(mode));
     })
   );
   screen.querySelector('#difficulty')?.addEventListener('change', (e) => {
     ctx.selection.difficulty = e.target.value;
-    renderTeamSelect(mode);
+    rerenderPreservingFocus(() => renderTeamSelect(mode));
   });
   screen.querySelector('#arena-select')?.addEventListener('change', (e) => {
     ctx.selection.arena = e.target.value;
-    renderTeamSelect(mode);
+    rerenderPreservingFocus(() => renderTeamSelect(mode));
   });
   screen.querySelector('#quick-rule')?.addEventListener('change', (e) => {
     ctx.selection.quickRule = e.target.value;
-    renderTeamSelect(mode);
+    rerenderPreservingFocus(() => renderTeamSelect(mode));
   });
   screen.querySelector('[data-action="random-enemy"]')?.addEventListener('click', () => {
     ctx.selection.enemyTeam = randomDistinct(3, ctx.selection.enemyTeam.join('').length + Date.now());
-    renderTeamSelect(mode);
+    rerenderPreservingFocus(() => renderTeamSelect(mode));
   });
   screen.querySelector('[data-action="start-battle"]')?.addEventListener('click', () => {
     ctx.save.lastTeam = [...ctx.selection.team];
