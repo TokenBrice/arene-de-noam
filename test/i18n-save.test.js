@@ -41,6 +41,10 @@ test('live dictionary values are not shadowed by duplicate definitions', () => {
     assert.equal(DICTIONARIES.en[key], en, `en ${key}`);
   }
 });
+test('consumed-status localization is available in both locales', () => {
+  assert.equal(DICTIONARIES.fr['battle.action.consumed'], '{actor} utilise son bonus {status} !');
+  assert.equal(DICTIONARIES.en['battle.action.consumed'], '{actor} uses up its {status} boost!');
+});
 test('save failure copy is available in both locales', () => {
   assert.equal(typeof DICTIONARIES.fr['app.saveFailed'], 'string');
   assert.equal(typeof DICTIONARIES.en['app.saveFailed'], 'string');

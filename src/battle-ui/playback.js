@@ -144,15 +144,20 @@ async function playEvents(events) {
       sound.heal();
     }
     if (event.type === 'status' && !(event.consumed && event.source === 'combo')) {
-      session.lastLine = event.applied
-        ? t('battle.action.status', {
+      session.lastLine = event.consumed
+        ? t('battle.action.consumed', {
             actor: creatureName(event.creatureId),
             status: t(`status.${event.status}`),
           })
-        : t('battle.action.cleanse', {
-            actor: creatureName(event.creatureId),
-            status: t(`status.${event.status}`),
-          });
+        : event.applied
+          ? t('battle.action.status', {
+              actor: creatureName(event.creatureId),
+              status: t(`status.${event.status}`),
+            })
+          : t('battle.action.cleanse', {
+              actor: creatureName(event.creatureId),
+              status: t(`status.${event.status}`),
+            });
       tacticalFx(event);
       sound.guard();
     }
