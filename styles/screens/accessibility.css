@@ -435,7 +435,7 @@ body.high-contrast .turn-chip {
 }
 .switch-incoming.lethal {
   border-color: #ffdf7380;
-  color: #fff0a0;
+  color: var(--gold-soft);
   background: #ffb23f19;
   box-shadow: 0 0 12px #ffc4561e;
 }
@@ -504,7 +504,7 @@ body.high-contrast .turn-chip {
   display: grid;
 }
 .relay-cut small {
-  color: #fff0a0;
+  color: var(--gold-soft);
   font-size: var(--text-xs);
   font-weight: 1000;
   letter-spacing: 0.15em;

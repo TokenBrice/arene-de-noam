@@ -5,6 +5,8 @@
   --panel: rgba(15, 17, 48, 0.88);
   --line: rgba(191, 204, 255, 0.22);
   --gold: #ffd66b;
+  --gold-bright: #ffe57e;
+  --gold-soft: #fff0a2;
   --cyan: #65e9ff;
   --violet: #9878ff;
   --danger: #ff6b75;
@@ -35,9 +37,14 @@
   --z-controls: 8;
   --z-modal: 20;
   --z-toast: 40;
-  font-family: Inter, ui-rounded, 'Avenir Next', system-ui, sans-serif;
+  font-family: ui-rounded, 'Avenir Next', system-ui, sans-serif;
   font-synthesis: none;
 }
+/* Color convention: reach for a token before a literal. --ink is primary text
+   (#fff is reserved for literal-white glows and `light-ink` marks on saturated
+   chips); --gold is the standard accent, --gold-bright the hot glow step,
+   --gold-soft the pale highlight step. Translucent variants stay literal
+   (8-digit hex) next to their use. */
 * {
   box-sizing: border-box;
 }

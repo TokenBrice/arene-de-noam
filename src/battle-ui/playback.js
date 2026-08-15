@@ -36,6 +36,7 @@ const {
   faintFx,
   switchOutFx,
   switchInFx,
+  syncBattleAnimationSpeed,
   clearBattleFx,
 } = route;
 
@@ -72,7 +73,11 @@ function eventPresentationDelay(event) {
   if (event.type === 'ace') return 1050 / ctx.save.battleSpeed;
   if (event.type === 'ko') return 700 / ctx.save.battleSpeed;
   if (event.type === 'switch' || event.type === 'replace') return 640 / ctx.save.battleSpeed;
-  if (['heal', 'status', 'barrier', 'barrier-hit', 'barrier-break', 'miss', 'recoil', 'status-tick'].includes(event.type))
+  if (
+    ['heal', 'status', 'barrier', 'barrier-hit', 'barrier-break', 'miss', 'recoil', 'status-tick'].includes(
+      event.type
+    )
+  )
     return 460 / ctx.save.battleSpeed;
   return 300 / ctx.save.battleSpeed;
 }
@@ -258,9 +263,21 @@ async function playEvents(events) {
       });
       if (session.timeline.length > 40) session.timeline.shift();
     }
+    const switchLeadIn =
+      event.type === 'switch' || event.type === 'replace'
+        ? (ctx.save.reducedMotion ? 70 : 220) / ctx.save.battleSpeed
+        : 0;
+    if (switchLeadIn) {
+      // Let the outgoing recall read before revealing the already-resolved
+      // incoming fighter. The overlap begins near the end of the light beam.
+      syncBattleAnimationSpeed();
+      await wait(switchLeadIn);
+      if (!sessionIsActive(session)) return;
+    }
     refreshBattle();
     if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
-    await wait(eventPresentationDelay(event));
+    syncBattleAnimationSpeed();
+    await wait(Math.max(1, eventPresentationDelay(event) - switchLeadIn));
     if (!sessionIsActive(session)) return;
     fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
     const next = events[eventIndex + 1];

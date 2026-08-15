@@ -16,6 +16,8 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await expect(page.locator('[data-move="lucid_arc"] .move-effectiveness.effective')).toContainText('▲');
   await expect(page.locator('#hud-player .affinity-icon')).toBeVisible();
   await expect(page.locator('[data-move="lucid_arc"] .simple-affinity .affinity-icon')).toBeVisible();
+  await expect(page.locator('[data-move="lucid_arc"] .move-description')).toBeVisible();
+  await expect(page.locator('[data-move="lucid_arc"] .move-description')).toContainText('Marque la cible');
   await expect(page.locator('[data-move] .move-archetype')).toHaveCount(0);
   await expect(page.locator('[data-move] .damage-preview')).toHaveCount(0);
   await expect(page.locator('[data-move] .move-context-source')).toHaveCount(0);
@@ -56,6 +58,7 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await expect(page.locator('.battle-screen')).toHaveClass(/expert-mode/);
   await expect(page.locator('#hud-player .surge-caption')).toHaveText('Éclat');
   await expect(page.locator('[data-move] .move-archetype').first()).toBeVisible();
+  await expect(page.locator('[data-move="lucid_arc"] .move-description')).toContainText('Marque la cible');
   await expect(page.locator('[data-move] .move-context-source')).toHaveCount(3);
   await expect(page.locator('.exchange-preview')).toHaveCount(2);
   await expect(page.locator('.intent-read')).toContainText('Frappe cristal');

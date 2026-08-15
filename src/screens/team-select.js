@@ -182,8 +182,7 @@ function renderTeamSelect(mode = 'ladder') {
   const matchup = teamMatchup(ctx.selection.team, ctx.selection.enemyTeam);
   const visibleIds = CREATURE_IDS.filter(
     (id) =>
-      (ctx.selection.filterAffinity === 'all' ||
-        CREATURES[id].affinity === ctx.selection.filterAffinity) &&
+      (ctx.selection.filterAffinity === 'all' || CREATURES[id].affinity === ctx.selection.filterAffinity) &&
       (ctx.selection.filterClass === 'all' || CREATURES[id].classId === ctx.selection.filterClass)
   );
   const affinityTabs = `<section class="selection-filters"><div class="filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filterAffinity === 'all' ? 'active' : ''}" data-affinity-filter="all" aria-label="${t('filter.allTypes')}" aria-pressed="${ctx.selection.filterAffinity === 'all'}">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map(
@@ -193,7 +192,9 @@ function renderTeamSelect(mode = 'ladder') {
       ([id, a]) =>
         `<button class="affinity-tab ${ctx.selection.filterAffinity === id ? 'active' : ''}" data-affinity-filter="${id}" aria-pressed="${ctx.selection.filterAffinity === id}" style="--tab-color:${a.color}">${affinityIcon(id)} ${affinityName(id)}</button>`
     )
-    .join('')}</div></div><div class="filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><div class="class-tabs"><button class="class-tab ${ctx.selection.filterClass === 'all' ? 'active' : ''}" data-class-filter="all" aria-label="${t('filter.allClasses')}" aria-pressed="${ctx.selection.filterClass === 'all'}">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button class="class-tab ${ctx.selection.filterClass === id ? 'active' : ''}" data-class-filter="${id}" aria-pressed="${ctx.selection.filterClass === id}" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`;
+    .join(
+      ''
+    )}</div></div><div class="filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><div class="class-tabs"><button class="class-tab ${ctx.selection.filterClass === 'all' ? 'active' : ''}" data-class-filter="all" aria-label="${t('filter.allClasses')}" aria-pressed="${ctx.selection.filterClass === 'all'}">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button class="class-tab ${ctx.selection.filterClass === id ? 'active' : ''}" data-class-filter="${id}" aria-pressed="${ctx.selection.filterClass === id}" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`;
   const quickEnemyControls =
     mode === 'quick'
       ? `<div class="enemy-picker" aria-label="${t('select.enemy')}">${CREATURE_IDS.map((id) => `<button type="button" class="icon-btn ${ctx.selection.enemyTeam.includes(id) ? 'active' : ''}" data-enemy-pick="${id}" aria-label="${creatureName(id)}" aria-pressed="${ctx.selection.enemyTeam.includes(id)}"><img src="${sprite(id)}" alt=""></button>`).join('')}</div>${actionButton(t('app.random'), 'random-enemy', 'subtle-btn wide')}`
@@ -319,24 +320,33 @@ function renderTeamSelect(mode = 'ladder') {
       } else if (ctx.selection.team.length < 3) ctx.selection.team.push(id);
       else notify(t('select.selected', { count: 3 }));
       renderTeamSelect(mode);
+      // Full re-render drops DOM focus; hand it back to the just-picked card.
+      screen.querySelector(`[data-creature="${id}"]`)?.focus({ preventScroll: true });
     })
   );
   screen.querySelectorAll('[data-affinity-filter]').forEach((button) =>
     button.addEventListener('click', () => {
       ctx.selection.filterAffinity = button.dataset.affinityFilter;
       renderTeamSelect(mode);
+      screen
+        .querySelector(`[data-affinity-filter="${button.dataset.affinityFilter}"]`)
+        ?.focus({ preventScroll: true });
     })
   );
   screen.querySelectorAll('[data-class-filter]').forEach((button) =>
     button.addEventListener('click', () => {
       ctx.selection.filterClass = button.dataset.classFilter;
       renderTeamSelect(mode);
+      screen
+        .querySelector(`[data-class-filter="${button.dataset.classFilter}"]`)
+        ?.focus({ preventScroll: true });
     })
   );
   screen.querySelectorAll('[data-lead-index]').forEach((button) =>
     button.addEventListener('click', () => {
       ctx.selection.lead = Number(button.dataset.leadIndex);
       renderTeamSelect(mode);
+      screen.querySelector(`[data-lead-index="${button.dataset.leadIndex}"]`)?.focus({ preventScroll: true });
     })
   );
   screen.querySelectorAll('[data-squad]').forEach((button) =>

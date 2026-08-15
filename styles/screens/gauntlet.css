@@ -96,7 +96,7 @@ body.gamepad-active button:focus,
 body.gamepad-active select:focus,
 body.gamepad-active input:focus,
 body.gamepad-active [role='button']:focus {
-  outline: 3px solid #ffe879;
+  outline: 3px solid var(--gold-bright);
   outline-offset: 4px;
   box-shadow:
     0 0 0 7px #ffe8791c,
@@ -214,7 +214,7 @@ body.gamepad-active [role='button']:focus {
   padding: 3px 6px;
   border: 1px solid #ffe58d55;
   border-radius: 999px;
-  color: #fff0a4;
+  color: var(--gold-soft);
   background: #2a2136e8;
   font-size: var(--text-xs);
   letter-spacing: 0.07em;

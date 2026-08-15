@@ -249,7 +249,7 @@
   text-align: center;
   text-shadow:
     0 2px #271c15,
-    0 0 15px #ffdf63;
+    0 0 15px var(--gold-bright);
   white-space: nowrap;
   animation: affinityCallout 0.9s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
 }
@@ -2112,6 +2112,9 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   image-rendering: pixelated;
   pointer-events: none;
   animation: switchOut 0.42s ease-in forwards;
+}
+.battle-screen .fighter.switch-awaiting > img:not(.switch-ghost) {
+  opacity: 0;
 }
 @keyframes switchOut {
   35% {

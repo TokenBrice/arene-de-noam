@@ -309,9 +309,7 @@ test('Eclipse of Grace purges the rival team after its aimed transaction', async
   await page.locator('[data-move="eclipse_of_grace"]').click();
   await expect(page.locator('[data-action="battle-log"]')).toBeEnabled();
   await page.locator('[data-action="battle-log"]').click();
-  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText(
-    'Éclipse des grâces'
-  );
+  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText('Éclipse des grâces');
   await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText(/barrière/i);
 });
 
@@ -556,6 +554,24 @@ test('knockout opens a free replacement selector before the next choice', async 
   await replacement.click();
   await expect(page.locator('#action-line')).toContainText(/entre en jeu|À toi/);
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
+});
+
+test('a voluntary switch recalls the outgoing creature before the replacement lands', async ({ page }) => {
+  await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
+  await page.goto('/?seed=31');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  const fighter = page.locator('#fighter-player');
+  const outgoingId = await fighter.getAttribute('data-creature');
+  await page.locator('[data-action="open-switch"]').waitFor({ state: 'visible' });
+  await expect(page.locator('[data-action="open-switch"]')).toBeEnabled();
+  await page.locator('[data-action="open-switch"]').click();
+  await page.locator('[data-switch-index]:enabled').first().click();
+  await expect(fighter.locator('.switch-ghost')).toHaveAttribute(
+    'src',
+    new RegExp(`/assets/monsters/${outgoingId}/battle\\.png$`)
+  );
+  await expect(fighter).not.toHaveAttribute('data-creature', outgoingId);
 });
 
 test('a defeat produces evidence-based trainer analysis', async ({ page }) => {

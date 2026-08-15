@@ -113,7 +113,7 @@
 }
 .league-rival.current .league-step span {
   border-color: var(--rival-a);
-  color: #fff;
+  color: var(--ink);
   background: color-mix(in srgb, var(--rival-b) 35%, #0a0c22);
   box-shadow: 0 0 20px var(--rival-a);
 }
@@ -382,7 +382,7 @@
   animation: relayRushCall 0.64s cubic-bezier(0.12, 0.88, 0.18, 1) forwards;
 }
 .relay-rush-call > i {
-  color: #fff09a;
+  color: var(--gold-soft);
   font-size: 48px;
   font-style: normal;
   font-weight: 1000;

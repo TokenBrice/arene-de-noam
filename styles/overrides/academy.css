@@ -162,7 +162,7 @@
 }
 .streak-banner b,
 .result-streak b {
-  color: #ffe0a1;
+  color: var(--gold-bright);
   font-size: var(--text-xs);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -232,7 +232,7 @@
   height: 54px;
   border: 1px solid #ffe68788;
   border-radius: 15px;
-  color: #fff0a2;
+  color: var(--gold-soft);
   background: #ffcf4b16;
   font-size: 28px;
   font-style: normal;
@@ -267,7 +267,7 @@
   padding: 9px;
   border: 1px solid #ffe37655;
   border-radius: 12px;
-  color: #fff0a4;
+  color: var(--gold-soft);
   background: #ffc94b10;
   font-weight: 1000;
 }

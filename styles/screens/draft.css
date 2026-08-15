@@ -303,7 +303,7 @@
     height: 76px;
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 600px) {
   .draft-page {
     padding-inline: var(--space-3);
   }
@@ -345,15 +345,32 @@
     gap: var(--space-2);
   }
   .draft-dots button {
-    width: 12px;
-    height: 12px;
+    position: relative;
+    width: 24px;
+    height: 24px;
     padding: 0;
-    border: 1px solid #d8b5ff88;
-    border-radius: 50%;
+    border: 0;
     background: transparent;
   }
-  .draft-dots button.active {
+  .draft-dots button::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 1px solid #d8b5ff88;
+    border-radius: 50%;
+  }
+  .draft-dots button.active::after {
     background: #d8b5ff;
     box-shadow: 0 0 10px #bd76ff;
+  }
+}
+/* Coarse pointers: the visible dot stays small, the hit area grows to 44px. */
+@media (max-width: 700px) and (pointer: coarse) {
+  .draft-dots button {
+    width: 44px;
+    height: 44px;
+  }
+  .draft-dots button::after {
+    inset: 16px;
   }
 }

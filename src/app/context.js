@@ -113,6 +113,7 @@ export const ctx = {
   selection: null,
   battleSession: null,
   arenaScene: null,
+  battleStylesReady: null,
   toastTimer: null,
   locked: false,
   currentFxMove: null,
@@ -173,6 +174,41 @@ function affinityIcon(id, { title = '', className = '' } = {}) {
       ? `<path class="affinity-icon-stroke" d="${meta.iconStrokePath}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`
       : '';
   return `<svg class="affinity-icon${className ? ` ${escapeHtml(className)}` : ''}" viewBox="0 0 24 24" focusable="false" ${accessible ? `role="img" aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"'}>${titleMarkup}<path d="${meta.iconPath}" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"/>${strokeMarkup}</svg>`;
+}
+
+/* Battle-only stylesheets ship as <link rel="preload"> in index.html and are
+   promoted to real stylesheets on first use (battle entry or move theater).
+   Each sheet is inserted before the first always-loaded sheet that originally
+   followed it, so the cascade order is byte-identical to eager loading. */
+const BATTLE_STYLESHEETS = [
+  ['./styles/screens/battle-fx.css', 'screens/progression'],
+  ['./styles/screens/battle-presentation.css', 'screens/draft'],
+  ['./styles/screens/battle-combos.css', 'screens/accessibility'],
+  ['./styles/screens/battle-ace-log.css', 'screens/accessibility'],
+  ['./styles/overrides/battle-moves.css', 'screens/results'],
+  ['./styles/overrides/battle-command.css', 'screens/results'],
+  ['./styles/overrides/battle-preview.css', 'screens/results'],
+  ['./styles/screens/battle-layout.css', null],
+];
+function ensureBattleStyles() {
+  if (!ctx.battleStylesReady) {
+    ctx.battleStylesReady = Promise.all(
+      BATTLE_STYLESHEETS.map(([href, anchor]) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = `${href}?build=epic7`;
+        const before = anchor
+          ? document.head.querySelector(`link[rel="stylesheet"][href*="${anchor}"]`)
+          : null;
+        document.head.insertBefore(link, before);
+        return new Promise((resolve) => {
+          link.onload = resolve;
+          link.onerror = resolve;
+        });
+      })
+    );
+  }
+  return ctx.battleStylesReady;
 }
 
 function disposeArena() {
@@ -320,6 +356,7 @@ Object.assign(ctx, {
   escapeHtml,
   affinityIcon,
   disposeArena,
+  ensureBattleStyles,
   emblemHtml,
   statusVisuals,
   comboRoutesHtml,

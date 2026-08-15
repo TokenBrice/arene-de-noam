@@ -437,7 +437,7 @@
 }
 .bestiary-tools button.active {
   border-color: var(--filter-color, #71e9f5);
-  color: #fff;
+  color: var(--ink);
   background: color-mix(in srgb, var(--filter-color, #71e9f5) 18%, #171933);
   box-shadow: 0 0 11px color-mix(in srgb, var(--filter-color, #71e9f5) 20%, transparent);
 }
@@ -513,7 +513,7 @@
 }
 .gauntlet-condition > button.lead {
   border-color: #ffe27880;
-  box-shadow: inset 2px 0 #ffe278;
+  box-shadow: inset 2px 0 var(--gold-bright);
 }
 .gauntlet-condition > button.recommended {
   background: linear-gradient(110deg, #50e5c212, #ffffff05);
@@ -568,7 +568,7 @@
   }
   .mobile-selection-dock i.lead {
     z-index: 2;
-    border-color: #ffe278;
+    border-color: var(--gold-bright);
     box-shadow: 0 0 9px #ffe2783d;
   }
   .mobile-selection-dock img {
@@ -588,15 +588,36 @@
     font-size: var(--text-xs);
   }
   .mobile-selection-dock > button {
-    min-height: 38px;
+    min-height: 44px;
     padding: 7px 9px;
     border: 1px solid #ffe17a63;
     border-radius: 10px;
     color: #2b2100;
-    background: #ffe68d;
+    background: var(--gold-bright);
     font-size: var(--text-xs);
     font-weight: 1000;
     cursor: pointer;
+  }
+  /* The validate CTA stays one DOM node (the aside button) so assistive tech
+     and tests see it once; on mobile it pins to the bottom, fused above the
+     selection dock, instead of living below the fold (plan §6.3). */
+  .select-aside > .primary-btn.wide[data-action='start-battle'] {
+    position: fixed;
+    z-index: 29;
+    left: 50%;
+    bottom: max(66px, calc(env(safe-area-inset-bottom) + 62px));
+    width: min(520px, calc(100vw - 18px));
+    min-height: 48px;
+    transform: translateX(-50%);
+    box-shadow: 0 12px 38px #000a;
+  }
+}
+/* Touch targets reach the 44px standard on coarse pointers (plan §6.3);
+   desktop density is unchanged. */
+@media (pointer: coarse) {
+  .remix-team-btn {
+    min-height: 44px;
+    padding: 10px 14px !important;
   }
 }
 @media (max-width: 600px) {

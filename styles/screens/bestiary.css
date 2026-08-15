@@ -127,7 +127,7 @@
 .bestiary-card:has(.creature-record span:first-child b:not(:empty)) {
   isolation: isolate;
 }
-@media (max-width: 650px) {
+@media (max-width: 600px) {
   .record-hero {
     grid-template-columns: 1fr;
     padding: 10px 12px;
@@ -280,7 +280,7 @@
 .bestiary-tools label {
   min-height: 44px;
 }
-@media (max-width: 650px) {
+@media (max-width: 600px) {
   .bestiary-grid {
     grid-template-columns: 1fr;
   }

@@ -28,6 +28,14 @@ function sessionIsActive(session) {
   );
 }
 
+function syncBattleAnimationSpeed() {
+  queueMicrotask(() => {
+    if (!screen.classList.contains('battle-screen')) return;
+    for (const animation of screen.getAnimations({ subtree: true }))
+      animation.updatePlaybackRate(ctx.save.battleSpeed);
+  });
+}
+
 function beginMoveFx(event) {
   const move = MOVES[event.moveId],
     a = AFFINITIES[move.affinity],
@@ -438,6 +446,7 @@ async function signatureClashIntro(events) {
   session.lastLine = t('battle.signatureClash');
   screen.querySelector('#action-line').textContent = session.lastLine;
   sound.clash();
+  syncBattleAnimationSpeed();
   await wait((ctx.save.reducedMotion ? 260 : 1050) / ctx.save.battleSpeed);
   if (!sessionIsActive(session)) return;
   clearBattleFx();
@@ -464,17 +473,19 @@ function faintFx(event) {
 
 function switchOutFx(event) {
   if (testAnimationScale === 0) return;
-  const fighter = screen.querySelector(`#fighter-${event.side}`),
-    img = fighter?.querySelector('img');
-  if (!fighter || !img?.getAttribute('src') || fighter.classList.contains('fainted')) return;
-  const outgoing = CREATURES[fighter.dataset.creature],
+  const owner = ctx.battleSession?.state.sides[event.side],
+    outgoing = owner?.team[event.from],
+    fighter = screen.querySelector(`#fighter-${event.side}`);
+  if (!fighter || !outgoing || outgoing.hp <= 0) return;
+  const ghost = document.createElement('img'),
     color = outgoing ? AFFINITIES[outgoing.affinity].color : '#9fd8ff',
-    ghost = img.cloneNode(),
     beam = document.createElement('i');
+  ghost.src = sprite(outgoing.id);
   ghost.className = 'switch-ghost';
   ghost.alt = '';
   beam.className = 'switch-beam';
   beam.style.setProperty('--fx-color', color);
+  fighter.classList.add('switch-awaiting');
   fighter.append(ghost, beam);
   setTimeout(() => {
     ghost.remove();
@@ -486,6 +497,7 @@ function switchInFx(event) {
   const fighter = screen.querySelector(`#fighter-${event.side}`),
     creature = CREATURES[event.creatureId];
   if (!fighter || !creature || fighter.classList.contains('fainted')) return;
+  fighter.classList.remove('switch-awaiting');
   if (testAnimationScale !== 0) {
     fighter.classList.add('entering');
     ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
@@ -498,7 +510,8 @@ async function battleOutroFx(state) {
   if (!session || testAnimationScale === 0 || !screen.classList.contains('battle-screen')) return;
   const speed = ctx.save.battleSpeed,
     reduced = ctx.save.reducedMotion,
-    winner = state?.winner,
+    neutral = state?.reason === 'turn-cap',
+    winner = neutral ? null : state?.winner,
     champion = winner ? activeOf(state, winner) : null;
   if (champion && champion.hp > 0) {
     const color = AFFINITIES[champion.affinity]?.color || '#ffe9a8';
@@ -514,9 +527,11 @@ async function battleOutroFx(state) {
   } else {
     screen.classList.add('battle-outro', 'outro-draw');
   }
+  syncBattleAnimationSpeed();
   await wait((reduced ? 340 : champion ? 820 : 520) / speed);
   if (!sessionIsActive(session)) return;
   screen.classList.add('battle-exit');
+  syncBattleAnimationSpeed();
   await wait((reduced ? 150 : 420) / speed);
 }
 
@@ -563,9 +578,18 @@ function clearBattleFx() {
     'ko-shock'
   );
   screen.querySelectorAll('.fighter').forEach((fighter) => {
-    const fainted = fighter.classList.contains('fainted');
-    fighter.className = fighter.classList.contains('enemy') ? 'fighter enemy' : 'fighter player';
-    if (fainted) fighter.classList.add('fainted');
+    fighter.classList.remove(
+      'attacking',
+      'hit',
+      'ko',
+      'barrier-hit',
+      'dodging',
+      'status-hit',
+      'entering',
+      'switch-awaiting',
+      'windup',
+      'victory-pose'
+    );
     fighter.style.removeProperty('--attack-affinity-color');
   });
   screen.querySelectorAll('.switch-ghost, .switch-beam').forEach((node) => node.remove());
@@ -594,5 +618,6 @@ registerRoutes({
   switchOutFx,
   switchInFx,
   battleOutroFx,
+  syncBattleAnimationSpeed,
   clearBattleFx,
 });

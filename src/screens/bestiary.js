@@ -25,6 +25,7 @@ const {
   className,
   escapeHtml,
   disposeArena,
+  ensureBattleStyles,
   topbar,
 } = ctx;
 const { bindCommon, beginMoveFx, impactMoveFx, tacticalFx, clearBattleFx } = route;
@@ -100,6 +101,8 @@ function runMoveTheater(moveId) {
 
 async function openMoveTheater(moveId) {
   closeMoveTheater();
+  await ensureBattleStyles();
+  if (screen.dataset.page !== 'bestiary') return;
   const move = MOVES[moveId],
     ownerIndex = CREATURE_IDS.indexOf(move.owner),
     targetId = CREATURE_IDS[(ownerIndex + 7) % CREATURE_IDS.length];

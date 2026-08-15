@@ -48,6 +48,7 @@ const {
   persist,
   escapeHtml,
   disposeArena,
+  ensureBattleStyles,
   statusVisuals,
   comboRoutesHtml,
 } = ctx;
@@ -67,7 +68,8 @@ const {
   finishBattle,
 } = route;
 
-let battleSessionSequence = 0;
+let battleSessionSequence = 0,
+  battleStartPending = false;
 
 function sessionIsActive(session) {
   return Boolean(
@@ -85,6 +87,8 @@ function cancelBattleSession(session) {
 }
 
 function startBattle(config) {
+  if (battleStartPending) return;
+  battleStartPending = true;
   ctx.previousScreen = 'selection';
   const seed = Number(params.get('seed')) || Math.floor(Date.now() / 1000);
   const state = createBattle({
@@ -131,12 +135,36 @@ function startBattle(config) {
     sessionToken: ++battleSessionSequence,
     cancelled: false,
   };
-  renderBattle();
+  void route.renderBattle(ctx.battleSession, screen.dataset.page);
 }
 
-function renderBattle() {
+async function renderBattle(session = ctx.battleSession, originPage = null) {
+  if (
+    !session ||
+    ctx.battleSession !== session ||
+    session.cancelled ||
+    (originPage && screen.dataset.page !== originPage)
+  ) {
+    battleStartPending = false;
+    return;
+  }
+  // Style promotion is normally instantaneous after the document preload, but
+  // replace the still-interactive selection DOM while it settles. This avoids
+  // duplicate starts and stale headings/live regions leaking into the battle.
+  screen.dataset.page = 'battle-loading';
+  screen.className = 'screen boot-screen';
+  screen.innerHTML = '<div class="brand-glyph" aria-hidden="true">✦</div>';
+  await ensureBattleStyles();
+  if (ctx.battleSession !== session || session.cancelled || screen.dataset.page !== 'battle-loading') {
+    if (ctx.battleSession === session) {
+      cancelBattleSession(session);
+      ctx.battleSession = null;
+    }
+    battleStartPending = false;
+    return;
+  }
+  battleStartPending = false;
   disposeArena();
-  const session = ctx.battleSession;
   screen.dataset.page = 'battle';
   screen.className = `screen battle-screen ${ctx.save.expertMode ? 'expert-mode' : 'simple-mode'}`;
   const trial =
@@ -523,6 +551,7 @@ function refreshBattle() {
     commandButton.title = t('command.effect.coach');
   }
   renderTutorialTip();
+  route.syncBattleAnimationSpeed?.();
 }
 
 function renderTutorialTip() {
@@ -555,9 +584,7 @@ function openSwitch(relayMoveId = null) {
         return { c: state.sides.player.team[index], index };
       }),
     plan =
-      !relayMoveId &&
-      !state.sides.player.pendingReplacement &&
-      ctx.battleSession.difficulty === 'apprentice'
+      !relayMoveId && !state.sides.player.pendingReplacement && ctx.battleSession.difficulty === 'apprentice'
         ? enemyPlan()
         : null;
   if (!options.length) return;
@@ -592,7 +619,12 @@ function openSwitch(relayMoveId = null) {
       const mult = affinityMultiplier(c.affinity, foe.affinity),
         incoming = affinityMultiplier(foe.affinity, c.affinity),
         forecast = relayMoveId
-          ? { icon: '✦', text: t('battle.relayProtected'), protected: true, ...previewAllySwitch(state, 'player', index, relayMoveId) }
+          ? {
+              icon: '✦',
+              text: t('battle.relayProtected'),
+              protected: true,
+              ...previewAllySwitch(state, 'player', index, relayMoveId),
+            }
           : forecastFor(index),
         score =
           (mult > 1 ? 24 : mult < 1 ? -8 : 0) +
@@ -633,12 +665,10 @@ function openSwitch(relayMoveId = null) {
       else handlePlayerAction({ type: 'switch', index });
     })
   );
-  screen
-    .querySelector('[data-action="cancel-switch"]')
-    ?.addEventListener('click', () => {
-      screen.querySelector('#replacement-root').innerHTML = '';
-      returnFocus?.focus();
-    });
+  screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => {
+    screen.querySelector('#replacement-root').innerHTML = '';
+    returnFocus?.focus();
+  });
   screen.querySelector('[data-switch-index]')?.focus();
 }
 

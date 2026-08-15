@@ -194,11 +194,11 @@ function renderCurrent() {
   else renderSettings();
 }
 
-/* Minimal shared route transition: the outgoing screen is snapshotted and
-   fades/slides out as an inert overlay while the new screen renders underneath
-   and fades in. Rendering stays synchronous, so fast follow-up clicks always
-   land on the new screen. Skipped for same-page re-renders, the boot screen,
-   reduced motion, and ?animations=0. */
+/* Minimal shared route transition. The new screen renders synchronously and
+   fades/slides in, while a short full-screen veil supplies the visual handoff.
+   Keeping only one semantic DOM tree avoids duplicate headings, labels, and
+   live regions during the transition. Skipped for same-page re-renders, the
+   boot screen, reduced motion, and ?animations=0. */
 const SCREEN_TRANSITION_PAGES = {
   renderTitle: 'title',
   renderAcademy: 'academy',
@@ -217,16 +217,14 @@ function transitionScreen(render, targetPage) {
     render();
     return;
   }
-  const snapshot = screen.cloneNode(true);
   render();
-  snapshot.removeAttribute('id');
-  snapshot.setAttribute('aria-hidden', 'true');
-  snapshot.inert = true;
-  snapshot.className = 'screen screen-snapshot';
-  screen.after(snapshot);
   screen.classList.add('screen-entering');
+  const veil = document.createElement('i');
+  veil.className = 'screen-transition-veil';
+  veil.setAttribute('aria-hidden', 'true');
+  document.body.append(veil);
   setTimeout(() => {
-    snapshot.remove();
+    veil.remove();
     screen.classList.remove('screen-entering');
   }, 340);
 }

@@ -3,6 +3,7 @@
 .battle-screen {
   --battle-side-gap: clamp(8px, 2vw, 24px);
   --battle-dock-width: min(1040px, calc(100vw - var(--battle-side-gap) - var(--battle-side-gap)));
+  --battle-move-h: 108px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -598,8 +599,8 @@
 
 .battle-screen .move-btn {
   display: grid;
-  grid-template-rows: 24px minmax(0, 1fr);
-  gap: 4px;
+  grid-template-rows: 22px minmax(28px, 1fr) auto;
+  gap: 3px;
   padding: 8px 10px 7px 13px;
 }
 
@@ -657,9 +658,23 @@
 }
 
 .battle-screen .move-name,
+.battle-screen .move-description,
 .battle-screen .move-figure {
   position: relative;
   z-index: 1;
+}
+
+.battle-screen .move-description {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  color: #c7cbe0;
+  font-size: var(--type-battle-micro);
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .battle-screen .move-figure {
@@ -917,7 +932,7 @@ body.high-contrast .battle-screen .action-line {
 @media (max-width: 700px) and (orientation: portrait) {
   .battle-layout {
     --battle-plate-h: 54px;
-    --battle-move-h: 48px;
+    --battle-move-h: 72px;
   }
 
   .battle-info-zone {
@@ -1037,11 +1052,11 @@ body.high-contrast .battle-screen .action-line {
   }
 
   .battle-screen .move-btn {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: 1fr;
-    align-items: center;
-    gap: 4px;
-    padding: 5px 8px 5px 10px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 14px minmax(22px, 1fr) 17px;
+    align-items: stretch;
+    gap: 2px;
+    padding: 5px 8px 4px 10px;
   }
 
   .battle-screen .move-name {
@@ -1061,8 +1076,13 @@ body.high-contrast .battle-screen .action-line {
   }
 
   .battle-screen .move-figure {
-    justify-self: end;
-    text-align: right;
+    justify-self: stretch;
+    text-align: left;
+  }
+
+  .battle-screen .move-description {
+    font-size: 9px;
+    line-height: 1.15;
   }
 
   .battle-screen .move-badges {
@@ -1109,7 +1129,7 @@ body.high-contrast .battle-screen .action-line {
 
 @media (max-width: 360px) {
   .battle-layout {
-    --battle-move-h: 48px;
+    --battle-move-h: 72px;
   }
 
   .battle-screen .battle-tools [data-action='battle-log'] {
@@ -1167,7 +1187,7 @@ body.high-contrast .battle-screen .action-line {
 @media (orientation: landscape) and (max-height: 620px) {
   .battle-layout {
     --battle-plate-h: 44px;
-    --battle-move-h: 70px;
+    --battle-move-h: 78px;
   }
 
   .battle-info-zone {
@@ -1228,8 +1248,8 @@ body.high-contrast .battle-screen .action-line {
   }
 
   .battle-screen .move-btn {
-    grid-template-rows: 20px 1fr;
-    padding-block: 5px;
+    grid-template-rows: 18px minmax(20px, 1fr) auto;
+    padding-block: 4px;
   }
 
   .battle-screen .fighter {
@@ -1244,8 +1264,8 @@ body.high-contrast .battle-screen .action-line {
   }
 }
 
-/* Simple mode keeps the choice surface readable at a glance. Deeper move
-   details still appear in the existing hover/focus/long-press context line. */
+/* Simple mode keeps the choice surface readable at a glance while preserving
+   the authored effect sentence on every move. */
 .battle-screen .surge-row .surge-caption {
   display: inline;
   overflow: hidden;
@@ -1261,7 +1281,6 @@ body.high-contrast .battle-screen .action-line {
 
 .battle-screen.simple-mode .move-btn.simple-move {
   position: relative;
-  grid-template-rows: 24px minmax(0, 1fr);
   background: linear-gradient(145deg, #151a3edb, #0a0e28e5);
 }
 
@@ -1342,7 +1361,7 @@ body.high-contrast .battle-screen .action-line {
 @media (max-width: 700px) and (orientation: portrait) {
   .battle-screen.simple-mode .move-btn.simple-move {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 18px minmax(0, 1fr);
+    grid-template-rows: 14px minmax(22px, 1fr) 17px;
     align-items: stretch;
     padding-block: 4px;
   }

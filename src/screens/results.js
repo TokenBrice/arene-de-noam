@@ -29,6 +29,7 @@ const {
   notify,
   escapeHtml,
   disposeArena,
+  testAnimationScale,
   emblemHtml,
   topbar,
 } = ctx;
@@ -343,6 +344,17 @@ function renderResults(win) {
         `<section class="battle-advice"><h3>☿ ${t('advice.title')}</h3>${advice.map((key) => `<p><i>${key === 'ace' ? '♛' : key === 'affinity' ? '△' : key === 'switch' ? '↺' : key === 'barrier' ? '⬡' : '✦'}</i><span>${t(`advice.${key}`)}</span></p>`).join('')}</section>`
       );
   bindCommon();
+  // The grade stamps in at the end of the reveal — land it with a soft thunk
+  // (existing synth hit; no new sound code). Skipped under ?animations=0.
+  if (testAnimationScale !== 0 && screen.querySelector('.results-grade .grade-letter')) {
+    const resultsSession = ctx.battleSession;
+    setTimeout(
+      () => {
+        if (ctx.battleSession === resultsSession && screen.dataset.page === 'results') sound.hit('force');
+      },
+      ctx.save.reducedMotion ? 200 : 810
+    );
+  }
   screen.querySelector('[data-action="result-log"]')?.addEventListener('click', openBattleLog);
   screen.querySelector('[data-action="adjust-team"]')?.addEventListener('click', adjustBattleTeam);
   screen.querySelector('[data-action="rematch"]').addEventListener('click', () => {

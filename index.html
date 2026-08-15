@@ -8,12 +8,8 @@
     <link rel="stylesheet" href="./styles/tokens.css?build=epic7" />
     <link rel="stylesheet" href="./styles/base.css?build=epic7" />
     <link rel="stylesheet" href="./styles/components.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/battle-fx.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/progression.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/battle-presentation.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/draft.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/battle-combos.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/battle-ace-log.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/accessibility.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/league.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/bestiary.css?build=epic7" />
@@ -21,11 +17,18 @@
     <link rel="stylesheet" href="./styles/screens/gauntlet.css?build=epic7" />
     <link rel="stylesheet" href="./styles/overrides/selection.css?build=epic7" />
     <link rel="stylesheet" href="./styles/overrides/academy.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/overrides/battle-moves.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/overrides/battle-command.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/overrides/battle-preview.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/results.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/battle-layout.css?build=epic7" />
+    <!-- Battle-only sheets are preloaded here and promoted to real stylesheets
+         on first battle entry or move-theater preview (ctx.ensureBattleStyles),
+         keeping the title screen's critical CSS small. -->
+    <link rel="preload" as="style" href="./styles/screens/battle-fx.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/screens/battle-presentation.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/screens/battle-combos.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/screens/battle-ace-log.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/overrides/battle-moves.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/overrides/battle-command.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/overrides/battle-preview.css?build=epic7" />
+    <link rel="preload" as="style" href="./styles/screens/battle-layout.css?build=epic7" />
   </head>
   <body>
     <div id="game">

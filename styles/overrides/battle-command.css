@@ -35,7 +35,7 @@
   border-color: #75e6a33c !important;
 }
 .trainer-command-codex strong {
-  color: #ffe68d;
+  color: var(--gold-bright);
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -217,7 +217,7 @@ body.reduced-motion .trainer-command-fx::after {
   animation-name: signatureReadyCutEnemy;
 }
 .signature-ready-call > i {
-  color: #fff0a0;
+  color: var(--gold-soft);
   font-size: 42px;
   font-style: normal;
   text-align: center;
