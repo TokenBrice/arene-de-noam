@@ -150,20 +150,6 @@ test('Relay Rush turns a voluntary switch into immediate tempo', async ({ page }
 test('conquering the League unlocks a rotating Champion Circuit', async ({ page }) => {
   await installCompletedTutorial(page, {
     ladderVictories: 12,
-    emblems: [
-      'dawn',
-      'velocity',
-      'wildheart',
-      'resonance',
-      'undertide',
-      'ironwall',
-      'inferno',
-      'nightfall',
-      'tempest',
-      'colossus',
-      'omen',
-      'crown',
-    ],
     circuitWins: 0,
   });
   await page.goto('/?seed=40&animations=0');
