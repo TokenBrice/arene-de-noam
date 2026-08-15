@@ -737,6 +737,9 @@ function openSwitch(relayMoveId = null) {
   replacementCard?.setAttribute('aria-modal', 'true');
   replacementTitle?.setAttribute('id', 'replacement-title');
   replacementCard?.setAttribute('aria-labelledby', 'replacement-title');
+  screen
+    .querySelectorAll('.switch-option>span')
+    .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
   screen.querySelectorAll('[data-switch-index]').forEach((button) =>
     button.addEventListener('click', (event) => {
       event.preventDefault();
