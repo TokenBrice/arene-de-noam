@@ -60,7 +60,7 @@ test('music themes cover every screen family and authored arena', () => {
 });
 
 test('mixer settings clamp independently and mute only the master', () => {
-  assert.deepEqual(computeMixerLevels({ volume: 2, musicVolume: -1, sfxVolume: 0.35 }), {
+  assert.deepEqual(computeMixerLevels({ volume: 0, musicVolume: -1, sfxVolume: 0.35 }), {
     master: 1,
     music: 0,
     sfx: 0.35,
@@ -77,9 +77,9 @@ test('mixer settings clamp independently and mute only the master', () => {
   assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99 }), 0.82);
 });
 
-test('the explicit migration chain advances every historical version to v15', () => {
-  assert.equal(SAVE_VERSION, 15);
-  assert.equal(SAVE_MIGRATIONS.length, 14);
+test('the explicit migration chain advances every historical version to v16', () => {
+  assert.equal(SAVE_VERSION, 16);
+  assert.equal(SAVE_MIGRATIONS.length, 15);
   let save = { version: 1 };
   for (let index = 0; index < SAVE_MIGRATIONS.length; index++) {
     save = SAVE_MIGRATIONS[index](save);
@@ -88,8 +88,8 @@ test('the explicit migration chain advances every historical version to v15', ()
   assert.equal(save.musicVolume, 0.45);
   assert.equal(save.sfxVolume, 0.8);
   assert.equal(save.expertMode, false);
-  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 15);
-  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 15);
+  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 16);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 16);
   assert.deepEqual(
     migrateSave({
       version: 14,

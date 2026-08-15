@@ -86,8 +86,6 @@ function renderSettings() {
       ctx.save = {
         ...DEFAULT_SAVE,
         lastTeam: [...DEFAULT_SAVE.lastTeam],
-        emblems: [],
-        cosmetics: ['crystal'],
         mastery: {},
         feats: [],
         trials: [],

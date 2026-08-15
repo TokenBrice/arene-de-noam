@@ -3,13 +3,11 @@ import { FEAT_IDS } from './data/progression.js';
 import { TRIAL_IDS } from './data/trials.js';
 
 export const SAVE_KEY = 'arene-de-noam-save';
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 export const DEFAULT_SAVE = Object.freeze({
   version: SAVE_VERSION,
   tutorialComplete: false,
   ladderVictories: 0,
-  emblems: [],
-  cosmetics: ['crystal'],
   mastery: {},
   records: {},
   customSquads: [null, null, null],
@@ -27,7 +25,6 @@ export const DEFAULT_SAVE = Object.freeze({
   difficulty: 'apprentice',
   language: 'fr',
   muted: false,
-  volume: 0.7,
   musicVolume: 0.45,
   sfxVolume: 0.8,
   reducedMotion: false,
@@ -85,6 +82,36 @@ export const migrateV14 = (save) => ({
       )
     : save.customSquads,
 });
+// v15 -> v16: dead reward/master-volume fields were removed and progression counters are consistent.
+export const migrateV16 = (save) => {
+  const { emblems: _emblems, cosmetics: _cosmetics, volume: _volume, ...rest } = save;
+  const bounded = (value, max) =>
+    Number.isInteger(value) ? Math.min(max, Math.max(0, value)) : 0;
+  const battlesPlayed = bounded(save.battlesPlayed, 9999);
+  const wins = Math.min(battlesPlayed, bounded(save.wins, 9999));
+  const records =
+    save.records && typeof save.records === 'object'
+      ? Object.fromEntries(
+          Object.entries(save.records).map(([id, source]) => {
+            if (!source || typeof source !== 'object') return [id, source];
+            const battles = bounded(source.battles, 99999);
+            return [
+              id,
+              { ...source, battles, wins: Math.min(battles, bounded(source.wins, 99999)) },
+            ];
+          })
+        )
+      : save.records;
+  return {
+    ...rest,
+    version: 16,
+    battlesPlayed,
+    wins,
+    winStreak: Math.min(wins, bounded(save.winStreak, 9999)),
+    bestStreak: Math.min(wins, bounded(save.bestStreak, 9999)),
+    records,
+  };
+};
 
 export const SAVE_MIGRATIONS = Object.freeze([
   migrateV1,
@@ -101,6 +128,7 @@ export const SAVE_MIGRATIONS = Object.freeze([
   migrateV12,
   migrateV13,
   migrateV14,
+  migrateV16,
 ]);
 
 export function migrateSave(value) {
@@ -141,7 +169,7 @@ export function validateSave(value) {
         Number.isInteger(source[key]) ? Math.min(max, Math.max(0, source[key])) : 0;
       const record = {
         battles: bounded('battles', 99999),
-        wins: bounded('wins', 99999),
+        wins: Math.min(bounded('battles', 99999), bounded('wins', 99999)),
         damage: bounded('damage', 9999999),
         kos: bounded('kos', 99999),
         signatures: bounded('signatures', 99999),
@@ -158,12 +186,21 @@ export function validateSave(value) {
       lead: Number.isInteger(squad.lead) && squad.lead >= 0 && squad.lead < 3 ? squad.lead : 0,
     };
   });
-  const winStreak = Number.isInteger(migrated.winStreak)
-      ? Math.min(9999, Math.max(0, migrated.winStreak))
+  const battlesPlayed = Number.isInteger(migrated.battlesPlayed)
+      ? Math.min(9999, Math.max(0, migrated.battlesPlayed))
       : 0,
-    bestStreak = Math.max(
-      winStreak,
-      Number.isInteger(migrated.bestStreak) ? Math.min(9999, Math.max(0, migrated.bestStreak)) : 0
+    wins = Number.isInteger(migrated.wins)
+      ? Math.min(battlesPlayed, Math.min(9999, Math.max(0, migrated.wins)))
+      : 0,
+    winStreak = Number.isInteger(migrated.winStreak)
+      ? Math.min(wins, Math.min(9999, Math.max(0, migrated.winStreak)))
+      : 0,
+    bestStreak = Math.min(
+      wins,
+      Math.max(
+        winStreak,
+        Number.isInteger(migrated.bestStreak) ? Math.min(9999, Math.max(0, migrated.bestStreak)) : 0
+      )
     );
   return {
     ...DEFAULT_SAVE,
@@ -172,18 +209,6 @@ export function validateSave(value) {
     ladderVictories: Number.isInteger(migrated.ladderVictories)
       ? Math.min(12, Math.max(0, migrated.ladderVictories))
       : 0,
-    emblems: Array.isArray(migrated.emblems)
-      ? [...new Set(migrated.emblems.filter((x) => typeof x === 'string'))].slice(0, 12)
-      : [],
-    cosmetics: Array.isArray(migrated.cosmetics)
-      ? [
-          ...new Set(
-            migrated.cosmetics.filter((x) =>
-              ['crystal', 'grove', 'tidal', 'volcano', 'astral', 'eclipse'].includes(x)
-            )
-          ),
-        ]
-      : ['crystal'],
     mastery,
     records,
     customSquads,
@@ -201,10 +226,8 @@ export function validateSave(value) {
       ? Math.min(9999, Math.max(0, migrated.circuitWins))
       : 0,
     bestGrade: ['D', 'C', 'B', 'A', 'S'].includes(migrated.bestGrade) ? migrated.bestGrade : null,
-    battlesPlayed: Number.isInteger(migrated.battlesPlayed)
-      ? Math.min(9999, Math.max(0, migrated.battlesPlayed))
-      : 0,
-    wins: Number.isInteger(migrated.wins) ? Math.min(9999, Math.max(0, migrated.wins)) : 0,
+    battlesPlayed,
+    wins,
     winStreak,
     bestStreak,
     lastTeam: validTeam(migrated.lastTeam) ? [...migrated.lastTeam] : [...DEFAULT_SAVE.lastTeam],
@@ -216,7 +239,6 @@ export function validateSave(value) {
           : 'apprentice',
     language: migrated.language === 'en' ? 'en' : 'fr',
     muted: Boolean(migrated.muted),
-    volume: Number.isFinite(migrated.volume) ? Math.min(1, Math.max(0, migrated.volume)) : 0.7,
     musicVolume: Number.isFinite(migrated.musicVolume)
       ? Math.min(1, Math.max(0, migrated.musicVolume))
       : 0.45,
@@ -232,8 +254,6 @@ function freshDefaultSave() {
   return {
     ...DEFAULT_SAVE,
     lastTeam: [...DEFAULT_SAVE.lastTeam],
-    emblems: [],
-    cosmetics: ['crystal'],
     mastery: {},
     records: {},
     customSquads: [null, null, null],
