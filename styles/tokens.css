@@ -1,8 +1,9 @@
 :root {
   color-scheme: dark;
+  --surface: #090b22;
   --ink: #f8f6ff;
   --muted: #b9b8d2;
-  --panel: rgba(15, 17, 48, 0.88);
+  --panel: #0f1130;
   --line: rgba(191, 204, 255, 0.22);
   --gold: #ffd66b;
   --gold-bright: #ffe57e;
@@ -12,6 +13,9 @@
   --danger: #ff6b75;
   --ok: #74e38b;
   --text-xs: 12px;
+  --radius-s: 18px;
+  --radius-m: 20px;
+  --radius-l: 26px;
   --text-sm: 13.5px;
   --text-md: 15px;
   --text-lg: 17px;
@@ -36,7 +40,9 @@
   --z-hud: 6;
   --z-controls: 8;
   --z-modal: 20;
-  --z-toast: 40;
+  --z-veil: 40;
+  --z-theater: 80;
+  --z-toast: 100;
   font-family: ui-rounded, 'Avenir Next', system-ui, sans-serif;
   font-synthesis: none;
 }

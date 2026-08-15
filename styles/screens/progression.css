@@ -61,6 +61,7 @@
   display: grid;
   gap: 4px;
   margin-bottom: 12px;
+  background: var(--panel);
 }
 .filter-row {
   display: grid;

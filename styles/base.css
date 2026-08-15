@@ -7,7 +7,7 @@ body,
   overflow: hidden;
 }
 body {
-  background: #07091d;
+  background: var(--surface);
   color: var(--ink);
   -webkit-tap-highlight-color: transparent;
 }
@@ -33,7 +33,7 @@ input:focus-visible {
   background:
     radial-gradient(circle at 70% 15%, #283075 0, transparent 32%),
     radial-gradient(circle at 20% 85%, #173b55 0, transparent 28%),
-    linear-gradient(145deg, #080b25, #11102c 55%, #090b22);
+    linear-gradient(145deg, #080b25, #11102c 55%, var(--surface));
 }
 .screen::before {
   content: '';
@@ -51,7 +51,7 @@ input:focus-visible {
 .screen-transition-veil {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-veil);
   pointer-events: none;
   background: #080b25;
   animation: screenVeil 0.2s ease-in forwards;
@@ -96,7 +96,7 @@ body.reduced-motion .screen.screen-entering {
   box-shadow:
     0 30px 90px #0008,
     inset 0 1px #fff1;
-  border-radius: 26px;
+  border-radius: var(--radius-l);
   padding: clamp(22px, 4vw, 44px);
 }
 .boot-card {

@@ -58,7 +58,7 @@
   padding: 3px;
   border: 1px solid color-mix(in srgb, var(--kit-color) 24%, transparent);
   border-radius: 7px;
-  background: linear-gradient(120deg, color-mix(in srgb, var(--kit-color) 9%, transparent), #ffffff04);
+  background: var(--panel);
 }
 .kit-move i {
   display: grid;
@@ -83,7 +83,7 @@
 }
 .kit-move.signature {
   border-color: #ffe17155;
-  background: linear-gradient(120deg, #ffd85818, #ffffff04);
+  background: linear-gradient(120deg, #ffd85818, var(--panel));
 }
 .kit-move.signature i {
   color: #382500;
@@ -375,7 +375,7 @@
   padding: 2px 8px;
   border: 1px solid #ffffff1b;
   border-radius: 10px;
-  background: #ffffff08;
+  background: var(--panel);
 }
 .bestiary-tools label > span {
   color: #91eaf5;
@@ -425,7 +425,7 @@
   border: 1px solid #ffffff15;
   border-radius: 9px;
   color: #b8b9cc;
-  background: #ffffff06;
+  background: var(--panel);
   font-size: var(--text-xs);
   cursor: pointer;
 }
