@@ -158,9 +158,16 @@ function persist() {
     notify(t('app.saveFailed'));
   }
   sound.update(ctx.save);
-  document.body.classList.toggle('reduced-motion', ctx.save.reducedMotion);
-  document.body.classList.toggle('high-contrast', ctx.save.highContrast);
+  syncPreferenceClasses();
   return ok;
+}
+
+function syncPreferenceClasses() {
+  const { reducedMotion, highContrast } = ctx.save;
+  document.documentElement.classList.toggle('reduced-motion', reducedMotion);
+  document.documentElement.classList.toggle('high-contrast', highContrast);
+  document.body.classList.toggle('reduced-motion', reducedMotion);
+  document.body.classList.toggle('high-contrast', highContrast);
 }
 
 function escapeHtml(value) {
@@ -386,6 +393,5 @@ export function registerRoutes(routes) {
   Object.assign(ctx.routes, routes);
 }
 
-document.body.classList.toggle('reduced-motion', ctx.save.reducedMotion);
-document.body.classList.toggle('high-contrast', ctx.save.highContrast);
+syncPreferenceClasses();
 persistSave(ctx.save);
