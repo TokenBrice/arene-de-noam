@@ -69,7 +69,8 @@ const {
 } = route;
 
 let battleSessionSequence = 0,
-  battleStartPending = false;
+  battleStartPending = false,
+  switchOpener = null;
 
 function sessionIsActive(session) {
   return Boolean(
@@ -512,6 +513,43 @@ function refreshBattle() {
     );
     const hud = screen.querySelector(`#hud-${side}`);
     hud.innerHTML = hudHtml(side, expertMode);
+    const plate = hud.querySelector('[data-plate-side]');
+    if (plate) {
+      const statusIds = sortStatusIds(Object.keys(c.statuses)),
+        statusNames = [
+          ...(c.barrier ? [t('battle.barrierName')] : []),
+          ...statusIds.map((id) => t(`status.${id}`)),
+        ],
+        pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) => pip.getAttribute('aria-label'));
+      plate.setAttribute(
+        'aria-label',
+        [creatureName(c.id), `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`, statusNames.join(' · ') || t('battle.noStatuses'), pipLabels.join(' · ')]
+          .filter(Boolean)
+          .join(' · ')
+      );
+      if (!expertMode) {
+        const overflowChip = plate.querySelector('.plate-status-more'),
+          hiddenStatusNames = statusNames.slice(2);
+        if (overflowChip && hiddenStatusNames.length) {
+          const overflowButton = document.createElement('button');
+          overflowButton.type = 'button';
+          overflowButton.className = 'plate-status-more';
+          overflowButton.textContent = overflowChip.textContent;
+          overflowButton.setAttribute(
+            'aria-label',
+            t('battle.statusOverflow', { statuses: hiddenStatusNames.join(', ') })
+          );
+          const plateWrap = document.createElement('div');
+          plateWrap.className = 'battle-plate-wrap';
+          plate.replaceWith(plateWrap);
+          plateWrap.append(plate, overflowButton);
+          overflowButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openPlateDetails(side);
+          });
+        }
+      }
+    }
     hud.querySelector('[data-plate-side]')?.addEventListener('click', () => openPlateDetails(side));
   }
   screen.querySelector('#moves').innerHTML = p.moves.map(moveButton).join('');
@@ -545,6 +583,7 @@ function refreshBattle() {
   const speedButton = screen.querySelector('[data-action="battle-speed"]');
   speedButton.textContent = `×${ctx.save.battleSpeed}`;
   speedButton.setAttribute('aria-pressed', String(ctx.save.battleSpeed === 2));
+  speedButton.setAttribute('aria-label', t('battle.speedLabel', { speed: ctx.save.battleSpeed }));
   const mute = screen.querySelector('[data-action="toggle-mute"]');
   mute.textContent = ctx.save.muted ? '🔇' : '🔊';
   mute.setAttribute('aria-pressed', String(ctx.save.muted));
@@ -580,6 +619,16 @@ function renderTutorialTip() {
   root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
 }
 
+function closeSwitch({ restoreFocus = true } = {}) {
+  const root = screen.querySelector('#replacement-root');
+  if (!root?.querySelector('.replacement-card')) return false;
+  root.innerHTML = '';
+  const opener = switchOpener;
+  switchOpener = null;
+  if (restoreFocus && opener?.isConnected) opener.focus();
+  return true;
+}
+
 function openSwitch(relayMoveId = null) {
   if (ctx.locked) return;
   const returnFocus = relayMoveId
@@ -603,6 +652,7 @@ function openSwitch(relayMoveId = null) {
         ? enemyPlan()
         : null;
   if (!options.length) return;
+  switchOpener = returnFocus;
   const forecastFor = (index) => {
     if (!plan) return null;
     if (plan.type === 'switch') return { icon: '↺', text: t('battle.switchIncomingSwitch'), lethal: false };
@@ -668,22 +718,25 @@ function openSwitch(relayMoveId = null) {
     : 'battle.switchBonus';
   screen.querySelector('#replacement-root').innerHTML =
     `<div class="replacement ${relayMoveId ? 'signature-relay' : ''}"><section class="glass-panel replacement-card"><span class="eyebrow">${relayMoveId ? t('move.immaculate_relay') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchForecast')}</span><h2>${relayMoveId ? t('battle.relayChoose') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchTitle')}</h2><p>${relayMoveId ? t('battle.relayHint') : state.sides.player.pendingReplacement ? t('battle.replacementHint') : t('battle.switchHint')}</p><div class="replacement-options">${optionHtml}</div>${!state.sides.player.pendingReplacement ? `${relayMoveId ? '' : `<div class="switch-bonus">✦ ${t(switchBonusKey)}</div>`}${actionButton(t('battle.cancel'), 'cancel-switch', 'subtle-btn')}` : ''}</section></div>`;
+  const replacementCard = screen.querySelector('.replacement-card'),
+    replacementTitle = replacementCard?.querySelector('h2');
+  replacementCard?.setAttribute('role', 'dialog');
+  replacementCard?.setAttribute('aria-modal', 'true');
+  replacementTitle?.setAttribute('id', 'replacement-title');
+  replacementCard?.setAttribute('aria-labelledby', 'replacement-title');
   screen
     .querySelectorAll('.switch-option>span')
     .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
   screen.querySelectorAll('[data-switch-index]').forEach((button) =>
     button.addEventListener('click', () => {
-      screen.querySelector('#replacement-root').innerHTML = '';
+      closeSwitch({ restoreFocus: false });
       const index = Number(button.dataset.switchIndex);
       if (relayMoveId) handlePlayerAction({ type: 'move', moveId: relayMoveId, allyIndex: index });
       else if (state.sides.player.pendingReplacement) handleReplacement(index);
       else handlePlayerAction({ type: 'switch', index });
     })
   );
-  screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => {
-    screen.querySelector('#replacement-root').innerHTML = '';
-    returnFocus?.focus();
-  });
+  screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => closeSwitch());
   screen.querySelector('[data-switch-index]')?.focus();
 }
 
@@ -808,6 +861,7 @@ registerRoutes({
   refreshBattle,
   renderTutorialTip,
   openSwitch,
+  closeSwitch,
   handleTrainerCommand,
   handlePlayerAction,
   resolvePendingReplacements,

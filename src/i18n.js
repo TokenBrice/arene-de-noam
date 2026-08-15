@@ -914,6 +914,8 @@ const en = {
 // while all new combat concepts stay perfectly key-parallel between languages.
 Object.assign(fr, {
   'battle.plateOpen': 'Ouvrir les détails de {name}',
+  'battle.speedLabel': 'Vitesse du combat : ×{speed}',
+  'battle.statusOverflow': 'Afficher les effets masqués : {statuses}',
   'battle.plateTitle': 'Détails de {name}',
   'battle.plateHint': 'Talent et état complet',
   'battle.talent': 'Talent',
@@ -1273,9 +1275,10 @@ Object.assign(fr, {
   'move.effect.fate_exchange': 'Draine 70 %, mais rend 12 % des dégâts en recul.',
   'move.effect.moonless_omen': 'Barrière 8 ; marque et sonne la cible.',
 });
-
 Object.assign(en, {
   'battle.plateOpen': 'Open {name} details',
+  'battle.speedLabel': 'Battle speed: ×{speed}',
+  'battle.statusOverflow': 'Show hidden effects: {statuses}',
   'battle.plateTitle': '{name} details',
   'battle.plateHint': 'Talent and full status',
   'battle.talent': 'Talent',

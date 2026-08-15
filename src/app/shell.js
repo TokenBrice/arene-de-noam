@@ -37,6 +37,7 @@ const {
   openMoveTheater,
   renderBestiary,
   renderSettings,
+  closeSwitch,
 } = route;
 
 function currentMusicScreen() {
@@ -241,8 +242,8 @@ function handleEscape() {
     closeMoveTheater();
     return;
   }
-  if (screen.querySelector('.replacement') && !ctx.battleSession?.state.sides.player.pendingReplacement) {
-    screen.querySelector('#replacement-root').innerHTML = '';
+  if (screen.querySelector('.replacement-card') && !ctx.battleSession?.state.sides.player.pendingReplacement) {
+    closeSwitch();
     return;
   }
   if (screen.dataset.page !== 'title' && screen.dataset.page !== 'battle') renderTitle();

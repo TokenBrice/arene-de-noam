@@ -61,3 +61,27 @@ test('all ninety moves have authored, move-specific animation choreography', asy
       `${moveId} needs its own animation selector`
     );
 });
+test('battle controls expose dialog, speed, plate, overflow, and mobile rule semantics', async () => {
+  const root = new URL('../', import.meta.url);
+  const [controller, hud, shell, styles, i18n] = await Promise.all(
+    [
+      'src/battle-ui/controller.js',
+      'src/battle-ui/hud.js',
+      'src/app/shell.js',
+      'styles/screens/battle-layout.css',
+      'src/i18n.js',
+    ].map((file) => readFile(new URL(file, root), 'utf8'))
+  );
+  assert.match(controller, /replacementCard\?\.setAttribute\('role', 'dialog'\)/);
+  assert.match(controller, /replacementCard\?\.setAttribute\('aria-modal', 'true'\)/);
+  assert.match(controller, /replacementCard\?\.setAttribute\('aria-labelledby', 'replacement-title'\)/);
+  assert.match(controller, /function closeSwitch\(/);
+  assert.match(shell, /closeSwitch\(\)/);
+  assert.match(controller, /battle\.speedLabel/);
+  assert.match(controller, /className = 'plate-status-more'/);
+  assert.match(controller, /battle\.statusOverflow/);
+  assert.match(styles, /-webkit-line-clamp:\s*2/);
+  assert.match(styles, /\.battle-screen \.arena-nameplate > small[\s\S]*white-space:\s*normal/);
+  assert.match(i18n, /'battle\.speedLabel': 'Vitesse du combat : ×\{speed\}'/);
+  assert.match(i18n, /'battle\.speedLabel': 'Battle speed: ×\{speed\}'/);
+});
