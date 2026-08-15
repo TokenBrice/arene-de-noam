@@ -1,6 +1,6 @@
 import { ctx, registerRoutes, route } from '../app/context.js';
 
-const { DEFAULT_SAVE, SAVE_KEY, i18n, t, screen, sound, persist, disposeArena, topbar } = ctx;
+const { freshDefaultSave, SAVE_KEY, i18n, t, screen, sound, persist, disposeArena, topbar } = ctx;
 const { bindCommon, renderTitle, rerenderPreservingFocus } = route;
 
 const volumePercent = (value) => `${Math.round(Number(value) * 100)}%`;
@@ -83,16 +83,8 @@ function renderSettings() {
     });
     backdrop.querySelector('[data-action="reset-confirm"]').addEventListener('click', () => {
       localStorage.removeItem(SAVE_KEY);
-      ctx.save = {
-        ...DEFAULT_SAVE,
-        lastTeam: [...DEFAULT_SAVE.lastTeam],
-        mastery: {},
-        feats: [],
-        trials: [],
-        language: i18n.lang,
-      };
-      persist();
-      renderTitle();
+      ctx.save = freshDefaultSave();
+      ctx.save.language = i18n.lang;
     });
     backdrop.querySelector('[data-action="reset-cancel"]').focus();
   });

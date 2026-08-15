@@ -250,7 +250,7 @@ export function validateSave(value) {
   };
 }
 
-function freshDefaultSave() {
+export function freshDefaultSave() {
   return {
     ...DEFAULT_SAVE,
     lastTeam: [...DEFAULT_SAVE.lastTeam],

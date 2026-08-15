@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DICTIONARIES, createI18n, validateDictionaries } from '../src/i18n.js';
-import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave, validateSave } from '../src/save.js';
+import {
+  DEFAULT_SAVE,
+  SAVE_KEY,
+  freshDefaultSave,
+  loadSave,
+  persistSave,
+  validateSave,
+} from '../src/save.js';
 import {
   CURRENT_FEAT_IDS,
   FEATS,
@@ -168,6 +175,14 @@ test('save round-trips with validated ranges', () => {
   assert.equal(loadSave(memory).save.version, 16);
   assert.equal('volume' in loadSave(memory).save, false);
   assert.equal('affinity' in loadSave(memory).save, false);
+});
+test('fresh save resets do not share records or custom squad collections', () => {
+  const firstReset = freshDefaultSave();
+  firstReset.records.orakyn = { battles: 1, wins: 1 };
+  firstReset.customSquads[0] = { team: ['orakyn', 'abyssar', 'virelia'], lead: 0 };
+  const secondReset = freshDefaultSave();
+  assert.deepEqual(secondReset.records, {});
+  assert.deepEqual(secondReset.customSquads, [null, null, null]);
 });
 test('v15 saves migrate to v16 without dead fields and with consistent counters', () => {
   const migrated = validateSave({
