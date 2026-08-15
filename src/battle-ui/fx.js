@@ -28,12 +28,51 @@ function sessionIsActive(session) {
   );
 }
 
+let lastAppliedSpeed = null,
+  syncQueued = false;
+
 function syncBattleAnimationSpeed() {
+  const speed = ctx.save.battleSpeed;
+  if (lastAppliedSpeed === speed || syncQueued) return;
+  syncQueued = true;
   queueMicrotask(() => {
+    syncQueued = false;
     if (!screen.classList.contains('battle-screen')) return;
+    const currentSpeed = ctx.save.battleSpeed;
+    if (lastAppliedSpeed === currentSpeed) return;
     for (const animation of screen.getAnimations({ subtree: true }))
-      animation.updatePlaybackRate(ctx.save.battleSpeed);
+      animation.updatePlaybackRate(currentSpeed);
+    lastAppliedSpeed = currentSpeed;
   });
+}
+
+function fxTimerRegistry() {
+  const session = ctx.battleSession;
+  if (session) {
+    session.fxTimers ||= new Set();
+    return session.fxTimers;
+  }
+  return ctx.battleFxTimers;
+}
+
+function scheduleFxTimer(callback, delay) {
+  const timers = fxTimerRegistry();
+  let timer;
+  timer = setTimeout(() => {
+    timers.delete(timer);
+    callback();
+  }, delay);
+  timers.add(timer);
+  return timer;
+}
+
+function clearFxTimers() {
+  const sessionTimers = ctx.battleSession?.fxTimers;
+  for (const timers of [sessionTimers, ctx.battleFxTimers]) {
+    if (!timers) continue;
+    timers.forEach(clearTimeout);
+    timers.clear();
+  }
 }
 
 function beginMoveFx(event) {
@@ -163,9 +202,9 @@ function impactMoveFx(event) {
   ctx.arenaScene?.flash(fx.strong ? 'power' : 'hit', color, event.side);
   ctx.arenaScene?.punch(event.side, fx.strong ? 1.55 : (event.hits || 1) > 1 ? 0.8 : 1);
   screen.classList.add('hit-stop');
-  setTimeout(
+  scheduleFxTimer(
     () => {
-      if (sessionIsActive(session)) screen.classList.remove('hit-stop');
+      screen.classList.remove('hit-stop');
     },
     ctx.save.reducedMotion ? 20 : 72 / ctx.save.battleSpeed
   );
@@ -330,9 +369,9 @@ function signatureReadyFx(event) {
   stage.append(call);
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.15);
-  setTimeout(
+  scheduleFxTimer(
     () => {
-      if (sessionIsActive(session)) call.remove();
+      call.remove();
     },
     (ctx.save.reducedMotion ? 180 : 900) / ctx.save.battleSpeed
   );
@@ -402,9 +441,7 @@ function arenaPulseFx(event) {
 }
 
 function missWhiffFx(event) {
-  if (testAnimationScale === 0) return;
-  const session = ctx.battleSession,
-    stage = screen.querySelector('#fx-stage');
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   // The attack sailed past: the projectile keeps flying beyond the dodger and
   // dissolves, and a callout pops where the hit would have landed. The callout
@@ -417,15 +454,11 @@ function missWhiffFx(event) {
   call.className = `whiff-callout side-${event.side}`;
   call.textContent = t('battle.missCallout');
   layer.append(call);
-  setTimeout(() => {
-    if (sessionIsActive(session)) call.remove();
-  }, 900 / ctx.save.battleSpeed);
+  scheduleFxTimer(() => call.remove(), 900 / ctx.save.battleSpeed);
 }
 
 function barrierShatterFx(event) {
-  if (testAnimationScale === 0) return;
-  const session = ctx.battleSession,
-    stage = screen.querySelector('#fx-stage');
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   // Same parent-layer trick as the whiff callout: the shards must outlive the
   // stage rebuild that the barrier-broken follow-up events trigger.
@@ -438,9 +471,7 @@ function barrierShatterFx(event) {
     return `<i class="shatter-hex" style="--i:${i};--dx:${Math.cos(angle) * (58 + (i % 3) * 26)}px;--dy:${Math.sin(angle) * (44 + (i % 3) * 22) - 26}px;--spin:${i % 2 ? 1 : -1}"></i>`;
   }).join('')}`;
   stage.parentElement.append(shards);
-  setTimeout(() => {
-    if (sessionIsActive(session)) shards.remove();
-  }, 900 / ctx.save.battleSpeed);
+  scheduleFxTimer(() => shards.remove(), 900 / ctx.save.battleSpeed);
 }
 
 async function signatureClashIntro(events) {
@@ -482,7 +513,7 @@ function faintFx(event) {
   ).join('');
   stage.classList.add('active');
   stage.append(wisps);
-  setTimeout(() => wisps.remove(), 1500 / ctx.save.battleSpeed);
+  scheduleFxTimer(() => wisps.remove(), 1500 / ctx.save.battleSpeed);
 }
 
 function switchOutFx(event) {
@@ -501,10 +532,13 @@ function switchOutFx(event) {
   beam.style.setProperty('--fx-color', color);
   fighter.classList.add('switch-awaiting');
   fighter.append(ghost, beam);
-  setTimeout(() => {
-    ghost.remove();
-    beam.remove();
-  }, 640 / ctx.save.battleSpeed);
+  scheduleFxTimer(
+    () => {
+      ghost.remove();
+      beam.remove();
+    },
+    640 / ctx.save.battleSpeed
+  );
 }
 
 function switchInFx(event) {
@@ -533,7 +567,7 @@ async function battleOutroFx(state) {
     if (!reduced) {
       sound.call(champion.id);
       ctx.arenaScene?.burst(color, winner, 1.35);
-      setTimeout(() => {
+      scheduleFxTimer(() => {
         if (sessionIsActive(session)) ctx.arenaScene?.burst('#fff6d8', winner, 0.85);
       }, 240 / speed);
     }
@@ -549,6 +583,7 @@ async function battleOutroFx(state) {
 }
 
 function clearBattleFx() {
+  clearFxTimers();
   const stage = screen.querySelector('#fx-stage');
   if (stage) {
     stage.className = 'fx-stage';

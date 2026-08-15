@@ -40,6 +40,7 @@ const {
   notify,
   escapeHtml,
   disposeArena,
+  ensureBattleStyles,
   emblemHtml,
   comboRoutesHtml,
   topbar,
@@ -153,7 +154,7 @@ function creatureCard(id, selected, lead, enemy = ctx.selection?.enemyTeam || []
         return `<span class="kit-move kind-${move.kind} ${move.signature ? 'signature' : ''}" style="--kit-color:${color}" title="${escapeHtml(`${t(`move.${moveId}`)} — ${t(`move.effect.${moveId}`)}`)}"><i>${moveArchetype(move)}</i><small>${t(`move.${moveId}`)}</small></span>`;
       })
       .join('');
-  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}" aria-label="${escapeHtml(`${creatureName(id)}, ${affinityName(c.affinity)}, ${className(c.classId)}`)}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-chip" style="--chip-color:${a.color}">${affinityIcon(c.affinity)} ${affinityName(c.affinity)}</span><span class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
+  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}" aria-label="${escapeHtml(`${creatureName(id)}, ${affinityName(c.affinity)}, ${className(c.classId)}`)}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt="" loading="lazy" decoding="async" width="128" height="128"><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-chip" style="--chip-color:${a.color}">${affinityIcon(c.affinity)} ${affinityName(c.affinity)}</span><span class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
 }
 
 function kitShowcaseHtml(id) {
@@ -174,6 +175,7 @@ function renderTeamSelect(mode = 'ladder') {
   ctx.previousScreen = 'title';
   screen.dataset.page = 'selection';
   screen.className = 'screen';
+  void ensureBattleStyles();
   if (!ctx.selection || ctx.selection.mode !== mode) ctx.selection = newSelection(mode);
   const trainer = TRAINERS[ctx.selection.trainerIndex],
     circuit = mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null,

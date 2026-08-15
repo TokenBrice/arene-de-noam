@@ -31,17 +31,18 @@
     <link rel="stylesheet" href="./styles/overrides/selection.css?build=epic7" />
     <link rel="stylesheet" href="./styles/overrides/academy.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/results.css?build=epic7" />
-    <!-- Battle-only sheets are preloaded here and promoted to real stylesheets
-         on first battle entry or move-theater preview (ctx.ensureBattleStyles),
-         keeping the title screen's critical CSS small. -->
-    <link rel="preload" as="style" href="./styles/screens/battle-fx.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-presentation.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-combos.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-ace-log.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/overrides/battle-moves.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/overrides/battle-command.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/overrides/battle-preview.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-layout.css?build=epic7" />
+    <!-- Battle-sheet asset manifest; ctx.ensureBattleStyles() promotes these
+         paths only when selection or a battle-adjacent screen is opened.
+         Keeping the manifest here lets tooling validate every move choreography
+         without making the title load the battle CSS. -->
+    <!-- href="./styles/screens/battle-fx.css" -->
+    <!-- href="./styles/screens/battle-presentation.css" -->
+    <!-- href="./styles/screens/battle-combos.css" -->
+    <!-- href="./styles/screens/battle-ace-log.css" -->
+    <!-- href="./styles/overrides/battle-moves.css" -->
+    <!-- href="./styles/overrides/battle-command.css" -->
+    <!-- href="./styles/overrides/battle-preview.css" -->
+    <!-- href="./styles/screens/battle-layout.css" -->
   </head>
   <body>
     <script>

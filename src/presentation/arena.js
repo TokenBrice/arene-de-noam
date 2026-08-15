@@ -95,7 +95,8 @@ export class ArenaScene {
     } catch (error) {
       throw new Error('WEBGL_UNAVAILABLE', { cause: error });
     }
-    this.renderer.setPixelRatio(Math.min(2, globalThis.devicePixelRatio || 1));
+    const cap = canvas.clientWidth * canvas.clientHeight > 500000 ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.min(cap, globalThis.devicePixelRatio || 1));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -509,9 +510,13 @@ export class ArenaScene {
     if (this.testAnimationScale === 0) return;
     this.burst(color, targetSide, kind === 'power' ? 1.65 : 1);
     if (this.reducedMotion) return;
+    const animationClass = kind === 'power' ? 'arena-power' : 'arena-hit';
     this.canvas.classList.remove('arena-hit', 'arena-power');
-    void this.canvas.offsetWidth;
-    this.canvas.classList.add(kind === 'power' ? 'arena-power' : 'arena-hit');
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!this.disposed) this.canvas.classList.add(animationClass);
+      })
+    );
   }
   punch(targetSide = 'enemy', strength = 1) {
     if (this.testAnimationScale === 0 || this.reducedMotion) return;

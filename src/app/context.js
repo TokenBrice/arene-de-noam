@@ -124,6 +124,7 @@ export const ctx = {
   gauntletRun: null,
   draftRun: null,
   theaterTimers: [],
+  battleFxTimers: new Set(),
   routes: {},
 };
 
@@ -188,10 +189,10 @@ function affinityIcon(id, { title = '', className = '' } = {}) {
   return `<svg class="affinity-icon${className ? ` ${escapeHtml(className)}` : ''}" viewBox="0 0 24 24" focusable="false" ${accessible ? `role="img" aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"'}>${titleMarkup}<path d="${meta.iconPath}" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"/>${strokeMarkup}</svg>`;
 }
 
-/* Battle-only stylesheets ship as <link rel="preload"> in index.html and are
-   promoted to real stylesheets on first use (battle entry or move theater).
-   Each sheet is inserted before the first always-loaded sheet that originally
-   followed it, so the cascade order is byte-identical to eager loading. */
+/* Battle-only stylesheets are promoted to real stylesheets before the first
+   battle or move theater is shown. Each sheet is inserted before the first
+   always-loaded sheet that originally followed it, so the cascade order stays
+   byte-identical to eager loading. */
 const BATTLE_STYLESHEETS = [
   ['./styles/screens/battle-fx.css', 'screens/progression'],
   ['./styles/screens/battle-presentation.css', 'screens/draft'],
