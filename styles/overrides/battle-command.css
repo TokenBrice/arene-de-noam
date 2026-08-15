@@ -154,14 +154,19 @@
     min-width: 44px;
     max-width: 44px;
     min-height: 44px;
-    padding: 6px 3px;
+    gap: 2px;
+    padding: 2px 1px;
+  }
+  .trainer-command-btn span {
+    font-size: 14px;
+    line-height: 1;
   }
   .trainer-command-btn small {
     display: block;
     max-width: none;
     overflow: visible;
-    font-size: 6px;
-    line-height: 1;
+    font-size: 10px;
+    line-height: 0.9;
     text-align: center;
     text-overflow: clip;
     white-space: normal;
