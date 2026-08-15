@@ -851,7 +851,7 @@ function executeMove(state, side, action, events) {
     removedPenalties += removeAndEmit(attacker, 'negative', move.cleanse, side, events).length;
   if (move.teamCleanse)
     for (const ally of state.sides[side].team)
-      if (ally.hp > 0)
+      if ((ally !== attacker || !move.cleanse) && ally.hp > 0)
         removedPenalties += removeAndEmit(ally, 'negative', move.teamCleanse, side, events).length;
   for (const id of move.consume || [])
     if (consume(attacker.statuses, id)) emitStatus(events, side, attacker, id, false, { consumed: true });

@@ -969,6 +969,33 @@ test('Night Terror extends Midnight Lullaby stun in the support path', () => {
   );
   assert.equal(result.state.sides.enemy.team[0].statuses.stunned?.remaining, 3);
 });
+test('Shell Bastion cleanses one caster penalty and one per living teammate', () => {
+  const state = createBattle({
+    playerTeam: ['abyssar', 'orakyn', 'virelia'],
+    enemyTeam: ['kordane', 'calderoc'],
+    seed: 75,
+  });
+  state.sides.player.surge = 100;
+  const [caster, firstAlly, secondAlly] = state.sides.player.team;
+  caster.statuses.marked = { appliedTurn: state.turn };
+  caster.statuses.rooted = { appliedTurn: state.turn };
+  caster.statuses.burning = { appliedTurn: state.turn, stacks: 1 };
+  firstAlly.statuses.marked = { appliedTurn: state.turn };
+  firstAlly.statuses.rooted = { appliedTurn: state.turn };
+  secondAlly.statuses.marked = { appliedTurn: state.turn };
+  secondAlly.statuses.rooted = { appliedTurn: state.turn };
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'shell_bastion' },
+    { type: 'move', moveId: 'crystal_strike' }
+  );
+  const penaltyCount = (creature) =>
+    ['marked', 'stunned', 'rooted', 'burning'].filter((id) => creature.statuses[id]).length;
+  assert.equal(penaltyCount(result.state.sides.player.team[0]), 2);
+  assert.equal(penaltyCount(result.state.sides.player.team[1]), 1);
+  assert.equal(penaltyCount(result.state.sides.player.team[2]), 1);
+});
+
 
 test('defensive Signatures spend Surge on distinct team-saving effects', () => {
   const state = createBattle({
@@ -979,6 +1006,7 @@ test('defensive Signatures spend Surge on distinct team-saving effects', () => {
   state.sides.player.surge = 100;
   state.sides.player.team.forEach((creature) => (creature.hp -= 20));
   state.sides.player.team[1].statuses.stunned = { remaining: 2, appliedTurn: state.turn, stacks: 1 };
+  state.sides.player.team[0].statuses.marked = { appliedTurn: state.turn };
   const result = resolveTurn(
     state,
     { type: 'move', moveId: 'leaf_mantle' },
@@ -989,6 +1017,7 @@ test('defensive Signatures spend Surge on distinct team-saving effects', () => {
     4
   );
   assert.ok(result.events.filter((event) => event.type === 'heal' && event.side === 'player').length >= 3);
+  assert.equal(result.state.sides.player.team[0].statuses.marked, undefined);
   assert.equal(result.state.sides.player.team[1].statuses.stunned, undefined);
   assert.ok(result.events.some((event) => event.type === 'surge' && event.amount === -100));
 });
