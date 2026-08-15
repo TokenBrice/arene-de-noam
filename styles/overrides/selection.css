@@ -83,7 +83,9 @@
 }
 .kit-move.signature {
   border-color: #ffe17155;
-  background: linear-gradient(120deg, #ffd85818, var(--panel));
+  background:
+    linear-gradient(120deg, #ffd85818, transparent),
+    var(--panel);
 }
 .kit-move.signature i {
   color: #382500;
