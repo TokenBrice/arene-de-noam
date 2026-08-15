@@ -550,6 +550,7 @@ test('multi-hit, barriers, drains, recoil, and damage-over-time emit semantic ev
     (event) => event.type === 'status-tick' && event.side === 'player' && event.status === 'burning'
   );
   assert.equal(burnTick.amount, Math.round(state.sides.player.team[0].maxHp * 0.1));
+  assert.equal(burnTick.remaining, 1, 'status ticks expose the resulting remaining turns');
   assert.ok(result.state.sides.player.team[0].hp <= hpBeforeBurn - burnTick.amount);
 
   const capped = createBattle({
@@ -1034,7 +1035,8 @@ test('knockout skips the second move and requires a free replacement', () => {
     { type: 'move', moveId: 'shade_spark' },
     { type: 'move', moveId: 'crystal_strike' }
   );
-  assert.ok(result.events.some((e) => e.type === 'ko'));
+  const knockout = result.events.find((e) => e.type === 'ko');
+  assert.equal(knockout.hp, 0, 'knockout events expose the resulting HP');
   assert.ok(result.events.some((e) => e.type === 'move-skip'));
   assert.equal(result.state.sides.enemy.pendingReplacement, true);
   const replacement = getLegalActions(result.state, 'enemy')[0];

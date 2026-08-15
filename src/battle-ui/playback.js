@@ -48,6 +48,51 @@ function sessionIsActive(session) {
     screen.classList.contains('battle-screen')
   );
 }
+function beginPresentation(session, preTurnState) {
+  if (!session || !preTurnState) return;
+  session.displayState = structuredClone(preTurnState);
+}
+
+function presentationCreature(state, event) {
+  if (!state?.sides?.[event.side] || !event.creatureId) return null;
+  return state.sides[event.side].team.find((creature) => creature.id === event.creatureId) || null;
+}
+
+function advancePresentation(session, event) {
+  const state = session?.displayState;
+  if (!state) return;
+  const creature = presentationCreature(state, event);
+  if (['damage', 'heal', 'recoil', 'status-tick'].includes(event.type) && creature && Number.isFinite(event.hp))
+    creature.hp = Math.max(0, event.hp);
+  if (event.type === 'ko' && creature) creature.hp = Number.isFinite(event.hp) ? Math.max(0, event.hp) : 0;
+  if (['barrier', 'barrier-hit', 'barrier-break'].includes(event.type) && creature && Number.isFinite(event.total))
+    creature.barrier = Math.max(0, event.total);
+  if (event.type === 'surge' && state.sides[event.side] && Number.isFinite(event.total))
+    state.sides[event.side].surge = Math.max(0, event.total);
+  if (event.type === 'status' && creature) {
+    if (!event.applied) delete creature.statuses[event.status];
+    else {
+      const previous = creature.statuses[event.status] || {};
+      const next = {
+        ...previous,
+        appliedTurn: event.turn ?? state.turn,
+        stacks: event.stacks ?? previous.stacks ?? 1,
+      };
+      if (event.remaining == null) delete next.remaining;
+      else next.remaining = event.remaining;
+      if (event.sourceCreatureId) next.sourceCreatureId = event.sourceCreatureId;
+      creature.statuses[event.status] = next;
+    }
+  }
+  if (event.type === 'status-tick' && creature && event.remaining != null) {
+    if (event.remaining <= 0) delete creature.statuses[event.status];
+    else if (creature.statuses[event.status]) creature.statuses[event.status].remaining = event.remaining;
+  }
+  if ((event.type === 'switch' || event.type === 'replace') && state.sides[event.side]) {
+    const activeIndex = Number.isInteger(event.activeIndex) ? event.activeIndex : event.to;
+    if (Number.isInteger(activeIndex)) state.sides[event.side].active = activeIndex;
+  }
+}
 
 function eventPresentationDelay(event) {
   if (testAnimationScale === 0) return 1;
@@ -86,18 +131,34 @@ function eventPresentationDelay(event) {
 }
 
 async function playEvents(events) {
-  const session = ctx.battleSession;
-  if (!sessionIsActive(session)) return;
+  const session = ctx.battleSession,
+    clearPresentation = () => {
+      if (session) session.displayState = null;
+    };
+  if (!sessionIsActive(session)) {
+    clearPresentation();
+    return;
+  }
   refreshBattle();
   await signatureClashIntro(events);
-  if (!sessionIsActive(session)) return;
+  if (!sessionIsActive(session)) {
+    clearPresentation();
+    return;
+  }
   for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
     const event = events[eventIndex];
     while (document.hidden) {
       await wait(150);
-      if (!sessionIsActive(session)) return;
+      if (!sessionIsActive(session)) {
+        clearPresentation();
+        return;
+      }
     }
-    if (!sessionIsActive(session)) return;
+    if (!sessionIsActive(session)) {
+      clearPresentation();
+      return;
+    }
+    advancePresentation(session, event);
     const actorSide = event.side;
     const fighter = screen.querySelector(`#fighter-${actorSide}`);
     if (event.type === 'trainer-command') {
@@ -294,13 +355,21 @@ async function playEvents(events) {
       // incoming fighter. The overlap begins near the end of the light beam.
       syncBattleAnimationSpeed();
       await wait(switchLeadIn);
-      if (!sessionIsActive(session)) return;
+      if (!sessionIsActive(session)) {
+        clearPresentation();
+        return;
+      }
     }
-    refreshBattle();
+    const deferRefresh = event.type === 'status' && !event.applied;
+    if (!deferRefresh) refreshBattle();
     if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
     syncBattleAnimationSpeed();
     await wait(Math.max(1, eventPresentationDelay(event) - switchLeadIn));
-    if (!sessionIsActive(session)) return;
+    if (!sessionIsActive(session)) {
+      clearPresentation();
+      return;
+    }
+    if (deferRefresh) refreshBattle();
     fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
     const next = events[eventIndex + 1];
     if (
@@ -312,8 +381,14 @@ async function playEvents(events) {
       event.type === 'move-skip' ||
       event.type === 'ko'
     )
-      clearBattleFx();
+      clearBattleFx({ preservePresentation: true });
   }
+  clearPresentation();
 }
 
-registerRoutes({ eventPresentationDelay, playEvents });
+registerRoutes({
+  eventPresentationDelay,
+  playEvents,
+  beginPresentation,
+  advancePresentation,
+});

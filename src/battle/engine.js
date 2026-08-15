@@ -396,7 +396,7 @@ function recordKnockout(state, side, creature, events) {
     events.some((event) => event.type === 'ko' && event.side === side && event.creatureId === creature.id)
   )
     return false;
-  push(events, 'ko', { side, creatureId: creature.id });
+  push(events, 'ko', { side, creatureId: creature.id, hp: creature.hp });
   const remaining = consciousIndices(state, side).filter((index) => index !== state.sides[side].active);
   if (remaining.length) state.sides[side].pendingReplacement = true;
   return true;
@@ -1001,7 +1001,12 @@ function tickEnd(state, events) {
         const dot = [['burning', 0.05]];
         for (const [status, ratio] of dot)
           if (hasStatus(creature, status)) {
-            const amount = Math.max(1, Math.round(creature.maxHp * ratio * statusStacks(creature, status)));
+            const amount = Math.max(1, Math.round(creature.maxHp * ratio * statusStacks(creature, status))),
+              timed = creature.statuses[status],
+              remaining =
+                typeof timed?.remaining === 'number' && !(timed.appliedTurn >= state.turn)
+                  ? Math.max(0, timed.remaining - 1)
+                  : timed?.remaining ?? null;
             creature.hp = Math.max(0, creature.hp - amount);
             push(events, 'status-tick', {
               side,
@@ -1010,10 +1015,11 @@ function tickEnd(state, events) {
               amount,
               hp: creature.hp,
               maxHp: creature.maxHp,
+              remaining,
             });
           }
         if (creature.hp <= 0) {
-          push(events, 'ko', { side, creatureId: creature.id });
+          push(events, 'ko', { side, creatureId: creature.id, hp: creature.hp });
           const remaining = consciousIndices(state, side).filter((i) => i !== state.sides[side].active);
           if (remaining.length) state.sides[side].pendingReplacement = true;
         }

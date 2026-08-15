@@ -64,6 +64,7 @@ const {
   tutorialEnemyAction,
   clearBattleFx,
   playEvents,
+  beginPresentation,
   completeTutorial,
   finishBattle,
 } = route;
@@ -81,9 +82,11 @@ function sessionIsActive(session) {
     screen.classList.contains('battle-screen')
   );
 }
-
 function cancelBattleSession(session) {
-  if (session) session.cancelled = true;
+  if (session) {
+    session.cancelled = true;
+    session.displayState = null;
+  }
   ctx.locked = false;
   clearBattleFx();
 }
@@ -136,6 +139,7 @@ function startBattle(config) {
     tutorialStep: config.tutorialStep ?? null,
     sessionToken: ++battleSessionSequence,
     cancelled: false,
+    displayState: null,
     fxTimers: new Set(),
   };
   void route.renderBattle(ctx.battleSession, screen.dataset.page);
@@ -361,10 +365,11 @@ function openPlateDetails(side) {
   const session = ctx.battleSession,
     root = screen.querySelector('#replacement-root'),
     trigger = screen.querySelector(`[data-plate-side="${side}"]`),
-    creature = activeOf(session.state, side);
+    view = session.displayState ?? session.state,
+    creature = activeOf(view, side);
   if (!root || !trigger || !creature) return;
   trigger.setAttribute('aria-expanded', 'true');
-  root.innerHTML = `<div class="replacement plate-detail-overlay"><section class="glass-panel plate-detail-card" role="dialog" aria-modal="true" aria-labelledby="plate-detail-title"><button type="button" class="codex-close icon-btn" data-action="close-plate" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.plateHint')}</span><h2 id="plate-detail-title">${t('battle.plateTitle', { name: creatureName(creature.id) })}</h2>${hudDetailHtml(side)}</section></div>`;
+  root.innerHTML = `<div class="replacement plate-detail-overlay"><section class="glass-panel plate-detail-card" role="dialog" aria-modal="true" aria-labelledby="plate-detail-title"><button type="button" class="codex-close icon-btn" data-action="close-plate" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.plateHint')}</span><h2 id="plate-detail-title">${t('battle.plateTitle', { name: creatureName(creature.id) })}</h2>${hudDetailHtml(side, view)}</section></div>`;
   const close = () => {
     if (!sessionIsActive(session)) return;
     root.innerHTML = '';
@@ -460,32 +465,32 @@ function refreshBattle() {
   if (!ctx.battleSession || !screen.classList.contains('battle-screen')) return;
   const session = ctx.battleSession,
     state = session.state,
-    p = activeOf(state, 'player'),
-    e = activeOf(state, 'enemy'),
+    view = session.displayState ?? state,
+    p = activeOf(view, 'player'),
+    e = activeOf(view, 'enemy'),
     expertMode = Boolean(ctx.save.expertMode);
-  const cadence = state.modifiers?.includes('rapid_arena') ? 2 : 4,
-    until = cadence - ((state.turn - 1) % cadence),
+  const cadence = view.modifiers?.includes('rapid_arena') ? 2 : 4,
+    until = cadence - ((view.turn - 1) % cadence),
     sideRatio = (side) =>
-      state.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
-      state.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
+      view.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
+      view.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
     lastStand = ['player', 'enemy'].some(
-      (side) => state.sides[side].team.filter((c) => c.hp > 0).length === 1
+      (side) => view.sides[side].team.filter((c) => c.hp > 0).length === 1
     ),
     tension = Math.min(
       1,
-      (state.turn - 1) / 25 +
+      (view.turn - 1) / 25 +
         (1 - Math.min(sideRatio('player'), sideRatio('enemy'))) * 0.58 +
         (lastStand ? 0.3 : 0)
     );
   screen.classList.toggle('locked', ctx.locked);
   screen.classList.toggle('expert-mode', expertMode);
-  screen.classList.toggle('simple-mode', !expertMode);
   screen.classList.toggle('arena-imminent', until === 1);
-  screen.classList.toggle('player-last-stand', state.sides.player.team.filter((c) => c.hp > 0).length === 1);
-  screen.classList.toggle('enemy-last-stand', state.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
+  screen.classList.toggle('player-last-stand', view.sides.player.team.filter((c) => c.hp > 0).length === 1);
+  screen.classList.toggle('enemy-last-stand', view.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
   // Final showdown (plan §5): both sides down to their last creature.
   const showdown = ['player', 'enemy'].every(
-    (side) => state.sides[side].team.filter((c) => c.hp > 0).length === 1
+    (side) => view.sides[side].team.filter((c) => c.hp > 0).length === 1
   );
   screen.classList.toggle('final-showdown', showdown);
   screen.classList.toggle('tension-rising', tension >= 0.38);
@@ -493,11 +498,11 @@ function refreshBattle() {
   screen.style.setProperty('--battle-tension', tension.toFixed(2));
   ctx.arenaScene?.setBattleState({ tension, imminent: until === 1, showdown });
   screen.querySelector('#turn-chip').innerHTML =
-    `<b>${t('battle.turn', { turn: state.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}</small>`;
+    `<b>${t('battle.turn', { turn: view.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}</small>`;
   screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
   for (const side of ['player', 'enemy']) {
-    const owner = state.sides[side],
-      c = activeOf(state, side),
+    const owner = view.sides[side],
+      c = activeOf(view, side),
       fighter = screen.querySelector(`#fighter-${side}`),
       img = fighter.querySelector('img'),
       rank = side === 'player' ? masteryRank(ctx.save.mastery[c.id] || 0) : 0;
@@ -524,7 +529,7 @@ function refreshBattle() {
       owner.surge >= signatureCostFor(c) && c.moves.some((id) => MOVES[id].signature)
     );
     const hud = screen.querySelector(`#hud-${side}`);
-    hud.innerHTML = hudHtml(side, expertMode);
+    hud.innerHTML = hudHtml(side, expertMode, view);
     const plate = hud.querySelector('[data-plate-side]');
     if (plate) {
       const statusIds = sortStatusIds(Object.keys(c.statuses)),
@@ -564,7 +569,9 @@ function refreshBattle() {
     }
     hud.querySelector('[data-plate-side]')?.addEventListener('click', () => openPlateDetails(side));
   }
-  screen.querySelector('#moves').innerHTML = p.moves.map(moveButton).join('');
+  screen.querySelector('#moves').innerHTML = p.moves
+    .map((moveId, index) => moveButton(moveId, index, view, state))
+    .join('');
   const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
   if (forecastPlan && expertMode)
     screen
@@ -572,7 +579,7 @@ function refreshBattle() {
       .forEach((button) =>
         button
           .querySelector('.move-tags')
-          ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan))
+          ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan, state))
       );
   screen.querySelectorAll('[data-move]').forEach((b) =>
     b.addEventListener('click', () => {
@@ -782,8 +789,10 @@ async function handleTrainerCommand() {
     refreshBattle();
     await sound.unlock();
     if (!sessionIsActive(session)) return;
-    const result = applyTrainerCommand(session.state, 'player');
+    const preTurnState = structuredClone(session.state),
+      result = applyTrainerCommand(session.state, 'player');
     session.state = result.state;
+    beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
     ctx.locked = false;
@@ -802,7 +811,8 @@ async function handlePlayerAction(action) {
     refreshBattle();
     await sound.unlock();
     if (!sessionIsActive(session)) return;
-    const tutorialStep = session.tutorialStep;
+    const preTurnState = structuredClone(session.state),
+      tutorialStep = session.tutorialStep;
     const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
     if (session.mode === 'tutorial') {
       if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
@@ -822,6 +832,7 @@ async function handlePlayerAction(action) {
       };
     const result = resolveTurn(session.state, action, enemyAction);
     session.state = result.state;
+    beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
     ctx.locked = false;
@@ -845,9 +856,11 @@ async function resolvePendingReplacements(session = ctx.battleSession) {
   if (!sessionIsActive(session)) return;
   let state = session.state;
   if (state.sides.enemy.pendingReplacement) {
-    const action = chooseAiAction(state, 'enemy', session.difficulty, session.style);
-    const result = applyReplacement(state, 'enemy', action);
+    const action = chooseAiAction(state, 'enemy', session.difficulty, session.style),
+      preTurnState = structuredClone(state),
+      result = applyReplacement(state, 'enemy', action);
     session.state = result.state;
+    beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
     state = session.state;
@@ -865,8 +878,10 @@ async function handleReplacement(index) {
   try {
     refreshBattle();
     if (!sessionIsActive(session)) return;
-    const result = applyReplacement(session.state, 'player', { type: 'replace', index });
+    const preTurnState = structuredClone(session.state),
+      result = applyReplacement(session.state, 'player', { type: 'replace', index });
     session.state = result.state;
+    beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
     ctx.locked = false;

@@ -492,7 +492,7 @@ async function signatureClashIntro(events) {
   syncBattleAnimationSpeed();
   await wait((ctx.save.reducedMotion ? 260 : 1050) / ctx.save.battleSpeed);
   if (!sessionIsActive(session)) return;
-  clearBattleFx();
+  clearBattleFx({ preservePresentation: true });
 }
 
 function faintFx(event) {
@@ -581,8 +581,9 @@ async function battleOutroFx(state) {
   await wait((reduced ? 150 : 420) / speed);
 }
 
-function clearBattleFx() {
+function clearBattleFx({ preservePresentation = false } = {}) {
   clearFxTimers();
+  if (!preservePresentation && ctx.battleSession) ctx.battleSession.displayState = null;
   const stage = screen.querySelector('#fx-stage');
   if (stage) {
     stage.className = 'fx-stage';
