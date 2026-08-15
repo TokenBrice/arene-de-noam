@@ -265,6 +265,7 @@ export class SoundSystem {
     this._disconnectedNodeCount = this.audioDebug ? 0 : undefined;
     this._trackedNodes = new Set();
     this._nodeUsers = new Map();
+    if (this.audioDebug) globalThis.__NOAM_SOUND__ = this;
   }
 
   createNode(method, ...args) {
@@ -683,6 +684,7 @@ export class SoundSystem {
     this.envelope(transientGain.gain, start, transientEnd, options.transientGain || 0.018, 0.002);
     transient.connect(transientGain).connect(output);
     this.trackSource(transient, this.sfxSources, [transient, transientGain, output, send]);
+    transient.start(start);
     transient.stop(transientEnd + 0.01);
 
     if ((options.noiseGain ?? 0.018) > 0) {
@@ -697,6 +699,7 @@ export class SoundSystem {
       this.envelope(noiseGain.gain, start, start + noiseDuration, options.noiseGain ?? 0.018, 0.002);
       noise.connect(noiseFilter).connect(noiseGain).connect(output);
       this.trackSource(noise, this.sfxSources, [noise, noiseFilter, noiseGain, output, send]);
+      noise.start(start);
       noise.stop(start + noiseDuration + 0.01);
     }
   }
