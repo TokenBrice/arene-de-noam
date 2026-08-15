@@ -40,6 +40,7 @@ const {
   startDraft,
   advanceGauntlet,
   performanceHtml,
+  renderTrials,
   startBattle,
   openBattleLog,
   battleOutroFx,
@@ -167,9 +168,14 @@ function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
   };
 }
 
-function finishBattle() {
+async function finishBattle() {
   const state = ctx.battleSession.state;
   if (ctx.battleSession.mode === 'tutorial') {
+    if (ctx.save.reducedMotion || testAnimationScale === 0) {
+      setTimeout(completeTutorial, 500 / ctx.save.battleSpeed);
+      return;
+    }
+    await battleOutroFx(state);
     setTimeout(completeTutorial, 500 / ctx.save.battleSpeed);
     return;
   }
