@@ -3,6 +3,8 @@ import { ctx, registerRoutes, route } from '../app/context.js';
 const {
   AFFINITIES,
   AFFINITY_ORDER,
+  CLASSES,
+  CLASS_ORDER,
   affinityMultiplier,
   CREATURES,
   CREATURE_IDS,
@@ -31,6 +33,8 @@ const {
   affinity,
   affinityName,
   affinityIcon,
+  classIcon,
+  className,
   actionButton,
   persist,
   notify,
@@ -57,11 +61,14 @@ function newSelection(mode) {
     return ids.length === 3 && new Set(ids).size === 3 ? ids : [...fallback];
   };
   const stage = GAUNTLET_STAGES[0];
+  const trainer = TRAINERS[index],
+    authoredEnemy = mode === 'circuit' && trainer.circuitTeam ? trainer.circuitTeam : trainer.team;
   return {
     mode,
     team: queryTeam('player', ctx.save.lastTeam),
     lead: 0,
-    enemyTeam: mode === 'gauntlet' ? [...stage.enemyTeam] : queryTeam('enemy', TRAINERS[index].team),
+    enemyTeam: mode === 'gauntlet' ? [...stage.enemyTeam] : queryTeam('enemy', authoredEnemy),
+    enemyLead: mode === 'circuit' ? trainer.circuitLead || 0 : 0,
     trainerIndex: index,
     arena:
       mode === 'gauntlet'
@@ -77,7 +84,8 @@ function newSelection(mode) {
           : mode === 'ladder'
             ? TRAINERS[index].difficulty
             : ctx.save.difficulty,
-    filter: 'all',
+    filterAffinity: 'all',
+    filterClass: 'all',
     quickRule: 'standard',
     circuitCondition: mode === 'circuit' ? circuit.condition.id : null,
   };
@@ -145,13 +153,13 @@ function creatureCard(id, selected, lead, enemy = ctx.selection?.enemyTeam || []
         return `<span class="kit-move kind-${move.kind} ${move.signature ? 'signature' : ''}" style="--kit-color:${color}" title="${escapeHtml(`${t(`move.${moveId}`)} — ${t(`move.effect.${moveId}`)}`)}"><i>${moveArchetype(move)}</i><small>${t(`move.${moveId}`)}</small></span>`;
       })
       .join('');
-  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-dot" style="background:${a.color}">${affinityIcon(c.affinity)}</span><span>${affinityName(c.affinity)} · ${t(`role.${c.role}`)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
+  return `<button type="button" class="creature-card ${selected ? 'selected' : ''} ${lead ? 'lead' : ''} ${scout.edge > 0 ? 'scout-strong' : scout.edge < 0 ? 'scout-danger' : ''} mastery-card-${rank}" data-creature="${id}" data-lead="${t('select.lead')}" aria-label="${escapeHtml(`${creatureName(id)}, ${affinityName(c.affinity)}, ${className(c.classId)}`)}">${rank ? `<span class="card-rank" title="${t('mastery.rank', { rank })}">${'★'.repeat(rank)}</span>` : ''}<img src="${sprite(id)}" alt=""><h3>${creatureName(id)} <i class="card-talent" title="${escapeHtml(t(`passive.effect.${c.passive}`))}">${passive.icon}</i></h3><div class="meta-row"><span class="affinity-chip" style="--chip-color:${a.color}">${affinityIcon(c.affinity)} ${affinityName(c.affinity)}</span><span class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</span></div><div class="mini-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</div><div class="kit-strip" aria-label="${t('bestiary.moves')}">${kit}</div><div class="scout-read" aria-label="${t('select.scout')}">${scoutLabel}</div></button>`;
 }
 
 function kitShowcaseHtml(id) {
   const creature = CREATURES[id];
   if (!creature) return '';
-  return `<section class="kit-showcase"><div class="kit-showcase-creature"><img src="${sprite(id)}" alt=""><span><small>${t('select.leadKit')}</small><b>${creatureName(id)}</b><em>${t(`role.${creature.role}`)}</em></span></div><div class="kit-showcase-moves">${creature.moves
+  return `<section class="kit-showcase"><div class="kit-showcase-creature"><img src="${sprite(id)}" alt=""><span><small>${t('select.leadKit')}</small><b>${creatureName(id)}</b><em class="class-chip" style="--class-color:${CLASSES[creature.classId].color}">${classIcon(creature.classId)} ${className(creature.classId)}</em></span></div><div class="kit-showcase-moves">${creature.moves
     .map((moveId) => {
       const move = MOVES[moveId],
         color = AFFINITIES[move.affinity]?.color || '#d8d9ea';
@@ -172,18 +180,20 @@ function renderTeamSelect(mode = 'ladder') {
     activeTrial = mode === 'trial' ? TRIALS.find((trial) => trial.id === ctx.selection.trialId) : null,
     ranked = ['ladder', 'circuit'].includes(mode);
   const matchup = teamMatchup(ctx.selection.team, ctx.selection.enemyTeam);
-  const visibleIds =
-    ctx.selection.filter === 'all'
-      ? CREATURE_IDS
-      : CREATURE_IDS.filter((id) => CREATURES[id].affinity === ctx.selection.filter);
-  const affinityTabs = `<div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filter === 'all' ? 'active' : ''}" data-filter="all" aria-pressed="${ctx.selection.filter === 'all'}">24</button>${AFFINITY_ORDER.map(
+  const visibleIds = CREATURE_IDS.filter(
+    (id) =>
+      (ctx.selection.filterAffinity === 'all' ||
+        CREATURES[id].affinity === ctx.selection.filterAffinity) &&
+      (ctx.selection.filterClass === 'all' || CREATURES[id].classId === ctx.selection.filterClass)
+  );
+  const affinityTabs = `<section class="selection-filters"><div class="filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><div class="affinity-tabs"><button class="affinity-tab ${ctx.selection.filterAffinity === 'all' ? 'active' : ''}" data-affinity-filter="all" aria-label="${t('filter.allTypes')}" aria-pressed="${ctx.selection.filterAffinity === 'all'}">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map(
     (id) => [id, AFFINITIES[id]]
   )
     .map(
       ([id, a]) =>
-        `<button class="affinity-tab ${ctx.selection.filter === id ? 'active' : ''}" data-filter="${id}" aria-pressed="${ctx.selection.filter === id}" style="--tab-color:${a.color}">${affinityIcon(id)} ${affinityName(id)}</button>`
+        `<button class="affinity-tab ${ctx.selection.filterAffinity === id ? 'active' : ''}" data-affinity-filter="${id}" aria-pressed="${ctx.selection.filterAffinity === id}" style="--tab-color:${a.color}">${affinityIcon(id)} ${affinityName(id)}</button>`
     )
-    .join('')}</div>`;
+    .join('')}</div></div><div class="filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><div class="class-tabs"><button class="class-tab ${ctx.selection.filterClass === 'all' ? 'active' : ''}" data-class-filter="all" aria-label="${t('filter.allClasses')}" aria-pressed="${ctx.selection.filterClass === 'all'}">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button class="class-tab ${ctx.selection.filterClass === id ? 'active' : ''}" data-class-filter="${id}" aria-pressed="${ctx.selection.filterClass === id}" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`;
   const quickEnemyControls =
     mode === 'quick'
       ? `<div class="enemy-picker" aria-label="${t('select.enemy')}">${CREATURE_IDS.map((id) => `<button type="button" class="icon-btn ${ctx.selection.enemyTeam.includes(id) ? 'active' : ''}" data-enemy-pick="${id}" aria-label="${creatureName(id)}" aria-pressed="${ctx.selection.enemyTeam.includes(id)}"><img src="${sprite(id)}" alt=""></button>`).join('')}</div>${actionButton(t('app.random'), 'random-enemy', 'subtle-btn wide')}`
@@ -197,7 +207,7 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.selection.enemyTeam
       .map(
         (id) =>
-          `<div class="selected-row"><img src="${sprite(id)}" alt=""><span>${creatureName(id)}<small class="meta-row">${affinityName(CREATURES[id].affinity)}</small></span></div>`
+          `<div class="selected-row"><img src="${sprite(id)}" alt=""><span>${creatureName(id)}<small class="meta-row">${affinityName(CREATURES[id].affinity)} · ${classIcon(CREATURES[id].classId)} ${className(CREATURES[id].classId)}</small></span></div>`
       )
       .join('') +
     (ranked
@@ -311,9 +321,15 @@ function renderTeamSelect(mode = 'ladder') {
       renderTeamSelect(mode);
     })
   );
-  screen.querySelectorAll('[data-filter]').forEach((button) =>
+  screen.querySelectorAll('[data-affinity-filter]').forEach((button) =>
     button.addEventListener('click', () => {
-      ctx.selection.filter = button.dataset.filter;
+      ctx.selection.filterAffinity = button.dataset.affinityFilter;
+      renderTeamSelect(mode);
+    })
+  );
+  screen.querySelectorAll('[data-class-filter]').forEach((button) =>
+    button.addEventListener('click', () => {
+      ctx.selection.filterClass = button.dataset.classFilter;
       renderTeamSelect(mode);
     })
   );
@@ -328,7 +344,8 @@ function renderTeamSelect(mode = 'ladder') {
       const preset = SQUAD_PRESETS.find((x) => x.id === button.dataset.squad);
       ctx.selection.team = [...preset.team];
       ctx.selection.lead = preset.lead;
-      ctx.selection.filter = 'all';
+      ctx.selection.filterAffinity = 'all';
+      ctx.selection.filterClass = 'all';
       renderTeamSelect(mode);
     })
   );
@@ -341,7 +358,8 @@ function renderTeamSelect(mode = 'ladder') {
       remix = remixTeam(ctx.selection.enemyTeam, seed + attempt++);
     ctx.selection.team = remix.team;
     ctx.selection.lead = remix.lead;
-    ctx.selection.filter = 'all';
+    ctx.selection.filterAffinity = 'all';
+    ctx.selection.filterClass = 'all';
     sound.ui();
     renderTeamSelect(mode);
     notify(t('squad.remixed'));
@@ -352,7 +370,8 @@ function renderTeamSelect(mode = 'ladder') {
       if (!squad) return;
       ctx.selection.team = [...squad.team];
       ctx.selection.lead = squad.lead;
-      ctx.selection.filter = 'all';
+      ctx.selection.filterAffinity = 'all';
+      ctx.selection.filterClass = 'all';
       sound.ui();
       renderTeamSelect(mode);
     })
@@ -417,7 +436,7 @@ function renderTeamSelect(mode = 'ladder') {
         playerTeam: ctx.selection.team,
         enemyTeam: ctx.selection.enemyTeam,
         playerLead: ctx.selection.lead,
-        enemyLead: 0,
+        enemyLead: ctx.selection.enemyLead || 0,
         mode,
         arena: ctx.selection.arena,
         difficulty: ctx.selection.difficulty,

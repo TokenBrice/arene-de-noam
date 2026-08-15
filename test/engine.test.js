@@ -942,9 +942,9 @@ test('support control, evasion, counters, roots, and team healing alter legal pl
     !getLegalActions(state, 'player').some((a) => a.type === 'switch'),
     'root prevents voluntary switching'
   );
-  state.sides.player.team[1].hp -= 30;
   state.sides.player.team[2].hp -= 20;
   state.sides.player.active = 1;
+  state.sides.player.team[1].hp -= 20;
   delete state.sides.player.team[1].statuses.rooted;
   result = resolveTurn(
     state,
@@ -1100,4 +1100,169 @@ test('turns 29 through 40 add no synthetic pressure events', () => {
     );
     assert.equal('lateTurnPressure' in result.state, false);
   }
+});
+
+test('Eclipse of Grace purges every enemy boost and barrier after counterplay', () => {
+  const state = createBattle({
+    playerTeam: ['deuilastre', 'orakyn', 'kordane'],
+    enemyTeam: ['aubeastre', 'virelia', 'pactigon'],
+    seed: 4,
+  });
+  state.sides.player.surge = 100;
+  for (const creature of state.sides.enemy.team) {
+    creature.barrier = 11;
+    creature.statuses = {
+      focused: { appliedTurn: 0 },
+      haste: { appliedTurn: 0, remaining: 3 },
+      evasive: { appliedTurn: 0 },
+      countering: { appliedTurn: 0 },
+      burning: { appliedTurn: 0, remaining: 3, stacks: 1 },
+    };
+  }
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'eclipse_of_grace' },
+    { type: 'move', moveId: 'kindred_halo' }
+  );
+  assert.ok(result.events.some((event) => event.type === 'miss'), 'Evasive answers the hit first');
+  for (const creature of result.state.sides.enemy.team) {
+    assert.equal(creature.barrier, 0);
+    assert.deepEqual(Object.keys(creature.statuses), ['burning']);
+  }
+  assert.equal(
+    result.events.filter((event) => event.type === 'barrier-break' && event.source === 'purge').length,
+    3
+  );
+});
+
+test('Immaculate Relay protects its chosen ally until after actions and grants no switch rewards', () => {
+  const state = createBattle({
+    playerTeam: ['aubeastre', 'deuilastre', 'pactigon'],
+    enemyTeam: ['orakyn', 'kordane', 'virelia'],
+    seed: 9,
+  });
+  state.sides.player.surge = 100;
+  state.sides.player.team[1].statuses = {
+    marked: { appliedTurn: 0, remaining: 2 },
+    burning: { appliedTurn: 0, remaining: 2, stacks: 1 },
+  };
+  const variants = getLegalActions(state, 'player').filter(
+    (action) => action.moveId === 'immaculate_relay'
+  );
+  assert.deepEqual(
+    variants.map(({ allyIndex }) => allyIndex),
+    [1, 2]
+  );
+  assert.throws(
+    () =>
+      resolveTurn(
+        state,
+        { type: 'move', moveId: 'immaculate_relay', allyIndex: 0 },
+        { type: 'move', moveId: 'lucid_arc' }
+      ),
+    /Illegal/
+  );
+  const result = resolveTurn(
+    state,
+    variants[0],
+    { type: 'move', moveId: 'lucid_arc' }
+  );
+  const outgoing = result.state.sides.player.team[0],
+    incoming = result.state.sides.player.team[1];
+  assert.ok(outgoing.hp < outgoing.maxHp);
+  assert.equal(incoming.hp, incoming.maxHp);
+  assert.equal(result.state.sides.player.active, 1);
+  assert.deepEqual(Object.keys(incoming.statuses), ['focused']);
+  assert.equal(incoming.barrier, 0);
+  assert.equal(result.state.sides.player.pendingReplacement, false);
+  assert.ok(
+    result.events.find((event) => event.type === 'switch' && event.source === 'signature')
+  );
+  assert.equal(
+    result.events.some(
+      (event) =>
+        event.type === 'surge' && ['switch', 'perfect-relay'].includes(event.source)
+    ),
+    false
+  );
+  assert.equal(result.state.sides.player.surge, 19, '11 resolve Surge plus Benevolent Omen');
+});
+
+test('Immaculate Relay still completes after Aubéastre is knocked out', () => {
+  const state = createBattle({
+    playerTeam: ['aubeastre', 'deuilastre', 'pactigon'],
+    enemyTeam: ['solflare', 'kordane', 'virelia'],
+    seed: 2,
+  });
+  state.sides.player.surge = 100;
+  state.sides.player.team[0].hp = 1;
+  const relay = getLegalActions(state, 'player').find(
+    (action) => action.moveId === 'immaculate_relay' && action.allyIndex === 1
+  );
+  const result = resolveTurn(state, relay, { type: 'move', moveId: 'sun_spear' });
+  assert.equal(result.state.sides.player.team[0].hp, 0);
+  assert.equal(result.state.sides.player.active, 1);
+  assert.equal(result.state.sides.player.pendingReplacement, false);
+});
+
+test('the four new roster talents trigger at their deterministic engine hooks', () => {
+  let state = createBattle({
+    playerTeam: ['flambelier', 'mareclat', 'pactigon'],
+    enemyTeam: ['kordane', 'orakyn', 'virelia'],
+    seed: 6,
+  });
+  let result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'ember_feint' },
+    { type: 'move', moveId: 'crystal_strike' }
+  );
+  assert.ok(result.state.sides.enemy.team[0].statuses.burning);
+  assert.ok(result.events.some((event) => event.type === 'passive' && event.passive === 'burning_code'));
+
+  state = createBattle({
+    playerTeam: ['mareclat', 'flambelier', 'pactigon'],
+    enemyTeam: ['kordane', 'orakyn', 'virelia'],
+    seed: 6,
+  });
+  result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'foam_foil' },
+    { type: 'move', moveId: 'crystal_strike' }
+  );
+  assert.ok(result.events.some((event) => event.type === 'miss'));
+  assert.ok(result.state.sides.player.team[0].statuses.haste);
+
+  state = createBattle({
+    playerTeam: ['xylocorne', 'flambelier', 'pactigon'],
+    enemyTeam: ['kordane', 'orakyn', 'virelia'],
+    seed: 6,
+  });
+  state.sides.enemy.team[0].barrier = 10;
+  result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'heartwood_breach' },
+    { type: 'move', moveId: 'resonant_focus' }
+  );
+  assert.equal(result.state.sides.enemy.team[0].barrier, 4);
+  assert.ok(result.state.sides.enemy.team[0].hp < result.state.sides.enemy.team[0].maxHp);
+  assert.ok(
+    result.events.some(
+      (event) => event.type === 'barrier-break' && event.source === 'passive' && event.amount === 6
+    )
+  );
+
+  state = createBattle({
+    playerTeam: ['pactigon', 'flambelier', 'mareclat'],
+    enemyTeam: ['kordane', 'orakyn', 'virelia'],
+    seed: 6,
+  });
+  state.sides.player.team[0].hp -= 20;
+  state.sides.player.team[1].hp -= 40;
+  result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'pulse_punch' },
+    { type: 'move', moveId: 'resonant_focus' }
+  );
+  assert.equal(result.state.sides.player.team[1].barrier, 4);
+  assert.ok(result.events.some((event) => event.type === 'passive' && event.passive === 'shared_breath'));
 });

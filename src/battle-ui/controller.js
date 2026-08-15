@@ -2,6 +2,7 @@ import { ctx, registerRoutes, route } from '../app/context.js';
 
 const {
   AFFINITIES,
+  CLASSES,
   affinityMultiplier,
   MOVES,
   PASSIVES,
@@ -21,6 +22,7 @@ const {
   getLegalActions,
   signatureCostFor,
   previewIncomingAfterSwitch,
+  previewAllySwitch,
   chooseAiAction,
   STATUS_DEFINITIONS,
   sortStatusIds,
@@ -39,6 +41,8 @@ const {
   affinity,
   affinityName,
   affinityIcon,
+  classIcon,
+  className,
   actionButton,
   wait,
   persist,
@@ -486,7 +490,9 @@ function refreshBattle() {
         delete b.dataset.longPressed;
         return;
       }
-      handlePlayerAction({ type: 'move', moveId: b.dataset.move });
+      const move = MOVES[b.dataset.move];
+      if (move.allySwitch) openSwitch(move.id);
+      else handlePlayerAction({ type: 'move', moveId: move.id });
     })
   );
   bindBattleChoiceContext(session);
@@ -495,7 +501,7 @@ function refreshBattle() {
     ctx.locked ||
     (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 3) ||
     !getLegalActions(state, 'player').some((action) => action.type === 'switch');
-  switchButton.onclick = openSwitch;
+  switchButton.onclick = () => openSwitch();
   const speedButton = screen.querySelector('[data-action="battle-speed"]');
   speedButton.textContent = `×${ctx.save.battleSpeed}`;
   speedButton.setAttribute('aria-pressed', String(ctx.save.battleSpeed === 2));
@@ -524,16 +530,28 @@ function renderTutorialTip() {
   root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
 }
 
-function openSwitch() {
+function openSwitch(relayMoveId = null) {
   if (ctx.locked) return;
+  const returnFocus = relayMoveId
+    ? screen.querySelector(`[data-move="${relayMoveId}"]`)
+    : screen.querySelector('[data-action="open-switch"]');
   const state = ctx.battleSession.state,
     legal = getLegalActions(state, 'player'),
     foe = activeOf(state, 'enemy'),
     options = legal
-      .filter((action) => action.type === 'switch' || action.type === 'replace')
-      .map(({ index }) => ({ c: state.sides.player.team[index], index })),
+      .filter((action) =>
+        relayMoveId
+          ? action.type === 'move' && action.moveId === relayMoveId
+          : action.type === 'switch' || action.type === 'replace'
+      )
+      .map((action) => {
+        const index = relayMoveId ? action.allyIndex : action.index;
+        return { c: state.sides.player.team[index], index };
+      }),
     plan =
-      !state.sides.player.pendingReplacement && ctx.battleSession.difficulty === 'apprentice'
+      !relayMoveId &&
+      !state.sides.player.pendingReplacement &&
+      ctx.battleSession.difficulty === 'apprentice'
         ? enemyPlan()
         : null;
   if (!options.length) return;
@@ -567,7 +585,9 @@ function openSwitch() {
   const scouted = options.map(({ c, index }) => {
       const mult = affinityMultiplier(c.affinity, foe.affinity),
         incoming = affinityMultiplier(foe.affinity, c.affinity),
-        forecast = forecastFor(index),
+        forecast = relayMoveId
+          ? { icon: '✦', text: t('battle.relayProtected'), protected: true, ...previewAllySwitch(state, 'player', index, relayMoveId) }
+          : forecastFor(index),
         score =
           (mult > 1 ? 24 : mult < 1 ? -8 : 0) +
           (incoming < 1 ? 18 : incoming > 1 ? -20 : 0) +
@@ -587,27 +607,33 @@ function openSwitch() {
         statuses = statusIds.length
           ? `<span class="switch-statuses" aria-hidden="true">${statusIds.map((id) => statusBadgeHtml(id, { compact: true, className: 'switch-status', title: escapeHtml(t(`status.${id}`)) })).join('')}</span><span class="visually-hidden switch-status-names">${escapeHtml(statusNames)}</span>`
           : '';
-      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${affinityIcon(c.affinity)}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="switch-match ${match}">${mult > 1 ? '↑ ' + t('battle.switchGood') : mult < 1 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small class="switch-passive" ${ctx.save.expertMode ? `title="${escapeHtml(t(`passive.effect.${c.passive}`))}"` : ''}>${passive.icon} ${t(`passive.${c.passive}`)}</small>${statuses}</button>`;
+      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${forecast?.protected ? 'protected-relay' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${affinityIcon(c.affinity)}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</small>${relayMoveId ? '' : `<small class="switch-match ${match}">${mult > 1 ? '↑ ' + t('battle.switchGood') : mult < 1 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>`}${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small class="switch-passive" ${ctx.save.expertMode ? `title="${escapeHtml(t(`passive.effect.${c.passive}`))}"` : ''}>${passive.icon} ${t(`passive.${c.passive}`)}</small>${statuses}</button>`;
     })
     .join('');
   const switchBonusKey = state.modifiers?.includes('relay_fever')
     ? 'battle.switchBonusFever'
     : 'battle.switchBonus';
   screen.querySelector('#replacement-root').innerHTML =
-    `<div class="replacement"><section class="glass-panel replacement-card"><span class="eyebrow">${state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchForecast')}</span><h2>${state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchTitle')}</h2><p>${state.sides.player.pendingReplacement ? t('battle.replacementHint') : t('battle.switchHint')}</p><div class="replacement-options">${optionHtml}</div>${!state.sides.player.pendingReplacement ? `<div class="switch-bonus">✦ ${t(switchBonusKey)}</div>${actionButton(t('battle.cancel'), 'cancel-switch', 'subtle-btn')}` : ''}</section></div>`;
+    `<div class="replacement ${relayMoveId ? 'signature-relay' : ''}"><section class="glass-panel replacement-card"><span class="eyebrow">${relayMoveId ? t('move.immaculate_relay') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchForecast')}</span><h2>${relayMoveId ? t('battle.relayChoose') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchTitle')}</h2><p>${relayMoveId ? t('battle.relayHint') : state.sides.player.pendingReplacement ? t('battle.replacementHint') : t('battle.switchHint')}</p><div class="replacement-options">${optionHtml}</div>${!state.sides.player.pendingReplacement ? `${relayMoveId ? '' : `<div class="switch-bonus">✦ ${t(switchBonusKey)}</div>`}${actionButton(t('battle.cancel'), 'cancel-switch', 'subtle-btn')}` : ''}</section></div>`;
   screen
     .querySelectorAll('.switch-option>span')
     .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
   screen.querySelectorAll('[data-switch-index]').forEach((button) =>
     button.addEventListener('click', () => {
       screen.querySelector('#replacement-root').innerHTML = '';
-      if (state.sides.player.pendingReplacement) handleReplacement(Number(button.dataset.switchIndex));
-      else handlePlayerAction({ type: 'switch', index: Number(button.dataset.switchIndex) });
+      const index = Number(button.dataset.switchIndex);
+      if (relayMoveId) handlePlayerAction({ type: 'move', moveId: relayMoveId, allyIndex: index });
+      else if (state.sides.player.pendingReplacement) handleReplacement(index);
+      else handlePlayerAction({ type: 'switch', index });
     })
   );
   screen
     .querySelector('[data-action="cancel-switch"]')
-    ?.addEventListener('click', () => (screen.querySelector('#replacement-root').innerHTML = ''));
+    ?.addEventListener('click', () => {
+      screen.querySelector('#replacement-root').innerHTML = '';
+      returnFocus?.focus();
+    });
+  screen.querySelector('[data-switch-index]')?.focus();
 }
 
 async function handleTrainerCommand() {

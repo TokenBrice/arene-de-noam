@@ -62,3 +62,15 @@ test('damage is deterministic and applies Focused, Dazed, and minimum damage', (
   assert.equal(calculateDamage(move, attacker, defender, { stunned: true }).status, 0.75);
   assert.equal(calculateDamage({ ...move, power: 0 }, attacker, defender).damage, 1);
 });
+
+test('single-type legendary matchup keeps priority Dire Pinion below a full-health knockout', () => {
+  assert.equal(CREATURES.deuilastre.affinity, 'shadow');
+  assert.equal(CREATURES.aubeastre.affinity, 'mind');
+  assert.equal(MOVES.dire_pinion.power, 22);
+  assert.deepEqual(calculateDamage(MOVES.dire_pinion, CREATURES.deuilastre, CREATURES.aubeastre), {
+    damage: 76,
+    affinity: 2,
+    status: 1,
+  });
+  assert.ok(76 < CREATURES.aubeastre.maxHp);
+});

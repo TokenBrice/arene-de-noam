@@ -24,6 +24,7 @@ const {
   creatureName,
   affinity,
   affinityName,
+  className,
   affinityIcon,
   escapeHtml,
 } = ctx;
@@ -100,7 +101,7 @@ function enemyIntentHtml() {
           : t('battle.intentTactic');
       return `<div class="intent-read simple-intent"><span>${icon}</span><b>${detail}</b></div>`;
     }
-    detail = `${t(`move.${action.moveId}`)}${forecast ? ` · ${forecast.miss ? t('battle.previewMiss') : t('battle.intentDamage', { damage: forecast.damage })}` : ''}`;
+    detail = `${t(`move.${action.moveId}`)}${move.allySwitch && Number.isInteger(action.allyIndex) ? ` → ${creatureName(state.sides.enemy.team[action.allyIndex].id)}` : ''}${forecast ? ` · ${forecast.miss ? t('battle.previewMiss') : t('battle.intentDamage', { damage: forecast.damage })}` : ''}`;
   }
   if (action.type === 'switch')
     detail = ctx.save.expertMode
@@ -129,7 +130,7 @@ function teamPipsHtml(owner) {
           creature.hp > 0 &&
           owner.surge >= signatureCostFor(creature) &&
           creature.moves.some((id) => MOVES[id].signature),
-        label = `${creatureName(creature.id)} · ${creature.hp}/${creature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`;
+        label = `${creatureName(creature.id)} · ${className(creature.classId)} · ${creature.hp}/${creature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`;
       return `<span class="team-dot ${index === owner.active ? 'active' : ''} ${creature.hp <= 0 ? 'ko' : ''} ${ready ? 'signature-ready' : ''}" style="--team-hp:${Math.max(0, (creature.hp / creature.maxHp) * 100)}" aria-label="${escapeHtml(label)}"><img src="${sprite(creature.id)}" alt=""></span>`;
     })
     .join('');

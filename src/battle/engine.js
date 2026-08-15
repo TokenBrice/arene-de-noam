@@ -1,5 +1,6 @@
 import { CREATURES } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
+import { affinityMultiplier } from '../data/affinities.js';
 import {
   COMBO_DAMAGE_MULTIPLIER,
   comboSetupStatus,
@@ -102,6 +103,7 @@ export function createBattle({
       },
     },
     history: [],
+    queuedRelays: {},
   };
   if (activeModifiers.includes('overdrive'))
     for (const side of ['player', 'enemy']) state.sides[side].surge = 100;
@@ -154,13 +156,17 @@ export function getLegalActions(state, side) {
       .map((index) => ({ type: 'replace', index }));
   if (state.phase !== 'choice') return [];
   const active = activeOf(state, side);
-  const moves = active.moves
-    .filter(
-      (id) =>
-        !active.cooldowns[id]?.remaining && !(MOVES[id].signature && owner.surge < signatureCostFor(active))
-    )
-    .map((moveId) => ({ type: 'move', moveId }));
   const canSwitch = !hasStatus(active, 'rooted') || active.passive === 'ancient_roots';
+  const moves = active.moves.flatMap((moveId) => {
+    const move = MOVES[moveId];
+    if (active.cooldowns[moveId]?.remaining || (move.signature && owner.surge < signatureCostFor(active)))
+      return [];
+    if (!move.allySwitch) return [{ type: 'move', moveId }];
+    if (!canSwitch) return [];
+    return consciousIndices(state, side)
+      .filter((index) => index !== owner.active)
+      .map((allyIndex) => ({ type: 'move', moveId, allyIndex }));
+  });
   const switches = canSwitch
     ? consciousIndices(state, side)
         .filter((i) => i !== owner.active)
@@ -169,7 +175,8 @@ export function getLegalActions(state, side) {
   return [...moves, ...switches];
 }
 function actionKey(action) {
-  return `${action?.type}:${action?.moveId ?? action?.index}`;
+  const move = action?.type === 'move' ? MOVES[action.moveId] : null;
+  return `${action?.type}:${action?.moveId ?? action?.index}${move?.allySwitch ? `:${action?.allyIndex}` : ''}`;
 }
 export function isLegalAction(state, side, action) {
   return getLegalActions(state, side).some((candidate) => actionKey(candidate) === actionKey(action));
@@ -310,7 +317,18 @@ function triggerAce(state, events) {
     adjustSurge(state, 'enemy', 100, events, 'ace');
   }
 }
-function resolveSwitch(state, side, action, events, replacement = false) {
+function resolveSwitch(
+  state,
+  side,
+  action,
+  events,
+  {
+    replacement = false,
+    source = replacement ? 'replacement' : 'switch',
+    rewards = !replacement,
+    triggerEntry = true,
+  } = {}
+) {
   const owner = state.sides[side],
     from = owner.active;
   owner.active = action.index;
@@ -320,9 +338,10 @@ function resolveSwitch(state, side, action, events, replacement = false) {
     from,
     to: action.index,
     creatureId: activeOf(state, side).id,
+    source,
   });
-  enterTalent(state, side, events);
-  if (!replacement) {
+  if (triggerEntry) enterTalent(state, side, events);
+  if (rewards) {
     const fever = state.modifiers?.includes('relay_fever');
     adjustSurge(state, side, fever ? 24 : 10, events, 'switch');
     if (fever)
@@ -383,6 +402,7 @@ function recordKnockout(state, side, creature, events) {
   return true;
 }
 function applyStatuses(creature, descriptors, state, side, events, sourceCreatureId = null) {
+  let count = 0;
   for (const spec of descriptors || []) {
     if (spec.id === 'rooted' && creature.passive === 'ancient_roots') continue;
     const applied = applyStatus(
@@ -398,12 +418,39 @@ function applyStatuses(creature, descriptors, state, side, events, sourceCreatur
       stacks: statusStacks(creature, spec.id),
       sourceCreatureId,
     });
+    count += 1;
   }
+  return count;
 }
 function removeAndEmit(creature, ids, count, side, events) {
   const removed = ids === 'negative' ? cleanse(creature, count) : purge(creature, count);
   removed.forEach((status) => emitStatus(events, side, creature, status, false));
   return removed;
+}
+
+function breakBarrier(creature, amount, side, events, source) {
+  const broken = Math.min(creature.barrier, Math.max(0, amount));
+  if (!broken) return 0;
+  creature.barrier -= broken;
+  push(events, 'barrier-break', {
+    side,
+    creatureId: creature.id,
+    amount: broken,
+    total: creature.barrier,
+    source,
+  });
+  return broken;
+}
+
+function purgeMoveTargets(state, targetSide, move, events) {
+  if (!move.purge) return;
+  const targets = move.purgeTeam
+    ? state.sides[targetSide].team.filter((creature) => creature.hp > 0)
+    : [activeOf(state, targetSide)];
+  for (const creature of targets) {
+    removeAndEmit(creature, 'positive', move.purge, targetSide, events);
+    if (move.purgeBarrier) breakBarrier(creature, creature.barrier, targetSide, events, 'purge');
+  }
 }
 
 export function canUseTrainerCommand(state, side = 'player') {
@@ -462,6 +509,11 @@ function resolveDamageTransaction(state, side, move, events) {
   if (consume(defender.statuses, 'evasive')) {
     push(events, 'miss', { side: targetSide, sourceSide: side, creatureId: defender.id, moveId: move.id });
     emitStatus(events, targetSide, defender, 'evasive', false);
+    if (defender.passive === 'perfect_ebb' && defender.talent.perfectEbbTurn !== state.turn) {
+      defender.talent.perfectEbbTurn = state.turn;
+      passiveEvent(events, targetSide, defender);
+      applyStatuses(defender, [{ id: 'haste', duration: 2 }], state, targetSide, events, defender.id);
+    }
     return {
       damage: 0,
       absorbed: 0,
@@ -471,6 +523,7 @@ function resolveDamageTransaction(state, side, move, events) {
       helperId: null,
       lethal: false,
       miss: true,
+      appliedStatuses: 0,
     };
   }
   const focused = consume(attacker.statuses, 'focused'),
@@ -579,6 +632,7 @@ function resolveDamageTransaction(state, side, move, events) {
       addBarrier(defender, 10, targetSide, events);
     }
   }
+  let appliedStatuses = 0;
   if (defender.hp > 0) {
     const statuses = (move.targetStatuses || []).map((spec) => {
       let duration = spec.duration,
@@ -588,7 +642,7 @@ function resolveDamageTransaction(state, side, move, events) {
       if (attacker.passive === 'living_furnace' && spec.id === 'burning') stacks = (stacks || 1) + 1;
       return { ...spec, duration, stacks };
     });
-    applyStatuses(defender, statuses, state, targetSide, events, attacker.id);
+    appliedStatuses = applyStatuses(defender, statuses, state, targetSide, events, attacker.id);
     if (statuses.length && attacker.passive === 'memory_silk') {
       passiveEvent(events, side, attacker);
       healCreature(attacker, 5, side, events, 'passive');
@@ -603,6 +657,7 @@ function resolveDamageTransaction(state, side, move, events) {
     helperId,
     lethal: defender.hp <= 0,
     miss: false,
+    appliedStatuses,
   };
 }
 
@@ -618,9 +673,26 @@ export function previewIncomingAfterSwitch(state, defenderSide, index, attackerM
     events = [];
   if (!snapshot.sides[defenderSide]?.team[index] || index === snapshot.sides[defenderSide].active)
     return null;
-  resolveSwitch(snapshot, defenderSide, { type: 'switch', index }, events, false);
+  resolveSwitch(snapshot, defenderSide, { type: 'switch', index }, events);
   const forecast = previewMove(snapshot, attackerSide, attackerMoveId);
   return forecast ? { ...forecast, perfectRelay: forecast.affinity === 0.5 } : null;
+}
+
+export function previewAllySwitch(state, side, allyIndex, moveId = 'immaculate_relay') {
+  const owner = state.sides[side],
+    candidate = owner?.team?.[allyIndex],
+    foe = state.sides[otherSide(side)] ? activeOf(state, otherSide(side)) : null,
+    relay = MOVES[moveId]?.allySwitch;
+  if (!candidate || candidate.hp <= 0 || allyIndex === owner.active) return null;
+  return {
+    allyIndex,
+    creatureId: candidate.id,
+    removedPenalties: NEGATIVE_STATUSES.filter((id) => hasStatus(candidate, id)).length,
+    focused: relay?.statuses?.some((status) => status.id === 'focused') || false,
+    outgoingAffinity: foe ? affinityMultiplier(candidate.affinity, foe.affinity) : 1,
+    incomingAffinity: foe ? affinityMultiplier(foe.affinity, candidate.affinity) : 1,
+    protectedIncomingDamage: 0,
+  };
 }
 
 export function previewMoveOrder(state, side, moveId, otherMoveId) {
@@ -633,25 +705,41 @@ export function previewMoveOrder(state, side, moveId, otherMoveId) {
   return speed === otherSpeed ? 'tie' : speed > otherSpeed ? 'first' : 'second';
 }
 
-function executeMove(state, side, moveId, events) {
+function executeMove(state, side, action, events) {
   const targetSide = otherSide(side),
     attacker = activeOf(state, side),
     defender = activeOf(state, targetSide),
-    move = MOVES[moveId];
+    move = MOVES[action.moveId],
+    barrierBefore = defender.barrier;
   if (attacker.hp <= 0) {
     push(events, 'move-skip', { side, reason: 'ko' });
     return;
   }
-  push(events, 'move-start', { side, creatureId: attacker.id, moveId });
+  push(events, 'move-start', {
+    side,
+    creatureId: attacker.id,
+    moveId: move.id,
+    ...(move.allySwitch ? { allyIndex: action.allyIndex } : {}),
+  });
   if (move.signature) adjustSurge(state, side, -signatureCostFor(attacker), events, 'signature');
-  let totalHpDamage = 0;
+  if (move.allySwitch)
+    state.queuedRelays[side] = {
+      allyIndex: action.allyIndex,
+      sourceCreatureId: attacker.id,
+      moveId: move.id,
+      config: move.allySwitch,
+    };
+  let totalHpDamage = 0,
+    appliedPenalties = 0;
   if (move.kind === 'damage') {
     const transaction = resolveDamageTransaction(state, side, move, events);
     totalHpDamage = transaction.damage;
+    appliedPenalties = transaction.appliedStatuses;
     if (!transaction.miss) {
       if (totalHpDamage && consume(defender.statuses, 'countering')) {
+        let reflected = 0;
         if (attacker.hp > 0) {
-          const reflected = Math.max(1, Math.round(totalHpDamage * 0.25));
+          reflected = Math.max(1, Math.round(totalHpDamage * 0.25));
           attacker.hp = Math.max(0, attacker.hp - reflected);
           push(events, 'recoil', {
             side,
@@ -663,6 +751,17 @@ function executeMove(state, side, moveId, events) {
           });
         }
         emitStatus(events, targetSide, defender, 'countering', false);
+        if (
+          reflected > 0 &&
+          defender.hp > 0 &&
+          attacker.hp > 0 &&
+          defender.passive === 'burning_code' &&
+          defender.talent.burningCodeTurn !== state.turn
+        ) {
+          defender.talent.burningCodeTurn = state.turn;
+          passiveEvent(events, targetSide, defender);
+          applyStatuses(attacker, [{ id: 'burning', duration: 2 }], state, side, events, defender.id);
+        }
       }
       if (totalHpDamage && defender.passive === 'bramblehide' && attacker.hp > 0) {
         const reflected = Math.max(1, Math.round(totalHpDamage * 0.06));
@@ -693,10 +792,25 @@ function executeMove(state, side, moveId, events) {
     healCreature(attacker, attacker.maxHp * move.healRatio, side, events);
   if (move.kind !== 'damage' && defender.hp > 0)
     applyStatuses(defender, move.targetStatuses, state, targetSide, events, attacker.id);
+  let healedAllies = 0;
   if (move.teamHealRatio) {
     const boost = attacker.passive === 'spring_tide' ? 1.25 : attacker.passive === 'photosynthesis' ? 1.3 : 1;
     for (const ally of state.sides[side].team)
-      if (ally.hp > 0) healCreature(ally, ally.maxHp * move.teamHealRatio * boost, side, events, 'team');
+      if (ally.hp > 0 && healCreature(ally, ally.maxHp * move.teamHealRatio * boost, side, events, 'team'))
+        healedAllies += 1;
+  }
+  if (attacker.passive === 'shared_breath' && healedAllies >= 2) {
+    const candidate = state.sides[side].team
+      .map((creature, index) => ({ creature, index }))
+      .filter(({ creature }) => creature.hp > 0)
+      .sort(
+        (a, b) =>
+          a.creature.hp / a.creature.maxHp - b.creature.hp / b.creature.maxHp || a.index - b.index
+      )[0]?.creature;
+    if (candidate) {
+      passiveEvent(events, side, attacker);
+      addBarrier(candidate, 4, side, events);
+    }
   }
   if (move.teamBarrier)
     for (const ally of state.sides[side].team)
@@ -715,14 +829,29 @@ function executeMove(state, side, moveId, events) {
       source: 'recoil',
     });
   }
-  if (move.cleanse) removeAndEmit(attacker, 'negative', move.cleanse, side, events);
+  if (
+    attacker.passive === 'heartwood_wedge' &&
+    barrierBefore > 0 &&
+    attacker.talent.heartwoodWedgeTurn !== state.turn
+  ) {
+    attacker.talent.heartwoodWedgeTurn = state.turn;
+    const broken = breakBarrier(defender, 6, targetSide, events, 'passive');
+    if (broken) passiveEvent(events, side, attacker);
+  }
+  purgeMoveTargets(state, targetSide, move, events);
+  let removedPenalties = 0;
+  if (move.cleanse)
+    removedPenalties += removeAndEmit(attacker, 'negative', move.cleanse, side, events).length;
   if (move.teamCleanse)
     for (const ally of state.sides[side].team)
-      if (ally.hp > 0) removeAndEmit(ally, 'negative', move.teamCleanse, side, events);
-  if (move.purge) removeAndEmit(defender, 'positive', move.purge, targetSide, events);
+      if (ally.hp > 0)
+        removedPenalties += removeAndEmit(ally, 'negative', move.teamCleanse, side, events).length;
   for (const id of move.consume || [])
     if (consume(attacker.statuses, id)) emitStatus(events, side, attacker, id, false, { consumed: true });
   applyStatuses(attacker, move.selfStatuses, state, side, events);
+  if (move.teamStatuses)
+    for (const ally of state.sides[side].team)
+      if (ally.hp > 0) applyStatuses(ally, move.teamStatuses, state, side, events, attacker.id);
   addBarrier(attacker, move.barrier, side, events);
   if (move.kind === 'damage' && attacker.passive === 'razor_engine') {
     applyStatuses(attacker, [{ id: 'haste', duration: 2 }], state, side, events);
@@ -736,6 +865,14 @@ function executeMove(state, side, moveId, events) {
       move.kind
     );
   if ((move.hits || 1) > 1 && attacker.passive === 'encore') adjustSurge(state, side, 8, events, 'passive');
+  if (appliedPenalties && attacker.passive === 'baleful_omen') {
+    passiveEvent(events, side, attacker);
+    adjustSurge(state, side, 8, events, 'passive');
+  }
+  if (removedPenalties && attacker.passive === 'benevolent_omen') {
+    passiveEvent(events, side, attacker);
+    adjustSurge(state, side, 8, events, 'passive');
+  }
   if (totalHpDamage) {
     adjustSurge(state, targetSide, totalHpDamage * SURGE_GAINS.directHpRatio, events, 'resolve');
   }
@@ -745,6 +882,38 @@ function executeMove(state, side, moveId, events) {
     [side, attacker],
   ])
     recordKnockout(state, checkSide, creature, events);
+}
+
+function resolveQueuedRelays(state, events) {
+  for (const side of ['player', 'enemy']) {
+    const relay = state.queuedRelays?.[side];
+    if (!relay) continue;
+    delete state.queuedRelays[side];
+    const owner = state.sides[side],
+      candidate = owner.team[relay.allyIndex];
+    if (!candidate || candidate.hp <= 0 || relay.allyIndex === owner.active) continue;
+    resolveSwitch(
+      state,
+      side,
+      { type: 'switch', index: relay.allyIndex },
+      events,
+      { source: 'signature', rewards: false, triggerEntry: false }
+    );
+    const removed = removeAndEmit(
+      candidate,
+      'negative',
+      relay.config.cleanse || 'all',
+      side,
+      events
+    );
+    applyStatuses(candidate, relay.config.statuses, state, side, events, relay.sourceCreatureId);
+    const sourceCreature = owner.team.find((creature) => creature.id === relay.sourceCreatureId);
+    if (removed.length && sourceCreature?.passive === 'benevolent_omen') {
+      passiveEvent(events, side, sourceCreature);
+      adjustSurge(state, side, 8, events, 'passive');
+    }
+    enterTalent(state, side, events);
+  }
 }
 
 function endBattleIfNeeded(state, events) {
@@ -888,9 +1057,10 @@ export function resolveTurn(inputState, playerAction, enemyAction) {
     }
   }
   for (const side of moveSides) {
-    executeMove(state, side, actions[side].moveId, events);
+    executeMove(state, side, actions[side], events);
     if (endBattleIfNeeded(state, events)) break;
   }
+  if (state.phase !== 'ended') resolveQueuedRelays(state, events);
   if (state.phase !== 'ended') {
     tickEnd(state, events);
     if (!endBattleIfNeeded(state, events)) {
@@ -916,7 +1086,7 @@ export function applyReplacement(inputState, side, action) {
   if (!isLegalAction(inputState, side, action)) throw new Error('Illegal replacement');
   const state = clone(inputState),
     events = [];
-  resolveSwitch(state, side, action, events, true);
+  resolveSwitch(state, side, action, events, { replacement: true, rewards: false });
   if (!state.sides.player.pendingReplacement && !state.sides.enemy.pendingReplacement) state.phase = 'choice';
   events.forEach((event) => (event.turn ??= state.turn));
   state.history.push(...events);

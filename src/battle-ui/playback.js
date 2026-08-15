@@ -24,6 +24,7 @@ const {
   comboCreditFx,
   perfectRelayFx,
   relayRushFx,
+  immaculateRelayFx,
   trainerCommandFx,
   signatureReadyFx,
   aceFx,
@@ -65,7 +66,7 @@ function eventPresentationDelay(event) {
   if (event.type === 'perfect-relay') return 620 / ctx.save.battleSpeed;
   if (event.type === 'ace') return 1050 / ctx.save.battleSpeed;
   if (event.type === 'ko') return 700 / ctx.save.battleSpeed;
-  if (['heal', 'status', 'barrier', 'barrier-hit', 'miss', 'recoil', 'status-tick'].includes(event.type))
+  if (['heal', 'status', 'barrier', 'barrier-hit', 'barrier-break', 'miss', 'recoil', 'status-tick'].includes(event.type))
     return 460 / ctx.save.battleSpeed;
   return 300 / ctx.save.battleSpeed;
 }
@@ -155,6 +156,15 @@ async function playEvents(events) {
       ctx.arenaScene?.flash('hit', '#73eaff', event.side);
       sound.guard();
     }
+    if (event.type === 'barrier-break') {
+      session.lastLine = t('battle.action.barrierBreak', {
+        actor: creatureName(event.creatureId),
+        amount: event.amount,
+      });
+      fighter?.classList.add('barrier-hit');
+      tacticalFx({ ...event, type: 'barrier' });
+      sound.guard();
+    }
     if (event.type === 'miss') {
       session.lastLine = t('battle.action.miss', { actor: creatureName(event.creatureId) });
       fighter?.classList.add('dodging');
@@ -210,7 +220,11 @@ async function playEvents(events) {
       sound.guard();
     }
     if (event.type === 'switch' || event.type === 'replace') {
-      session.lastLine = t('battle.action.switch', { actor: creatureName(event.creatureId) });
+      session.lastLine =
+        event.source === 'signature'
+          ? t('battle.immaculateRelay', { actor: creatureName(event.creatureId) })
+          : t('battle.action.switch', { actor: creatureName(event.creatureId) });
+      if (event.source === 'signature') immaculateRelayFx(event);
       sound.ui();
     }
     if (event.type === 'ko') {

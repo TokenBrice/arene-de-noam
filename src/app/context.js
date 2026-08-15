@@ -1,5 +1,6 @@
 import { AFFINITIES, AFFINITY_ORDER, AFFINITY_TRIANGLES, affinityMultiplier } from '../data/affinities.js';
 import { CREATURES, CREATURE_IDS } from '../data/creatures.js';
+import { CLASSES, CLASS_IDS, CLASS_ORDER, classIcon } from '../data/classes.js';
 import { MOVES } from '../data/moves.js';
 import { PASSIVES } from '../data/passives.js';
 import {
@@ -34,6 +35,7 @@ import {
   previewMove,
   previewMoveOrder,
   previewIncomingAfterSwitch,
+  previewAllySwitch,
 } from '../battle/engine.js';
 import { chooseAiAction } from '../battle/ai.js';
 import { normalizeSeed, randomIndex } from '../battle/rng.js';
@@ -72,6 +74,7 @@ const LOG_EVENT_TYPES = new Set([
   'status',
   'barrier',
   'barrier-hit',
+  'barrier-break',
   'miss',
   'recoil',
   'status-tick',
@@ -94,6 +97,7 @@ const LOG_TYPE_GROUPS = {
   status: 'effect',
   barrier: 'defense',
   'barrier-hit': 'defense',
+  'barrier-break': 'defense',
   miss: 'dodge',
   'arena-pulse': 'arena',
   ace: 'ace',
@@ -126,6 +130,7 @@ const sprite = (id) => `./assets/monsters/${id}/battle.png`;
 const creatureName = (id) => t(`creature.${id}`);
 const affinity = (id) => AFFINITIES[CREATURES[id].affinity];
 const affinityName = (id) => t(AFFINITIES[id].nameKey);
+const className = (id) => t(`class.${id}`);
 const actionButton = (label, action, cls = 'subtle-btn', extra = '') =>
   `<button type="button" class="${cls}" data-action="${action}" ${extra}>${label}</button>`;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -235,6 +240,11 @@ Object.assign(ctx, {
   affinityMultiplier,
   CREATURES,
   CREATURE_IDS,
+  CLASSES,
+  CLASS_IDS,
+  CLASS_ORDER,
+  classIcon,
+  className,
   MOVES,
   PASSIVES,
   FEATS,
@@ -274,6 +284,7 @@ Object.assign(ctx, {
   previewMove,
   previewMoveOrder,
   previewIncomingAfterSwitch,
+  previewAllySwitch,
   chooseAiAction,
   normalizeSeed,
   randomIndex,

@@ -353,7 +353,7 @@
   z-index: 7;
   top: 7px;
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto auto;
+  grid-template-columns: minmax(210px, 1fr) auto;
   align-items: center;
   gap: 10px;
   margin: 0 0 16px;
@@ -393,11 +393,27 @@
   display: flex;
   gap: 4px;
 }
+.bestiary-tools .bestiary-filter-row {
+  grid-column: 1 / -1;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.bestiary-tools .bestiary-filter-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.bestiary-filter-row > b {
+  margin-right: 3px;
+  color: #8f91a8;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
 .bestiary-tools button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 29px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 5px 7px;
   border: 1px solid #ffffff15;
   border-radius: 9px;
@@ -409,6 +425,15 @@
 .bestiary-tools button .affinity-icon {
   width: 16px;
   height: 16px;
+}
+.bestiary-tools button .class-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--class-color);
+}
+.bestiary-tools [data-bestiary-class].active {
+  border-color: var(--class-color, #aab0ba);
+  background: color-mix(in srgb, var(--class-color, #aab0ba) 20%, #171933);
 }
 .bestiary-tools button.active {
   border-color: var(--filter-color, #71e9f5);

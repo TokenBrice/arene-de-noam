@@ -12,13 +12,24 @@ test('visible tutorial teaches types, Combo, Signature, and switch, then complet
   await page.goto('/?seed=4242&animations=0');
   await page.getByRole('button', { name: /Jouer/ }).click();
   await expect(page.getByText(/Combat craint Psy/)).toBeVisible();
+  await page.evaluate(() => {
+    const stage = document.getElementById('fx-stage');
+    window.__fxLog = [];
+    new MutationObserver(() =>
+      window.__fxLog.push({ cls: stage.className, color: stage.style.getPropertyValue('--fx-color') })
+    ).observe(stage, { attributes: true });
+  });
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('#hud-enemy')).toContainText('Marqué');
   const markedToken = page.locator('#hud-enemy .plate-status[data-status="marked"]');
   await expect(markedToken).toHaveClass(/negative/);
   await expect(markedToken.locator('.status-icon-target-lock')).toHaveCount(1);
   await expect(markedToken).toHaveCSS('--status-color', '#AD1457');
-  await expect(page.locator('.tactical-marked')).toHaveCSS('--fx-color', '#AD1457');
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__fxLog.find((entry) => entry.cls.includes('tactical-marked'))?.color)
+    )
+    .toBe('#AD1457');
   await expect(page.getByText(/Kordane est Marqué/)).toBeVisible();
   await page.locator('[data-move="slowing_riddle"]').click();
   await expect(page.locator('#hud-enemy')).not.toContainText('Marqué');
@@ -278,12 +289,57 @@ test('roster cards scout favorable targets and threats in the revealed rival tri
   await installCompletedTutorial(page);
   await page.goto('/?enemy=kordane,calderoc,virelia');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('.scout-read')).toHaveCount(24);
+  await expect(page.locator('.scout-read')).toHaveCount(30);
   await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText(
     '1 cible(s) favorable(s)'
   );
   await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 menace(s)');
   await expect(page.locator('.creature-card.scout-strong')).not.toHaveCount(0);
+});
+
+test('Eclipse of Grace purges the rival team after its aimed transaction', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto(
+    '/?seed=814201&animations=0&player=deuilastre,orakyn,kordane&enemy=aubeastre,virelia,pactigon&enemyMove=kindred_halo'
+  );
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.locator('#quick-rule').selectOption('starstorm');
+  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await expect(page.locator('[data-move="eclipse_of_grace"]')).toBeEnabled();
+  await page.locator('[data-move="eclipse_of_grace"]').click();
+  await expect(page.locator('[data-action="battle-log"]')).toBeEnabled();
+  await page.locator('[data-action="battle-log"]').click();
+  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText(
+    'Éclipse des grâces'
+  );
+  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText(/barrière/i);
+});
+
+test('Immaculate Relay reuses the selector and switches only after the aimed attack', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto(
+    '/?seed=814202&animations=0&player=aubeastre,deuilastre,pactigon&enemy=orakyn,kordane,virelia&enemyMove=lucid_arc'
+  );
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.locator('#quick-rule').selectOption('starstorm');
+  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  const relay = page.locator('[data-move="immaculate_relay"]');
+  await relay.click();
+  await expect(page.getByRole('heading', { name: 'Choisis l’allié protégé' })).toBeVisible();
+  await expect(page.locator('.signature-relay [data-switch-index]')).toHaveCount(2);
+  await expect(page.locator('.signature-relay .switch-incoming')).toHaveText([
+    /Aucun impact entrant.*purifié.*Concentré/,
+    /Aucun impact entrant.*purifié.*Concentré/,
+  ]);
+  await page.getByRole('button', { name: 'Annuler' }).click();
+  await expect(relay).toBeFocused();
+  await relay.click();
+  await page.locator('.signature-relay [data-switch-index="1"]').click();
+  await expect(page.locator('#fighter-player')).toHaveAttribute('data-creature', 'deuilastre');
+  await page.locator('[data-action="battle-log"]').click();
+  const log = page.getByRole('dialog', { name: 'Chronique du combat' });
+  await expect(log).toContainText('Arc lucide');
+  await expect(log).toContainText(/Deuilastre entre purifié et Concentré/);
 });
 
 test('ladder rivals telegraph and trigger their unique ace phase', async ({ page }) => {

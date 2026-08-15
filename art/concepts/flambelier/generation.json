@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/flambelier.json",
+  "source": null,
+  "seed": 814203,
+  "job_id": "1d5c6256-5152-441d-bd23-9a536ddf7b1b",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "flambelier-candidate-1.png",
+    "flambelier-candidate-2.png",
+    "flambelier-candidate-3.png",
+    "flambelier-candidate-4.png"
+  ]
+}

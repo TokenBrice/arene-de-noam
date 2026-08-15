@@ -1,6 +1,6 @@
 # Arène de Noam
 
-**Arène de Noam** (*Noam's Arena* in English) is a local, deterministic 3v3 creature-battle game for the browser. It includes 24 creatures, 72 authored moves, six animated arenas, French and English, progression, and mouse, touch, keyboard, and gamepad controls.
+**Arène de Noam** (*Noam's Arena* in English) is a local, deterministic 3v3 creature-battle game for the browser. It includes 30 creatures, 90 authored moves, six readable classes, six animated arenas, French and English, progression, and mouse, touch, keyboard, and gamepad controls.
 
 There is no account, backend, analytics, build step, runtime generation, or network API dependency. Three.js is vendored locally; Playwright is development-only.
 
@@ -41,7 +41,7 @@ If another ally applied the setup, a short cut-in credits that helper. The credi
 - **Gauntlet** — three battles with persistent wounds, recovery, and boon choices.
 - **Daily Draft** — make three picks, choose a lead, and face the daily rival.
 - **Mythic Trials** — six authored challenge encounters.
-- **Bestiary & Move Theater** — records, talents, lore, mastery progress, and all 72 move previews.
+- **Bestiary & Move Theater** — records, talents, lore, mastery progress, class filters, and all 90 move previews.
 - **Arena Academy** — the eight essentials, both type triangles, and the eight-effect reference.
 
 Team selection and Draft show type coverage, team roles, and cross-creature Combo routes. Mastery ranks are collection progress only and never change combat stats.
@@ -66,7 +66,8 @@ New battles count `records.combos`. Existing `records.assists` and the `team_ass
 
 ## Architecture
 
-- `src/data/moves.js` — the 72 authored move definitions.
+- `src/data/moves.js` — the 90 authored move definitions.
+- `src/data/classes.js` — the six descriptive class identities and SVG icons.
 - `src/data/combos.js` — the shared Combo rule and team route discovery.
 - `src/battle/` — deterministic engine, damage, statuses, seeded RNG, previews, and AI.
 - `src/battle-ui/` — HUD, controller, event playback, and battle effects.

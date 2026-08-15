@@ -26,6 +26,12 @@ export const PASSIVES = Object.freeze({
   night_terror: { icon: '★' },
   apex_stalker: { icon: '⌃' },
   ill_omen: { icon: '☿' },
+  baleful_omen: { icon: '◒' },
+  benevolent_omen: { icon: '◓' },
+  burning_code: { icon: '⟐' },
+  perfect_ebb: { icon: '≍' },
+  heartwood_wedge: { icon: '⋈' },
+  shared_breath: { icon: '⬡' },
 });
 
 export const PASSIVE_IDS = Object.freeze(Object.keys(PASSIVES));

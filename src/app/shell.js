@@ -3,6 +3,8 @@ import { ctx, registerRoutes, route } from './context.js';
 const {
   AFFINITIES,
   AFFINITY_ORDER,
+  CLASSES,
+  CLASS_ORDER,
   CREATURES,
   CREATURE_IDS,
   CURRENT_FEAT_IDS,
@@ -16,6 +18,8 @@ const {
   affinity,
   affinityName,
   affinityIcon,
+  classIcon,
+  className,
   persist,
 } = ctx;
 const {
@@ -118,26 +122,29 @@ function installBestiaryFilters() {
   cards.forEach((card, index) => {
     card.dataset.creature = CREATURE_IDS[index];
     card.dataset.affinity = CREATURES[CREATURE_IDS[index]].affinity;
+    card.dataset.class = CREATURES[CREATURE_IDS[index]].classId;
   });
   screen
     .querySelector('.bestiary-grid')
     ?.insertAdjacentHTML(
       'beforebegin',
-      `<section class="bestiary-tools"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><div><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">24</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><b data-bestiary-count>24 / 24</b></section>`
+      `<section class="bestiary-tools"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><div class="bestiary-filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><div class="bestiary-filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><button type="button" class="active" data-bestiary-class="all" aria-pressed="true">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button type="button" data-bestiary-class="${id}" aria-pressed="false" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div><b data-bestiary-count>${CREATURE_IDS.length} / ${CREATURE_IDS.length}</b></section>`
     );
   const input = screen.querySelector('[data-bestiary-search]'),
     count = screen.querySelector('[data-bestiary-count]');
-  let active = 'all';
+  let activeAffinity = 'all',
+    activeClass = 'all';
   const apply = () => {
     const query = input.value.trim().toLocaleLowerCase(i18n.lang),
       visible = cards.filter((card) => {
         const show =
-          (active === 'all' || card.dataset.affinity === active) &&
+          (activeAffinity === 'all' || card.dataset.affinity === activeAffinity) &&
+          (activeClass === 'all' || card.dataset.class === activeClass) &&
           creatureName(card.dataset.creature).toLocaleLowerCase(i18n.lang).includes(query);
         card.hidden = !show;
         return show;
       });
-    count.textContent = `${visible.length} / 24`;
+    count.textContent = `${visible.length} / ${CREATURE_IDS.length}`;
     if (query && visible.length === 1) {
       const card = visible[0],
         summary = card.querySelector('.bestiary-summary'),
@@ -152,8 +159,18 @@ function installBestiaryFilters() {
   input.addEventListener('input', apply);
   screen.querySelectorAll('[data-bestiary-affinity]').forEach((button) =>
     button.addEventListener('click', () => {
-      active = button.dataset.bestiaryAffinity;
+      activeAffinity = button.dataset.bestiaryAffinity;
       screen.querySelectorAll('[data-bestiary-affinity]').forEach((item) => {
+        item.classList.toggle('active', item === button);
+        item.setAttribute('aria-pressed', String(item === button));
+      });
+      apply();
+    })
+  );
+  screen.querySelectorAll('[data-bestiary-class]').forEach((button) =>
+    button.addEventListener('click', () => {
+      activeClass = button.dataset.bestiaryClass;
+      screen.querySelectorAll('[data-bestiary-class]').forEach((item) => {
         item.classList.toggle('active', item === button);
         item.setAttribute('aria-pressed', String(item === button));
       });

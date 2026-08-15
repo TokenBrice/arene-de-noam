@@ -2,6 +2,7 @@ import { ctx, registerRoutes, route } from '../app/context.js';
 
 const {
   AFFINITIES,
+  CLASSES,
   CREATURES,
   MOVES,
   FEATS,
@@ -20,6 +21,8 @@ const {
   LADDER_COUNT,
   sprite,
   creatureName,
+  classIcon,
+  className,
   affinity,
   actionButton,
   persist,
@@ -306,7 +309,7 @@ function renderResults(win) {
     .map((entry) => {
       const creature = CREATURES[entry.id],
         color = AFFINITIES[creature.affinity].color;
-      return `<article style="--report-color:${color}"><img src="${sprite(entry.id)}" alt=""><span><b>${creatureName(entry.id)}</b><small>${t(`role.${creature.role}`)}</small></span><dl><div><dt>${t('result.dealt')}</dt><dd>${entry.damage}</dd></div><div><dt>${t('result.actions')}</dt><dd>${entry.actions}</dd></div><div><dt>${t('result.combos')}</dt><dd>${entry.combos}</dd></div><div><dt>${t('result.kos')}</dt><dd>${entry.kos}</dd></div></dl></article>`;
+      return `<article style="--report-color:${color}"><img src="${sprite(entry.id)}" alt=""><span><b>${creatureName(entry.id)}</b><small class="class-chip" style="--class-color:${CLASSES[creature.classId].color}">${classIcon(creature.classId)} ${className(creature.classId)}</small></span><dl><div><dt>${t('result.dealt')}</dt><dd>${entry.damage}</dd></div><div><dt>${t('result.actions')}</dt><dd>${entry.actions}</dd></div><div><dt>${t('result.combos')}</dt><dd>${entry.combos}</dd></div><div><dt>${t('result.kos')}</dt><dd>${entry.kos}</dd></div></dl></article>`;
     })
     .join('')}</div></section>`;
   const celebration = win

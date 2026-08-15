@@ -11,6 +11,8 @@ import {
   performanceGrade,
 } from '../src/data/progression.js';
 import { MOVES } from '../src/data/moves.js';
+import { CREATURE_IDS, CREATURES } from '../src/data/creatures.js';
+import { CLASS_ORDER } from '../src/data/classes.js';
 import { STATUS_DEFINITIONS } from '../src/battle/statuses.js';
 
 function storage(initial = null) {
@@ -85,7 +87,7 @@ test('the eight kid-clear status labels are complete and dead ids are absent', (
     }
   }
 });
-test('all seventy-two move effects are short, localized, and free of removed systems', () => {
+test('all ninety move effects are short, localized, and free of removed systems', () => {
   const removed = /\b(doctrine|flow|resonance|contract|bond|detonat|assist)\b/i;
   for (const dictionary of Object.values(DICTIONARIES))
     for (const id of Object.keys(MOVES)) {
@@ -96,6 +98,22 @@ test('all seventy-two move effects are short, localized, and free of removed sys
       assert.ok(effect.trim().split(/\s+/).length <= 12, `${id}: ${effect}`);
       assert.equal(removed.test(effect), false, `${id}: ${effect}`);
     }
+});
+test('thirty creatures and six classes are complete with no legacy role keys', () => {
+  assert.equal(CREATURE_IDS.length, 30);
+  for (const dictionary of Object.values(DICTIONARIES)) {
+    assert.equal(Object.keys(dictionary).some((key) => key.startsWith('role.')), false);
+    for (const classId of CLASS_ORDER) {
+      assert.ok(dictionary[`class.${classId}`]);
+      assert.ok(dictionary[`class.effect.${classId}`]);
+    }
+    for (const id of CREATURE_IDS) {
+      assert.ok(dictionary[`creature.${id}`]);
+      assert.ok(dictionary[`passive.${CREATURES[id].passive}`]);
+      assert.ok(dictionary[`passive.effect.${CREATURES[id].passive}`]);
+      assert.ok(dictionary[`lore.${id}`]);
+    }
+  }
 });
 test('save round-trips with validated ranges', () => {
   const memory = storage();
@@ -110,6 +128,34 @@ test('save round-trips with validated ranges', () => {
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
   assert.equal(loadSave(memory).save.version, 15);
   assert.equal('affinity' in loadSave(memory).save, false);
+});
+test('historical v15 saves stay valid and accept all six new creature ids', () => {
+  const historical = validateSave({
+    ...DEFAULT_SAVE,
+    version: 15,
+    lastTeam: ['orakyn', 'abyssar', 'virelia'],
+    mastery: { orakyn: 12, unknown: 90 },
+    records: { orakyn: { battles: 4, wins: 3 }, unknown: { battles: 99 } },
+  });
+  assert.equal(historical.version, 15);
+  assert.equal(historical.mastery.orakyn, 12);
+  assert.equal(historical.mastery.unknown, undefined);
+  assert.equal(historical.records.unknown, undefined);
+  const expanded = validateSave({
+    ...historical,
+    lastTeam: ['deuilastre', 'aubeastre', 'pactigon'],
+    mastery: { ...historical.mastery, flambelier: 7, mareclat: 4 },
+    records: {
+      ...historical.records,
+      xylocorne: { battles: 2, wins: 1 },
+      pactigon: { battles: 1, wins: 1 },
+    },
+  });
+  assert.deepEqual(expanded.lastTeam, ['deuilastre', 'aubeastre', 'pactigon']);
+  assert.equal(expanded.mastery.flambelier, 7);
+  assert.equal(expanded.mastery.mareclat, 4);
+  assert.equal(expanded.records.xylocorne.battles, 2);
+  assert.equal(expanded.records.pactigon.wins, 1);
 });
 test('v14 personal squad slots migrate to legal teams and leads only', () => {
   const save = validateSave({

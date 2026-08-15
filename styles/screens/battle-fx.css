@@ -1432,3 +1432,233 @@ body.reduced-motion .status-tick-icon {
     transform: rotate(calc(var(--detail) * 60deg + 120deg)) translateX(70px) scale(1.15);
   }
 }
+
+/* Wave 2: each move owns a silhouette and timing cue, while retaining the
+   shared affinity particles and impact grammar. */
+.move-dire_pinion .fx-projectile {
+  clip-path: polygon(0 45%, 68% 0, 52% 38%, 100% 50%, 52% 62%, 68% 100%);
+  transform: rotate(-8deg);
+}
+.move-dire_pinion .fx-detail > i {
+  clip-path: polygon(50% 0, 72% 45%, 100% 100%, 50% 76%, 0 100%, 28% 45%);
+  background: var(--fx-color);
+  animation: shadowClone 0.42s ease calc(var(--detail) * 24ms) forwards;
+}
+.move-spectral_knell .fx-projectile b::after {
+  content: '◌';
+  font-size: 48px;
+}
+.move-spectral_knell .fx-detail > i {
+  border-radius: 50%;
+  border-width: 5px 1px;
+  animation: riddleOrbit 0.72s ease calc(var(--detail) * 42ms) forwards;
+}
+.move-eclipse_of_grace .fx-curtain {
+  background: radial-gradient(circle at var(--to-x) var(--to-y), transparent 4%, #08000be8 36%, #000 78%);
+}
+.move-eclipse_of_grace .fx-sky-symbol {
+  transform: scale(1.8) rotate(180deg);
+  filter: drop-shadow(0 0 35px #d23cff);
+}
+.move-eclipse_of_grace .fx-detail > i {
+  clip-path: polygon(50% 0, 66% 38%, 100% 100%, 50% 75%, 0 100%, 34% 38%);
+  background: #120016;
+  animation: shedEcho 0.85s ease calc(var(--detail) * 38ms) forwards;
+}
+.move-dawn_dew .fx-detail > i {
+  width: 13px;
+  height: 22px;
+  border: 0;
+  border-radius: 60% 40% 55% 45%;
+  background: linear-gradient(#fff, var(--fx-color));
+  animation: tidalWall 0.72s ease calc(var(--detail) * 42ms) forwards;
+}
+.move-kindred_halo .fx-detail > i {
+  width: calc(34px + var(--detail) * 12px);
+  height: calc(34px + var(--detail) * 12px);
+  margin: calc(-17px - var(--detail) * 6px);
+  border-radius: 50%;
+  border-style: double;
+  animation: resonancePulse 0.76s ease calc(var(--detail) * 48ms) forwards;
+}
+.move-immaculate_relay .fx-curtain {
+  background: linear-gradient(90deg, transparent, #fff5c633, transparent);
+}
+.move-immaculate_relay .fx-detail > i {
+  width: 44px;
+  height: 88px;
+  margin: -44px -22px;
+  border: 3px solid #fff4b8;
+  border-radius: 50% 50% 10% 10%;
+  animation: veilRise 0.9s ease calc(var(--detail) * 34ms) forwards;
+}
+.move-ember_feint .fx-projectile {
+  clip-path: polygon(0 50%, 32% 10%, 54% 38%, 100% 50%, 54% 62%, 32% 90%);
+}
+.move-ember_feint .fx-detail > i {
+  border-radius: 50% 0 50% 50%;
+  background: var(--fx-color);
+  animation: cinderSalvo 0.46s ease calc(var(--detail) * 20ms) forwards;
+}
+.move-red_horn .fx-projectile {
+  clip-path: polygon(0 64%, 28% 12%, 43% 50%, 100% 50%, 43% 76%);
+  background: linear-gradient(90deg, #3b0900, var(--fx-color), #fff);
+}
+.move-red_horn .fx-detail > i {
+  border-width: 6px 0 0;
+  transform: rotate(calc(-24deg + var(--detail) * 7deg));
+  animation: groundFracture 0.58s ease calc(var(--detail) * 25ms) forwards;
+}
+.move-last_spark_duel .fx-sky-symbol {
+  transform: scale(1.45);
+  filter: drop-shadow(0 0 28px #ffcb7a);
+}
+.move-last_spark_duel .fx-detail > i {
+  clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%);
+  background: linear-gradient(#fff, var(--fx-color));
+  animation: eruptionPillar 0.78s ease calc(var(--detail) * 29ms) forwards;
+}
+.move-foam_foil .fx-projectile {
+  width: 150px;
+  height: 8px;
+  clip-path: polygon(0 35%, 86% 35%, 100% 50%, 86% 65%, 0 65%);
+  background: linear-gradient(90deg, transparent, #fff);
+}
+.move-foam_foil .fx-detail > i {
+  width: 30px;
+  height: 9px;
+  border-radius: 50%;
+  animation: whirlpoolFlight 0.4s ease calc(var(--detail) * 18ms) forwards;
+}
+.move-ebb_cut .fx-projectile {
+  clip-path: polygon(0 44%, 75% 18%, 100% 50%, 75% 82%, 0 56%, 56% 50%);
+}
+.move-ebb_cut .fx-detail > i {
+  border-radius: 50%;
+  border-width: 2px 5px 0 0;
+  animation: undertowSpin 0.64s ease calc(var(--detail) * 32ms) forwards;
+}
+.move-mirror_tide .fx-curtain {
+  background: linear-gradient(120deg, #69eaff1c 48%, #fff8 50%, #69eaff1c 52%);
+}
+.move-mirror_tide .fx-detail > i {
+  width: 62px;
+  height: 92px;
+  margin: -46px -31px;
+  border-radius: 50%;
+  border-left-color: #fff;
+  animation: tidalWall 0.82s ease calc(var(--detail) * 35ms) forwards;
+}
+.move-heartwood_breach .fx-projectile {
+  clip-path: polygon(0 30%, 68% 30%, 68% 0, 100% 50%, 68% 100%, 68% 70%, 0 70%);
+  background: linear-gradient(90deg, #4a2710, var(--fx-color), #f2d18a);
+}
+.move-heartwood_breach .fx-detail > i {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: #dba65d;
+  animation: bracerShard 0.6s ease calc(var(--detail) * 24ms) forwards;
+}
+.move-resin_vise .fx-projectile {
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd477, #765314 52%, transparent 55%);
+}
+.move-resin_vise .fx-detail > i {
+  width: calc(26px + var(--detail) * 9px);
+  height: calc(26px + var(--detail) * 9px);
+  margin: calc(-13px - var(--detail) * 4.5px);
+  border-radius: 45% 55% 35% 65%;
+  animation: seedBloom 0.7s ease calc(var(--detail) * 45ms) forwards;
+}
+.move-falling_rings .fx-sky-symbol {
+  transform: scale(1.7) rotate(90deg);
+}
+.move-falling_rings .fx-detail > i {
+  width: calc(40px + var(--detail) * 14px);
+  height: calc(18px + var(--detail) * 5px);
+  margin: calc(-9px - var(--detail) * 2.5px) calc(-20px - var(--detail) * 7px);
+  border-radius: 50%;
+  border-width: 5px;
+  animation: groundFracture 0.9s ease calc(var(--detail) * 38ms) forwards;
+}
+.move-pulse_punch .fx-projectile {
+  clip-path: polygon(0 20%, 62% 20%, 62% 0, 100% 50%, 62% 100%, 62% 80%, 0 80%);
+}
+.move-pulse_punch .fx-detail > i {
+  border-radius: 50%;
+  border-width: 4px;
+  animation: resonancePulse 0.48s ease calc(var(--detail) * 24ms) forwards;
+}
+.move-linked_guard .fx-detail > i {
+  width: calc(46px + var(--detail) * 8px);
+  height: calc(40px + var(--detail) * 7px);
+  margin: calc(-20px - var(--detail) * 3.5px) calc(-23px - var(--detail) * 4px);
+  clip-path: polygon(50% 0, 96% 20%, 86% 75%, 50% 100%, 14% 75%, 4% 20%);
+  animation: shellLayer 0.7s ease calc(var(--detail) * 46ms) forwards;
+}
+.move-unbroken_circle .fx-curtain {
+  background: radial-gradient(circle at var(--from-x) var(--from-y), #fff3b53d, transparent 52%);
+}
+.move-unbroken_circle .fx-detail > i {
+  width: calc(48px + var(--detail) * 16px);
+  height: calc(48px + var(--detail) * 16px);
+  margin: calc(-24px - var(--detail) * 8px);
+  border: 6px double var(--fx-color);
+  border-radius: 50%;
+  animation: resonancePulse 0.95s ease calc(var(--detail) * 52ms) forwards;
+}
+
+.immaculate-relay-fx .immaculate-gate {
+  position: absolute;
+  left: var(--from-x, 50%);
+  top: var(--from-y, 50%);
+  width: 120px;
+  height: 190px;
+  translate: -50% -50%;
+  border: 7px double #fff6bd;
+  border-radius: 60% 60% 14% 14%;
+  box-shadow: 0 0 50px var(--fx-color), inset 0 0 34px #fff8;
+  animation: veilRise 0.8s ease both;
+}
+.immaculate-feathers i {
+  position: absolute;
+  left: calc(var(--from-x, 50%) + (var(--feather) - 3) * 15px);
+  top: var(--from-y, 50%);
+  width: 12px;
+  height: 38px;
+  border-radius: 80% 10% 80% 10%;
+  background: #fff9d8;
+  animation: petalFan 0.8s ease calc(var(--feather) * 35ms) both;
+}
+.immaculate-call {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  translate: -50% -50%;
+  color: #fff;
+  text-shadow: 0 0 15px var(--fx-color);
+}
+.immaculate-call img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .immaculate-relay-fx *,
+  .move-immaculate_relay * {
+    animation: fxReduced 0.2s ease both !important;
+  }
+}
+body.reduced-motion .immaculate-relay-fx *,
+body.reduced-motion .move-immaculate_relay * {
+  animation: fxReduced 0.2s ease both !important;
+}
+body.high-contrast .immaculate-gate,
+body.high-contrast .move-eclipse_of_grace .fx-detail > i {
+  border-color: currentColor;
+  outline: 2px solid currentColor;
+}

@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/xylocorne.json",
+  "source": null,
+  "seed": 814205,
+  "job_id": "b1bc7f98-966d-43e7-b6cc-17ba61a4e3ab",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "xylocorne-candidate-1.png",
+    "xylocorne-candidate-2.png",
+    "xylocorne-candidate-3.png",
+    "xylocorne-candidate-4.png"
+  ]
+}

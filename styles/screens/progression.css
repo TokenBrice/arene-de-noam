@@ -1,4 +1,4 @@
-/* Expansion UI: a 24-creature roster, collectible relic-like badges, and
+/* Expansion UI: a 30-creature roster, collectible relic-like badges, and
    battlefield-readable states. */
 .selection-layout {
   grid-template-columns: minmax(0, 1fr) 350px;
@@ -13,19 +13,22 @@
   width: 112px;
   height: 112px;
 }
-.affinity-tabs {
+.affinity-tabs,
+.class-tabs {
   display: flex;
   gap: 8px;
   overflow: auto;
   padding: 4px 2px 14px;
   scrollbar-width: thin;
 }
-.affinity-tab {
+.affinity-tab,
+.class-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 7px 13px;
@@ -37,11 +40,39 @@
   width: 18px;
   height: 18px;
 }
+.class-tab .class-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--class-color);
+}
 .affinity-tab.active {
   color: #fff;
   border-color: var(--tab-color, var(--cyan));
   background: color-mix(in srgb, var(--tab-color, var(--cyan)) 22%, #11142f);
   box-shadow: 0 0 20px color-mix(in srgb, var(--tab-color, var(--cyan)) 30%, transparent);
+}
+.class-tab.active {
+  color: #fff;
+  border-color: var(--class-color);
+  background: color-mix(in srgb, var(--class-color) 24%, #11142f);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--class-color) 26%, transparent);
+}
+.selection-filters {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.filter-row {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+.filter-row > b {
+  padding-top: 14px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
 }
 .enemy-picker {
   grid-template-columns: repeat(8, 1fr);

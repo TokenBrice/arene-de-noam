@@ -3,6 +3,10 @@ import { ctx, registerRoutes, route } from '../app/context.js';
 const {
   AFFINITIES,
   AFFINITY_TRIANGLES,
+  CLASSES,
+  CLASS_ORDER,
+  CREATURE_IDS,
+  MOVES,
   STATUS_DEFINITIONS,
   STATUS_DISPLAY_ORDER,
   statusIcon,
@@ -11,6 +15,8 @@ const {
   affinity,
   affinityName,
   affinityIcon,
+  classIcon,
+  className,
   actionButton,
   disposeArena,
   topbar,
@@ -50,6 +56,10 @@ function renderAcademy() {
     return `<section class="academy-status-group ${polarity}" aria-labelledby="${groupId}"><h3 id="${groupId}">${positive ? '▲' : '▼'} ${label}</h3><div class="academy-status-grid academy-status-grid-all">${statuses}</div></section>`;
   };
   const statuses = `<div class="academy-status-lexicon">${statusGroupHtml(true)}${statusGroupHtml(false)}</div>`;
+  const classCards = CLASS_ORDER.map(
+    (id) =>
+      `<article class="academy-class" style="--class-color:${CLASSES[id].color}"><i>${classIcon(id)}</i><span><b>${className(id)}</b><small>${t(`class.effect.${id}`)}</small></span></article>`
+  ).join('');
   const icons = ['♥', '↺', '△', '3', '»', '✦', '☿', '◎'],
     core = Array.from({ length: 8 }, (_, index) => {
       const number = index + 1,
@@ -61,7 +71,7 @@ function renderAcademy() {
               : '';
       return `<article class="academy-core academy-core-${number}"><header><i>${icons[index]}</i><span><small>${number}/8</small><h2>${t(`academy.core.${number}.title`)}</h2></span></header><p>${t(`academy.core.${number}.desc`)}</p>${extra}</article>`;
     }).join('');
-  screen.innerHTML = `<div class="shell academy-page">${topbar()}<div class="page-head academy-head"><div><span class="eyebrow">24 · 72 · 3v3</span><h1>${t('academy.title')}</h1><p>${t('academy.subtitle')}</p></div>${actionButton(t('academy.openBestiary'), 'academy-bestiary', 'primary-btn')}</div><section class="academy-section academy-essentials"><div class="academy-section-title"><span class="eyebrow">✦ ${t('academy.essentials')}</span></div><div class="academy-core-grid">${core}</div></section><section class="academy-section academy-deeper"><h2>${t('academy.affinities')} · ${t('academy.statuses')}</h2><p>${t('academy.surge')}</p><p>${t('academy.command')}</p></section><div class="academy-footer">${actionButton(t('academy.openBestiary'), 'academy-bestiary', 'primary-btn')}</div></div>`;
+  screen.innerHTML = `<div class="shell academy-page">${topbar()}<div class="page-head academy-head"><div><span class="eyebrow">${CREATURE_IDS.length} · ${Object.keys(MOVES).length} · 3v3</span><h1>${t('academy.title')}</h1><p>${t('academy.subtitle')}</p></div>${actionButton(t('academy.openBestiary'), 'academy-bestiary', 'primary-btn')}</div><section class="academy-section academy-essentials"><div class="academy-section-title"><span class="eyebrow">✦ ${t('academy.essentials')}</span></div><div class="academy-core-grid">${core}</div></section><section class="academy-section academy-classes"><h2>${t('academy.classes')}</h2><div class="academy-class-grid">${classCards}</div></section><section class="academy-section academy-deeper"><h2>${t('academy.affinities')} · ${t('academy.statuses')}</h2><p>${t('academy.surge')}</p><p>${t('academy.command')}</p></section><div class="academy-footer">${actionButton(t('academy.openBestiary'), 'academy-bestiary', 'primary-btn')}</div></div>`;
   bindCommon();
   screen
     .querySelectorAll('[data-action="academy-bestiary"]')

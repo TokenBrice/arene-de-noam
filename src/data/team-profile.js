@@ -1,4 +1,4 @@
-import { CREATURES } from './creatures.js';
+import { CREATURES, CREATURE_IDS } from './creatures.js';
 import { MOVES } from './moves.js';
 import { affinityMultiplier } from './affinities.js';
 import { teamComboRoutes } from './combos.js';
@@ -23,7 +23,10 @@ export function teamProfile(ids = []) {
       targetStatuses.filter((id) => id === 'stunned' || id === 'rooted').length * 15 +
       (targetStatuses.includes('marked') ? 8 : 0) +
       (move.combo ? 5 : 0) +
-      (move.purge ? 9 : 0);
+      (move.purge ? 9 : 0) +
+      (move.purgeTeam ? 18 : 0) +
+      (move.purgeBarrier ? 12 : 0) +
+      (move.owner === 'xylocorne' ? 4 : 0);
     raw.pressure +=
       (targetStatuses.includes('burning') ? 12 : 0) +
       (targetStatuses.includes('marked') ? 6 : 0) +
@@ -34,13 +37,15 @@ export function teamProfile(ids = []) {
       (move.healRatio || 0) * 130 +
       (move.teamHealRatio || 0) * 330 +
       (move.cleanse ? 10 : 0) +
-      (move.teamCleanse ? 18 : 0) +
+      (move.teamCleanse === 'all' ? 28 : move.teamCleanse ? 18 : 0) +
+      (move.allySwitch ? 18 : 0) +
       (move.drain || 0) * 24;
     raw.tempo +=
       Math.max(0, move.priority || 0) * 7 +
       (move.selfStatuses?.some((status) => status.id === 'haste') ? 10 : 0) +
       (move.selfStatuses?.some((status) => status.id === 'evasive') ? 7 : 0) +
-      (move.hits > 1 ? 4 : 0);
+      (move.hits > 1 ? 4 : 0) +
+      (move.allySwitch ? 22 : 0);
   }
   const scales = { pressure: 255, control: 135, sustain: 190, tempo: 145 },
     scores = Object.fromEntries(
@@ -67,7 +72,7 @@ export function bestLeadIndex(ids = [], enemyIds = []) {
 }
 
 export function remixTeam(enemyIds = [], seed = 1) {
-  const ids = Object.keys(CREATURES);
+  const ids = CREATURE_IDS;
   let rngState = normalizeSeed(seed),
     best = null;
   for (let a = 0; a < ids.length - 2; a++)
@@ -75,6 +80,7 @@ export function remixTeam(enemyIds = [], seed = 1) {
       for (let c = b + 1; c < ids.length; c++) {
         const team = [ids[a], ids[b], ids[c]],
           affinities = new Set(team.map((id) => CREATURES[id].affinity)),
+          classes = new Set(team.map((id) => CREATURES[id].classId)),
           matchup = team.reduce(
             (total, id) =>
               total +
@@ -91,6 +97,7 @@ export function remixTeam(enemyIds = [], seed = 1) {
         rngState = roll.state;
         const score =
           affinities.size * 9 +
+          classes.size * 2 +
           Math.min(4, teamComboRoutes(team).length) * 5 +
           matchup * 2 +
           roll.value * REMIX_DITHER_MAX;

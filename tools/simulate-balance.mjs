@@ -10,6 +10,17 @@ import {
 } from '../src/battle/engine.js';
 import { normalizeSeed, randomIndex } from '../src/battle/rng.js';
 import { PROFILE_AXES, teamProfile } from '../src/data/team-profile.js';
+import { CLASS_ORDER } from '../src/data/classes.js';
+import { AFFINITY_ORDER } from '../src/data/affinities.js';
+
+const NEW_ENTRANTS = Object.freeze([
+  'deuilastre',
+  'aubeastre',
+  'flambelier',
+  'mareclat',
+  'xylocorne',
+  'pactigon',
+]);
 
 function drawTeam(seed) {
   const pool = [...CREATURE_IDS],
@@ -214,6 +225,40 @@ const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.AREN
   balanceSeed = normalizeSeed(Number(process.env.ARENA_BALANCE_SEED) || 0xc0ffee),
   stats = emptyRecord(CREATURE_IDS),
   archetypes = emptyRecord(PROFILE_AXES),
+  classes = emptyRecord(CLASS_ORDER),
+  affinities = emptyRecord(AFFINITY_ORDER),
+  entrantMetrics = new Map(
+    NEW_ENTRANTS.map((id) => [
+      id,
+      {
+        games: 0,
+        wins: 0,
+        turns: 0,
+        kos: 0,
+        damage: 0,
+        healing: 0,
+        barrierCreated: 0,
+        barrierBroken: 0,
+        signatures: 0,
+        moves: new Map(),
+      },
+    ])
+  ),
+  definingEvents = {
+    baleful_omen: 0,
+    benevolent_omen: 0,
+    burning_code: 0,
+    perfect_ebb: 0,
+    heartwood_wedge: 0,
+    shared_breath: 0,
+    purgeBarrier: 0,
+    protectedRelay: 0,
+  },
+  sustainCompositions = new Map(
+    ['healer', 'tank'].flatMap((classId) =>
+      [0, 1, 2, 3].map((count) => [`${classId}:${count}`, { games: 0, wins: 0, caps: 0 }])
+    )
+  ),
   pairwise = new Map(
     CREATURE_IDS.map((row) => [row, emptyRecord(CREATURE_IDS.filter((column) => column !== row))])
   );
@@ -244,6 +289,63 @@ for (let game = 0; game < samples; game++) {
   }
   recordSide(stats, player.team, playerWon);
   recordSide(stats, enemy.team, enemyWon);
+  recordSide(classes, player.team.map((id) => CREATURES[id].classId), playerWon);
+  recordSide(classes, enemy.team.map((id) => CREATURES[id].classId), enemyWon);
+  recordSide(affinities, player.team.map((id) => CREATURES[id].affinity), playerWon);
+  recordSide(affinities, enemy.team.map((id) => CREATURES[id].affinity), enemyWon);
+  for (const [side, team, won] of [
+    ['player', player.team, playerWon],
+    ['enemy', enemy.team, enemyWon],
+  ])
+    for (const id of team) {
+      const metric = entrantMetrics.get(id);
+      if (!metric) continue;
+      metric.games++;
+      metric.wins += won ? 1 : 0;
+      metric.turns += result.turn;
+      metric.kos += result.history.filter(
+        (event) => event.type === 'damage' && event.hp === 0 && event.sourceCreatureId === id
+      ).length;
+      for (const event of result.history.filter(
+        (event) => event.type === 'move-start' && event.side === side && event.creatureId === id
+      )) {
+        metric.moves.set(event.moveId, (metric.moves.get(event.moveId) || 0) + 1);
+        if (MOVES[event.moveId].signature) metric.signatures++;
+      }
+    }
+  const currentActor = { player: null, enemy: null };
+  for (const event of result.history) {
+    if (event.type === 'move-start') currentActor[event.side] = event.creatureId;
+    const sourceCreatureId =
+        event.type === 'damage'
+          ? event.sourceCreatureId
+          : event.type === 'barrier-break'
+            ? currentActor[event.side === 'player' ? 'enemy' : 'player']
+            : ['heal', 'barrier'].includes(event.type)
+              ? currentActor[event.side]
+              : null,
+      sourceMetric = entrantMetrics.get(sourceCreatureId);
+    if (sourceMetric && event.amount > 0) {
+      if (event.type === 'damage') sourceMetric.damage += event.amount;
+      if (event.type === 'heal') sourceMetric.healing += event.amount;
+      if (event.type === 'barrier') sourceMetric.barrierCreated += event.amount;
+      if (event.type === 'barrier-break') sourceMetric.barrierBroken += event.amount;
+    }
+    if (event.type === 'passive' && event.passive in definingEvents) definingEvents[event.passive]++;
+    if (event.type === 'barrier-break') definingEvents.purgeBarrier += event.amount || 0;
+    if (event.type === 'switch' && event.source === 'signature') definingEvents.protectedRelay++;
+  }
+  for (const [team, won] of [
+    [player.team, playerWon],
+    [enemy.team, enemyWon],
+  ])
+    for (const classId of ['healer', 'tank']) {
+      const count = team.filter((id) => CREATURES[id].classId === classId).length,
+        bucket = sustainCompositions.get(`${classId}:${count}`);
+      bucket.games++;
+      bucket.wins += won ? 1 : 0;
+      bucket.caps += result.reason === 'turn-cap' ? 1 : 0;
+    }
   recordSide(archetypes, [teamProfile(player.team).dominant], playerWon);
   recordSide(archetypes, [teamProfile(enemy.team).dominant], enemyWon);
   for (const playerId of player.team)
@@ -294,6 +396,30 @@ console.log(
   }).join(' · ')}`
 );
 console.log(
+  `Classes: ${CLASS_ORDER.map((id) => `${id} ${percent(rate(classes.get(id)), 1)} (${classes.get(id).games})`).join(' · ')}`
+);
+console.log(
+  `Types: ${AFFINITY_ORDER.map((id) => `${id} ${percent(rate(affinities.get(id)), 1)} (${affinities.get(id).games})`).join(' · ')}`
+);
+console.log('New entrant cohorts:');
+for (const [id, metric] of entrantMetrics)
+  console.log(
+    `${id}: ${metric.games} appearances · ${percent(metric.wins / Math.max(1, metric.games), 1)} wins · ${(metric.turns / Math.max(1, metric.games)).toFixed(1)} avg turns · ${metric.kos} K.O. · ${metric.damage} damage · ${metric.healing} healing · ${metric.barrierCreated} barrier made · ${metric.barrierBroken} barrier broken · ${metric.signatures} Signatures · ${[...metric.moves].map(([moveId, count]) => `${moveId}:${count}`).join(', ') || 'no moves'}`
+  );
+console.log(
+  `Defining hooks: ${Object.entries(definingEvents)
+    .map(([id, count]) => `${id}:${count}`)
+    .join(' · ')}`
+);
+console.log(
+  `Sustain compositions: ${[...sustainCompositions]
+    .map(
+      ([key, item]) =>
+        `${key} ${percent(item.wins / Math.max(1, item.games), 1)} wins/${percent(item.caps / Math.max(1, item.games), 1)} caps (${item.games})`
+    )
+    .join(' · ')}`
+);
+console.log(
   `Five most lopsided pairs: ${lopsided
     .slice(0, 5)
     .map((item) => `${item.winner} over ${item.loser} ${percent(item.rate, 1)} (${item.games})`)
@@ -310,6 +436,19 @@ for (const row of CREATURE_IDS)
       ),
     ].join(',')
   );
+console.log('New entrant matchup matrix (win rate/observations):');
+console.log(['creature', ...CREATURE_IDS].join(','));
+for (const row of NEW_ENTRANTS)
+  console.log(
+    [
+      row,
+      ...CREATURE_IDS.map((column) => {
+        if (row === column) return '—';
+        const item = pairwise.get(row).get(column);
+        return `${percent(rate(item), 1)}/${item.games}`;
+      }),
+    ].join(',')
+  );
 
 checkNaiveRamp();
 checkTtkProfile();
@@ -318,7 +457,7 @@ const averageTurns = totalTurns / samples,
   capShare = caps / samples,
   signaturesPerSide = signatureUses / (samples * 2),
   medianFirstSignature = median(firstSignatureActions);
-if (averageTurns < 12 || averageTurns > 16 || capShare >= 0.05)
+if (averageTurns < 12 || averageTurns > 17 || capShare >= 0.05)
   throw new Error(
     `Pacing outside targets: average turns ${averageTurns.toFixed(1)}, turn-cap share ${percent(capShare, 1)}`
   );

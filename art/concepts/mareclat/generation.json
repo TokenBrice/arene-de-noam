@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/mareclat.json",
+  "source": null,
+  "seed": 814204,
+  "job_id": "3f7a24c1-fa7a-4c49-ad07-44a03e8dc987",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "mareclat-candidate-1.png",
+    "mareclat-candidate-2.png",
+    "mareclat-candidate-3.png",
+    "mareclat-candidate-4.png"
+  ]
+}

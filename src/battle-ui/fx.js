@@ -234,6 +234,20 @@ function relayRushFx(event) {
   sound.ui();
 }
 
+function immaculateRelayFx(event) {
+  const stage = screen.querySelector('#fx-stage'),
+    creature = CREATURES[event.creatureId];
+  if (!stage || !creature) return;
+  const color = AFFINITIES[creature.affinity].color;
+  stage.className = `fx-stage active immaculate-relay-fx from-${event.side}`;
+  stage.style.setProperty('--fx-color', color);
+  stage.innerHTML = `<div class="immaculate-gate"></div><div class="immaculate-feathers">${Array.from({ length: 7 }, (_, index) => `<i style="--feather:${index}"></i>`).join('')}</div><div class="immaculate-call"><img src="${sprite(event.creatureId)}" alt=""><span><small>${t('move.immaculate_relay')}</small><b>${creatureName(event.creatureId)}</b></span></div>`;
+  screen.classList.add('immaculate-relay-mode', `relay-${event.side}`);
+  ctx.arenaScene?.flash('power', color, event.side);
+  ctx.arenaScene?.burst(color, event.side, 1.4);
+  sound.guard();
+}
+
 function trainerCommandFx(event) {
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId],
@@ -387,6 +401,7 @@ function clearBattleFx() {
     'combo-credit-mode',
     'perfect-relay-mode',
     'relay-rush-mode',
+    'immaculate-relay-mode',
     'relay-player',
     'relay-enemy',
     'command-mode',
@@ -410,6 +425,7 @@ registerRoutes({
   comboCreditFx,
   perfectRelayFx,
   relayRushFx,
+  immaculateRelayFx,
   trainerCommandFx,
   signatureReadyFx,
   aceFx,

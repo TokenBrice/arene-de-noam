@@ -1,11 +1,11 @@
-// The roster is deliberately built around 24 different combat fantasies. Stats are
+// The roster is deliberately built around 30 different combat fantasies. Stats are
 // intentionally asymmetric; a creature's move kit, not a shared basic attack, is
 // the main expression of its identity.
 export const CREATURES = {
   orakyn: {
     id: 'orakyn',
     affinity: 'mind',
-    role: 'controller',
+    classId: 'controller',
     passive: 'foresight',
     maxHp: 90,
     attack: 92,
@@ -16,7 +16,7 @@ export const CREATURES = {
   lumivox: {
     id: 'lumivox',
     affinity: 'mind',
-    role: 'maestro',
+    classId: 'breaker',
     passive: 'encore',
     maxHp: 86,
     attack: 99,
@@ -27,7 +27,7 @@ export const CREATURES = {
   mnemora: {
     id: 'mnemora',
     affinity: 'mind',
-    role: 'mystic',
+    classId: 'controller',
     passive: 'memory_silk',
     maxHp: 98,
     attack: 84,
@@ -38,7 +38,7 @@ export const CREATURES = {
   prismage: {
     id: 'prismage',
     affinity: 'mind',
-    role: 'breaker',
+    classId: 'breaker',
     passive: 'prism_skin',
     maxHp: 84,
     attack: 108,
@@ -50,7 +50,7 @@ export const CREATURES = {
   kordane: {
     id: 'kordane',
     affinity: 'force',
-    role: 'duelist',
+    classId: 'duelist',
     passive: 'duel_oath',
     maxHp: 100,
     attack: 105,
@@ -61,7 +61,7 @@ export const CREATURES = {
   brontusk: {
     id: 'brontusk',
     affinity: 'force',
-    role: 'vanguard',
+    classId: 'tank',
     passive: 'last_bastion',
     maxHp: 114,
     attack: 96,
@@ -72,7 +72,7 @@ export const CREATURES = {
   ferrax: {
     id: 'ferrax',
     affinity: 'force',
-    role: 'assassin',
+    classId: 'assassin',
     passive: 'razor_engine',
     maxHp: 82,
     attack: 104,
@@ -83,7 +83,7 @@ export const CREATURES = {
   monolith: {
     id: 'monolith',
     affinity: 'force',
-    role: 'sentinel',
+    classId: 'tank',
     passive: 'foundation',
     maxHp: 122,
     attack: 82,
@@ -95,7 +95,7 @@ export const CREATURES = {
   abyssar: {
     id: 'abyssar',
     affinity: 'tide',
-    role: 'tank',
+    classId: 'tank',
     passive: 'deep_pressure',
     maxHp: 125,
     attack: 76,
@@ -106,7 +106,7 @@ export const CREATURES = {
   riptalon: {
     id: 'riptalon',
     affinity: 'tide',
-    role: 'assassin',
+    classId: 'assassin',
     passive: 'blood_in_water',
     maxHp: 88,
     attack: 103,
@@ -117,7 +117,7 @@ export const CREATURES = {
   nymbloom: {
     id: 'nymbloom',
     affinity: 'tide',
-    role: 'healer',
+    classId: 'healer',
     passive: 'spring_tide',
     maxHp: 108,
     attack: 72,
@@ -128,7 +128,7 @@ export const CREATURES = {
   voltide: {
     id: 'voltide',
     affinity: 'tide',
-    role: 'disruptor',
+    classId: 'controller',
     passive: 'conductor',
     maxHp: 92,
     attack: 108,
@@ -140,7 +140,7 @@ export const CREATURES = {
   calderoc: {
     id: 'calderoc',
     affinity: 'flame',
-    role: 'artillery',
+    classId: 'breaker',
     passive: 'living_furnace',
     maxHp: 95,
     attack: 120,
@@ -151,7 +151,7 @@ export const CREATURES = {
   pyrolynx: {
     id: 'pyrolynx',
     affinity: 'flame',
-    role: 'assassin',
+    classId: 'assassin',
     passive: 'nine_lives',
     maxHp: 80,
     attack: 112,
@@ -162,7 +162,7 @@ export const CREATURES = {
   magmoth: {
     id: 'magmoth',
     affinity: 'flame',
-    role: 'vanguard',
+    classId: 'tank',
     passive: 'ember_cocoon',
     maxHp: 108,
     attack: 84,
@@ -173,7 +173,7 @@ export const CREATURES = {
   solflare: {
     id: 'solflare',
     affinity: 'flame',
-    role: 'berserker',
+    classId: 'breaker',
     passive: 'sunborn',
     maxHp: 91,
     attack: 125,
@@ -185,7 +185,7 @@ export const CREATURES = {
   virelia: {
     id: 'virelia',
     affinity: 'grove',
-    role: 'support',
+    classId: 'healer',
     passive: 'photosynthesis',
     maxHp: 105,
     attack: 76,
@@ -196,7 +196,7 @@ export const CREATURES = {
   mossaur: {
     id: 'mossaur',
     affinity: 'grove',
-    role: 'tank',
+    classId: 'tank',
     passive: 'ancient_roots',
     maxHp: 134,
     attack: 78,
@@ -207,7 +207,7 @@ export const CREATURES = {
   florafae: {
     id: 'florafae',
     affinity: 'grove',
-    role: 'mystic',
+    classId: 'healer',
     passive: 'dream_dust',
     maxHp: 102,
     attack: 91,
@@ -218,7 +218,7 @@ export const CREATURES = {
   thornox: {
     id: 'thornox',
     affinity: 'grove',
-    role: 'controller',
+    classId: 'controller',
     passive: 'bramblehide',
     maxHp: 101,
     attack: 94,
@@ -230,7 +230,7 @@ export const CREATURES = {
   farfombre: {
     id: 'farfombre',
     affinity: 'shadow',
-    role: 'trickster',
+    classId: 'assassin',
     passive: 'living_shadow',
     maxHp: 81,
     attack: 86,
@@ -241,7 +241,7 @@ export const CREATURES = {
   nocturnyx: {
     id: 'nocturnyx',
     affinity: 'shadow',
-    role: 'controller',
+    classId: 'controller',
     passive: 'night_terror',
     maxHp: 94,
     attack: 83,
@@ -252,7 +252,7 @@ export const CREATURES = {
   umbrawl: {
     id: 'umbrawl',
     affinity: 'shadow',
-    role: 'assassin',
+    classId: 'assassin',
     passive: 'apex_stalker',
     maxHp: 87,
     attack: 118,
@@ -263,13 +263,80 @@ export const CREATURES = {
   hexalune: {
     id: 'hexalune',
     affinity: 'shadow',
-    role: 'mystic',
+    classId: 'controller',
     passive: 'ill_omen',
     maxHp: 103,
     attack: 90,
     guard: 86,
     speed: 80,
     moves: ['hex_bolt', 'fate_exchange', 'moonless_omen'],
+  },
+
+  deuilastre: {
+    id: 'deuilastre',
+    affinity: 'shadow',
+    classId: 'assassin',
+    passive: 'baleful_omen',
+    maxHp: 79,
+    attack: 124,
+    guard: 64,
+    speed: 122,
+    moves: ['dire_pinion', 'spectral_knell', 'eclipse_of_grace'],
+  },
+  aubeastre: {
+    id: 'aubeastre',
+    affinity: 'mind',
+    classId: 'healer',
+    passive: 'benevolent_omen',
+    maxHp: 79,
+    attack: 73,
+    guard: 64,
+    speed: 122,
+    moves: ['dawn_dew', 'kindred_halo', 'immaculate_relay'],
+  },
+  flambelier: {
+    id: 'flambelier',
+    affinity: 'flame',
+    classId: 'duelist',
+    passive: 'burning_code',
+    maxHp: 103,
+    attack: 102,
+    guard: 88,
+    speed: 91,
+    moves: ['ember_feint', 'red_horn', 'last_spark_duel'],
+  },
+  mareclat: {
+    id: 'mareclat',
+    affinity: 'tide',
+    classId: 'duelist',
+    passive: 'perfect_ebb',
+    maxHp: 99,
+    attack: 100,
+    guard: 84,
+    speed: 107,
+    moves: ['foam_foil', 'ebb_cut', 'mirror_tide'],
+  },
+  xylocorne: {
+    id: 'xylocorne',
+    affinity: 'grove',
+    classId: 'breaker',
+    passive: 'heartwood_wedge',
+    maxHp: 97,
+    attack: 117,
+    guard: 78,
+    speed: 66,
+    moves: ['heartwood_breach', 'resin_vise', 'falling_rings'],
+  },
+  pactigon: {
+    id: 'pactigon',
+    affinity: 'force',
+    classId: 'healer',
+    passive: 'shared_breath',
+    maxHp: 111,
+    attack: 79,
+    guard: 96,
+    speed: 69,
+    moves: ['pulse_punch', 'linked_guard', 'unbroken_circle'],
   },
 };
 

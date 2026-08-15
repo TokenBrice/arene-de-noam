@@ -55,11 +55,11 @@ test('all six arena themes render without runtime errors', async ({ page }) => {
   await expectNoRuntimeLeaks(runtime);
 });
 
-test('expanded roster filters all 24 creatures and exposes authored kits', async ({ page }) => {
+test('expanded roster filters all 30 creatures by type and class', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('[data-creature]')).toHaveCount(24);
+  await expect(page.locator('[data-creature]')).toHaveCount(30);
   await expect(page.locator('[data-squad]')).toHaveCount(8);
   await expect(page.locator('.profile-bars > span')).toHaveCount(4);
   await expect(page.locator('.selected-row.recommended-lead')).toHaveCount(1);
@@ -67,12 +67,21 @@ test('expanded roster filters all 24 creatures and exposes authored kits', async
   await page.locator('[data-squad="storm_circuit"]').click();
   await expect(page.locator('.team-profile')).toContainText('Contrôle');
   await expect(page.locator('[data-doctrine], #contract-select, .team-bonds')).toHaveCount(0);
-  await page.locator('[data-filter="shadow"]').click();
-  await expect(page.locator('[data-creature]')).toHaveCount(4);
+  await expect(page.locator('[data-affinity-filter]')).toHaveCount(7);
+  await expect(page.locator('[data-class-filter]')).toHaveCount(7);
+  await page.locator('[data-affinity-filter="shadow"]').click();
+  await expect(page.locator('[data-creature]')).toHaveCount(5);
+  await page.locator('[data-affinity-filter="flame"]').click();
+  await page.locator('[data-class-filter="duelist"]').click();
+  await expect(page.locator('[data-creature]')).toHaveCount(1);
+  await expect(page.locator('[data-creature="flambelier"]')).toBeVisible();
+  await page.locator('[data-affinity-filter="all"]').click();
+  await expect(page.locator('[data-creature]')).toHaveCount(3);
+  await page.locator('[data-class-filter="all"]').click();
   await page.locator('[data-creature="hexalune"]').click();
   await page.locator('[data-action="title"]').first().click();
   await page.getByRole('button', { name: /Bestiaire/ }).click();
-  await expect(page.locator('.bestiary-card')).toHaveCount(24);
+  await expect(page.locator('.bestiary-card')).toHaveCount(30);
   await expect(page.getByText('Moisson de venin').first()).toBeVisible();
 });
 
@@ -163,6 +172,10 @@ test('the tactical academy leads with eight essentials and every current effect'
     'Psy bat Combat, Combat bat Ténèbres, Ténèbres bat Psy.'
   );
   await expect(page.locator('.academy-core')).toHaveCount(8);
+  await expect(page.locator('.academy-head .eyebrow')).toHaveText('30 · 90 · 3v3');
+  await expect(page.locator('.academy-class')).toHaveCount(6);
+  await expect(page.locator('.academy-class .class-icon')).toHaveCount(6);
+  await expect(page.locator('.academy-class').filter({ hasText: 'Rempart' })).toHaveCount(1);
   await expect(page.locator('.academy-core').first()).toContainText('Ton équipe et les PV');
   await expect(page.locator('.academy-core-3')).toContainText('×2');
   await expect(page.locator('.academy-core-3')).toContainText('×0,5');
@@ -176,7 +189,7 @@ test('the tactical academy leads with eight essentials and every current effect'
   await expect(page.locator('.academy-status-group.positive > h3')).toHaveText('▲ AVANTAGE');
   await expect(page.locator('.academy-status-group.negative > h3')).toHaveText('▼ MALUS');
   await expect(page.locator('.academy-status .status-icon')).toHaveCount(8);
-  await expect(page.locator('.academy-status')).toHaveAttribute('data-icon', /.+/);
+  await expect(page.locator('.academy-status[data-icon]')).toHaveCount(8);
   expect(
     await page.locator('.academy-status').evaluateAll((cards) => cards.map((card) => card.dataset.status))
   ).toEqual(['focused', 'haste', 'evasive', 'countering', 'marked', 'rooted', 'stunned', 'burning']);
@@ -190,7 +203,7 @@ test('the tactical academy leads with eight essentials and every current effect'
     ).size
   ).toBe(8);
   await page
-    .getByRole('button', { name: /Explorer les 72 techniques/ })
+    .getByRole('button', { name: /Explorer les 90 techniques/ })
     .first()
     .click();
   await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeVisible();
@@ -200,14 +213,20 @@ test('Bestiary Move Theater replays all authored techniques accessibly', async (
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
   await page.goto('/');
   await page.getByRole('button', { name: /Bestiaire/ }).click();
-  await expect(page.locator('[data-preview-move]')).toHaveCount(72);
+  await expect(page.locator('[data-preview-move]')).toHaveCount(90);
   await expect(page.locator('[data-bestiary-affinity]')).toHaveCount(7);
+  await expect(page.locator('[data-bestiary-class]')).toHaveCount(7);
   await expect(page.locator('[data-bestiary-affinity="force"]')).toContainText('Combat');
   await expect(page.locator('[data-bestiary-affinity="force"] .affinity-icon')).toHaveCount(1);
   await page.locator('[data-bestiary-affinity="force"]').click();
-  await expect(page.locator('.bestiary-card:not([hidden])')).toHaveCount(4);
-  await expect(page.locator('[data-bestiary-count]')).toHaveText('4 / 24');
+  await expect(page.locator('.bestiary-card:not([hidden])')).toHaveCount(5);
+  await expect(page.locator('[data-bestiary-count]')).toHaveText('5 / 30');
   await page.locator('[data-bestiary-affinity="all"]').click();
+  await page.locator('[data-bestiary-class="breaker"]').click();
+  await expect(page.locator('.bestiary-card:not([hidden])')).toHaveCount(5);
+  await page.locator('[data-bestiary-class="duelist"]').click();
+  await expect(page.locator('.bestiary-card:not([hidden])')).toHaveCount(3);
+  await page.locator('[data-bestiary-class="all"]').click();
   await page.getByLabel('Rechercher une créature').fill('Orakyn');
   await expect(page.locator('.bestiary-card:not([hidden])')).toHaveCount(1);
   await page.getByLabel('Rechercher une créature').fill('');
@@ -241,7 +260,7 @@ test('mythic trials expose six rule-bending encounters and launch with modifiers
   await expect(page.getByText(/Les deux équipes commencent à 100 Éclat/)).toBeVisible();
   await page.getByRole('button', { name: 'Relever l’épreuve' }).first().click();
   await expect(page.getByRole('heading', { name: 'Tempête de Signatures' }).first()).toBeVisible();
-  await expect(page.locator('[data-creature]')).toHaveCount(24);
+  await expect(page.locator('[data-creature]')).toHaveCount(30);
   await expect(page.locator('.enemy-list img')).toHaveCount(3);
   await page.getByRole('button', { name: 'Relever l’épreuve' }).click();
   await expect(page.getByText('Tempête de Signatures')).toBeVisible();

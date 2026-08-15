@@ -1,0 +1,16 @@
+{
+  "brief": "../../briefs/pactigon.json",
+  "source": null,
+  "seed": 814206,
+  "job_id": "10e39b70-3700-4f63-9952-5adaaaf5b134",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "pactigon-candidate-1.png",
+    "pactigon-candidate-2.png",
+    "pactigon-candidate-3.png",
+    "pactigon-candidate-4.png"
+  ]
+}

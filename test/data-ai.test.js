@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { CREATURES, CREATURE_IDS } from '../src/data/creatures.js';
 import { MOVES } from '../src/data/moves.js';
 import { PASSIVES, PASSIVE_IDS } from '../src/data/passives.js';
+import { CLASSES, CLASS_IDS, CLASS_ORDER } from '../src/data/classes.js';
+import { AFFINITY_ORDER } from '../src/data/affinities.js';
 import { TRIALS } from '../src/data/trials.js';
 import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../src/data/gauntlet.js';
 import { SQUAD_PRESETS } from '../src/data/squads.js';
@@ -40,9 +42,9 @@ const SURVIVING_STATUSES = new Set([
   'burning',
 ]);
 
-test('twenty-four creatures each reference exactly three authored owner moves', () => {
-  assert.equal(CREATURE_IDS.length, 24);
-  assert.equal(Object.keys(MOVES).length, 72);
+test('thirty creatures each reference exactly three authored owner moves', () => {
+  assert.equal(CREATURE_IDS.length, 30);
+  assert.equal(Object.keys(MOVES).length, 90);
   for (const id of CREATURE_IDS) {
     assert.equal(CREATURES[id].moves.length, 3);
     assert.equal(new Set(CREATURES[id].moves).size, 3);
@@ -54,10 +56,30 @@ test('twenty-four creatures each reference exactly three authored owner moves', 
 });
 
 test('every creature owns one named innate talent', () => {
-  assert.equal(PASSIVE_IDS.length, 24);
-  assert.equal(new Set(PASSIVE_IDS).size, 24);
-  assert.equal(new Set(CREATURE_IDS.map((id) => CREATURES[id].passive)).size, 24);
+  assert.equal(PASSIVE_IDS.length, 30);
+  assert.equal(new Set(PASSIVE_IDS).size, 30);
+  assert.equal(new Set(CREATURE_IDS.map((id) => CREATURES[id].passive)).size, 30);
   for (const id of CREATURE_IDS) assert.ok(PASSIVES[CREATURES[id].passive]);
+});
+
+test('six classes classify the full roster without legacy roles or singletons', () => {
+  assert.equal(CLASS_ORDER.length, 6);
+  assert.deepEqual(new Set(CLASS_ORDER), new Set(CLASS_IDS));
+  const classCounts = CLASS_ORDER.map(
+    (classId) => CREATURE_IDS.filter((id) => CREATURES[id].classId === classId).length
+  );
+  assert.deepEqual([...classCounts].sort((a, b) => a - b), [3, 5, 5, 5, 6, 6]);
+  assert.ok(classCounts.every((count) => count >= 2));
+  assert.deepEqual(
+    AFFINITY_ORDER.map(
+      (affinity) => CREATURE_IDS.filter((id) => CREATURES[id].affinity === affinity).length
+    ),
+    [5, 5, 5, 5, 5, 5]
+  );
+  for (const creature of Object.values(CREATURES)) {
+    assert.ok(CLASSES[creature.classId]);
+    assert.equal('role' in creature, false);
+  }
 });
 
 test('composition has no mechanical bond data or battle opening effects', () => {
@@ -77,7 +99,7 @@ test('all moves have unique mechanical and visual identities', () => {
   assert.equal(new Set(mechanics).size, mechanics.length, 'no move may be a renamed mechanical clone');
   assert.equal(
     new Set(Object.values(MOVES).map((move) => move.visual)).size,
-    72,
+    90,
     'every move owns a visual choreography id'
   );
 });
@@ -134,13 +156,18 @@ test('every creature owns exactly one mechanically meaningful Signature', () => 
     assert.equal(signatures.length, 1, `${id} needs one Signature`);
     const move = signatures[0];
     assert.ok(
-      move.power > 0 || move.barrier || move.teamBarrier || move.teamHealRatio || move.selfStatuses?.length,
+      move.power > 0 ||
+        move.barrier ||
+        move.teamBarrier ||
+        move.teamHealRatio ||
+        move.selfStatuses?.length ||
+        move.allySwitch,
       `${move.id} needs a decisive effect`
     );
   }
   assert.equal(
     Object.values(MOVES).filter((move) => move.signature && move.kind !== 'damage').length,
-    7,
+    9,
     'ultimates should include defensive and healing fantasies'
   );
 });
@@ -160,6 +187,12 @@ test('twelve trainer teams and their badges are authored and legal', () => {
     assert.equal(trainer.colors.length, 2);
     assert.ok(trainer.badge);
     assert.ok(trainer.ace);
+    if (trainer.circuitTeam) {
+      assert.equal(trainer.circuitTeam.length, 3);
+      assert.equal(new Set(trainer.circuitTeam).size, 3);
+      trainer.circuitTeam.forEach((id) => assert.ok(CREATURES[id]));
+      assert.ok(trainer.circuitTeam[trainer.circuitLead ?? 0]);
+    }
   }
   assert.deepEqual(
     TRAINERS.map((trainer) => trainer.difficulty),
@@ -371,18 +404,21 @@ test('move status data uses exactly the eight-status contract', () => {
   assert.equal(POSITIVE_STATUSES.length, 4);
   assert.equal(NEGATIVE_STATUSES.length, 4);
   for (const move of Object.values(MOVES))
-    for (const field of ['targetStatuses', 'selfStatuses', 'consume'])
+    for (const field of ['targetStatuses', 'selfStatuses', 'teamStatuses', 'consume'])
       for (const entry of move[field] || []) {
         const id = typeof entry === 'string' ? entry : entry.id;
         assert.ok(SURVIVING_STATUSES.has(id), `${move.id}.${field} contains ${id}`);
         if (typeof entry !== 'string' && entry.stacks != null) assert.equal(id, 'burning');
       }
+  for (const move of Object.values(MOVES))
+    for (const entry of move.allySwitch?.statuses || [])
+      assert.ok(SURVIVING_STATUSES.has(entry.id), `${move.id}.allySwitch contains ${entry.id}`);
   assert.equal(STATUS_DEFINITIONS.burning.maxStacks, 2);
   assert.ok(
     Object.entries(STATUS_DEFINITIONS).every(([id, definition]) => id === 'burning' || !definition.stackable)
   );
   const comboMoves = Object.values(MOVES).filter(moveCanCombo);
-  assert.equal(comboMoves.length, 8);
+  assert.equal(comboMoves.length, 9);
   for (const move of Object.values(MOVES)) {
     for (const legacy of ['bonusAgainst', 'bonusMultiplier', 'detonate', 'detonatePower'])
       assert.equal(legacy in move, false, `${move.id} still has ${legacy}`);
@@ -411,6 +447,25 @@ test('every AI difficulty chooses legal actions while mutating only the determin
   assert.deepEqual(state, before);
   assert.notEqual(rngState, 91);
   assert.equal('playerAction' in state, false);
+});
+
+test('Champion AI selects the useful protected-relay target as one complete legal action', () => {
+  const state = createBattle({
+    playerTeam: ['kordane', 'orakyn', 'virelia'],
+    enemyTeam: ['aubeastre', 'deuilastre', 'pactigon'],
+    seed: 12,
+  });
+  state.sides.enemy.surge = 100;
+  state.sides.enemy.team[0].hp = 20;
+  state.sides.enemy.team[1].statuses = {
+    marked: { appliedTurn: 0, remaining: 2 },
+    burning: { appliedTurn: 0, remaining: 2, stacks: 1 },
+  };
+  const before = structuredClone(state),
+    action = chooseAiAction(state, 'enemy', 'champion', 'endurance');
+  assert.deepEqual(action, { type: 'move', moveId: 'immaculate_relay', allyIndex: 1 });
+  assert.ok(getLegalActions(before, 'enemy').some((candidate) => JSON.stringify(candidate) === JSON.stringify(action)));
+  assert.deepEqual({ ...state, rngState: before.rngState }, before);
 });
 
 test('successive tied AI decisions advance RNG and replay identically from the same seed', () => {
@@ -563,7 +618,7 @@ test('Standard and Champion select their second-ranked action at their seeded im
     }
     return [...counts.values()].sort((a, b) => a - b);
   };
-  assert.deepEqual(outcomes('standard'), [284, 716]);
+  assert.deepEqual(outcomes('standard'), [187, 813]);
   assert.deepEqual(outcomes('champion'), [1000]);
 });
 

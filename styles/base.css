@@ -353,6 +353,43 @@ input:focus-visible {
   overflow: visible;
   color: inherit;
 }
+
+.class-icon {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  flex: 0 0 auto;
+  vertical-align: -0.2em;
+}
+.class-chip,
+.affinity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 2px solid var(--class-color, var(--chip-color, currentColor));
+  border-radius: 999px;
+  color: #eef0f7;
+  background: color-mix(in srgb, var(--class-color, var(--chip-color, #8991a1)) 14%, #111426);
+  font-size: var(--text-xs);
+  font-style: normal;
+  line-height: 1;
+}
+.affinity-chip {
+  border-width: 1px;
+}
+.class-chip .class-icon,
+.affinity-chip .affinity-icon {
+  width: 17px;
+  height: 17px;
+  color: var(--class-color, var(--chip-color, currentColor));
+}
+body.high-contrast .class-chip,
+body.high-contrast .class-tab,
+body.high-contrast [data-bestiary-class] {
+  --class-color: currentColor !important;
+}
 .affinity-dot .affinity-icon {
   width: 16px;
   height: 16px;

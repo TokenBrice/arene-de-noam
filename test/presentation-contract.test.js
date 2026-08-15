@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { MOVES } from '../src/data/moves.js';
 import { AFFINITIES, AFFINITY_ORDER } from '../src/data/affinities.js';
 import { STATUS_DEFINITIONS } from '../src/battle/statuses.js';
+import { CLASSES, CLASS_ORDER, classIcon } from '../src/data/classes.js';
 
 test('all six types have unique original SVG geometry and the settled accessible palette', () => {
   const expectedColors = {
@@ -27,7 +28,24 @@ test('all six types have unique original SVG geometry and the settled accessible
   }
 });
 
-test('all seventy-two moves have authored, move-specific animation choreography', async () => {
+test('all six classes have distinct muted SVG identities outside type and status palettes', () => {
+  const colors = CLASS_ORDER.map((id) => CLASSES[id].color.toUpperCase()),
+    paths = CLASS_ORDER.map((id) => CLASSES[id].iconPath),
+    reserved = new Set([
+      ...Object.values(AFFINITIES).map(({ color }) => color.toUpperCase()),
+      ...Object.values(STATUS_DEFINITIONS).map(({ color }) => color.toUpperCase()),
+    ]);
+  assert.equal(new Set(colors).size, 6);
+  assert.equal(new Set(paths).size, 6);
+  for (const id of CLASS_ORDER) {
+    assert.ok(CLASSES[id].iconPath.length > 30);
+    assert.equal(reserved.has(CLASSES[id].color.toUpperCase()), false);
+    assert.match(classIcon(id, { title: id }), /viewBox="0 0 24 24"/);
+    assert.match(classIcon(id, { title: id }), /role="img"/);
+  }
+});
+
+test('all ninety moves have authored, move-specific animation choreography', async () => {
   const root = new URL('../', import.meta.url);
   const index = await readFile(new URL('index.html', root), 'utf8');
   const stylesheets = [...index.matchAll(/href="(\.\/styles\/[^"?]+\.css)(?:\?[^"\s]*)?"/g)].map(
