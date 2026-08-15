@@ -1371,6 +1371,15 @@ body.high-contrast .battle-screen .action-line {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.battle-screen.simple-mode .simple-preview {
+  overflow: hidden;
+  color: #f4d77e;
+  font-size: clamp(11px, 1.1vw, 14px);
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .battle-screen.simple-mode .move-effectiveness.not-effective {
   color: #929bb8;
@@ -1435,6 +1444,9 @@ body.high-contrast .battle-screen .action-line {
 
   .battle-screen.simple-mode .move-effectiveness,
   .battle-screen.simple-mode .simple-signature-state {
+    font-size: 10px;
+  }
+  .battle-screen.simple-mode .simple-preview {
     font-size: 10px;
   }
 

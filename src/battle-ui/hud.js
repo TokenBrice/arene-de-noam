@@ -273,7 +273,11 @@ function moveButton(moveId, index) {
         ? t('battle.signatureReady')
         : t('battle.signatureCost', { cost: cost - state.sides.player.surge })
       : '';
-  const preview = previewMove(state, 'player', moveId);
+  const preview = previewMove(state, 'player', moveId),
+    shortPreview =
+      move.power && preview
+        ? `<span class="simple-preview">${t('battle.previewShort', { damage: preview.damage })}</span>`
+        : '';
   const archetype = moveArchetype(move);
   const dominant = preview?.damage
       ? `<b>⚔ ${preview.damage}</b>`
@@ -303,7 +307,7 @@ function moveButton(moveId, index) {
       : '',
     cooldownState = cd ? `<span class="move-badge simple-cooldown">⌛ ${cd}</span>` : '',
     comboState = preview?.combo ? `<span class="combo-ready move-combo-badge">COMBO +40%</span>` : '';
-  return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${signatureState}${cooldownState}${comboState}</span></button>`;
+  return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${shortPreview}${signatureState}${cooldownState}${comboState}</span></button>`;
 }
 
 function exchangeForecastHtml(moveId, enemyAction) {
