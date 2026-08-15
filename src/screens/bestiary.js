@@ -50,12 +50,49 @@ function moveStatusBadgesHtml(move, className = '') {
     : '';
 }
 
-function closeMoveTheater() {
+let theaterRequest = 0;
+let theaterTrigger = null;
+let bestiaryCompactQuery = null;
+let bestiaryResizeBound = false;
+
+function syncBestiaryDisclosureMode(event = bestiaryCompactQuery) {
+  if (screen.dataset.page !== 'bestiary') return;
+  const compact = event?.matches ?? bestiaryCompactQuery?.matches ?? false;
+  screen.querySelectorAll('.record-hall, .feat-hall-disclosure').forEach((detail) => {
+    detail.open = !compact;
+  });
+}
+
+function installBestiaryDisclosureSync() {
+  if (!bestiaryCompactQuery) {
+    bestiaryCompactQuery = window.matchMedia('(max-width: 600px)');
+    if (bestiaryCompactQuery.addEventListener)
+      bestiaryCompactQuery.addEventListener('change', syncBestiaryDisclosureMode);
+    else {
+      bestiaryCompactQuery.addListener(syncBestiaryDisclosureMode);
+      if (!bestiaryResizeBound) {
+        window.addEventListener('resize', syncBestiaryDisclosureMode);
+        bestiaryResizeBound = true;
+      }
+    }
+  }
+  syncBestiaryDisclosureMode();
+}
+
+function removeMoveTheater() {
   ctx.theaterTimers.forEach(clearTimeout);
   ctx.theaterTimers = [];
   clearBattleFx();
   screen.querySelector('.move-theater')?.remove();
   ctx.currentFxMove = null;
+}
+
+function closeMoveTheater() {
+  theaterRequest += 1;
+  removeMoveTheater();
+  const trigger = theaterTrigger;
+  theaterTrigger = null;
+  if (trigger?.isConnected) trigger.focus();
 }
 
 function runMoveTheater(moveId) {
@@ -99,17 +136,26 @@ function runMoveTheater(moveId) {
   );
 }
 
-async function openMoveTheater(moveId) {
-  closeMoveTheater();
+async function openMoveTheater(moveId, trigger = null) {
+  const req = ++theaterRequest;
+  theaterTrigger =
+    trigger?.isConnected
+      ? trigger
+      : document.activeElement?.matches?.('[data-preview-move]')
+        ? document.activeElement
+        : null;
+  removeMoveTheater();
   await ensureBattleStyles();
-  if (screen.dataset.page !== 'bestiary') return;
-  const move = MOVES[moveId],
-    ownerIndex = CREATURE_IDS.indexOf(move.owner),
+  if (req !== theaterRequest || screen.dataset.page !== 'bestiary') return;
+  const move = MOVES[moveId];
+  if (!move) return;
+  const ownerIndex = CREATURE_IDS.indexOf(move.owner),
     targetId = CREATURE_IDS[(ownerIndex + 7) % CREATURE_IDS.length];
   screen.insertAdjacentHTML(
     'beforeend',
     `<div class="move-theater" role="dialog" aria-modal="true" aria-labelledby="theater-title"><div class="theater-backdrop"></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div><div class="battlefield theater-battlefield"><div class="fighter enemy" id="fighter-enemy"><div class="status-orbits"></div><img src="${sprite(targetId)}" alt="${creatureName(targetId)}"></div><div class="fighter player" id="fighter-player"><div class="status-orbits"></div><img src="${sprite(move.owner)}" alt="${creatureName(move.owner)}"></div></div><div class="theater-head"><span>${t('bestiary.theaterHint')}</span><h2 id="theater-title">${t('bestiary.theater')}</h2><b>${creatureName(move.owner)} · ${t(`move.${moveId}`)}</b><small>${t(`move.effect.${moveId}`)}</small>${moveStatusBadgesHtml(move, 'theater-status-badges')}</div><div class="action-line" id="action-line"></div><div class="theater-actions"><button class="subtle-btn" data-action="replay-theater">↻ ${t('bestiary.replay')}</button><button class="icon-btn" data-action="close-theater" aria-label="${t('app.close')}">✕</button></div></div>`
   );
+  if (req !== theaterRequest) return;
   const overlay = screen.querySelector('.move-theater');
   overlay.querySelector('[data-action="close-theater"]').addEventListener('click', closeMoveTheater);
   overlay
@@ -118,9 +164,9 @@ async function openMoveTheater(moveId) {
   overlay.querySelector('.theater-backdrop').addEventListener('click', closeMoveTheater);
   overlay.querySelector('[data-action="close-theater"]').focus();
   await sound.unlock();
+  if (req !== theaterRequest || screen.dataset.page !== 'bestiary') return;
   runMoveTheater(moveId);
 }
-
 function renderBestiary() {
   disposeArena();
   ctx.battleSession = null;
@@ -148,7 +194,8 @@ function renderBestiary() {
     return `<article class="bestiary-card rank-${mastery.rank}" data-class="${c.classId}" style="--card-affinity:${a.color}"><button type="button" class="bestiary-summary" aria-expanded="false" aria-controls="bestiary-detail-${id}"><span class="bestiary-portrait"><img src="${sprite(id)}" alt=""></span><span class="bestiary-identity"><h2>${creatureName(id)}</h2><span class="meta-row"><span class="affinity-chip" style="--chip-color:${a.color}">${affinityIcon(c.affinity)} ${affinityName(c.affinity)}</span><span class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</span></span><span class="bestiary-key-stats">${t('bestiary.stats', { hp: c.maxHp, attack: c.attack, guard: c.guard, speed: c.speed })}</span><span class="bestiary-signature">✦ ${t(`move.${signatureId}`)}</span></span><span class="bestiary-expand" aria-hidden="true">＋</span></button><div class="bestiary-detail" id="bestiary-detail-${id}" hidden><div class="mastery-mini"><b>${'★'.repeat(mastery.rank)}${'☆'.repeat(5 - mastery.rank)}</b><i><u style="width:${mastery.ratio * 100}%"></u></i></div><div class="class-definition class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} <b>${className(c.classId)}</b><span>${t(`class.effect.${c.classId}`)}</span></div><div class="passive-line"><b>${passive.icon} ${t(`passive.${c.passive}`)}</b><span>${t(`passive.effect.${c.passive}`)}</span></div><p class="lore ${unlocked ? '' : 'locked-lore'}">${unlocked ? t(`lore.${id}`) : `🔒 ${t('bestiary.loreLocked')}`}</p><strong>${t('bestiary.moves')}</strong><div class="move-list">${c.moves.map((moveId) => `<button type="button" data-preview-move="${moveId}" class="theater-trigger ${MOVES[moveId].signature ? 'signature-entry' : ''}" aria-label="${t('bestiary.preview', { move: t(`move.${moveId}`) })}"><strong>${MOVES[moveId].signature ? '✦ ' : ''}${t(`move.${moveId}`)}</strong><span>${t(`move.effect.${moveId}`)}${moveStatusBadgesHtml(MOVES[moveId])}</span></button>`).join('')}</div></div></article>`;
   }).join('');
   const earnedVisible = visibleFeatIds.filter((id) => ctx.save.feats.includes(id)).length;
-  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${CREATURE_IDS.length} / ${CREATURE_IDS.length}</span><h1>${t('bestiary.title')}</h1><p>${t('bestiary.subtitle')}</p></div></div><section class="feat-hall"><div><span class="eyebrow">${earnedVisible}/${visibleFeatIds.length}</span><h2>${t('feat.gallery')}</h2></div><div class="feat-gallery">${featGallery}</div></section><div class="bestiary-grid">${cards}</div></div>`;
+  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${CREATURE_IDS.length} / ${CREATURE_IDS.length}</span><h1>${t('bestiary.title')}</h1><p>${t('bestiary.subtitle')}</p></div></div><details class="record-hall" open><summary><span class="eyebrow">${t('record.hall')}</span><strong>${t('record.hall')}</strong></summary><div class="record-hall-content"></div></details><details class="feat-hall-disclosure" open><summary><span class="eyebrow">${earnedVisible}/${visibleFeatIds.length}</span><strong>${t('feat.gallery')}</strong></summary><section class="feat-hall"><div><span class="eyebrow">${earnedVisible}/${visibleFeatIds.length}</span><h2>${t('feat.gallery')}</h2></div><div class="feat-gallery">${featGallery}</div></section></details><div class="bestiary-grid">${cards}</div></div>`;
+  installBestiaryDisclosureSync();
   bindCommon();
   screen.querySelectorAll('.bestiary-summary').forEach((button) =>
     button.addEventListener('click', () => {

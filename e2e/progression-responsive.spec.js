@@ -339,15 +339,24 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
     const size = await page.evaluate(() => ({ body: document.body.scrollWidth, view: innerWidth }));
     expect(size.body).toBeLessThanOrEqual(size.view);
   }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?seed=4&animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await expect(page.getByRole('button', { name: /Entrer dans/ })).toHaveCount(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?seed=4&animations=0');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await expect(page.getByRole('button', { name: /Entrer dans/ })).toHaveCount(1);
   await expect(page.locator('.mobile-selection-dock')).toBeVisible();
   await expect(page.locator('.mobile-selection-dock img')).toHaveCount(3);
   await page.getByRole('button', { name: /Plan de bataille/ }).click();
-  const planBox = await page.locator('.select-aside').boundingBox();
-  expect(planBox.y).toBeGreaterThanOrEqual(-1);
-  expect(planBox.y).toBeLessThan(844);
+  const planSummary = page.locator('.battle-plan > summary');
+  await expect(planSummary).toBeFocused();
+  await expect
+    .poll(async () => (await planSummary.boundingBox())?.y ?? -1)
+    .toBeGreaterThanOrEqual(0);
+  const summaryBox = await planSummary.boundingBox();
+  expect(summaryBox.y).toBeLessThan(80);
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('.arena-nameplate')).toBeVisible();
   await expect(page.locator('#contract-chip')).toHaveCount(0);

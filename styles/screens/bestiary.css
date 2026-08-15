@@ -154,6 +154,93 @@
 }
 
 /* Compact summaries disclose the dense career dossier only on request. */
+.record-hall,
+.feat-hall-disclosure {
+  display: contents;
+}
+.record-hall > summary,
+.feat-hall-disclosure > summary {
+  display: none;
+}
+.record-hall > .record-hall-content,
+.feat-hall-disclosure > .feat-hall {
+  display: block;
+}
+@media (min-width: 901px) {
+  .bestiary-card.expanded {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 600px) {
+  [data-page='bestiary'] .shell {
+    display: flex;
+    flex-direction: column;
+  }
+  [data-page='bestiary'] .shell > .topbar {
+    order: 0;
+  }
+  [data-page='bestiary'] .shell > .page-head {
+    order: 1;
+  }
+  [data-page='bestiary'] .shell .bestiary-search-row {
+    order: 2;
+  }
+  [data-page='bestiary'] .shell .bestiary-filter-chips {
+    order: 3;
+  }
+  [data-page='bestiary'] .shell > .record-hall {
+    order: 4;
+  }
+  [data-page='bestiary'] .shell > .feat-hall-disclosure {
+    order: 5;
+  }
+  [data-page='bestiary'] .shell > .bestiary-grid {
+    order: 6;
+  }
+  .record-hall,
+  .feat-hall-disclosure {
+    display: block;
+    margin: 0 0 12px;
+  }
+  .record-hall > summary,
+  .feat-hall-disclosure > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #ffffff1b;
+    border-radius: 12px;
+    color: var(--ink);
+    background: #ffffff08;
+    cursor: pointer;
+    list-style: none;
+  }
+  .record-hall > summary::-webkit-details-marker,
+  .feat-hall-disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+  .record-hall > summary::after,
+  .feat-hall-disclosure > summary::after {
+    content: '＋';
+    color: var(--gold);
+    font-size: 18px;
+  }
+  .record-hall[open] > summary::after,
+  .feat-hall-disclosure[open] > summary::after {
+    content: '−';
+  }
+  .record-hall:not([open]) > .record-hall-content,
+  .feat-hall-disclosure:not([open]) > .feat-hall {
+    display: none;
+  }
+  .record-hall[open] > .record-hall-content,
+  .feat-hall-disclosure[open] > .feat-hall {
+    display: block;
+    margin-top: 10px;
+  }
+}
 .bestiary-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
   align-items: start;

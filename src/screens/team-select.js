@@ -281,8 +281,14 @@ function renderTeamSelect(mode = 'ladder') {
       'start-battle',
       'primary-btn wide',
       ctx.selection.team.length === 3 && ctx.selection.enemyTeam.length === 3 ? '' : 'disabled'
+    ),
+    readyPinned = actionButton(
+      readyLabel,
+      'start-battle',
+      'primary-btn',
+      ctx.selection.team.length === 3 && ctx.selection.enemyTeam.length === 3 ? '' : 'disabled'
     );
-  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${selectionEyebrow}</span><h1>${selectionTitle}</h1><p>${selectionSubtitle}</p></div><strong>${t('select.selected', { count: ctx.selection.team.length })}</strong></div>${circuitBanner}${customSquads}${presets}${affinityTabs}${kitShowcaseHtml(ctx.selection.team[ctx.selection.lead])}<div class="selection-layout"><div class="creature-grid">${visibleIds.map((id) => creatureCard(id, ctx.selection.team.includes(id), ctx.selection.team[ctx.selection.lead] === id)).join('')}</div><aside class="glass-panel select-aside">${ranked ? `<div class="trainer-badge">${emblemHtml(ctx.selection.trainerIndex, true)}</div>` : ''}<section class="selection-primary"><h2>${opponentTitle}</h2><div class="enemy-list">${enemyRows}</div>${quickEnemyControls}<h3>${t('select.team')}</h3><div class="selected-list">${selectedRows}</div></section>${planControls}${ready}</aside></div></div>`;
+  screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${selectionEyebrow}</span><h1>${selectionTitle}</h1><p>${selectionSubtitle}</p></div><strong>${t('select.selected', { count: ctx.selection.team.length })}</strong></div>${circuitBanner}${customSquads}${presets}${affinityTabs}${kitShowcaseHtml(ctx.selection.team[ctx.selection.lead])}<div class="selection-layout"><div class="creature-grid">${visibleIds.map((id) => creatureCard(id, ctx.selection.team.includes(id), ctx.selection.team[ctx.selection.lead] === id)).join('')}</div><aside class="glass-panel select-aside">${ranked ? `<div class="trainer-badge">${emblemHtml(ctx.selection.trainerIndex, true)}</div>` : ''}<div class="selection-aside-ready"><strong>${t('select.selected', { count: ctx.selection.team.length })}</strong>${readyPinned}</div><section class="selection-primary"><h2>${opponentTitle}</h2><div class="enemy-list">${enemyRows}</div>${quickEnemyControls}<h3>${t('select.team')}</h3><div class="selected-list">${selectedRows}</div></section>${planControls}${ready}</aside></div></div>`;
   screen.querySelector('.battle-plan').open = !matchMedia('(max-width: 700px)').matches;
   screen
     .querySelector('.selection-layout')
@@ -304,11 +310,20 @@ function renderTeamSelect(mode = 'ladder') {
       );
   bindCommon();
   screen.querySelector('[data-action="open-plan"]')?.addEventListener('click', () => {
-    const plan = screen.querySelector('.battle-plan');
+    const plan = screen.querySelector('.battle-plan'),
+      summary = plan?.querySelector(':scope > summary');
     if (plan) plan.open = true;
-    screen
-      .querySelector('.select-aside')
-      ?.scrollIntoView({ behavior: ctx.save.reducedMotion ? 'auto' : 'smooth', block: 'start' });
+    if (!summary) return;
+    const fixedBarsHeight = [...screen.querySelectorAll('.select-aside > .primary-btn.wide[data-action="start-battle"], .mobile-selection-dock')]
+      .filter((element) => getComputedStyle(element).position === 'fixed')
+      .reduce((height, element) => height + element.getBoundingClientRect().height, 0);
+    summary.style.scrollMarginTop = '18px';
+    summary.style.scrollMarginBottom = `${fixedBarsHeight + 12}px`;
+    summary.scrollIntoView({
+      behavior: ctx.save.reducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    summary.focus({ preventScroll: true });
   });
   screen.querySelectorAll('[data-creature]').forEach((card) =>
     card.addEventListener('click', () => {
@@ -437,34 +452,36 @@ function renderTeamSelect(mode = 'ladder') {
     ctx.selection.enemyTeam = randomDistinct(3, ctx.selection.enemyTeam.join('').length + Date.now());
     rerenderPreservingFocus(() => renderTeamSelect(mode));
   });
-  screen.querySelector('[data-action="start-battle"]')?.addEventListener('click', () => {
-    ctx.save.lastTeam = [...ctx.selection.team];
-    if (['quick', 'ladder'].includes(mode)) ctx.save.difficulty = ctx.selection.difficulty;
-    persist();
-    if (mode === 'gauntlet') startGauntlet(ctx.selection.team, ctx.selection.lead);
-    else
-      startBattle({
-        playerTeam: ctx.selection.team,
-        enemyTeam: ctx.selection.enemyTeam,
-        playerLead: ctx.selection.lead,
-        enemyLead: ctx.selection.enemyLead || 0,
-        mode,
-        arena: ctx.selection.arena,
-        difficulty: ctx.selection.difficulty,
-        trainerIndex: ctx.selection.trainerIndex,
-        quickRuleId: mode === 'quick' ? ctx.selection.quickRule : null,
-        circuitCondition: ctx.selection.circuitCondition,
-        trialId: ctx.selection.trialId,
-        modifiers:
-          mode === 'quick'
-            ? [...quickRule(ctx.selection.quickRule).modifiers]
-            : mode === 'circuit'
-              ? [...circuit.condition.modifiers]
-              : mode === 'trial'
-                ? [...(ctx.selection.modifiers || [])]
-                : [],
-      });
-  });
+  screen.querySelectorAll('[data-action="start-battle"]').forEach((button) =>
+    button.addEventListener('click', () => {
+      ctx.save.lastTeam = [...ctx.selection.team];
+      if (['quick', 'ladder'].includes(mode)) ctx.save.difficulty = ctx.selection.difficulty;
+      persist();
+      if (mode === 'gauntlet') startGauntlet(ctx.selection.team, ctx.selection.lead);
+      else
+        startBattle({
+          playerTeam: ctx.selection.team,
+          enemyTeam: ctx.selection.enemyTeam,
+          playerLead: ctx.selection.lead,
+          enemyLead: ctx.selection.enemyLead || 0,
+          mode,
+          arena: ctx.selection.arena,
+          difficulty: ctx.selection.difficulty,
+          trainerIndex: ctx.selection.trainerIndex,
+          quickRuleId: mode === 'quick' ? ctx.selection.quickRule : null,
+          circuitCondition: ctx.selection.circuitCondition,
+          trialId: ctx.selection.trialId,
+          modifiers:
+            mode === 'quick'
+              ? [...quickRule(ctx.selection.quickRule).modifiers]
+              : mode === 'circuit'
+                ? [...circuit.condition.modifiers]
+                : mode === 'trial'
+                  ? [...(ctx.selection.modifiers || [])]
+                  : [],
+        });
+    })
+  );
 }
 
 registerRoutes({

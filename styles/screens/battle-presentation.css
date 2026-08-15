@@ -1212,12 +1212,6 @@
   .trainer-badge .emblem {
     width: 90px;
   }
-  .feat-hall {
-    grid-template-columns: 1fr;
-  }
-  .feat-gallery {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 @media (max-width: 900px) {
   .squad-presets {
