@@ -218,7 +218,7 @@ export function resolveThemeId(screenId) {
 }
 
 export function computeMixerLevels(settings = {}) {
-  const master = settings.muted ? 0 : clamp01(settings.volume, 0.7);
+  const master = settings.muted ? 0 : 1;
   return Object.freeze({
     master,
     music: clamp01(settings.musicVolume, 0.45),

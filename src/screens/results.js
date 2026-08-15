@@ -185,10 +185,6 @@ async function finishBattle() {
     const index = ctx.battleSession.trainerIndex;
     if (index === ctx.save.ladderVictories && ctx.save.ladderVictories < LADDER_COUNT) {
       ctx.save.ladderVictories++;
-      const emblem = TRAINERS[index].id;
-      if (!ctx.save.emblems.includes(emblem)) ctx.save.emblems.push(emblem);
-      for (const unlocked of TRAINERS.slice(0, ctx.save.ladderVictories).map((x) => x.arena))
-        if (!ctx.save.cosmetics.includes(unlocked)) ctx.save.cosmetics.push(unlocked);
     }
   }
   if (win && ctx.battleSession.mode === 'trial' && !ctx.save.trials.includes(ctx.battleSession.trialId))

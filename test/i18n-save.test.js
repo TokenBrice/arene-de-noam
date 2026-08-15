@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DICTIONARIES, createI18n, validateDictionaries } from '../src/i18n.js';
-import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave, validateSave } from '../src/save.js';
+import {
+  DEFAULT_SAVE,
+  SAVE_KEY,
+  freshDefaultSave,
+  loadSave,
+  persistSave,
+  validateSave,
+} from '../src/save.js';
 import {
   CURRENT_FEAT_IDS,
   FEATS,
@@ -165,9 +172,51 @@ test('save round-trips with validated ranges', () => {
   };
   assert.equal(persistSave(changed, memory), true);
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
-  assert.equal(loadSave(memory).save.version, 15);
+  assert.equal(loadSave(memory).save.version, 16);
+  assert.equal('volume' in loadSave(memory).save, false);
   assert.equal('affinity' in loadSave(memory).save, false);
 });
+test('fresh save resets rebuild every nested collection', () => {
+  const firstReset = freshDefaultSave();
+  firstReset.mastery.orakyn = 99;
+  firstReset.feats.push('blitz');
+  firstReset.trials.push('trial-one');
+  firstReset.lastTeam[0] = 'kordane';
+  firstReset.records.orakyn = { battles: 1, wins: 1 };
+  firstReset.customSquads[0] = { team: ['orakyn', 'abyssar', 'virelia'], lead: 0 };
+  const secondReset = freshDefaultSave();
+  for (const key of ['mastery', 'feats', 'trials', 'lastTeam', 'records', 'customSquads'])
+    assert.notEqual(secondReset[key], firstReset[key], `${key} should be a fresh collection`);
+  assert.deepEqual(secondReset.mastery, {});
+  assert.deepEqual(secondReset.feats, []);
+  assert.deepEqual(secondReset.trials, []);
+  assert.deepEqual(secondReset.lastTeam, ['orakyn', 'abyssar', 'virelia']);
+  assert.deepEqual(secondReset.records, {});
+  assert.deepEqual(secondReset.customSquads, [null, null, null]);
+});
+test('v15 saves migrate to v16 without dead fields and with consistent counters', () => {
+  const migrated = validateSave({
+    ...DEFAULT_SAVE,
+    version: 15,
+    emblems: ['trainer-a'],
+    cosmetics: ['crystal', 'grove'],
+    volume: 0.2,
+    battlesPlayed: 5,
+    wins: 12,
+    winStreak: 30,
+    bestStreak: 40,
+    records: { orakyn: { battles: 2, wins: 8 } },
+  });
+  assert.equal(migrated.version, 16);
+  assert.equal('emblems' in migrated, false);
+  assert.equal('cosmetics' in migrated, false);
+  assert.equal('volume' in migrated, false);
+  assert.equal(migrated.wins, 5);
+  assert.equal(migrated.records.orakyn.wins, 2);
+  assert.equal(migrated.winStreak, 5);
+  assert.equal(migrated.bestStreak, 5);
+});
+
 test('historical v15 saves stay valid and accept all six new creature ids', () => {
   const historical = validateSave({
     ...DEFAULT_SAVE,
@@ -176,7 +225,7 @@ test('historical v15 saves stay valid and accept all six new creature ids', () =
     mastery: { orakyn: 12, unknown: 90 },
     records: { orakyn: { battles: 4, wins: 3 }, unknown: { battles: 99 } },
   });
-  assert.equal(historical.version, 15);
+  assert.equal(historical.version, 16);
   assert.equal(historical.mastery.orakyn, 12);
   assert.equal(historical.mastery.unknown, undefined);
   assert.equal(historical.records.unknown, undefined);
@@ -225,6 +274,8 @@ test('older saves migrate and progression fields are bounded', () => {
     version: 1,
     tutorialComplete: true,
     ladderVictories: 80,
+    battlesPlayed: 10,
+    wins: 7,
     lastTeam: ['bad'],
     language: 'xx',
     difficulty: 'impossible',
@@ -242,7 +293,7 @@ test('older saves migrate and progression fields are bounded', () => {
     winStreak: 7,
     bestStreak: 3,
   });
-  assert.equal(migrated.version, 15);
+  assert.equal(migrated.version, 16);
   assert.equal(migrated.ladderVictories, 12);
   assert.deepEqual(migrated.lastTeam, DEFAULT_SAVE.lastTeam);
   assert.equal(migrated.language, 'fr');

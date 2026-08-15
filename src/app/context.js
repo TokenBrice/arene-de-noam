@@ -48,7 +48,7 @@ import {
   statusIcon,
 } from '../battle/statuses.js';
 import { createI18n, validateDictionaries } from '../i18n.js';
-import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave } from '../save.js';
+import { DEFAULT_SAVE, SAVE_KEY, freshDefaultSave, loadSave, persistSave } from '../save.js';
 import { ArenaScene } from '../presentation/arena.js';
 import { SoundSystem } from '../sound.js';
 
@@ -343,6 +343,7 @@ Object.assign(ctx, {
   statusBadgeHtml,
   statusIcon,
   DEFAULT_SAVE,
+  freshDefaultSave,
   SAVE_KEY,
   persistSave,
   ArenaScene,
