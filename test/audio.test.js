@@ -180,3 +180,88 @@ test('shared SFX nodes disconnect only after the final source ends', () => {
   second.emit('ended');
   assert.deepEqual(disconnected, ['shared']);
 });
+
+test('patch starts every SFX source before stopping and cleans each chain on ended', () => {
+  const makeParam = () => ({
+    value: 1,
+    setValueAtTime() {},
+    exponentialRampToValueAtTime() {},
+    setTargetAtTime() {},
+    cancelScheduledValues() {},
+  });
+  class FakeNode {
+    constructor(kind) {
+      this.kind = kind;
+      this.gain = makeParam();
+      this.frequency = makeParam();
+      this.Q = makeParam();
+      this.listeners = {};
+      this.started = [];
+      this.stopped = [];
+      this.disconnects = 0;
+    }
+    connect(node) {
+      return node;
+    }
+    disconnect() {
+      this.disconnects += 1;
+    }
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    }
+    start(time) {
+      this.started.push(time);
+    }
+    stop(time) {
+      assert.ok(this.started.length, `${this.kind} stopped before start`);
+      this.stopped.push(time);
+    }
+    emitEnded() {
+      this.listeners.ended?.();
+    }
+  }
+  class FakeAudioContext {
+    constructor() {
+      this.currentTime = 1;
+      this.sampleRate = 100;
+      this.state = 'running';
+      this.destination = new FakeNode('destination');
+      this.nodes = [];
+    }
+    node(kind) {
+      const node = new FakeNode(kind);
+      this.nodes.push(node);
+      return node;
+    }
+    createGain() {
+      return this.node('gain');
+    }
+    createOscillator() {
+      return this.node('oscillator');
+    }
+    createBufferSource() {
+      return this.node('buffer-source');
+    }
+    createBiquadFilter() {
+      return this.node('filter');
+    }
+    createBuffer(channels, length) {
+      return { numberOfChannels: channels, getChannelData: () => new Float32Array(length) };
+    }
+  }
+
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  const ctx = new FakeAudioContext();
+  sound.ctx = ctx;
+  sound.graph = { sfxBus: ctx.createGain(), reverbIn: ctx.createGain() };
+  sound.patch({ duration: 0.16, noiseGain: 0.02 });
+
+  assert.equal(sound.sfxSources.size, 3);
+  for (const source of sound.sfxSources) {
+    assert.equal(source.started.length, 1);
+    assert.equal(source.stopped.length, 1);
+    source.emitEnded();
+  }
+  assert.equal(sound.sfxSources.size, 0);
+  assert.ok(ctx.nodes.slice(2).every((node) => node.disconnects === 1));
+});
