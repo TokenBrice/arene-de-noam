@@ -6,7 +6,7 @@ import {
   watchRuntime,
 } from './helpers.js';
 
-test('a ladder victory awards an emblem and opens the next authored opponent', async ({ page }) => {
+test('a ladder victory awards progress and opens the next authored opponent', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=1&animations=0&player=voltide,brontusk,mossaur&enemyHp=1');
   await page.getByRole('button', { name: /Continuer/ }).click();
@@ -18,7 +18,6 @@ test('a ladder victory awards an emblem and opens the next authored opponent', a
   await expect(page.getByRole('heading', { name: 'Maître de la Vélocité' })).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
   expect(saved.ladderVictories).toBe(1);
-  expect(saved.emblems).toContain('dawn');
   expect(saved.records.voltide.battles).toBe(1);
   expect(saved.records.brontusk.battles).toBe(1);
   expect(saved.records.mossaur.battles).toBe(1);
@@ -28,7 +27,7 @@ test('a ladder victory awards an emblem and opens the next authored opponent', a
 });
 
 test('League map reveals progress, conceals future rivals, and replays cleared duels', async ({ page }) => {
-  await installCompletedTutorial(page, { ladderVictories: 2, emblems: ['dawn', 'velocity'] });
+  await installCompletedTutorial(page, { ladderVictories: 2 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Ligue des rivaux' }).first().click();
   await expect(page.getByRole('heading', { name: 'Carte de la Ligue' })).toBeVisible();
@@ -113,7 +112,7 @@ test('three personal squad slots save, reload, and clear a team with its lead', 
   await page.locator('[data-custom-load="0"]').click();
   await expect(page.locator('[data-creature="voltide"]')).toHaveClass(/selected/);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
-  expect(stored.version).toBe(15);
+  expect(stored.version).toBe(16);
   expect(stored.customSquads[0]).toEqual({ team: ['voltide', 'nymbloom', 'riptalon'], lead: 0 });
   await page.reload();
   await page.getByRole('button', { name: /Combat rapide/ }).click();
