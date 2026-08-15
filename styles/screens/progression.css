@@ -764,12 +764,23 @@ body.reduced-motion .status-orb.status-burning {
   background: linear-gradient(135deg, #ffce5314, #7e63e711);
 }
 .feat-card.locked {
-  filter: saturate(0.25);
-  opacity: 0.58;
+  position: relative;
+  filter: none;
+  opacity: 1;
+  border-color: #cfd4ff88;
 }
-.feat-card.locked i {
-  color: #8d8a9e;
+.feat-card.locked > i {
+  color: #d8d8e8;
   background: #ffffff0a;
+  filter: saturate(0.6);
+}
+.feat-card.locked::after {
+  content: '🔒';
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  font-size: var(--text-xs);
+  line-height: 1;
 }
 .trainer-strategy {
   display: grid;
@@ -1095,11 +1106,16 @@ body.reduced-motion .status-orb.status-burning {
 .trial-squad span {
   display: grid;
   place-items: center;
+  width: 44px;
+  height: 44px;
   margin-left: -7px;
+  border: 1px solid #ffffff24;
+  border-radius: 50%;
+  background: #0b0e29;
 }
 .trial-squad img {
-  width: 54px;
-  height: 54px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
   image-rendering: pixelated;
 }
@@ -1379,7 +1395,7 @@ body.reduced-motion .status-orb.status-burning {
 }
 .player-last-stand #fighter-player::before,
 .enemy-last-stand #fighter-enemy::before {
-  content: 'LAST';
+  content: attr(data-last-label);
   position: absolute;
   z-index: 5;
   left: 50%;

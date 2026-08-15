@@ -571,7 +571,7 @@ body.reduced-motion .fighter-shadow {
   animation-delay: 0.2s;
 }
 .result-team img.fallen {
-  filter: grayscale(0.8) brightness(0.55) drop-shadow(0 15px 12px #0008);
+  filter: grayscale(0.45) brightness(0.8) drop-shadow(0 15px 12px #0008);
   transform: rotate(8deg);
 }
 .battle-recap {
@@ -866,7 +866,7 @@ body.reduced-motion .fighter-shadow {
     padding: 22px;
   }
   .roster-fan {
-    height: 150px;
+    height: 140px;
   }
   .roster-fan img {
     width: 88px;

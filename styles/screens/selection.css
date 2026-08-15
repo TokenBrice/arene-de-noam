@@ -110,9 +110,12 @@
     grid-template-columns: 1fr;
   }
   .custom-squad-track {
+    position: relative;
     display: flex;
     overflow: auto;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: x proximity;
+    -webkit-mask-image: linear-gradient(to right, #000 0 calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0 calc(100% - 24px), transparent 100%);
   }
   .custom-squad {
     flex: 0 0 min(240px, 78vw);
