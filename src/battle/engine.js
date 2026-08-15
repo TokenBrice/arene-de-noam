@@ -1,10 +1,7 @@
 import { CREATURES } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
 import { affinityMultiplier } from '../data/affinities.js';
-import {
-  COMBO_DAMAGE_MULTIPLIER,
-  comboSetupStatus,
-} from '../data/combos.js';
+import { COMBO_DAMAGE_MULTIPLIER, comboSetupStatus } from '../data/combos.js';
 import { calculateDamage } from './damage.js';
 import { randomFromState } from './rng.js';
 import {
@@ -188,7 +185,8 @@ function push(events, type, data = {}) {
   events.push({ type, ...data });
 }
 function passiveEvent(events, side, creature, result = {}) {
-  if (events) push(events, 'passive', { side, creatureId: creature.id, passive: creature.passive, ...result });
+  if (events)
+    push(events, 'passive', { side, creatureId: creature.id, passive: creature.passive, ...result });
 }
 function enterTalent(state, side, events = null) {
   const creature = activeOf(state, side),
@@ -525,7 +523,6 @@ function applyTargetStatus(state, side, descriptors, attacker, events) {
   return applyStatuses(target, statuses, state, targetSide, events, attacker.id);
 }
 
-
 function resolveDamageTransaction(state, side, move, events) {
   const targetSide = otherSide(side),
     attacker = activeOf(state, side),
@@ -822,8 +819,7 @@ function executeMove(state, side, action, events) {
       .map((creature, index) => ({ creature, index }))
       .filter(({ creature }) => creature.hp > 0)
       .sort(
-        (a, b) =>
-          a.creature.hp / a.creature.maxHp - b.creature.hp / b.creature.maxHp || a.index - b.index
+        (a, b) => a.creature.hp / a.creature.maxHp - b.creature.hp / b.creature.maxHp || a.index - b.index
       )[0]?.creature;
     if (candidate) {
       passiveEvent(events, side, attacker);
@@ -910,20 +906,12 @@ function resolveQueuedRelays(state, events) {
     const owner = state.sides[side],
       candidate = owner.team[relay.allyIndex];
     if (!candidate || candidate.hp <= 0 || relay.allyIndex === owner.active) continue;
-    resolveSwitch(
-      state,
-      side,
-      { type: 'switch', index: relay.allyIndex },
-      events,
-      { source: 'signature', rewards: false, triggerEntry: false }
-    );
-    const removed = removeAndEmit(
-      candidate,
-      'negative',
-      relay.config.cleanse || 'all',
-      side,
-      events
-    );
+    resolveSwitch(state, side, { type: 'switch', index: relay.allyIndex }, events, {
+      source: 'signature',
+      rewards: false,
+      triggerEntry: false,
+    });
+    const removed = removeAndEmit(candidate, 'negative', relay.config.cleanse || 'all', side, events);
     applyStatuses(candidate, relay.config.statuses, state, side, events, relay.sourceCreatureId);
     const sourceCreature = owner.team.find((creature) => creature.id === relay.sourceCreatureId);
     if (removed.length && sourceCreature?.passive === 'benevolent_omen') {
@@ -1017,7 +1005,7 @@ function tickEnd(state, events) {
               remaining =
                 typeof timed?.remaining === 'number' && !(timed.appliedTurn >= state.turn)
                   ? Math.max(0, timed.remaining - 1)
-                  : timed?.remaining ?? null;
+                  : (timed?.remaining ?? null);
             creature.hp = Math.max(0, creature.hp - amount);
             push(events, 'status-tick', {
               side,

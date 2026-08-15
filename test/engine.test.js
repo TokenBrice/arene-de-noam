@@ -756,10 +756,7 @@ test('Burning powers Venom Harvest through the single Combo rule', () => {
   assert.ok(
     result.events.some(
       (event) =>
-        event.type === 'status' &&
-        event.status === 'burning' &&
-        event.consumed &&
-        event.source === 'combo'
+        event.type === 'status' && event.status === 'burning' && event.consumed && event.source === 'combo'
     )
   );
   assert.equal(result.events.filter((event) => event.type === 'damage' && event.combo).length, 1);
@@ -809,7 +806,10 @@ test('a teammate Combo credits its helper once and grants no assist Surge', () =
   assert.ok(hits.slice(1).every((hit) => hit.combo === null));
   assert.equal(result.state.sides.enemy.team[0].statuses.marked, undefined);
   assert.equal(result.events.filter((event) => event.type === 'assist').length, 1);
-  assert.equal(result.events.filter((event) => event.type === 'surge' && event.source === 'assist').length, 0);
+  assert.equal(
+    result.events.filter((event) => event.type === 'surge' && event.source === 'assist').length,
+    0
+  );
 });
 
 test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consume it', () => {
@@ -859,7 +859,10 @@ test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consum
     { type: 'move', moveId: 'shade_spark' }
   );
   assert.ok(missResult.state.sides.enemy.team[0].statuses.marked);
-  assert.equal(missResult.events.some((event) => event.type === 'damage' && event.combo), false);
+  assert.equal(
+    missResult.events.some((event) => event.type === 'damage' && event.combo),
+    false
+  );
 });
 
 test('damage previews are exact, barrier-aware, immutable, and honest about guaranteed survival', () => {
@@ -997,7 +1000,6 @@ test('Shell Bastion cleanses one caster penalty and one per living teammate', ()
   assert.equal(penaltyCount(result.state.sides.player.team[2]), 1);
 });
 
-
 test('defensive Signatures spend Surge on distinct team-saving effects', () => {
   const state = createBattle({
     playerTeam: ['virelia', 'orakyn', 'abyssar'],
@@ -1046,7 +1048,10 @@ test('knockout skips the second move and requires a free replacement', () => {
   assert.equal(replaced.state.phase, 'choice');
   assert.equal(replaced.state.sides.enemy.surge, beforeSurge);
   assert.equal(activeOf(replaced.state, 'enemy').statuses.focused, undefined);
-  assert.equal(replaced.events.some((e) => e.type === 'rally'), false);
+  assert.equal(
+    replaced.events.some((e) => e.type === 'rally'),
+    false
+  );
 });
 
 test('trainer ace powers trigger exactly once when the final enemy enters', () => {
@@ -1110,7 +1115,6 @@ test('entry and ace events expose resulting projection values', () => {
   assert.equal(conductor.remaining, 2);
   assert.equal(conductor.stacks, 1);
 });
-
 
 test('the last fighters add no synthetic duel event or reward', () => {
   const state = make();
@@ -1210,7 +1214,10 @@ test('Eclipse of Grace purges every enemy boost and barrier after counterplay', 
     { type: 'move', moveId: 'eclipse_of_grace' },
     { type: 'move', moveId: 'kindred_halo' }
   );
-  assert.ok(result.events.some((event) => event.type === 'miss'), 'Evasive answers the hit first');
+  assert.ok(
+    result.events.some((event) => event.type === 'miss'),
+    'Evasive answers the hit first'
+  );
   for (const creature of result.state.sides.enemy.team) {
     assert.equal(creature.barrier, 0);
     assert.deepEqual(Object.keys(creature.statuses), ['burning']);
@@ -1232,9 +1239,7 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
     marked: { appliedTurn: 0, remaining: 2 },
     burning: { appliedTurn: 0, remaining: 2, stacks: 1 },
   };
-  const variants = getLegalActions(state, 'player').filter(
-    (action) => action.moveId === 'immaculate_relay'
-  );
+  const variants = getLegalActions(state, 'player').filter((action) => action.moveId === 'immaculate_relay');
   assert.deepEqual(
     variants.map(({ allyIndex }) => allyIndex),
     [1, 2]
@@ -1248,11 +1253,7 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
       ),
     /Illegal/
   );
-  const result = resolveTurn(
-    state,
-    variants[0],
-    { type: 'move', moveId: 'lucid_arc' }
-  );
+  const result = resolveTurn(state, variants[0], { type: 'move', moveId: 'lucid_arc' });
   const outgoing = result.state.sides.player.team[0],
     incoming = result.state.sides.player.team[1];
   assert.ok(outgoing.hp < outgoing.maxHp);
@@ -1261,13 +1262,10 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
   assert.deepEqual(Object.keys(incoming.statuses), ['focused']);
   assert.equal(incoming.barrier, 0);
   assert.equal(result.state.sides.player.pendingReplacement, false);
-  assert.ok(
-    result.events.find((event) => event.type === 'switch' && event.source === 'signature')
-  );
+  assert.ok(result.events.find((event) => event.type === 'switch' && event.source === 'signature'));
   assert.equal(
     result.events.some(
-      (event) =>
-        event.type === 'surge' && ['switch', 'perfect-relay'].includes(event.source)
+      (event) => event.type === 'surge' && ['switch', 'perfect-relay'].includes(event.source)
     ),
     false
   );

@@ -77,14 +77,22 @@ function advancePresentation(session, event) {
   const state = session?.displayState;
   if (!state) return;
   const creature = presentationCreature(state, event);
-  if (['damage', 'heal', 'recoil', 'status-tick'].includes(event.type) && creature && Number.isFinite(event.hp))
+  if (
+    ['damage', 'heal', 'recoil', 'status-tick'].includes(event.type) &&
+    creature &&
+    Number.isFinite(event.hp)
+  )
     creature.hp = Math.max(0, event.hp);
   if (event.type === 'ko' && creature) creature.hp = Number.isFinite(event.hp) ? Math.max(0, event.hp) : 0;
   if (event.type === 'ace' && creature) {
     if (Number.isFinite(event.maxHp)) creature.maxHp = Math.max(0, event.maxHp);
     if (Number.isFinite(event.hp)) creature.hp = Math.max(0, event.hp);
   }
-  if (['barrier', 'barrier-hit', 'barrier-break'].includes(event.type) && creature && Number.isFinite(event.total))
+  if (
+    ['barrier', 'barrier-hit', 'barrier-break'].includes(event.type) &&
+    creature &&
+    Number.isFinite(event.total)
+  )
     creature.barrier = Math.max(0, event.total);
   if (event.type === 'surge' && state.sides[event.side] && Number.isFinite(event.total))
     state.sides[event.side].surge = Math.max(0, event.total);
@@ -109,8 +117,7 @@ function advancePresentation(session, event) {
 function eventPresentationDelay(event) {
   if (testAnimationScale === 0) return 1;
   if (ctx.save.reducedMotion) return 190 / ctx.save.battleSpeed;
-  if (event.type === 'status' && event.consumed && event.source === 'combo')
-    return 60 / ctx.save.battleSpeed;
+  if (event.type === 'status' && event.consumed && event.source === 'combo') return 60 / ctx.save.battleSpeed;
   if (event.type === 'move-skip') return 120 / ctx.save.battleSpeed;
   if (event.type === 'move-start')
     return (

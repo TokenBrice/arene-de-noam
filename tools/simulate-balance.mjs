@@ -289,10 +289,26 @@ for (let game = 0; game < samples; game++) {
   }
   recordSide(stats, player.team, playerWon);
   recordSide(stats, enemy.team, enemyWon);
-  recordSide(classes, player.team.map((id) => CREATURES[id].classId), playerWon);
-  recordSide(classes, enemy.team.map((id) => CREATURES[id].classId), enemyWon);
-  recordSide(affinities, player.team.map((id) => CREATURES[id].affinity), playerWon);
-  recordSide(affinities, enemy.team.map((id) => CREATURES[id].affinity), enemyWon);
+  recordSide(
+    classes,
+    player.team.map((id) => CREATURES[id].classId),
+    playerWon
+  );
+  recordSide(
+    classes,
+    enemy.team.map((id) => CREATURES[id].classId),
+    enemyWon
+  );
+  recordSide(
+    affinities,
+    player.team.map((id) => CREATURES[id].affinity),
+    playerWon
+  );
+  recordSide(
+    affinities,
+    enemy.team.map((id) => CREATURES[id].affinity),
+    enemyWon
+  );
   for (const [side, team, won] of [
     ['player', player.team, playerWon],
     ['enemy', enemy.team, enemyWon],

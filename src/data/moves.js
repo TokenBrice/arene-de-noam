@@ -963,10 +963,7 @@ export const MOVES = {
     cooldown: 0,
     teamHealRatio: 0.12,
     teamBarrier: 17,
-    teamStatuses: [
-      { id: 'focused' },
-      { id: 'haste', duration: 2 },
-    ],
+    teamStatuses: [{ id: 'focused' }, { id: 'haste', duration: 2 }],
     visual: 'kindred_halo',
   },
   immaculate_relay: {

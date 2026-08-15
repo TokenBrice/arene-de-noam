@@ -499,7 +499,6 @@ export class SoundSystem {
     this.cancelSources(this.musicSources, 0.24);
   }
 
-
   startScheduler() {
     const levels = computeMixerLevels(this.settings);
     if (
@@ -636,7 +635,6 @@ export class SoundSystem {
     source.start(time);
     source.stop(time + duration + 0.02);
   }
-
 
   canPlaySfx() {
     return this.enabled() && Date.now() >= this.suppressSfxUntil;

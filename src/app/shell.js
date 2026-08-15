@@ -79,15 +79,13 @@ function bindCommon() {
       button.addEventListener('click', handler);
     });
   }
-  screen
-    .querySelectorAll('[data-action="settings"]')
-    .forEach((b) =>
-      b.addEventListener('click', () => {
-        ctx.settingsReturn = screen.dataset.page || 'title';
-        ctx.settingsBattleSession = ctx.battleSession;
-        renderSettings();
-      })
-    );
+  screen.querySelectorAll('[data-action="settings"]').forEach((b) =>
+    b.addEventListener('click', () => {
+      ctx.settingsReturn = screen.dataset.page || 'title';
+      ctx.settingsBattleSession = ctx.battleSession;
+      renderSettings();
+    })
+  );
   screen.querySelectorAll('[data-action="toggle-mute"]').forEach((b) =>
     b.addEventListener('click', () => {
       ctx.save.muted = !ctx.save.muted;
@@ -357,4 +355,11 @@ function trapModalTab(event) {
   }
   return true;
 }
-registerRoutes({ bindCommon, installBestiaryFilters, renderCurrent, handleEscape, trapModalTab, rerenderPreservingFocus });
+registerRoutes({
+  bindCommon,
+  installBestiaryFilters,
+  renderCurrent,
+  handleEscape,
+  trapModalTab,
+  rerenderPreservingFocus,
+});

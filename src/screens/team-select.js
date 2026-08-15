@@ -316,7 +316,11 @@ function renderTeamSelect(mode = 'ladder') {
       summary = plan?.querySelector(':scope > summary');
     if (plan) plan.open = true;
     if (!summary) return;
-    const fixedBarsHeight = [...screen.querySelectorAll('.select-aside > .primary-btn.wide[data-action="start-battle"], .mobile-selection-dock')]
+    const fixedBarsHeight = [
+      ...screen.querySelectorAll(
+        '.select-aside > .primary-btn.wide[data-action="start-battle"], .mobile-selection-dock'
+      ),
+    ]
       .filter((element) => getComputedStyle(element).position === 'fixed')
       .reduce((height, element) => height + element.getBoundingClientRect().height, 0);
     summary.style.scrollMarginTop = '18px';

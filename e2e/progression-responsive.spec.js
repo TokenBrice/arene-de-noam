@@ -351,9 +351,7 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   await page.getByRole('button', { name: /Plan de bataille/ }).click();
   const planSummary = page.locator('.battle-plan > summary');
   await expect(planSummary).toBeFocused();
-  await expect
-    .poll(async () => (await planSummary.boundingBox())?.y ?? -1)
-    .toBeGreaterThanOrEqual(0);
+  await expect.poll(async () => (await planSummary.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
   const summaryBox = await planSummary.boundingBox();
   expect(summaryBox.y).toBeLessThan(80);
   await page.getByRole('button', { name: /Entrer dans/ }).click();

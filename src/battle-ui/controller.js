@@ -390,7 +390,6 @@ function closeBattleOverlay() {
   return true;
 }
 
-
 function bindBattleChoiceContext(session) {
   const moves = screen.querySelector('#moves'),
     line = screen.querySelector('#action-line');
@@ -543,7 +542,12 @@ function patchBattleHud(hud, side, view) {
     pipLabels = pips.map((pip) => pip.getAttribute('aria-label'));
   plate.setAttribute(
     'aria-label',
-    [creatureName(c.id), `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`, statusNames.join(' · ') || t('battle.noStatuses'), pipLabels.join(' · ')]
+    [
+      creatureName(c.id),
+      `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`,
+      statusNames.join(' · ') || t('battle.noStatuses'),
+      pipLabels.join(' · '),
+    ]
       .filter(Boolean)
       .join(' · ')
   );
@@ -668,10 +672,17 @@ function refreshBattle() {
           ...(c.barrier ? [t('battle.barrierName')] : []),
           ...statusIds.map((id) => t(`status.${id}`)),
         ],
-        pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) => pip.getAttribute('aria-label'));
+        pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) =>
+          pip.getAttribute('aria-label')
+        );
       plate.setAttribute(
         'aria-label',
-        [creatureName(c.id), `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`, statusNames.join(' · ') || t('battle.noStatuses'), pipLabels.join(' · ')]
+        [
+          creatureName(c.id),
+          `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`,
+          statusNames.join(' · ') || t('battle.noStatuses'),
+          pipLabels.join(' · '),
+        ]
           .filter(Boolean)
           .join(' · ')
       );
@@ -936,7 +947,8 @@ async function handlePlayerAction(action) {
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
       tutorialStep = session.tutorialStep;
-    const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
+    const enemyAction =
+      session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
     if (session.mode === 'tutorial') {
       if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
       else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;

@@ -85,8 +85,7 @@ export const migrateV14 = (save) => ({
 // v15 -> v16: dead reward/master-volume fields were removed and progression counters are consistent.
 export const migrateV16 = (save) => {
   const { emblems: _emblems, cosmetics: _cosmetics, volume: _volume, ...rest } = save;
-  const bounded = (value, max) =>
-    Number.isInteger(value) ? Math.min(max, Math.max(0, value)) : 0;
+  const bounded = (value, max) => (Number.isInteger(value) ? Math.min(max, Math.max(0, value)) : 0);
   const battlesPlayed = bounded(save.battlesPlayed, 9999);
   const wins = Math.min(battlesPlayed, bounded(save.wins, 9999));
   const records =
@@ -95,10 +94,7 @@ export const migrateV16 = (save) => {
           Object.entries(save.records).map(([id, source]) => {
             if (!source || typeof source !== 'object') return [id, source];
             const battles = bounded(source.battles, 99999);
-            return [
-              id,
-              { ...source, battles, wins: Math.min(battles, bounded(source.wins, 99999)) },
-            ];
+            return [id, { ...source, battles, wins: Math.min(battles, bounded(source.wins, 99999)) }];
           })
         )
       : save.records;

@@ -88,7 +88,10 @@ function tacticalFxTemplate(particleCount) {
     cached = radialFxTemplateCache.get(key);
   if (cached) return cached;
   const template = {
-    rings: Array.from({ length: 4 }, (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 85}ms"></i>`).join(''),
+    rings: Array.from(
+      { length: 4 },
+      (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 85}ms"></i>`
+    ).join(''),
     detail: Array.from({ length: 6 }, (_, i) => `<i style="--detail:${i}"></i>`).join(''),
     particles: radialParticles(particleCount, 'tactical', 5, 6, 30),
   };
@@ -571,13 +574,10 @@ function switchOutFx(event) {
   beam.style.setProperty('--fx-color', color);
   fighter.classList.add('switch-awaiting');
   fighter.append(ghost, beam);
-  scheduleFxTimer(
-    () => {
-      ghost.remove();
-      beam.remove();
-    },
-    640 / ctx.save.battleSpeed
-  );
+  scheduleFxTimer(() => {
+    ghost.remove();
+    beam.remove();
+  }, 640 / ctx.save.battleSpeed);
 }
 
 function switchInFx(event) {
@@ -680,7 +680,9 @@ function clearBattleFx({ preservePresentation = false } = {}) {
     );
     fighter.style.removeProperty('--attack-affinity-color');
   });
-  screen.querySelectorAll('.switch-ghost, .switch-beam, .whiff-callout, .barrier-shatter').forEach((node) => node.remove());
+  screen
+    .querySelectorAll('.switch-ghost, .switch-beam, .whiff-callout, .barrier-shatter')
+    .forEach((node) => node.remove());
   screen.querySelector('#action-line')?.classList.remove('epic');
   ctx.currentFxMove = null;
 }

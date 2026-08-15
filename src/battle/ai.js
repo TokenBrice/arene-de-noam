@@ -76,13 +76,10 @@ function scoreMove(state, side, action, difficulty, style) {
       const targets = move.purgeTeam ? state.sides[side === 'player' ? 'enemy' : 'player'].team : [defender],
         positiveCount = targets.reduce(
           (sum, creature) =>
-            sum +
-            Object.keys(creature.statuses).filter((id) => STATUS_DEFINITIONS[id]?.positive).length,
+            sum + Object.keys(creature.statuses).filter((id) => STATUS_DEFINITIONS[id]?.positive).length,
           0
         ),
-        barrierPoints = move.purgeBarrier
-          ? targets.reduce((sum, creature) => sum + creature.barrier, 0)
-          : 0;
+        barrierPoints = move.purgeBarrier ? targets.reduce((sum, creature) => sum + creature.barrier, 0) : 0;
       score += positiveCount * 8 + barrierPoints * 0.35;
     }
     if (move.selfStatuses?.some((x) => x.id === 'marked'))
@@ -90,21 +87,18 @@ function scoreMove(state, side, action, difficulty, style) {
     if (move.drain) score += Math.min(attacker.maxHp - attacker.hp, estimated * move.drain) * 0.6;
     if (move.recoil) score -= estimated * move.recoil * 0.7;
     if (move.executeThreshold && defender.hp / defender.maxHp <= move.executeThreshold) score += 28;
-    if (forecast.combo)
-      score += difficulty === 'apprentice' ? 3 : difficulty === 'champion' ? 10 : 8;
+    if (forecast.combo) score += difficulty === 'apprentice' ? 3 : difficulty === 'champion' ? 10 : 8;
     score += setupScore(state, side, move);
     if (move.barrier) score += Math.min(move.barrier, Math.max(0, BARRIER_CAP - attacker.barrier)) * 0.35;
     if (move.signature) score += 14;
     if (style === 'speed') score += (move.priority || 0) * 7 + (move.scaling === 'speed' ? 12 : 0);
     if (style === 'endurance')
       score += (move.drain ? 14 : 0) + (move.barrier || 0) * 0.35 + (move.teamHealRatio ? 18 : 0);
-    if (style === 'control')
-      score += move.targetStatuses?.some((status) => status.id === 'marked') ? 9 : 0;
+    if (style === 'control') score += move.targetStatuses?.some((status) => status.id === 'marked') ? 9 : 0;
     if (style === 'pressure')
       score += estimated * 0.16 + (move.targetStatuses?.some((x) => x.id === 'burning') ? 12 : 0);
     if (style === 'deception')
-      score +=
-        (move.selfStatuses?.some((x) => ['evasive', 'countering'].includes(x.id)) ? 18 : 0);
+      score += move.selfStatuses?.some((x) => ['evasive', 'countering'].includes(x.id)) ? 18 : 0;
     score -= move.cooldown * (difficulty === 'apprentice' ? 1 : 3);
     return score;
   }

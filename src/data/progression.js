@@ -63,8 +63,6 @@ export const FEATS = Object.freeze({
   perfect_relay: { id: 'perfect_relay', icon: '↺' },
   team_assist: { id: 'team_assist', icon: '↗' },
 });
-export const CURRENT_FEAT_IDS = Object.freeze(
-  Object.keys(FEATS).filter((id) => id !== 'team_assist')
-);
+export const CURRENT_FEAT_IDS = Object.freeze(Object.keys(FEATS).filter((id) => id !== 'team_assist'));
 // Save-only identifiers: old owners keep the history, but it is never shown or awarded.
 export const FEAT_IDS = Object.freeze([...Object.keys(FEATS), 'contract_hero', 'final_duelist']);

@@ -40,7 +40,11 @@ test('French and English localization keys are complete and interpolation works'
 test('live dictionary values are not shadowed by duplicate definitions', () => {
   for (const [key, fr, en] of [
     ['status.effect.marked', 'Combo : Marqué consommé, dégâts ×1,4.', 'Combo consumes Marked: +40% damage.'],
-    ['move.effect.petal_ray', 'Inflige des dégâts et rend 3 % des PV à l’équipe.', "Deals damage and restores 3% of the team's HP."],
+    [
+      'move.effect.petal_ray',
+      'Inflige des dégâts et rend 3 % des PV à l’équipe.',
+      "Deals damage and restores 3% of the team's HP.",
+    ],
     ['advice.title', 'Conseils de l’entraîneur', 'Coach Tips'],
     ['battle.switchIncoming', 'Dégâts prévus : {damage}', 'Predicted damage: {damage}'],
   ]) {
@@ -70,7 +74,8 @@ test('battle playback and Chronicle copy is available in both locales', () => {
     },
   };
   for (const [language, entries] of Object.entries(expected))
-    for (const [key, value] of Object.entries(entries)) assert.equal(DICTIONARIES[language][key], value, `${language} ${key}`);
+    for (const [key, value] of Object.entries(entries))
+      assert.equal(DICTIONARIES[language][key], value, `${language} ${key}`);
 });
 test('save failure copy is available in both locales', () => {
   assert.equal(typeof DICTIONARIES.fr['app.saveFailed'], 'string');
@@ -148,7 +153,10 @@ test('all ninety move effects are short, localized, and free of removed systems'
 test('thirty creatures and six classes are complete with no legacy role keys', () => {
   assert.equal(CREATURE_IDS.length, 30);
   for (const dictionary of Object.values(DICTIONARIES)) {
-    assert.equal(Object.keys(dictionary).some((key) => key.startsWith('role.')), false);
+    assert.equal(
+      Object.keys(dictionary).some((key) => key.startsWith('role.')),
+      false
+    );
     for (const classId of CLASS_ORDER) {
       assert.ok(dictionary[`class.${classId}`]);
       assert.ok(dictionary[`class.effect.${classId}`]);

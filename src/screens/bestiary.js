@@ -138,12 +138,11 @@ function runMoveTheater(moveId) {
 
 async function openMoveTheater(moveId, trigger = null) {
   const req = ++theaterRequest;
-  theaterTrigger =
-    trigger?.isConnected
-      ? trigger
-      : document.activeElement?.matches?.('[data-preview-move]')
-        ? document.activeElement
-        : null;
+  theaterTrigger = trigger?.isConnected
+    ? trigger
+    : document.activeElement?.matches?.('[data-preview-move]')
+      ? document.activeElement
+      : null;
   removeMoveTheater();
   await ensureBattleStyles();
   if (req !== theaterRequest || screen.dataset.page !== 'bestiary') return;

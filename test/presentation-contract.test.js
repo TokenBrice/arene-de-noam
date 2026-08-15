@@ -16,9 +16,7 @@ test('all six types have unique original SVG geometry and the settled accessible
     shadow: '#9B8CFF',
   };
   const paths = AFFINITY_ORDER.map((id) => AFFINITIES[id].iconPath);
-  const statusColors = new Set(
-    Object.values(STATUS_DEFINITIONS).map(({ color }) => color.toUpperCase())
-  );
+  const statusColors = new Set(Object.values(STATUS_DEFINITIONS).map(({ color }) => color.toUpperCase()));
   assert.equal(new Set(paths).size, 6);
   for (const id of AFFINITY_ORDER) {
     assert.ok(AFFINITIES[id].iconPath.length > 30, `${id} needs authored SVG geometry`);
@@ -102,8 +100,14 @@ test('high-contrast and compact presentation details keep their semantic cues', 
         'src/i18n.js',
       ].map((file) => readFile(new URL(file, root), 'utf8'))
     );
-  assert.match(accessibility, /body\.high-contrast\s+:is\(\.feat-hall, \.record-hero, \.league-rival, \.draft-card, \.boon-card, \.academy-section, \.academy-core, \.academy-type-triangle\)/);
-  assert.match(accessibility, /body\.high-contrast \.league-rival\.locked[\s\S]*opacity:\s*1[\s\S]*border:\s*2px dashed/);
+  assert.match(
+    accessibility,
+    /body\.high-contrast\s+:is\(\.feat-hall, \.record-hero, \.league-rival, \.draft-card, \.boon-card, \.academy-section, \.academy-core, \.academy-type-triangle\)/
+  );
+  assert.match(
+    accessibility,
+    /body\.high-contrast \.league-rival\.locked[\s\S]*opacity:\s*1[\s\S]*border:\s*2px dashed/
+  );
   assert.match(accessibility, /body\.high-contrast \.screen::before\s*\{[\s\S]*display:\s*none/);
   assert.match(accessibility, /body\.high-contrast \.move-btn:disabled[\s\S]*border:\s*2px dashed/);
   assert.match(accessibility, /body\.high-contrast \.move-btn:disabled::after[\s\S]*content:\s*['"]▦['"]/);

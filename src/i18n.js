@@ -30,7 +30,8 @@ const fr = {
   'academy.title': 'Académie de l’Arène',
   'academy.subtitle': 'Toutes les règles importantes, sans interrompre ton prochain combat.',
   'academy.affinities': 'Deux triangles de types',
-  'academy.affinityHint': 'Suis la flèche pour ×2. Dans le sens inverse, c’est ×0,5. Entre les triangles, c’est ×1.',
+  'academy.affinityHint':
+    'Suis la flèche pour ×2. Dans le sens inverse, c’est ×0,5. Entre les triangles, c’est ×1.',
   'academy.beats': 'domine',
   'academy.mechanics': 'Astuces de combat',
   'academy.statuses': 'Lexique des effets',
@@ -51,12 +52,16 @@ const fr = {
   'advice.title': 'Conseils de l’entraîneur',
   'advice.ace':
     'Prépare la Phase d’As : garde une Signature ou une technique défensive pour le dernier changement.',
-  'advice.affinity': 'Tes attaques ont souvent été peu efficaces. Change de créature pour prendre l’avantage de type.',
+  'advice.affinity':
+    'Tes attaques ont souvent été peu efficaces. Change de créature pour prendre l’avantage de type.',
   'advice.switch':
     'Tu n’as jamais changé volontairement. Un changement donne +10 Éclat et peut renverser l’avantage de type.',
-  'advice.cleanse': 'Les malus s’accumulent. Garde une technique qui les retire ou qui te rend Insaisissable.',
-  'advice.barrier': 'Les barrières absorbent beaucoup. Utilise une technique qui les traverse ou retire les bonus ennemis.',
-  'advice.surge': 'Ta Signature n’a pas beaucoup aidé. Alterne techniques et changements pour remplir l’Éclat.',
+  'advice.cleanse':
+    'Les malus s’accumulent. Garde une technique qui les retire ou qui te rend Insaisissable.',
+  'advice.barrier':
+    'Les barrières absorbent beaucoup. Utilise une technique qui les traverse ou retire les bonus ennemis.',
+  'advice.surge':
+    'Ta Signature n’a pas beaucoup aidé. Alterne techniques et changements pour remplir l’Éclat.',
   'advice.tempo': 'Observe l’ordre des actions et prépare-toi au prochain pouvoir de l’arène.',
   'title.rosterLine': '30 CRÉATURES · 90 TECHNIQUES · 3 CONTRE 3',
   'difficulty.effect.apprentice':
@@ -511,8 +516,7 @@ const en = {
   'command.effect.coach':
     'If your active creature has a penalty: remove all its penalties and gain +15 Surge. Once per battle, without using your action.',
   'advice.title': 'Coach Tips',
-  'advice.ace':
-    'Prepare for Ace Phase: save a Signature or a defensive move for the final switch.',
+  'advice.ace': 'Prepare for Ace Phase: save a Signature or a defensive move for the final switch.',
   'advice.affinity': 'Your attacks were often weak. Switch creatures to gain a type advantage.',
   'advice.switch':
     'You never switched voluntarily. A switch grants +10 Surge and can turn the type matchup around.',
@@ -1813,7 +1817,8 @@ Object.assign(fr, {
   'academy.subtitle': 'Commence par l’essentiel, puis explore les détails.',
   'academy.essentials': 'L’essentiel',
   'academy.affinities': 'Deux triangles de types',
-  'academy.affinityHint': 'Suis la flèche pour ×2. Dans le sens inverse, c’est ×0,5. Entre les triangles, c’est ×1.',
+  'academy.affinityHint':
+    'Suis la flèche pour ×2. Dans le sens inverse, c’est ×0,5. Entre les triangles, c’est ×1.',
   'academy.triangle.elemental': 'Triangle élémentaire',
   'academy.triangle.tactical': 'Triangle tactique',
   'academy.elementalRule': 'Eau bat Feu, Feu bat Plante, Plante bat Eau.',
@@ -1849,7 +1854,8 @@ Object.assign(fr, {
   'passive.effect.encore': 'Multi-frappe : gagne 8 Éclat.',
   'passive.effect.memory_silk': 'Quand elle inflige un malus, elle récupère 5 PV.',
   'passive.effect.prism_skin': 'Chaque barrière gagne 6 points.',
-  'passive.effect.duel_oath': 'Si les deux combattants ont plus de 50 % de leurs PV, les dégâts augmentent de 12 %.',
+  'passive.effect.duel_oath':
+    'Si les deux combattants ont plus de 50 % de leurs PV, les dégâts augmentent de 12 %.',
   'passive.effect.last_bastion': 'Sous 50 % de PV, gagne une barrière de 16 une fois.',
   'passive.effect.razor_engine': 'Chaque attaque donne Accéléré.',
   'passive.effect.foundation': 'À sa première entrée, gagne une barrière de 14.',
@@ -2090,7 +2096,7 @@ Object.assign(en, {
   'move.effect.sun_spear': 'Bypasses barriers; power 36.',
   'move.effect.solar_wings': 'Grants Haste 3 turns and Focused.',
   'move.effect.supernova': 'Removes every boost and takes 28% recoil.',
-  'move.effect.petal_ray': 'Deals damage and restores 3% of the team\'s HP.',
+  'move.effect.petal_ray': "Deals damage and restores 3% of the team's HP.",
   'move.effect.seed_bloom': 'Restores 23% HP.',
   'move.effect.leaf_mantle': 'Signature: barriers 8/7, heals 4%, removes one penalty from each ally.',
   'move.effect.mossy_crush': 'Recovers 22% of damage dealt.',
@@ -2139,8 +2145,7 @@ Object.assign(fr, {
   'filter.allTypes': 'Tous les types',
   'filter.allClasses': 'Toutes les classes',
   'battle.relayChoose': 'Choisis l’allié protégé',
-  'battle.relayHint':
-    'L’attaque annoncée vise Aubéastre ; cet allié entrera ensuite purifié et Concentré.',
+  'battle.relayHint': 'L’attaque annoncée vise Aubéastre ; cet allié entrera ensuite purifié et Concentré.',
   'battle.relayProtected': 'Aucun impact entrant · purifié · Concentré',
   'battle.immaculateRelay': '{actor} entre purifié et Concentré après les attaques !',
   'battle.action.barrierBreak': 'La barrière de {actor} perd {amount} !',
@@ -2155,12 +2160,12 @@ Object.assign(fr, {
   'passive.benevolent_omen': 'Augure bienveillant',
   'passive.effect.benevolent_omen': 'Malus retiré par une technique : gagne 8 Éclat.',
   'passive.burning_code': 'Code brûlant',
-  'passive.effect.burning_code': 'Une Riposte réussie inflige Brûlure à l’attaquant survivant une fois par tour.',
+  'passive.effect.burning_code':
+    'Une Riposte réussie inflige Brûlure à l’attaquant survivant une fois par tour.',
   'passive.perfect_ebb': 'Reflux parfait',
   'passive.effect.perfect_ebb': 'Quand Insaisissable est consommé, gagne Accéléré une fois par tour.',
   'passive.heartwood_wedge': 'Coin du cœur',
-  'passive.effect.heartwood_wedge':
-    'Premier coup contre une barrière : en détruit 6, même esquivé.',
+  'passive.effect.heartwood_wedge': 'Premier coup contre une barrière : en détruit 6, même esquivé.',
   'passive.shared_breath': 'Souffle partagé',
   'passive.effect.shared_breath':
     'Soigner deux membres de l’équipe (elle-même comprise) donne une barrière de 4 au plus blessé.',
@@ -2175,7 +2180,8 @@ Object.assign(fr, {
   'move.kindred_halo': 'Halo fraternel',
   'move.effect.kindred_halo': 'Tous : +12 % PV, Concentré, Accéléré et une barrière de 17.',
   'move.immaculate_relay': 'Relève immaculée',
-  'move.effect.immaculate_relay': 'Signature : l’allié choisi entre Purifié et Concentré après les attaques ennemies.',
+  'move.effect.immaculate_relay':
+    'Signature : l’allié choisi entre Purifié et Concentré après les attaques ennemies.',
   'move.ember_feint': 'Feinte de braise',
   'move.effect.ember_feint': 'Prioritaire. Gagne Riposte pendant 2 tours.',
   'move.red_horn': 'Corne rouge',
@@ -2253,14 +2259,15 @@ Object.assign(en, {
   'passive.benevolent_omen': 'Benevolent Omen',
   'passive.effect.benevolent_omen': 'A move removes a penalty: gain 8 Surge.',
   'passive.burning_code': 'Burning Code',
-  'passive.effect.burning_code': 'A successful Counter applies Burning to the surviving attacker once per turn.',
+  'passive.effect.burning_code':
+    'A successful Counter applies Burning to the surviving attacker once per turn.',
   'passive.perfect_ebb': 'Perfect Ebb',
   'passive.effect.perfect_ebb': 'When Elusive is consumed, gain Haste once per turn.',
   'passive.heartwood_wedge': 'Heartwood Wedge',
-  'passive.effect.heartwood_wedge':
-    'First move against a barrier breaks 6, even when dodged.',
+  'passive.effect.heartwood_wedge': 'First move against a barrier breaks 6, even when dodged.',
   'passive.shared_breath': 'Shared Breath',
-  'passive.effect.shared_breath': 'Healing two team members (itself included) grants a barrier of 4 to the most wounded.',
+  'passive.effect.shared_breath':
+    'Healing two team members (itself included) grants a barrier of 4 to the most wounded.',
   'move.dire_pinion': 'Dire Pinion',
   'move.effect.dire_pinion': 'Priority. Marks the target for 2 turns.',
   'move.spectral_knell': 'Spectral Knell',
@@ -2272,7 +2279,8 @@ Object.assign(en, {
   'move.kindred_halo': 'Kindred Halo',
   'move.effect.kindred_halo': 'Heals 12%; all allies gain Focus, Haste, and a barrier of 17.',
   'move.immaculate_relay': 'Immaculate Relay',
-  'move.effect.immaculate_relay': 'Signature: the chosen ally enters Cleansed and Focused after enemy attacks.',
+  'move.effect.immaculate_relay':
+    'Signature: the chosen ally enters Cleansed and Focused after enemy attacks.',
   'move.ember_feint': 'Ember Feint',
   'move.effect.ember_feint': 'Priority. Gains Counter for 2 turns.',
   'move.red_horn': 'Red Horn',
