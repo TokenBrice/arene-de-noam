@@ -169,9 +169,16 @@ function renderBestiary() {
   }).join('');
   const earnedVisible = visibleFeatIds.filter((id) => ctx.save.feats.includes(id)).length;
   screen.innerHTML = `<div class="shell">${topbar()}<div class="page-head"><div><span class="eyebrow">${CREATURE_IDS.length} / ${CREATURE_IDS.length}</span><h1>${t('bestiary.title')}</h1><p>${t('bestiary.subtitle')}</p></div></div><details class="record-hall" open><summary><span class="eyebrow">${t('record.hall')}</span><strong>${t('record.hall')}</strong></summary><div class="record-hall-content"></div></details><details class="feat-hall-disclosure" open><summary><span class="eyebrow">${earnedVisible}/${visibleFeatIds.length}</span><strong>${t('feat.gallery')}</strong></summary><section class="feat-hall"><div><span class="eyebrow">${earnedVisible}/${visibleFeatIds.length}</span><h2>${t('feat.gallery')}</h2></div><div class="feat-gallery">${featGallery}</div></section></details><div class="bestiary-grid">${cards}</div></div>`;
-  screen.querySelectorAll('.record-hall, .feat-hall-disclosure').forEach((detail) => {
-    detail.open = window.innerWidth > 600;
-  });
+  const disclosures = [...screen.querySelectorAll('.record-hall, .feat-hall-disclosure')],
+    compactQuery = window.matchMedia('(max-width: 600px)'),
+    syncDisclosureMode = ({ matches } = compactQuery) => {
+      disclosures.forEach((detail) => {
+        detail.open = !matches;
+      });
+    };
+  syncDisclosureMode();
+  if (compactQuery.addEventListener) compactQuery.addEventListener('change', syncDisclosureMode);
+  else compactQuery.addListener(syncDisclosureMode);
   bindCommon();
   screen.querySelectorAll('.bestiary-summary').forEach((button) =>
     button.addEventListener('click', () => {

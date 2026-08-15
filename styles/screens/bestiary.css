@@ -156,7 +156,7 @@
 /* Compact summaries disclose the dense career dossier only on request. */
 .record-hall,
 .feat-hall-disclosure {
-  display: block;
+  display: contents;
 }
 .record-hall > summary,
 .feat-hall-disclosure > summary {
@@ -182,17 +182,20 @@
   [data-page='bestiary'] .shell > .page-head {
     order: 1;
   }
-  [data-page='bestiary'] .shell > .bestiary-tools {
+  [data-page='bestiary'] .shell .bestiary-search-row {
     order: 2;
   }
-  [data-page='bestiary'] .shell > .record-hall {
+  [data-page='bestiary'] .shell .bestiary-filter-chips {
     order: 3;
   }
-  [data-page='bestiary'] .shell > .feat-hall-disclosure {
+  [data-page='bestiary'] .shell > .record-hall {
     order: 4;
   }
-  [data-page='bestiary'] .shell > .bestiary-grid {
+  [data-page='bestiary'] .shell > .feat-hall-disclosure {
     order: 5;
+  }
+  [data-page='bestiary'] .shell > .bestiary-grid {
+    order: 6;
   }
   .record-hall,
   .feat-hall-disclosure {

@@ -709,14 +709,6 @@ body.reduced-motion .status-orb.status-burning {
   border-radius: 22px;
   background: radial-gradient(circle at 0 0, #ffc84a15, transparent 38%), #ffffff06;
 }
-@media (max-width: 900px) {
-  .feat-hall {
-    grid-template-columns: 1fr;
-  }
-  .feat-gallery {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
 .feat-hall h2 {
   margin: 5px 0;
 }
@@ -724,6 +716,14 @@ body.reduced-motion .status-orb.status-burning {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 7px;
+}
+@media (max-width: 900px) {
+  .feat-hall {
+    grid-template-columns: 1fr;
+  }
+  .feat-gallery {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 .feat-card {
   display: grid;

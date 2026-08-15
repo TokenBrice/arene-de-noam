@@ -349,7 +349,7 @@
   text-transform: uppercase;
 }
 .bestiary-tools {
-  margin: 0 0 16px;
+  display: contents;
 }
 .bestiary-search-row {
   position: sticky;
@@ -396,7 +396,7 @@
 .bestiary-tools .bestiary-filter-chips {
   display: grid;
   gap: 4px;
-  margin-top: 8px;
+  margin: 8px 0 16px;
 }
 .bestiary-tools .bestiary-filter-row {
   display: flex;
@@ -478,6 +478,11 @@
 .bestiary-card[hidden],
 .bestiary-empty[hidden] {
   display: none !important;
+}
+@media (min-width: 761px) {
+  .bestiary-filter-toggle {
+    display: none !important;
+  }
 }
 @media (max-width: 760px) {
   .bestiary-search-row {
