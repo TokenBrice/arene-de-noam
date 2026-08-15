@@ -17,6 +17,10 @@ function startInput() {
       return;
     }
     if (screen.dataset.page === 'battle' && !ctx.locked) {
+      const modalOpen =
+        screen.querySelector('[role="dialog"][aria-modal="true"]') ||
+        screen.querySelector('#replacement-root')?.childElementCount > 0;
+      if (modalOpen) return;
       if (['1', '2', '3'].includes(event.key)) {
         const move = activeOf(ctx.battleSession.state, 'player').moves[Number(event.key) - 1];
         const button = screen.querySelector(`[data-move="${move}"]`);
