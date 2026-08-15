@@ -241,21 +241,33 @@ const SCREEN_TRANSITION_PAGES = {
   renderBattle: 'battle',
 };
 function transitionScreen(render, targetPage) {
-  const samePage = !screen.dataset.page || screen.dataset.page === targetPage;
-  if (testAnimationScale === 0 || ctx.save.reducedMotion || samePage) {
+  const pageChanged = targetPage !== screen.dataset.page;
+  if (testAnimationScale === 0 || ctx.save.reducedMotion || !pageChanged) {
     render();
-    return;
+  } else {
+    render();
+    screen.classList.add('screen-entering');
+    const veil = document.createElement('i');
+    veil.className = 'screen-transition-veil';
+    veil.setAttribute('aria-hidden', 'true');
+    document.body.append(veil);
+    setTimeout(() => {
+      veil.remove();
+      screen.classList.remove('screen-entering');
+    }, 340);
   }
+  if (pageChanged) {
+    screen.scrollTo(0, 0);
+    const heading = screen.querySelector('h1');
+    heading?.setAttribute('tabindex', '-1');
+    heading?.focus({ preventScroll: true });
+  }
+}
+export function rerenderPreservingFocus(render) {
+  const active = document.activeElement;
+  const key = active?.dataset?.focusKey ?? null;
   render();
-  screen.classList.add('screen-entering');
-  const veil = document.createElement('i');
-  veil.className = 'screen-transition-veil';
-  veil.setAttribute('aria-hidden', 'true');
-  document.body.append(veil);
-  setTimeout(() => {
-    veil.remove();
-    screen.classList.remove('screen-entering');
-  }, 340);
+  if (key) ctx.screen.querySelector(`[data-focus-key="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
 }
 export function installScreenTransitions() {
   for (const [name, page] of Object.entries(SCREEN_TRANSITION_PAGES)) {
@@ -304,5 +316,4 @@ function trapModalTab(event) {
   }
   return true;
 }
-
-registerRoutes({ bindCommon, installBestiaryFilters, renderCurrent, handleEscape, trapModalTab });
+registerRoutes({ bindCommon, installBestiaryFilters, renderCurrent, handleEscape, trapModalTab, rerenderPreservingFocus });

@@ -370,3 +370,26 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   await expect(page.getByText('Tour 1')).toBeVisible();
   await expect(page.locator('[data-move]').first()).toBeVisible();
 });
+
+test('navigation and control rerenders preserve keyboard focus', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+
+  const difficulty = page.locator('#difficulty');
+  await difficulty.focus();
+  await difficulty.selectOption('champion');
+  await expect(page.locator('#difficulty')).toBeFocused();
+
+  await page.locator('#screen').evaluate((node) => node.scrollTo(0, node.scrollHeight));
+  await page.locator('[data-action="title"]').first().click();
+  await page.getByRole('button', { name: /Bestiaire/ }).click();
+  await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeFocused();
+  await expect(page.locator('#screen')).toHaveJSProperty('scrollTop', 0);
+
+  await page.locator('[data-action="settings"]').click();
+  const language = page.locator('[data-lang="en"]');
+  await language.focus();
+  await language.click();
+  await expect(page.locator('[data-lang="en"]')).toBeFocused();
+});
