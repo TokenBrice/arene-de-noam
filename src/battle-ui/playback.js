@@ -161,7 +161,13 @@ async function playEvents(events) {
     return;
   }
   for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
-    const event = events[eventIndex];
+    const event = events[eventIndex],
+      switchLeadIn =
+        event.type === 'switch' || event.type === 'replace'
+          ? (ctx.save.reducedMotion ? 70 : 220) / ctx.save.battleSpeed
+          : 0,
+      deferRefresh = event.type === 'status' && !event.applied,
+      deferProjection = Boolean(switchLeadIn || deferRefresh);
     while (document.hidden) {
       await wait(150);
       if (!sessionIsActive(session)) {
@@ -173,7 +179,7 @@ async function playEvents(events) {
       clearPresentation();
       return;
     }
-    advancePresentation(session, event);
+    if (!deferProjection) advancePresentation(session, event);
     const actorSide = event.side;
     const fighter = screen.querySelector(`#fighter-${actorSide}`);
     if (event.type === 'trainer-command') {
@@ -361,10 +367,6 @@ async function playEvents(events) {
       });
       if (session.timeline.length > 40) session.timeline.shift();
     }
-    const switchLeadIn =
-      event.type === 'switch' || event.type === 'replace'
-        ? (ctx.save.reducedMotion ? 70 : 220) / ctx.save.battleSpeed
-        : 0;
     if (switchLeadIn) {
       // Let the outgoing recall read before revealing the already-resolved
       // incoming fighter. The overlap begins near the end of the light beam.
@@ -375,8 +377,11 @@ async function playEvents(events) {
         return;
       }
     }
-    const deferRefresh = event.type === 'status' && !event.applied;
-    if (!deferRefresh) refreshBattle();
+    if (!deferProjection) refreshBattle();
+    else if (switchLeadIn) {
+      advancePresentation(session, event);
+      refreshBattle();
+    }
     if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
     syncBattleAnimationSpeed();
     await wait(Math.max(1, eventPresentationDelay(event) - switchLeadIn));
@@ -384,7 +389,10 @@ async function playEvents(events) {
       clearPresentation();
       return;
     }
-    if (deferRefresh) refreshBattle();
+    if (deferRefresh) {
+      advancePresentation(session, event);
+      refreshBattle();
+    }
     fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
     const next = events[eventIndex + 1];
     if (
