@@ -41,9 +41,29 @@ test('live dictionary values are not shadowed by duplicate definitions', () => {
     assert.equal(DICTIONARIES.en[key], en, `en ${key}`);
   }
 });
-test('consumed-status localization is available in both locales', () => {
-  assert.equal(DICTIONARIES.fr['battle.action.consumed'], '{actor} utilise son bonus {status} !');
-  assert.equal(DICTIONARIES.en['battle.action.consumed'], '{actor} uses up its {status} boost!');
+test('battle playback and Chronicle copy is available in both locales', () => {
+  const expected = {
+    fr: {
+      'battle.action.consumed': '{actor} utilise son bonus {status} !',
+      'battle.action.skip': '{name} ne peut pas agir : K.O. !',
+      'battle.logEnd.win': 'Victoire !',
+      'battle.logEnd.loss': 'Défaite — belle bataille.',
+      'battle.logEnd.cap': 'Fin du combat : limite de tours.',
+      'battle.logSide.player': 'Ton {name}',
+      'battle.logSide.enemy': '{name} rival',
+    },
+    en: {
+      'battle.action.consumed': '{actor} uses up its {status} boost!',
+      'battle.action.skip': '{name} cannot act — K.O.!',
+      'battle.logEnd.win': 'Victory!',
+      'battle.logEnd.loss': 'Defeat — good battle.',
+      'battle.logEnd.cap': 'Battle over: turn limit.',
+      'battle.logSide.player': 'Your {name}',
+      'battle.logSide.enemy': 'Rival {name}',
+    },
+  };
+  for (const [language, entries] of Object.entries(expected))
+    for (const [key, value] of Object.entries(entries)) assert.equal(DICTIONARIES[language][key], value, `${language} ${key}`);
 });
 test('save failure copy is available in both locales', () => {
   assert.equal(typeof DICTIONARIES.fr['app.saveFailed'], 'string');

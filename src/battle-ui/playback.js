@@ -261,11 +261,25 @@ async function playEvents(events) {
       sound.call(event.creatureId, { fall: true });
       sound.ko();
     }
-    if (event.type === 'battle-end' && event.reason === 'turn-cap') session.lastLine = t('battle.cap');
+    if (event.type === 'move-skip') {
+      const skipped = activeOf(session.state, event.side);
+      session.lastLine = t('battle.action.skip', { name: creatureName(skipped.id) });
+    }
+    if (event.type === 'battle-end') {
+      session.lastLine =
+        event.reason === 'turn-cap'
+          ? t('battle.logEnd.cap')
+          : event.winner === 'player'
+            ? t('battle.logEnd.win')
+            : t('battle.logEnd.loss');
+    }
     if (LOG_EVENT_TYPES.has(event.type)) {
+      const timelineCreature =
+        event.creatureId || (event.type === 'move-skip' ? activeOf(session.state, event.side)?.id : null);
       session.timeline.push({
         type: event.type === 'damage' && event.combo ? 'combo' : event.type,
         side: event.side,
+        name: timelineCreature ? creatureName(timelineCreature) : null,
         turn: event.turn || session.state.turn,
         text: session.lastLine,
       });

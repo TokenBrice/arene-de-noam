@@ -67,6 +67,7 @@ const toast = document.querySelector('#toast');
 const LADDER_COUNT = TRAINERS.length;
 const LOG_EVENT_TYPES = new Set([
   'move-start',
+  'move-skip',
   'trainer-command',
   'perfect-relay',
   'damage',
@@ -84,6 +85,7 @@ const LOG_EVENT_TYPES = new Set([
   'switch',
   'replace',
   'ko',
+  'battle-end',
 ]);
 const LOG_TYPE_GROUPS = {
   'move-start': 'move',

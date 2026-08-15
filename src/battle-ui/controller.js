@@ -329,8 +329,14 @@ function openBattleLog() {
       ? entries
           .map((entry, index) => {
             const turn = entry.turn || 1,
-              turnStart = index === 0 || entries[index - 1].turn !== turn;
-            return `<li class="log-${entry.side || 'field'} ${index === 0 ? 'latest' : ''} ${turnStart ? 'turn-start' : ''}" data-turn="${t('battle.turn', { turn })}"><i>${icons[entry.side] || '✦'}</i><span><small>${t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`)}</small>${escapeHtml(entry.text)}</span></li>`;
+              turnStart = index === 0 || entries[index - 1].turn !== turn,
+              active = entry.side ? activeOf(ctx.battleSession.state, entry.side) : null,
+              sideCreature = entry.name || active?.id,
+              sideLabel =
+                entry.side && sideCreature
+                  ? t(`battle.logSide.${entry.side}`, { name: creatureName(sideCreature) })
+                  : '';
+            return `<li class="log-${entry.side || 'field'} ${index === 0 ? 'latest' : ''} ${turnStart ? 'turn-start' : ''}" data-turn="${t('battle.turn', { turn })}"><i>${icons[entry.side] || '✦'}</i><span><small>${t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`)}</small>${sideLabel ? `<b class="log-side-label">${escapeHtml(sideLabel)}</b> ` : ''}${escapeHtml(entry.text)}</span></li>`;
           })
           .join('')
       : `<li class="empty">${t('battle.logEmpty')}</li>`
