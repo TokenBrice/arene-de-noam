@@ -241,7 +241,7 @@ const SCREEN_TRANSITION_PAGES = {
   renderBattle: 'battle',
 };
 function transitionScreen(render, targetPage) {
-  const pageChanged = targetPage !== screen.dataset.page;
+  const pageChanged = Boolean(screen.dataset.page) && targetPage !== screen.dataset.page;
   if (testAnimationScale === 0 || ctx.save.reducedMotion || !pageChanged) {
     render();
   } else {

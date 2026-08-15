@@ -102,10 +102,13 @@ function renderDraft() {
   bindCommon();
   screen.querySelectorAll('[data-draft-pick]').forEach((button) =>
     button.addEventListener('click', () => {
+      const leadIndex = ctx.draftRun.team.length;
       ctx.draftRun.team.push(button.dataset.draftPick);
       ctx.draftRun.round++;
       sound.ui();
       rerenderPreservingFocus(() => renderDraft());
+      if (ctx.draftRun.round >= ctx.draftRun.offers.length)
+        screen.querySelector(`[data-focus-key="draft-lead-${leadIndex}"]`)?.focus({ preventScroll: true });
     })
   );
   const showOffer = (index) => {

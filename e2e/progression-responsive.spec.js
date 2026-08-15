@@ -393,3 +393,29 @@ test('navigation and control rerenders preserve keyboard focus', async ({ page }
   await language.click();
   await expect(page.locator('[data-lang="en"]')).toBeFocused();
 });
+
+test('cold boot does not steal focus during initial title render', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await expect(page.locator('.screen-transition-veil')).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+});
+
+test('custom slot clearing restores focus to its replacement save control', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.locator('[data-squad="storm_circuit"]').click();
+  await page.locator('[data-custom-save="0"]').click();
+  const clear = page.locator('[data-custom-clear="0"]');
+  await clear.click();
+  await expect(page.locator('[data-custom-save="0"]')).toBeFocused();
+});
+
+test('final draft pick hands focus to its lead control', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?seed=20260814&animations=0');
+  await page.getByRole('button', { name: 'Draft du jour' }).click();
+  for (let round = 0; round < 3; round++) await page.locator('[data-draft-pick]').first().click();
+  await expect(page.locator('[data-focus-key="draft-lead-2"]')).toBeFocused();
+});

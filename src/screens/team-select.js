@@ -408,6 +408,7 @@ function renderTeamSelect(mode = 'ladder') {
       );
       persist();
       rerenderPreservingFocus(() => renderTeamSelect(mode));
+      screen.querySelector(`[data-focus-key="custom-save-${slot}"]`)?.focus({ preventScroll: true });
     })
   );
   screen.querySelectorAll('[data-enemy-pick]').forEach((button) =>
