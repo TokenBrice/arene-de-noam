@@ -971,6 +971,12 @@ body.reduced-motion * {
   padding: 2px;
   opacity: 0.45;
 }
+@media (max-width: 600px) {
+  .enemy-picker .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 .enemy-picker .icon-btn.active {
   opacity: 1;
   border-color: var(--cyan);

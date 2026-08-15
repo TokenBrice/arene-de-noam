@@ -661,7 +661,39 @@ body.reduced-motion .battle-vignette {
   transition: none;
 }
 
-/* Selection is split into a scouting stage and a disclosed tactical plan. */
+/* Keep the confirmation action beside the selection count while the tactical
+   plan grows below it. The compact end-of-page action remains for keyboard
+   and reading-order continuity. */
+.selection-aside-ready {
+  position: sticky;
+  z-index: 3;
+  top: max(18px, env(safe-area-inset-top));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: 0 0 var(--space-3);
+  border-bottom: 1px solid #ffffff16;
+  background: linear-gradient(145deg, #1e2152f5, #0a0d28f5);
+}
+.selection-aside-ready > strong {
+  color: var(--ink);
+  font-size: var(--text-md);
+  white-space: nowrap;
+}
+.selection-aside-ready > .primary-btn {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding-inline: 14px;
+}
+/* The end-of-page CTA is the single mobile action; the dock and this CTA
+   already reserve the fixed bottom controls there. */
+@media (max-width: 900px) {
+  .selection-aside-ready {
+    display: none;
+  }
+}
 .selection-primary {
   display: grid;
   gap: var(--space-3);
@@ -694,6 +726,17 @@ body.reduced-motion .battle-vignette {
 .battle-plan > summary b {
   font-size: var(--text-md);
 }
+@media (max-width: 900px) {
+  [data-page='selection'] .shell {
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  }
+  .mobile-selection-dock {
+    min-height: 64px;
+  }
+  .mobile-selection-dock > button {
+    min-height: 44px;
+  }
+}
 .battle-plan > summary small {
   color: var(--muted);
   font-size: var(--text-xs);
@@ -715,17 +758,6 @@ body.reduced-motion .battle-vignette {
 .select-aside > .primary-btn {
   margin-top: var(--space-4);
   min-height: 48px;
-}
-@media (max-width: 900px) {
-  [data-page='selection'] .shell {
-    padding-bottom: calc(86px + env(safe-area-inset-bottom));
-  }
-  .mobile-selection-dock {
-    min-height: 64px;
-  }
-  .mobile-selection-dock > button {
-    min-height: 44px;
-  }
 }
 @media (max-width: 700px) {
   .battle-plan {
