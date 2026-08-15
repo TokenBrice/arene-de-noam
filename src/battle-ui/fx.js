@@ -306,6 +306,7 @@ function tacticalFx(event) {
   stage.className = `fx-stage active tactical-fx tactical-${['heal', 'barrier'].includes(event.type) ? event.type : event.status || 'cleanse'} ${numeric ? 'tactical-numeric' : ''} ${statusPolarity} ${statusChange} ${moveClass} from-${side}`;
   stage.style.setProperty('--fx-color', color);
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
+  stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');
   const tacticalTemplate = tacticalFxTemplate(particleBudget(18));
   stage.innerHTML = `<div class="fx-source-aura">${tacticalTemplate.rings}</div><div class="fx-detail">${tacticalTemplate.detail}</div><div class="fx-impact">${tacticalTemplate.particles}<i class="fx-core ${numeric ? 'tactical-number' : ''}${meta?.lightInk ? ' light-ink' : ''}">${coreText}</i></div>`;
   ctx.arenaScene?.burst(color, side, event.type === 'heal' ? 1.2 : 0.8);

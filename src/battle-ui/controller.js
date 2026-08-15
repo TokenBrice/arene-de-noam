@@ -521,12 +521,29 @@ function patchBattleHud(hud, side, view) {
   surgeRow?.classList.toggle('ready', owner.surge >= cost);
   if (surgeFill) surgeFill.style.width = `${owner.surge}%`;
   if (surgeNumber) surgeNumber.textContent = `✦ ${owner.surge}/${cost}`;
+  const pips = [...plate.querySelectorAll('.team-dot')];
+  owner.team.forEach((teamCreature, index) => {
+    const pip = pips[index];
+    if (!pip) return;
+    const ready =
+      teamCreature.hp > 0 &&
+      owner.surge >= signatureCostFor(teamCreature) &&
+      teamCreature.moves.some((id) => MOVES[id].signature);
+    pip.classList.toggle('active', index === owner.active);
+    pip.classList.toggle('ko', teamCreature.hp <= 0);
+    pip.classList.toggle('signature-ready', ready);
+    pip.style.setProperty('--team-hp', `${Math.max(0, (teamCreature.hp / teamCreature.maxHp) * 100)}`);
+    pip.setAttribute(
+      'aria-label',
+      `${creatureName(teamCreature.id)} · ${teamCreature.hp}/${teamCreature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`
+    );
+  });
   const statusIds = sortStatusIds(Object.keys(c.statuses)),
     statusNames = [
       ...(c.barrier ? [t('battle.barrierName')] : []),
       ...statusIds.map((id) => t(`status.${id}`)),
     ],
-    pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) => pip.getAttribute('aria-label'));
+    pipLabels = pips.map((pip) => pip.getAttribute('aria-label'));
   plate.setAttribute(
     'aria-label',
     [creatureName(c.id), `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`, statusNames.join(' · ') || t('battle.noStatuses'), pipLabels.join(' · ')]
@@ -588,8 +605,8 @@ function refreshBattle() {
       statusSet(p),
       statusSet(e),
       moveStateKey,
-      view.sides.player.surge >= signatureCostFor(p) ? 1 : 0,
-      view.sides.enemy.surge >= signatureCostFor(e) ? 1 : 0,
+      view.sides.player.surge,
+      view.sides.enemy.surge,
     ].join('::'),
     reuseLockedMoves =
       ctx.locked &&
