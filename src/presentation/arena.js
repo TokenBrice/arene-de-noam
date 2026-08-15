@@ -95,8 +95,7 @@ export class ArenaScene {
     } catch (error) {
       throw new Error('WEBGL_UNAVAILABLE', { cause: error });
     }
-    const cap = canvas.clientWidth * canvas.clientHeight > 500000 ? 1.5 : 2;
-    this.renderer.setPixelRatio(Math.min(cap, globalThis.devicePixelRatio || 1));
+    this.pixelRatioCap = null;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -462,7 +461,12 @@ export class ArenaScene {
     if (this.disposed) return;
     const rect = this.canvas.getBoundingClientRect(),
       w = Math.max(1, rect.width),
-      h = Math.max(1, rect.height);
+      h = Math.max(1, rect.height),
+      cap = this.canvas.clientWidth * this.canvas.clientHeight > 500000 ? 1.5 : 2;
+    if (this.pixelRatioCap !== cap) {
+      this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, cap));
+      this.pixelRatioCap = cap;
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);

@@ -28,21 +28,24 @@ function sessionIsActive(session) {
   );
 }
 
-let lastAppliedSpeed = null,
-  syncQueued = false;
+let lastAppliedSpeed = null;
 
 function syncBattleAnimationSpeed() {
   const speed = ctx.save.battleSpeed;
-  if (lastAppliedSpeed === speed || syncQueued) return;
-  syncQueued = true;
+  if (speed === 1 && lastAppliedSpeed === 1) return;
   queueMicrotask(() => {
-    syncQueued = false;
-    if (!screen.classList.contains('battle-screen')) return;
-    const currentSpeed = ctx.save.battleSpeed;
-    if (lastAppliedSpeed === currentSpeed) return;
-    for (const animation of screen.getAnimations({ subtree: true }))
-      animation.updatePlaybackRate(currentSpeed);
-    lastAppliedSpeed = currentSpeed;
+    const apply = () => {
+      if (!screen.classList.contains('battle-screen')) return;
+      const currentSpeed = ctx.save.battleSpeed;
+      if (currentSpeed === 1 && lastAppliedSpeed === 1) return;
+      for (const animation of screen.getAnimations({ subtree: true })) {
+        animation.updatePlaybackRate(currentSpeed);
+        animation.playbackRate = currentSpeed;
+      }
+      lastAppliedSpeed = currentSpeed;
+    };
+    apply();
+    if (ctx.save.battleSpeed !== 1) requestAnimationFrame(apply);
   });
 }
 
@@ -435,6 +438,7 @@ function arenaPulseFx(event) {
 }
 
 function missWhiffFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   // The attack sailed past: the projectile keeps flying beyond the dodger and
@@ -452,6 +456,7 @@ function missWhiffFx(event) {
 }
 
 function barrierShatterFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   // Same parent-layer trick as the whiff callout: the shards must outlive the
@@ -634,7 +639,7 @@ function clearBattleFx() {
     );
     fighter.style.removeProperty('--attack-affinity-color');
   });
-  screen.querySelectorAll('.switch-ghost, .switch-beam').forEach((node) => node.remove());
+  screen.querySelectorAll('.switch-ghost, .switch-beam, .whiff-callout, .barrier-shatter').forEach((node) => node.remove());
   screen.querySelector('#action-line')?.classList.remove('epic');
   ctx.currentFxMove = null;
 }

@@ -106,6 +106,48 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   await expectNoRuntimeLeaks(runtime);
 });
 
+test('×2 speed syncs newly spawned animations across rematches', async ({ page }) => {
+  test.setTimeout(90000);
+  await installCompletedTutorial(page, {
+    reducedMotion: false,
+    battleSpeed: 2,
+    lastTeam: ['orakyn', 'abyssar', 'virelia'],
+  });
+  await page.goto('/?seed=18&enemyHp=1');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await expect(page.locator('.battle-screen')).toBeVisible();
+  const initialRates = await page.evaluate(() =>
+    [...document.querySelector('.battle-screen').getAnimations({ subtree: true })].map(
+      (animation) => animation.playbackRate
+    )
+  );
+  expect(initialRates.length).toBeGreaterThan(0);
+  expect(initialRates.every((rate) => rate === 2)).toBe(true);
+  const move = page.locator('[data-move]:visible:enabled').first();
+  await move.click();
+  await page.waitForTimeout(100);
+  await expect(page.locator('#fx-stage.impact')).toBeVisible();
+  const laterRates = await page.evaluate(() =>
+    [...document.querySelector('.battle-screen').getAnimations({ subtree: true })].map(
+      (animation) => animation.playbackRate
+    )
+  );
+  expect(laterRates.length).toBeGreaterThan(0);
+  expect(laterRates.every((rate) => rate === 2)).toBe(true);
+  await playVisibleBattle(page, { maxIterations: 1200 });
+  await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Revanche' }).click();
+  await expect(page.locator('.battle-screen')).toBeVisible();
+  const rematchRates = await page.evaluate(() =>
+    [...document.querySelector('.battle-screen').getAnimations({ subtree: true })].map(
+      (animation) => animation.playbackRate
+    )
+  );
+  expect(rematchRates.length).toBeGreaterThan(0);
+  expect(rematchRates.every((rate) => rate === 2)).toBe(true);
+});
+
 test('quick battle rules alter the fight and remain visible in the codex', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=40&animations=0');
