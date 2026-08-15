@@ -65,7 +65,7 @@ Complete. Commits:
 
 ## Status
 Complete. Commit:
-- `bb60054` (`polish: add high-contrast and responsive visual details`)
+- `23e5f10` (`polish: add high-contrast and responsive visual details`)
 
 ## Implemented
 - Added opaque, two-pixel high-contrast surfaces for feat, record, rival, draft, boon, and academy panels; removed the decorative screen pattern in high contrast.
