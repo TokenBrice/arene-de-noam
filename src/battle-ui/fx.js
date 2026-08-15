@@ -4,7 +4,6 @@ const {
   AFFINITIES,
   CREATURES,
   MOVES,
-  quickRule,
   activeOf,
   STATUS_DEFINITIONS,
   statusIcon,
@@ -14,7 +13,6 @@ const {
   sound,
   sprite,
   creatureName,
-  affinity,
   affinityIcon,
   wait,
 } = ctx;

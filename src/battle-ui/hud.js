@@ -22,7 +22,6 @@ const {
   t,
   sprite,
   creatureName,
-  affinity,
   affinityName,
   className,
   affinityIcon,

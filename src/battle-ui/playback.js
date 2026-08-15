@@ -4,15 +4,12 @@ const {
   CREATURES,
   MOVES,
   activeOf,
-  STATUS_DEFINITIONS,
   testAnimationScale,
   t,
   screen,
   sound,
   LOG_EVENT_TYPES,
   creatureName,
-  affinity,
-  affinityName,
   wait,
 } = ctx;
 const {
