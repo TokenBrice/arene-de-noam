@@ -956,6 +956,19 @@ test('support control, evasion, counters, roots, and team healing alter legal pl
     'team healing reaches conscious allies'
   );
 });
+test('Night Terror extends Midnight Lullaby stun in the support path', () => {
+  const state = createBattle({
+    playerTeam: ['nocturnyx', 'orakyn'],
+    enemyTeam: ['kordane', 'calderoc'],
+    seed: 74,
+  });
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'midnight_lullaby' },
+    { type: 'move', moveId: 'crystal_strike' }
+  );
+  assert.equal(result.state.sides.enemy.team[0].statuses.stunned?.remaining, 3);
+});
 
 test('defensive Signatures spend Surge on distinct team-saving effects', () => {
   const state = createBattle({

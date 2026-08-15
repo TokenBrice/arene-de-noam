@@ -500,6 +500,20 @@ function scaledPower(move, attacker, defender) {
   if (attacker.passive === 'blood_in_water' && defender.hp / defender.maxHp < 0.5) power *= 1.18;
   return power;
 }
+function applyTargetStatus(state, side, descriptors, attacker, events) {
+  const targetSide = otherSide(side),
+    target = activeOf(state, targetSide),
+    statuses = (descriptors || []).map((spec) => {
+      let duration = spec.duration,
+        stacks = spec.stacks;
+      if (attacker.passive === 'dream_dust' && duration) duration += 1;
+      if (attacker.passive === 'night_terror' && spec.id === 'stunned' && duration) duration += 1;
+      if (attacker.passive === 'living_furnace' && spec.id === 'burning') stacks = (stacks || 1) + 1;
+      return { ...spec, duration, stacks };
+    });
+  return applyStatuses(target, statuses, state, targetSide, events, attacker.id);
+}
+
 
 function resolveDamageTransaction(state, side, move, events) {
   const targetSide = otherSide(side),
@@ -634,15 +648,8 @@ function resolveDamageTransaction(state, side, move, events) {
   }
   let appliedStatuses = 0;
   if (defender.hp > 0) {
-    const statuses = (move.targetStatuses || []).map((spec) => {
-      let duration = spec.duration,
-        stacks = spec.stacks;
-      if (attacker.passive === 'dream_dust' && duration) duration += 1;
-      if (attacker.passive === 'night_terror' && spec.id === 'stunned' && duration) duration += 1;
-      if (attacker.passive === 'living_furnace' && spec.id === 'burning') stacks = (stacks || 1) + 1;
-      return { ...spec, duration, stacks };
-    });
-    appliedStatuses = applyStatuses(defender, statuses, state, targetSide, events, attacker.id);
+    const statuses = move.targetStatuses || [];
+    appliedStatuses = applyTargetStatus(state, side, statuses, attacker, events);
     if (statuses.length && attacker.passive === 'memory_silk') {
       passiveEvent(events, side, attacker);
       healCreature(attacker, 5, side, events, 'passive');
@@ -791,7 +798,7 @@ function executeMove(state, side, action, events) {
   if (move.kind !== 'damage' && move.healRatio)
     healCreature(attacker, attacker.maxHp * move.healRatio, side, events);
   if (move.kind !== 'damage' && defender.hp > 0)
-    applyStatuses(defender, move.targetStatuses, state, targetSide, events, attacker.id);
+    applyTargetStatus(state, side, move.targetStatuses, attacker, events);
   let healedAllies = 0;
   if (move.teamHealRatio) {
     const boost = attacker.passive === 'spring_tide' ? 1.25 : attacker.passive === 'photosynthesis' ? 1.3 : 1;
