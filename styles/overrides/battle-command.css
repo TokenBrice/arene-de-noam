@@ -13,12 +13,11 @@
   font-size: 17px;
 }
 .trainer-command-btn small {
-  overflow: hidden;
-  max-width: 88px;
+  overflow: visible;
   font-size: 7px;
   font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
 }
 .trainer-command-btn.used {
   border-color: #7feaa73b !important;
@@ -151,11 +150,21 @@
 @media (max-width: 600px) {
   .trainer-command-btn {
     grid-template-columns: 1fr;
+    width: 44px;
     min-width: 44px;
-    padding: 8px;
+    max-width: 44px;
+    min-height: 44px;
+    padding: 6px 3px;
   }
   .trainer-command-btn small {
-    display: none;
+    display: block;
+    max-width: none;
+    overflow: visible;
+    font-size: 6px;
+    line-height: 1;
+    text-align: center;
+    text-overflow: clip;
+    white-space: normal;
   }
   .command-stripe {
     grid-template-columns: 58px 1fr 95px;

@@ -39,12 +39,13 @@ const fr = {
   'academy.surge':
     'Une attaque donne 20 Éclat ; un soin ou un soutien en donne 25. Subir des dégâts directs donne aussi 25 % des PV perdus. Une Signature dépense son coût.',
   'academy.openBestiary': 'Explorer les 90 techniques',
-  'battle.command': 'Ordre du dresseur',
-  'battle.commandUsed': 'Ordre donné',
-  'battle.commandLine': '⚑ ORDRE DU DRESSEUR · {command} !',
+  'battle.command': 'Coup de pouce',
+  'battle.commandUsed': 'Coup de pouce utilisé',
+  'battle.commandLine': '⚑ COUP DE POUCE · {command} !',
   'academy.command':
     'Le Coup de pouce retire tous les malus de ta créature active et donne +15 Éclat, une fois par combat sans consommer ton action.',
   'command.coach': 'Coup de pouce',
+  'command.unavailable': 'Utilisable quand ta créature a un malus.',
   'command.effect.coach':
     'Si ta créature active a un malus : retire tous ses malus et gagne +15 Éclat. Une fois par combat, sans utiliser ton action.',
   'advice.title': 'Conseils de l’entraîneur',
@@ -496,12 +497,13 @@ const en = {
   'academy.surge':
     'A damaging move gives 20 Surge; healing or support gives 25. Taking direct damage gives Surge equal to 25% of HP lost. A Signature spends its cost.',
   'academy.openBestiary': 'Explore all 90 moves',
-  'battle.command': 'Trainer Command',
-  'battle.commandUsed': 'Command used',
-  'battle.commandLine': '⚑ TRAINER COMMAND · {command}!',
+  'battle.command': 'Coach Boost',
+  'battle.commandUsed': 'Coach Boost used',
+  'battle.commandLine': '⚑ COACH BOOST · {command}!',
   'academy.command':
     'Coach Boost removes every penalty from your active creature and grants +15 Surge once per battle without spending your action.',
   'command.coach': 'Coach Boost',
+  'command.unavailable': 'Usable when your creature has a penalty.',
   'command.effect.coach':
     'If your active creature has a penalty: remove all its penalties and gain +15 Surge. Once per battle, without using your action.',
   'advice.title': 'Coach Tips',

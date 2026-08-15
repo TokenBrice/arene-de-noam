@@ -550,11 +550,20 @@ function refreshBattle() {
   mute.setAttribute('aria-pressed', String(ctx.save.muted));
   const commandButton = screen.querySelector('[data-action="trainer-command"]');
   if (commandButton) {
-    const used = state.sides.player.commandUsed;
-    commandButton.disabled = ctx.locked || !canUseTrainerCommand(state, 'player');
+    const used = state.sides.player.commandUsed,
+      available = canUseTrainerCommand(state, 'player'),
+      disabled = ctx.locked || !available;
+    commandButton.disabled = disabled;
     commandButton.classList.toggle('used', used);
     commandButton.innerHTML = `<span>${used ? '✓' : '⚑'}</span><small>${used ? t('battle.commandUsed') : t('command.coach')}</small>`;
-    commandButton.title = t('command.effect.coach');
+    if (disabled && !used) {
+      const unavailable = t('command.unavailable');
+      commandButton.title = unavailable;
+      commandButton.setAttribute('aria-label', unavailable);
+    } else {
+      commandButton.title = t('command.effect.coach');
+      commandButton.setAttribute('aria-label', used ? t('battle.commandUsed') : t('battle.command'));
+    }
   }
   renderTutorialTip();
   route.syncBattleAnimationSpeed?.();

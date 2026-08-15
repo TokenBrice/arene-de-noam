@@ -157,12 +157,8 @@
 }
 
 .battle-screen .trainer-command-btn {
-  grid-template-columns: 1fr;
-  max-width: 44px;
-}
-
-.battle-screen .trainer-command-btn small {
-  display: none;
+  grid-template-columns: auto auto;
+  min-width: 44px;
 }
 
 .battle-plates {
