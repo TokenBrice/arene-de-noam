@@ -375,6 +375,15 @@ function openPlateDetails(side) {
   });
   root.querySelector('[data-action="close-plate"]')?.focus();
 }
+function closeBattleOverlay() {
+  const closeButton = screen
+    .querySelector('#replacement-root')
+    ?.querySelector('[data-action="close-codex"],[data-action="close-log"],[data-action="close-plate"]');
+  if (!closeButton) return false;
+  closeButton.click();
+  return true;
+}
+
 
 function bindBattleChoiceContext(session) {
   const line = screen.querySelector('#action-line');
@@ -874,6 +883,7 @@ registerRoutes({
   openBattleCodex,
   openBattleLog,
   openPlateDetails,
+  closeBattleOverlay,
   battleEntrance,
   refreshBattle,
   renderTutorialTip,
