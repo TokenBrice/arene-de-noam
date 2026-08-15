@@ -535,7 +535,7 @@ function patchBattleHud(hud, side, view) {
     pip.style.setProperty('--team-hp', `${Math.max(0, (teamCreature.hp / teamCreature.maxHp) * 100)}`);
     pip.setAttribute(
       'aria-label',
-      `${creatureName(teamCreature.id)} · ${teamCreature.hp}/${teamCreature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`
+      `${creatureName(teamCreature.id)} · ${className(teamCreature.classId)} · ${teamCreature.hp}/${teamCreature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`
     );
   });
   const statusIds = sortStatusIds(Object.keys(c.statuses)),
