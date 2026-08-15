@@ -453,6 +453,8 @@ test('battle chronicle records semantic events and opens from the keyboard', asy
   await expect(page.locator('.battle-log li')).not.toHaveCount(0);
   await expect(page.locator('.battle-log li.turn-start[data-turn="Tour 1"]')).toHaveCount(1);
   await expect(page.locator('.battle-log')).toContainText(/lance|perd|entre dans l’arène/);
+  await expect(page.locator('.battle-log')).toContainText('Ton Orakyn');
+  await expect(page.locator('.battle-log')).toContainText('Kordane rival');
   await expect(page.locator('.battle-log li').filter({ hasText: 'Combo' })).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(page.locator('.battle-log')).toHaveCount(0);

@@ -331,7 +331,7 @@ function openBattleLog() {
             const turn = entry.turn || 1,
               turnStart = index === 0 || entries[index - 1].turn !== turn,
               active = entry.side ? activeOf(ctx.battleSession.state, entry.side) : null,
-              sideCreature = entry.name || active?.id,
+              sideCreature = entry.creatureId || active?.id,
               sideLabel =
                 entry.side && sideCreature
                   ? t(`battle.logSide.${entry.side}`, { name: creatureName(sideCreature) })

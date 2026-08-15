@@ -279,7 +279,7 @@ async function playEvents(events) {
       session.timeline.push({
         type: event.type === 'damage' && event.combo ? 'combo' : event.type,
         side: event.side,
-        name: timelineCreature ? creatureName(timelineCreature) : null,
+        creatureId: timelineCreature,
         turn: event.turn || session.state.turn,
         text: session.lastLine,
       });
