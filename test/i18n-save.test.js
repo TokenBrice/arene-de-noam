@@ -32,7 +32,7 @@ test('French and English localization keys are complete and interpolation works'
 });
 test('live dictionary values are not shadowed by duplicate definitions', () => {
   for (const [key, fr, en] of [
-    ['status.effect.marked', 'Combo consomme Marqué +40 % dégâts.', 'Combo consumes Marked: +40% damage.'],
+    ['status.effect.marked', 'Combo : Marqué consommé, dégâts ×1,4.', 'Combo consumes Marked: +40% damage.'],
     ['move.effect.petal_ray', 'Inflige des dégâts et rend 3 % des PV à l’équipe.', "Deals damage and restores 3% of the team's HP."],
     ['advice.title', 'Conseils de l’entraîneur', 'Coach Tips'],
     ['battle.switchIncoming', 'Dégâts prévus : {damage}', 'Predicted damage: {damage}'],
