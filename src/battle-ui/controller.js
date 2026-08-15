@@ -136,6 +136,7 @@ function startBattle(config) {
     tutorialStep: config.tutorialStep ?? null,
     sessionToken: ++battleSessionSequence,
     cancelled: false,
+    fxTimers: new Set(),
   };
   void route.renderBattle(ctx.battleSession, screen.dataset.page);
 }

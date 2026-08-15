@@ -124,7 +124,6 @@ export const ctx = {
   gauntletRun: null,
   draftRun: null,
   theaterTimers: [],
-  battleFxTimers: new Set(),
   routes: {},
 };
 

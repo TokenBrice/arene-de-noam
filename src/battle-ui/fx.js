@@ -46,13 +46,10 @@ function syncBattleAnimationSpeed() {
   });
 }
 
+const theaterFxTimers = new Set();
+
 function fxTimerRegistry() {
-  const session = ctx.battleSession;
-  if (session) {
-    session.fxTimers ||= new Set();
-    return session.fxTimers;
-  }
-  return ctx.battleFxTimers;
+  return ctx.battleSession?.fxTimers || theaterFxTimers;
 }
 
 function scheduleFxTimer(callback, delay) {
@@ -67,12 +64,9 @@ function scheduleFxTimer(callback, delay) {
 }
 
 function clearFxTimers() {
-  const sessionTimers = ctx.battleSession?.fxTimers;
-  for (const timers of [sessionTimers, ctx.battleFxTimers]) {
-    if (!timers) continue;
-    timers.forEach(clearTimeout);
-    timers.clear();
-  }
+  const timers = ctx.battleSession?.fxTimers || theaterFxTimers;
+  timers.forEach(clearTimeout);
+  timers.clear();
 }
 
 function beginMoveFx(event) {
