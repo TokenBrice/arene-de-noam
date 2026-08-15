@@ -345,8 +345,80 @@
   border: 3px double var(--fx-color);
   border-radius: 50%;
   color: #fff;
+  opacity: 0;
   filter: drop-shadow(0 0 35px var(--fx-color));
-  animation: arenaRune 0.78s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
+  animation: arenaRune 0.78s cubic-bezier(0.15, 0.8, 0.2, 1) both;
+}
+/* The pulse reaches each side from its own origin (plan §4.3): a smaller rune
+   blooms over each fighter, the enemy side slightly staggered. */
+.arena-pulse-rune.pulse-player,
+.arena-pulse-rune.pulse-enemy {
+  width: min(38vmin, 330px);
+  height: min(38vmin, 330px);
+}
+.arena-pulse-rune.pulse-player {
+  left: 26%;
+  top: 58%;
+}
+.arena-pulse-rune.pulse-enemy {
+  left: 74%;
+  top: 30%;
+  animation-delay: 130ms;
+}
+.arena-pulse-rune.pulse-player b,
+.arena-pulse-rune.pulse-enemy b {
+  font-size: clamp(52px, 10vw, 110px);
+}
+/* Damaging pulses (volcano, eclipse) read hostile: jagged and hot. */
+.pulse-hostile .arena-pulse-rune {
+  border-style: solid;
+  border-radius: 16%;
+}
+.pulse-hostile .arena-pulse-rune::before {
+  border: 0;
+  clip-path: polygon(
+    50% 0,
+    58% 12%,
+    72% 4%,
+    76% 18%,
+    92% 14%,
+    90% 30%,
+    100% 38%,
+    94% 50%,
+    100% 62%,
+    90% 70%,
+    92% 86%,
+    76% 82%,
+    72% 96%,
+    58% 88%,
+    50% 100%,
+    42% 88%,
+    28% 96%,
+    24% 82%,
+    8% 86%,
+    10% 70%,
+    0 62%,
+    6% 50%,
+    0 38%,
+    10% 30%,
+    8% 14%,
+    24% 18%,
+    28% 4%,
+    42% 12%
+  );
+  background: color-mix(in srgb, var(--fx-color) 55%, transparent);
+}
+.pulse-hostile .arena-pulse-rune i {
+  border-style: dashed;
+  border-color: #fff;
+  animation-duration: 2.6s;
+}
+.pulse-hostile .fx-curtain {
+  background: radial-gradient(
+    circle at 50% 48%,
+    color-mix(in srgb, var(--fx-color) 48%, transparent),
+    #1a0508dd 66%
+  );
 }
 .arena-pulse-rune::before,
 .arena-pulse-rune::after {
@@ -802,10 +874,12 @@
   35% {
     transform: translateX(-35%) skewX(-12deg);
     opacity: 0.18;
+    filter: blur(3px);
   }
   55% {
     transform: translateX(18%);
     opacity: 0.65;
+    filter: blur(1px);
   }
 }
 @keyframes barrierHit {
@@ -1207,6 +1281,7 @@
    screen slash, strobe, pulsing borders, or looping last-creature aura. */
 @media (prefers-reduced-motion: reduce) {
   .finisher-impact::after,
+  .mini-finisher-impact::after,
   .ko-shock::after,
   .arena-imminent::after,
   .victory-burst {
@@ -1219,12 +1294,19 @@
   .finisher-impact .damage-number {
     animation: fxReduced 0.2s ease forwards !important;
   }
+  .final-showdown .battle-vignette {
+    animation: none;
+  }
 }
 body.reduced-motion .finisher-impact::after,
+body.reduced-motion .mini-finisher-impact::after,
 body.reduced-motion .ko-shock::after,
 body.reduced-motion .arena-imminent::after,
 body.reduced-motion .victory-burst {
   display: none !important;
+}
+body.reduced-motion .final-showdown .battle-vignette {
+  animation: none;
 }
 body.reduced-motion .player-last-stand #fighter-player::before,
 body.reduced-motion .enemy-last-stand #fighter-enemy::before {

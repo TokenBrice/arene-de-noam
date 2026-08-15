@@ -38,6 +38,7 @@ const {
   performanceHtml,
   startBattle,
   openBattleLog,
+  battleOutroFx,
 } = route;
 
 function completeTutorial() {
@@ -192,11 +193,14 @@ function finishBattle() {
     ctx.save.bestGrade = grade.letter;
   ctx.pendingRewards = awardBattleProgress(state, win, grade);
   persist();
-  if (win && ctx.battleSession.mode === 'gauntlet') {
-    setTimeout(advanceGauntlet, 450 / ctx.save.battleSpeed);
-    return;
-  }
-  setTimeout(() => renderResults(win), 450 / ctx.save.battleSpeed);
+  void battleOutroFx(state).then(() => {
+    if (!ctx.battleSession || ctx.battleSession.cancelled) return;
+    if (win && ctx.battleSession.mode === 'gauntlet') {
+      advanceGauntlet();
+      return;
+    }
+    renderResults(win);
+  });
 }
 
 function battleRecap(state) {

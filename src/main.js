@@ -1,5 +1,5 @@
 import { ctx } from './app/context.js';
-import './app/shell.js';
+import { installScreenTransitions } from './app/shell.js';
 import './screens/title.js';
 import './screens/academy.js';
 import './screens/league.js';
@@ -17,5 +17,6 @@ import './screens/bestiary.js';
 import './screens/settings.js';
 import './input/gamepad.js';
 
+installScreenTransitions();
 ctx.routes.startInput();
 ctx.routes.renderTitle();

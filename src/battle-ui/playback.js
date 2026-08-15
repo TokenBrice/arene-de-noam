@@ -29,7 +29,12 @@ const {
   aceFx,
   statusTickFx,
   arenaPulseFx,
+  missWhiffFx,
+  barrierShatterFx,
   signatureClashIntro,
+  faintFx,
+  switchOutFx,
+  switchInFx,
   clearBattleFx,
 } = route;
 
@@ -65,6 +70,7 @@ function eventPresentationDelay(event) {
   if (event.type === 'perfect-relay') return 620 / ctx.save.battleSpeed;
   if (event.type === 'ace') return 1050 / ctx.save.battleSpeed;
   if (event.type === 'ko') return 700 / ctx.save.battleSpeed;
+  if (event.type === 'switch' || event.type === 'replace') return 640 / ctx.save.battleSpeed;
   if (['heal', 'status', 'barrier', 'barrier-hit', 'miss', 'recoil', 'status-tick'].includes(event.type))
     return 460 / ctx.save.battleSpeed;
   return 300 / ctx.save.battleSpeed;
@@ -130,14 +136,14 @@ async function playEvents(events) {
     }
     if (event.type === 'status' && !(event.consumed && event.source === 'combo')) {
       session.lastLine = event.applied
-          ? t('battle.action.status', {
-              actor: creatureName(event.creatureId),
-              status: t(`status.${event.status}`),
-            })
-          : t('battle.action.cleanse', {
-              actor: creatureName(event.creatureId),
-              status: t(`status.${event.status}`),
-            });
+        ? t('battle.action.status', {
+            actor: creatureName(event.creatureId),
+            status: t(`status.${event.status}`),
+          })
+        : t('battle.action.cleanse', {
+            actor: creatureName(event.creatureId),
+            status: t(`status.${event.status}`),
+          });
       tacticalFx(event);
       sound.guard();
     }
@@ -153,11 +159,16 @@ async function playEvents(events) {
       session.lastLine = t('battle.action.absorb', { amount: event.amount });
       fighter?.classList.add('barrier-hit');
       ctx.arenaScene?.flash('hit', '#73eaff', event.side);
-      sound.guard();
+      if (event.total <= 0) {
+        // The dome just broke: glass shatter instead of the usual guard hum.
+        barrierShatterFx(event);
+        sound.shatter();
+      } else sound.guard();
     }
     if (event.type === 'miss') {
       session.lastLine = t('battle.action.miss', { actor: creatureName(event.creatureId) });
       fighter?.classList.add('dodging');
+      missWhiffFx(event);
       sound.ui();
     }
     if (event.type === 'recoil') {
@@ -211,12 +222,15 @@ async function playEvents(events) {
     }
     if (event.type === 'switch' || event.type === 'replace') {
       session.lastLine = t('battle.action.switch', { actor: creatureName(event.creatureId) });
+      switchOutFx(event);
       sound.ui();
     }
     if (event.type === 'ko') {
       session.lastLine = t('battle.ko', { name: creatureName(event.creatureId) });
       fighter?.classList.add('ko');
       screen.classList.add('ko-shock');
+      faintFx(event);
+      sound.call(event.creatureId, { fall: true });
       sound.ko();
     }
     if (event.type === 'battle-end' && event.reason === 'turn-cap') session.lastLine = t('battle.cap');
@@ -230,22 +244,15 @@ async function playEvents(events) {
       if (session.timeline.length > 40) session.timeline.shift();
     }
     refreshBattle();
+    if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
     await wait(eventPresentationDelay(event));
     if (!sessionIsActive(session)) return;
-    fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit');
+    fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
     const next = events[eventIndex + 1];
     if (
       (event.type === 'damage' &&
         !['damage', 'status', 'barrier-hit', 'passive', 'ko'].includes(next?.type)) ||
-      [
-        'heal',
-        'barrier',
-        'miss',
-        'recoil',
-        'status-tick',
-        'arena-pulse',
-        'ace',
-      ].includes(event.type) ||
+      ['heal', 'barrier', 'miss', 'recoil', 'status-tick', 'arena-pulse', 'ace'].includes(event.type) ||
       (event.type === 'status' && !['status', 'damage'].includes(next?.type)) ||
       (event.type === 'passive' && !['barrier', 'heal', 'status'].includes(next?.type)) ||
       event.type === 'move-skip' ||

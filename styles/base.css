@@ -46,6 +46,46 @@ input:focus-visible {
     linear-gradient(-30deg, transparent 48%, #58e8ff 49%, transparent 51%);
   background-size: 80px 80px;
 }
+/* Shared route transition: an inert snapshot of the outgoing screen fades and
+   slides out over the new screen, which fades in underneath. Shell JS skips
+   both under reduced motion and ?animations=0. */
+.screen-snapshot {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  pointer-events: none;
+  animation: screenLeave 0.2s ease-in forwards;
+}
+@keyframes screenLeave {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.screen.screen-entering {
+  animation: screenEnter 0.26s ease-out;
+}
+@keyframes screenEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen-snapshot {
+    display: none;
+  }
+  .screen.screen-entering {
+    animation: none;
+  }
+}
+body.reduced-motion .screen-snapshot {
+  display: none;
+}
+body.reduced-motion .screen.screen-entering {
+  animation: none;
+}
 .boot-screen {
   display: grid;
   place-items: center;

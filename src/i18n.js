@@ -376,7 +376,8 @@ const fr = {
   'settings.resetConfirm': 'Effacer les emblèmes et recommencer ?',
   'settings.controls':
     'Souris, toucher ou clavier : touches 1–3 pour les techniques, C pour changer, M pour le son, Échap pour revenir.',
-  'settings.affinities': 'Eau → Feu → Plante → Eau · Psy → Combat → Ténèbres → Psy. Flèche : ×2 · retour : ×0,5 · entre triangles : ×1.',
+  'settings.affinities':
+    'Eau → Feu → Plante → Eau · Psy → Combat → Ténèbres → Psy. Flèche : ×2 · retour : ×0,5 · entre triangles : ×1.',
   'notice.corrupt': 'Une sauvegarde abîmée a été remplacée sans danger.',
   'notice.future': 'Cette sauvegarde vient d’une version plus récente. Une nouvelle partie sûre a été créée.',
   'error.webgl':
@@ -521,8 +522,7 @@ const en = {
   'advice.surge': 'Your Signature had no impact. Alternate moves and relays to accelerate Surge.',
   'advice.tempo': 'Read action order and play around the next arena awakening.',
   'title.rosterLine': '24 CREATURES · 72 MOVES · 3 ON 3',
-  'difficulty.effect.apprentice':
-    'The action category is visible. Tactical details show exact numbers.',
+  'difficulty.effect.apprentice': 'The action category is visible. Tactical details show exact numbers.',
   'difficulty.effect.standard':
     'Intent is hidden. The rival plays tactically, but sometimes hesitates and does not forecast switches.',
   'difficulty.effect.champion': 'Intent is hidden. The rival anticipates damage, switches, and counterplay.',
@@ -837,7 +837,8 @@ const en = {
   'settings.resetConfirm': 'Erase emblems and start over?',
   'settings.controls':
     'Mouse, touch, or keyboard: keys 1–3 for moves, C to switch, M for sound, Escape to go back.',
-  'settings.affinities': 'Water → Fire → Grass → Water · Psychic → Fighting → Dark → Psychic. Arrow: ×2 · reverse: ×0.5 · between triangles: ×1.',
+  'settings.affinities':
+    'Water → Fire → Grass → Water · Psychic → Fighting → Dark → Psychic. Arrow: ×2 · reverse: ×0.5 · between triangles: ×1.',
   'notice.corrupt': 'A damaged save was safely replaced.',
   'notice.future': 'This save came from a newer version. A fresh safe game was created.',
   'error.webgl': 'This arena needs WebGL. Try a recent browser or enable graphics acceleration.',
@@ -936,7 +937,8 @@ Object.assign(fr, {
   'title.emblems': '{count}/12 emblèmes',
   'select.subtitle': 'Choisis trois créatures aux stratégies complémentaires, puis désigne ton meneur.',
   'bestiary.subtitle': 'Vingt-quatre gardiens. Aucun ne se bat comme un autre.',
-  'settings.affinities': 'Eau → Feu → Plante → Eau · Psy → Combat → Ténèbres → Psy. Flèche : ×2 · retour : ×0,5 · entre triangles : ×1.',
+  'settings.affinities':
+    'Eau → Feu → Plante → Eau · Psy → Combat → Ténèbres → Psy. Flèche : ×2 · retour : ×0,5 · entre triangles : ×1.',
   'arena.grove': 'Sanctuaire sylvestre',
   'arena.volcano': 'Forge du volcan',
   'arena.astral': 'Observatoire astral',
@@ -958,6 +960,7 @@ Object.assign(fr, {
   'battle.action.barrier': 'Une barrière de {amount} protège {actor}.',
   'battle.action.absorb': 'La barrière absorbe {amount} dégâts !',
   'battle.action.miss': '{actor} esquive complètement !',
+  'battle.missCallout': 'Esquivé !',
   'battle.action.recoil': '{actor} subit {amount} dégâts de retour.',
   'battle.action.tick': '{status} inflige {amount} dégâts à {actor}.',
   'battle.hit': 'Impact {hit}/{hits}',
@@ -1317,6 +1320,7 @@ Object.assign(en, {
   'battle.action.barrier': 'A barrier of {amount} protects {actor}.',
   'battle.action.absorb': 'The barrier absorbs {amount} damage!',
   'battle.action.miss': '{actor} dodges completely!',
+  'battle.missCallout': 'Dodged!',
   'battle.action.recoil': '{actor} takes {amount} damage in return.',
   'battle.action.tick': '{status} deals {amount} damage to {actor}.',
   'battle.hit': 'Hit {hit}/{hits}',
