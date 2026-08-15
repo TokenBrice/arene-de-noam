@@ -672,61 +672,76 @@ function openSwitch(relayMoveId = null) {
   screen.querySelector('[data-switch-index]')?.focus();
 }
 
-async function handleTrainerCommand() {
-  if (ctx.locked || !canUseTrainerCommand(ctx.battleSession.state, 'player')) return;
-  const session = ctx.battleSession;
-  await sound.unlock();
-  if (!sessionIsActive(session)) return;
+function claimBattleLock() {
+  if (ctx.locked) return false;
   ctx.locked = true;
-  refreshBattle();
-  const result = applyTrainerCommand(session.state, 'player');
-  session.state = result.state;
-  await playEvents(result.events);
-  if (!sessionIsActive(session)) return;
-  ctx.locked = false;
-  session.lastLine = t('battle.yourTurn');
-  refreshBattle();
+  return true;
+}
+
+async function handleTrainerCommand() {
+  if (!canUseTrainerCommand(ctx.battleSession.state, 'player')) return;
+  if (!claimBattleLock()) return;
+  const session = ctx.battleSession;
+  try {
+    refreshBattle();
+    await sound.unlock();
+    if (!sessionIsActive(session)) return;
+    const result = applyTrainerCommand(session.state, 'player');
+    session.state = result.state;
+    await playEvents(result.events);
+    if (!sessionIsActive(session)) return;
+    ctx.locked = false;
+    session.lastLine = t('battle.yourTurn');
+    refreshBattle();
+  } catch (error) {
+    if (sessionIsActive(session)) ctx.locked = false;
+    throw error;
+  }
 }
 
 async function handlePlayerAction(action) {
-  if (ctx.locked) return;
+  if (!claimBattleLock()) return;
   const session = ctx.battleSession;
-  await sound.unlock();
-  if (!sessionIsActive(session)) return;
-  ctx.locked = true;
-  refreshBattle();
-  const tutorialStep = session.tutorialStep;
-  const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
-  if (session.mode === 'tutorial') {
-    if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
-    else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;
-    else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
-    else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
-  }
-  if (
-    action?.type === 'move' &&
-    MOVES[action.moveId]?.signature &&
-    enemyAction?.type === 'move' &&
-    MOVES[enemyAction.moveId]?.signature
-  )
-    session.committedClash = {
-      left: { creatureId: activeOf(session.state, 'player').id, moveId: action.moveId },
-      right: { creatureId: activeOf(session.state, 'enemy').id, moveId: enemyAction.moveId },
-    };
-  const result = resolveTurn(session.state, action, enemyAction);
-  session.state = result.state;
-  await playEvents(result.events);
-  if (!sessionIsActive(session)) return;
-  ctx.locked = false;
-  if (session.state.phase === 'ended') {
-    finishBattle();
-    return;
-  }
-  await resolvePendingReplacements(session);
-  if (!sessionIsActive(session)) return;
-  if (session.state.phase !== 'ended') {
-    session.lastLine = t('battle.yourTurn');
+  try {
     refreshBattle();
+    await sound.unlock();
+    if (!sessionIsActive(session)) return;
+    const tutorialStep = session.tutorialStep;
+    const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
+    if (session.mode === 'tutorial') {
+      if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
+      else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;
+      else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
+      else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
+    }
+    if (
+      action?.type === 'move' &&
+      MOVES[action.moveId]?.signature &&
+      enemyAction?.type === 'move' &&
+      MOVES[enemyAction.moveId]?.signature
+    )
+      session.committedClash = {
+        left: { creatureId: activeOf(session.state, 'player').id, moveId: action.moveId },
+        right: { creatureId: activeOf(session.state, 'enemy').id, moveId: enemyAction.moveId },
+      };
+    const result = resolveTurn(session.state, action, enemyAction);
+    session.state = result.state;
+    await playEvents(result.events);
+    if (!sessionIsActive(session)) return;
+    ctx.locked = false;
+    if (session.state.phase === 'ended') {
+      finishBattle();
+      return;
+    }
+    await resolvePendingReplacements(session);
+    if (!sessionIsActive(session)) return;
+    if (session.state.phase !== 'ended') {
+      session.lastLine = t('battle.yourTurn');
+      refreshBattle();
+    }
+  } catch (error) {
+    if (sessionIsActive(session)) ctx.locked = false;
+    throw error;
   }
 }
 
@@ -749,17 +764,23 @@ async function resolvePendingReplacements(session = ctx.battleSession) {
 }
 
 async function handleReplacement(index) {
+  if (!claimBattleLock()) return;
   const session = ctx.battleSession;
-  if (!sessionIsActive(session)) return;
-  ctx.locked = true;
-  const result = applyReplacement(session.state, 'player', { type: 'replace', index });
-  session.state = result.state;
-  await playEvents(result.events);
-  if (!sessionIsActive(session)) return;
-  ctx.locked = false;
-  await resolvePendingReplacements(session);
-  if (!sessionIsActive(session)) return;
-  refreshBattle();
+  try {
+    refreshBattle();
+    if (!sessionIsActive(session)) return;
+    const result = applyReplacement(session.state, 'player', { type: 'replace', index });
+    session.state = result.state;
+    await playEvents(result.events);
+    if (!sessionIsActive(session)) return;
+    ctx.locked = false;
+    await resolvePendingReplacements(session);
+    if (!sessionIsActive(session)) return;
+    refreshBattle();
+  } catch (error) {
+    if (sessionIsActive(session)) ctx.locked = false;
+    throw error;
+  }
 }
 
 registerRoutes({
