@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Arène de Noam** — a local, deterministic 3v3 creature-battle browser game for a ~10-year-old child, French-first with full English localization. 30 creatures, 90 moves, 6 classes, 6 arenas. No build step, no backend, no runtime AI/API calls; Three.js is vendored in `vendor/`. `AUTONOMOUS_GAME_BUILD_BRIEF.md` is the binding product brief (pillars, scope, acceptance criteria); `README.md` describes the shipped game rules. Past implementation plans live in `docs/superpowers/plans/`.
 
+Agent implementation documentation starts at `docs/README.md`, with focused runtime architecture and battle/content contracts linked from there.
+
 ## Scratch area
 
 Use the repo-root `agents/` folder (gitignored) for all agent working files: plans, test outputs, screenshots, generated artifacts, notes, throwaway scripts. Never commit scratch material or leave it elsewhere in the tree.
