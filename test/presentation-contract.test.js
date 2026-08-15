@@ -85,3 +85,41 @@ test('battle controls expose dialog, speed, plate, overflow, and mobile rule sem
   assert.match(i18n, /'battle\.speedLabel': 'Vitesse du combat : ×\{speed\}'/);
   assert.match(i18n, /'battle\.speedLabel': 'Battle speed: ×\{speed\}'/);
 });
+test('high-contrast and compact presentation details keep their semantic cues', async () => {
+  const root = new URL('../', import.meta.url);
+  const [accessibility, progression, components, base, selection, title, trials, draft, controller, i18n] =
+    await Promise.all(
+      [
+        'styles/screens/accessibility.css',
+        'styles/screens/progression.css',
+        'styles/components.css',
+        'styles/base.css',
+        'styles/screens/selection.css',
+        'src/screens/title.js',
+        'src/screens/trials.js',
+        'src/screens/draft.js',
+        'src/battle-ui/controller.js',
+        'src/i18n.js',
+      ].map((file) => readFile(new URL(file, root), 'utf8'))
+    );
+  assert.match(accessibility, /body\.high-contrast\s+:is\(\.feat-hall, \.record-hero, \.league-rival, \.draft-card, \.boon-card, \.academy-section, \.academy-core, \.academy-type-triangle\)/);
+  assert.match(accessibility, /body\.high-contrast \.league-rival\.locked[\s\S]*opacity:\s*1[\s\S]*border:\s*2px dashed/);
+  assert.match(accessibility, /body\.high-contrast \.screen::before\s*\{[\s\S]*display:\s*none/);
+  assert.match(accessibility, /body\.high-contrast \.move-btn:disabled[\s\S]*border:\s*2px dashed/);
+  assert.match(accessibility, /body\.high-contrast \.move-btn:disabled::after[\s\S]*content:\s*['"]▦['"]/);
+  assert.match(progression, /\.feat-card\.locked\s*\{[\s\S]*opacity:\s*1/);
+  assert.match(progression, /\.feat-card\.locked\s*>\s*i[\s\S]*saturate\(0\.6\)/);
+  assert.match(progression, /\.feat-card\.locked::after[\s\S]*content:\s*['"]🔒['"]/);
+  assert.match(components, /\.result-team img\.fallen\s*\{[\s\S]*grayscale\(0\.45\)\s*brightness\(0\.8\)/);
+  assert.match(base, /\.roster-fan\s*\{[\s\S]*height:\s*140px/);
+  assert.match(selection, /scroll-snap-type:\s*x proximity/);
+  assert.match(selection, /mask-image:\s*linear-gradient/);
+  assert.match(progression, /\.trial-squad img[\s\S]*width:\s*44px[\s\S]*height:\s*44px/);
+  assert.match(title, /t\('app\.trials'\)/);
+  assert.match(title, /t\('gauntlet\.title'\)/);
+  assert.equal(draft.includes("<h3>${t('combo.title')}</h3>${comboRoutesHtml"), false);
+  assert.match(controller, /data-last-label="\$\{escapeHtml\(t\('battle\.lastBadge'\)\)\}"/);
+  assert.match(progression, /content: attr\(data-last-label\)/);
+  assert.match(i18n, /'battle\.lastBadge': 'DERNIÈRE'/);
+  assert.match(i18n, /'battle\.lastBadge': 'LAST'/);
+});

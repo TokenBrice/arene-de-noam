@@ -14,6 +14,31 @@ body.high-contrast .screen {
     radial-gradient(circle at 70% 15%, #202a68 0, transparent 32%),
     linear-gradient(145deg, #01030d, #0a0a20 58%, #020410);
 }
+body.high-contrast .screen::before {
+  display: none;
+}
+body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-section, .academy-core, .academy-type-triangle) {
+  border: 2px solid #d5dcff99;
+  background: #080a1c;
+  color: var(--ink);
+}
+body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-section, .academy-core, .academy-type-triangle) :is(b, h2, h3, p, small) {
+  color: var(--ink);
+}
+body.high-contrast .league-rival.locked {
+  filter: none;
+  opacity: 1;
+  border: 2px dashed #d5dcff;
+}
+body.high-contrast .league-rival.locked::before {
+  content: '🔒';
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 12px;
+  color: #fff;
+  font-size: var(--text-xs);
+}
 body.high-contrast .glass-panel,
 body.high-contrast .boot-card,
 body.high-contrast .hud-card,
@@ -89,8 +114,20 @@ body.high-contrast .status-icon {
   filter: drop-shadow(0 0 2px #000);
 }
 body.high-contrast .move-btn:disabled {
-  opacity: 0.68;
-  filter: grayscale(0.7);
+  opacity: 1;
+  filter: none;
+  border: 2px dashed #fff;
+  color: #fff;
+}
+body.high-contrast .move-btn:disabled::after {
+  content: '▦';
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 1000;
+  line-height: 1;
 }
 body.high-contrast .tag {
   border: 1px solid #ffffff65;
