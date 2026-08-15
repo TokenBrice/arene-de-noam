@@ -92,7 +92,7 @@ function bindCommon() {
       hero = favorite.battles
         ? `<section class="record-hero" style="--record-color:${favoriteAffinity.color}"><div class="record-creature"><img src="${sprite(favorite.id)}" alt=""><span><small>${t('record.favorite')}</small><h2>${creatureName(favorite.id)}</h2><p>${t('record.subtitle')}</p></span></div><div class="record-hero-stats"><span><b>${favorite.battles}</b><small>${t('record.battles')}</small></span><span><b>${favorite.wins}</b><small>${t('record.wins')}</small></span><span><b>${favorite.damage}</b><small>${t('record.damage')}</small></span><span><b>${favorite.kos}</b><small>${t('record.kos')}</small></span></div></section>`
         : `<section class="record-hero empty"><div><span class="eyebrow">${t('record.hall')}</span><h2>${t('record.none')}</h2></div></section>`;
-    screen.querySelector('.feat-hall')?.insertAdjacentHTML('beforebegin', hero);
+    screen.querySelector('.record-hall-content')?.insertAdjacentHTML('afterbegin', hero);
     screen.querySelectorAll('.bestiary-card').forEach((card, creatureIndex) => {
       const id = CREATURE_IDS[creatureIndex],
         record = { ...emptyRecord, ...(ctx.save.records?.[id] || {}) };
@@ -105,7 +105,7 @@ function bindCommon() {
       card.querySelectorAll('[data-preview-move]').forEach((entry) => {
         const moveId = entry.dataset.previewMove;
         entry.setAttribute('role', 'button');
-        entry.addEventListener('click', () => openMoveTheater(moveId));
+        entry.addEventListener('click', () => openMoveTheater(moveId, entry));
       });
     });
   }
@@ -124,10 +124,12 @@ function installBestiaryFilters() {
     .querySelector('.bestiary-grid')
     ?.insertAdjacentHTML(
       'beforebegin',
-      `<section class="bestiary-tools"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><div class="bestiary-filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><div class="bestiary-filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><button type="button" class="active" data-bestiary-class="all" aria-pressed="true">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button type="button" data-bestiary-class="${id}" aria-pressed="false" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div><b data-bestiary-count>${CREATURE_IDS.length} / ${CREATURE_IDS.length}</b></section>`
+      `<section class="bestiary-tools"><div class="bestiary-search-row"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><button type="button" class="bestiary-filter-toggle" data-bestiary-toggle aria-expanded="false" aria-controls="bestiary-filter-chips" aria-label="${t('filter.types')} / ${t('filter.classes')}">☷</button><b data-bestiary-count>${CREATURE_IDS.length} / ${CREATURE_IDS.length}</b></div><div id="bestiary-filter-chips" class="bestiary-filter-chips"><div class="bestiary-filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><div class="bestiary-filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><button type="button" class="active" data-bestiary-class="all" aria-pressed="true">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button type="button" data-bestiary-class="${id}" aria-pressed="false" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`
     );
   const input = screen.querySelector('[data-bestiary-search]'),
-    count = screen.querySelector('[data-bestiary-count]');
+    count = screen.querySelector('[data-bestiary-count]'),
+    grid = screen.querySelector('.bestiary-grid'),
+    filterToggle = screen.querySelector('[data-bestiary-toggle]');
   let activeAffinity = 'all',
     activeClass = 'all';
   const apply = () => {
@@ -141,6 +143,32 @@ function installBestiaryFilters() {
         return show;
       });
     count.textContent = `${visible.length} / ${CREATURE_IDS.length}`;
+    let empty = grid.querySelector('.bestiary-empty');
+    if (!visible.length && !empty) {
+      grid.insertAdjacentHTML(
+        'beforeend',
+        `<article class="bestiary-empty" role="status"><p>${t('bestiary.noResults')}</p><button type="button" data-bestiary-clear>${t('bestiary.clearFilters')}</button></article>`
+      );
+      empty = grid.querySelector('.bestiary-empty');
+      empty.querySelector('[data-bestiary-clear]').addEventListener('click', () => {
+        input.value = '';
+        activeAffinity = 'all';
+        activeClass = 'all';
+        screen.querySelectorAll('[data-bestiary-affinity]').forEach((item) => {
+          const active = item.dataset.bestiaryAffinity === 'all';
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-pressed', String(active));
+        });
+        screen.querySelectorAll('[data-bestiary-class]').forEach((item) => {
+          const active = item.dataset.bestiaryClass === 'all';
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-pressed', String(active));
+        });
+        apply();
+        input.focus();
+      });
+    }
+    if (empty) empty.hidden = visible.length > 0;
     if (query && visible.length === 1) {
       const card = visible[0],
         summary = card.querySelector('.bestiary-summary'),
@@ -152,6 +180,11 @@ function installBestiaryFilters() {
       if (detail) detail.hidden = false;
     }
   };
+  filterToggle?.addEventListener('click', () => {
+    const open = filterToggle.getAttribute('aria-expanded') === 'true';
+    filterToggle.setAttribute('aria-expanded', String(!open));
+    screen.querySelector('.bestiary-tools')?.classList.toggle('filters-open', !open);
+  });
   input.addEventListener('input', apply);
   screen.querySelectorAll('[data-bestiary-affinity]').forEach((button) =>
     button.addEventListener('click', () => {
