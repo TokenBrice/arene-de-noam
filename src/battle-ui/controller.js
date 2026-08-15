@@ -216,6 +216,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
     ctx.arenaScene = new ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
       reducedMotion: ctx.save.reducedMotion,
+      testAnimationScale,
     });
   } catch (error) {
     cancelBattleSession(session);

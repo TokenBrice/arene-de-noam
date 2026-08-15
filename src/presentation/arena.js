@@ -73,9 +73,10 @@ function material(
 }
 
 export class ArenaScene {
-  constructor(canvas, theme = 'crystal', { reducedMotion = false } = {}) {
+  constructor(canvas, theme = 'crystal', { reducedMotion = false, testAnimationScale = 1 } = {}) {
     this.canvas = canvas;
     this.reducedMotion = reducedMotion;
+    this.testAnimationScale = testAnimationScale;
     this.theme = THEMES[theme] ? theme : 'crystal';
     this.disposed = false;
     this.animations = [];
@@ -471,7 +472,7 @@ export class ArenaScene {
     this.targetShowdown = showdown ? 1 : 0;
   }
   burst(color = '#fff', targetSide = 'enemy', strength = 1) {
-    if (!this.burstPoints) return;
+    if (this.testAnimationScale === 0 || !this.burstPoints) return;
     const positions = this.burstPoints.geometry.attributes.position.array,
       origin = targetSide === 'enemy' ? 2.35 : -2.35;
     this.burstPoints.material.color.set(color);
@@ -505,6 +506,7 @@ export class ArenaScene {
     this.burstLife = 0.82;
   }
   flash(kind = 'hit', color = '#fff', targetSide = 'enemy') {
+    if (this.testAnimationScale === 0) return;
     this.burst(color, targetSide, kind === 'power' ? 1.65 : 1);
     if (this.reducedMotion) return;
     this.canvas.classList.remove('arena-hit', 'arena-power');
@@ -512,7 +514,7 @@ export class ArenaScene {
     this.canvas.classList.add(kind === 'power' ? 'arena-power' : 'arena-hit');
   }
   punch(targetSide = 'enemy', strength = 1) {
-    if (this.reducedMotion) return;
+    if (this.testAnimationScale === 0 || this.reducedMotion) return;
     this.cameraKick.x = (targetSide === 'enemy' ? -0.22 : 0.22) * strength;
     this.cameraKick.y = 0.09 * strength;
     this.cameraKick.z = -0.42 * strength;

@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#090b22" />
     <script>
+      const params = new URLSearchParams(location.search),
+        urlLanguage = params.get('lang');
+      if (urlLanguage === 'en' || urlLanguage === 'fr') document.documentElement.lang = urlLanguage;
       try {
-        const params = new URLSearchParams(location.search),
-          saved = JSON.parse(localStorage.getItem('arene-de-noam-save') || 'null'),
+        const saved = JSON.parse(localStorage.getItem('arene-de-noam-save') || 'null'),
           root = document.documentElement,
-          urlLanguage = params.get('lang'),
           language = urlLanguage === 'en' || urlLanguage === 'fr' ? urlLanguage : saved?.language;
         if (saved?.reducedMotion) root.classList.add('reduced-motion');
         if (saved?.highContrast) root.classList.add('high-contrast');
-        if (language === 'en' || language === 'fr') document.documentElement.lang = language;
+        if (language === 'en' || language === 'fr') root.lang = language;
       } catch {}
     </script>
     <title>Arène de Noam</title>
@@ -43,6 +44,14 @@
     <link rel="preload" as="style" href="./styles/screens/battle-layout.css?build=epic7" />
   </head>
   <body>
+    <script>
+      try {
+        const root = document.documentElement,
+          body = document.body;
+        body.classList.toggle('reduced-motion', root.classList.contains('reduced-motion'));
+        body.classList.toggle('high-contrast', root.classList.contains('high-contrast'));
+      } catch {}
+    </script>
     <div id="game">
       <main id="screen" class="screen boot-screen">
         <section class="boot-card">

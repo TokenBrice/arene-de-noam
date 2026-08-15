@@ -37,14 +37,23 @@ function syncBattleAnimationSpeed() {
 }
 
 function beginMoveFx(event) {
-  if (testAnimationScale === 0) return;
   const move = MOVES[event.moveId],
     a = AFFINITIES[move.affinity],
-    stage = screen.querySelector('#fx-stage');
+    source = event.side,
+    target = source === 'player' ? 'enemy' : 'player';
+  ctx.currentFxMove = {
+    moveId: event.moveId,
+    creatureId: event.creatureId,
+    affinity: move.affinity,
+    source,
+    target,
+    strong: Boolean(move.signature) || move.power >= 46,
+    kind: move.kind,
+  };
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
-  const source = event.side,
-    target = source === 'player' ? 'enemy' : 'player',
-    strong = Boolean(move.signature) || move.power >= 46,
+  const strong = ctx.currentFxMove.strong,
     cameraGrammar = move.signature
       ? 'ultimate'
       : move.kind !== 'damage'
@@ -54,15 +63,6 @@ function beginMoveFx(event) {
           : move.power >= 42
             ? 'heavy'
             : 'strike';
-  ctx.currentFxMove = {
-    moveId: event.moveId,
-    creatureId: event.creatureId,
-    affinity: move.affinity,
-    source,
-    target,
-    strong,
-    kind: move.kind,
-  };
   // Stakes scaling (plan §4.2): a cornered attacker (low HP or last creature
   // standing) gets a bigger show — more particles, hotter vignette, and the
   // camera grammar bumps one tier.
@@ -227,10 +227,13 @@ function tacticalFx(event) {
 }
 
 function comboCreditFx(event) {
+  const creature = CREATURES[event.creatureId];
+  sound.call(event.creatureId);
+  sound.comboCredit(creature.affinity);
   if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
-  const a = AFFINITIES[CREATURES[event.creatureId].affinity],
+  const a = AFFINITIES[creature.affinity],
     call = document.createElement('div');
   call.className = `combo-credit-call ${event.side}`;
   call.style.setProperty('--combo-credit-color', a.color);
@@ -238,15 +241,14 @@ function comboCreditFx(event) {
   stage.append(call);
   screen.classList.add('combo-credit-mode');
   ctx.arenaScene?.burst(a.color, event.side, 1);
-  sound.call(event.creatureId);
-  sound.comboCredit(CREATURES[event.creatureId].affinity);
 }
-
 function perfectRelayFx(event) {
-  if (testAnimationScale === 0) return;
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId],
+  const creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
+  sound.guard();
+  sound.ui();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   stage.className = `fx-stage active perfect-relay-fx from-${event.side}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -256,16 +258,17 @@ function perfectRelayFx(event) {
   screen.classList.add('perfect-relay-mode', `relay-${event.side}`);
   ctx.arenaScene?.flash('hit', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.2);
-  sound.guard();
-  sound.ui();
 }
 
 function relayRushFx(event) {
-  if (testAnimationScale === 0) return;
-  const session = ctx.battleSession;
-  const stage = screen.querySelector('#fx-stage'),
+  const session = ctx.battleSession,
     creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null;
-  if (!stage || !creature) return;
+  if (!creature) return;
+  sound.comboCredit(creature.affinity);
+  sound.ui();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   const a = AFFINITIES[creature.affinity];
   stage.className = `fx-stage active relay-rush-fx from-${event.side}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -276,30 +279,28 @@ function relayRushFx(event) {
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.5);
   ctx.arenaScene?.punch(event.side, 1.15);
-  sound.comboCredit(creature.affinity);
-  sound.ui();
 }
-
 function immaculateRelayFx(event) {
-  if (testAnimationScale === 0) return;
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId];
-  if (!stage || !creature) return;
+  const creature = CREATURES[event.creatureId];
+  if (!creature) return;
   const color = AFFINITIES[creature.affinity].color;
+  sound.guard();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   stage.className = `fx-stage active immaculate-relay-fx from-${event.side}`;
   stage.style.setProperty('--fx-color', color);
   stage.innerHTML = `<div class="immaculate-gate"></div><div class="immaculate-feathers">${Array.from({ length: 7 }, (_, index) => `<i style="--feather:${index}"></i>`).join('')}</div><div class="immaculate-call"><img src="${sprite(event.creatureId)}" alt=""><span><small>${t('move.immaculate_relay')}</small><b>${creatureName(event.creatureId)}</b></span></div>`;
   screen.classList.add('immaculate-relay-mode', `relay-${event.side}`);
   ctx.arenaScene?.flash('power', color, event.side);
   ctx.arenaScene?.burst(color, event.side, 1.4);
-  sound.guard();
 }
-
 function trainerCommandFx(event) {
-  if (testAnimationScale === 0) return;
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId],
+  const creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
+  sound.clash();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   stage.className = `fx-stage active trainer-command-fx command-${event.command}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -307,16 +308,18 @@ function trainerCommandFx(event) {
   screen.classList.add('command-mode');
   ctx.arenaScene?.flash('power', a.color, 'player');
   ctx.arenaScene?.burst(a.color, 'player', 1.25);
-  sound.clash();
 }
 
 function signatureReadyFx(event) {
-  if (testAnimationScale === 0) return;
-  const session = ctx.battleSession;
-  const stage = screen.querySelector('#fx-stage'),
+  const session = ctx.battleSession,
     creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null,
     signature = creature?.moves.find((id) => MOVES[id].signature);
-  if (!stage || !creature || !signature) return;
+  if (!creature || !signature) return;
+  sound.call(creature.id);
+  sound.ui();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   stage.classList.add('active');
   stage.querySelector('.signature-ready-call')?.remove();
   const a = AFFINITIES[creature.affinity],
@@ -327,8 +330,6 @@ function signatureReadyFx(event) {
   stage.append(call);
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.15);
-  sound.call(creature.id);
-  sound.ui();
   setTimeout(
     () => {
       if (sessionIsActive(session)) call.remove();
@@ -336,12 +337,12 @@ function signatureReadyFx(event) {
     (ctx.save.reducedMotion ? 180 : 900) / ctx.save.battleSpeed
   );
 }
-
 function aceFx(event) {
-  if (testAnimationScale === 0) return;
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId],
+  const creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
+  sound.clash();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   stage.className = `fx-stage active ace-phase ace-${event.ace}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -350,7 +351,6 @@ function aceFx(event) {
   ctx.arenaScene?.flash('power', a.color, 'enemy');
   ctx.arenaScene?.burst(a.color, 'enemy', 1.7);
   ctx.arenaScene?.punch('enemy', 1.3);
-  sound.clash();
 }
 
 function statusTickFx(event) {
@@ -377,6 +377,7 @@ function statusTickFx(event) {
 }
 
 function arenaPulseFx(event) {
+  sound.guard();
   if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
@@ -390,8 +391,6 @@ function arenaPulseFx(event) {
       eclipse: '#e37aff',
     },
     color = colors[event.arena] || '#fff',
-    // Volcano burns and eclipse marks: those pulses hurt, so they read hostile
-    // (jagged, hot) instead of benevolent. Others help both sides.
     hostile = event.arena === 'volcano' || event.arena === 'eclipse';
   stage.className = `fx-stage active arena-pulse-fx arena-pulse-${event.arena} ${hostile ? 'pulse-hostile' : 'pulse-kind'}`;
   stage.style.setProperty('--fx-color', color);
@@ -400,7 +399,6 @@ function arenaPulseFx(event) {
   ctx.arenaScene?.flash('power', color, 'enemy');
   ctx.arenaScene?.burst(color, 'player', 1.4);
   ctx.arenaScene?.burst(color, 'enemy', 1.4);
-  sound.guard();
 }
 
 function missWhiffFx(event) {
@@ -510,14 +508,14 @@ function switchOutFx(event) {
 }
 
 function switchInFx(event) {
-  if (testAnimationScale === 0) return;
   const fighter = screen.querySelector(`#fighter-${event.side}`),
     creature = CREATURES[event.creatureId];
   if (!fighter || !creature || fighter.classList.contains('fainted')) return;
+  sound.call(event.creatureId);
+  if (testAnimationScale === 0) return;
   fighter.classList.remove('switch-awaiting');
   fighter.classList.add('entering');
   ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
-  sound.call(event.creatureId);
 }
 
 async function battleOutroFx(state) {
