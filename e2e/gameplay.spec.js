@@ -332,6 +332,7 @@ test('Immaculate Relay reuses the selector and switches only after the aimed att
   await relay.click();
   await page.locator('.signature-relay [data-switch-index="1"]').click();
   await expect(page.locator('#fighter-player')).toHaveAttribute('data-creature', 'deuilastre');
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.locator('[data-action="battle-log"]').click();
   const log = page.getByRole('dialog', { name: 'Journal du combat' });
   await expect(log).toContainText('Arc lucide');
