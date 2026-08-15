@@ -36,6 +36,31 @@ test('visible tutorial teaches types, Combo, Signature, and switch, then complet
   await expectNoRuntimeLeaks(runtime);
 });
 
+test('reduced-motion tutorial outro is presented before team select', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.goto('/?seed=4242');
+  await page.getByRole('button', { name: /Réglages/ }).click();
+  await page.locator('#motion').check();
+  await page.getByRole('button', { name: /Retour/ }).click();
+  await page.getByRole('button', { name: /Jouer/ }).click();
+  await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible();
+  await page.locator('[data-move="lucid_arc"]').click();
+  await page.locator('[data-move="slowing_riddle"]').click();
+  await page.locator('[data-move="oracle_veil"]').click();
+  await page.locator('[data-action="open-switch"]').click();
+  await page.getByRole('button', { name: /Abyssar/ }).click();
+  await expect(page.getByText(/À toi\. Observe les PV et termine le combat/)).toBeVisible();
+  await page.evaluate(() => {
+    window.__tutorialOutroSeen = false;
+    new MutationObserver(() => {
+      if (document.querySelector('.battle-outro, .victory-pose')) window.__tutorialOutroSeen = true;
+    }).observe(document.body, { attributes: true, childList: true, subtree: true });
+  });
+  await playVisibleBattle(page, { untilSelection: true });
+  expect(await page.evaluate(() => window.__tutorialOutroSeen)).toBe(true);
+  await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
+});
+
 test('configures a team and finishes a seeded full quick battle', async ({ page }) => {
   const runtime = watchRuntime(page);
   await installCompletedTutorial(page);
@@ -568,6 +593,12 @@ test('a defeat produces evidence-based trainer analysis', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Belle bataille !' })).toBeVisible();
   await expect(page.locator('.battle-advice')).toBeVisible();
   await expect(page.locator('.battle-advice')).toContainText('Conseils de l’entraîneur');
+  await expect(page.locator('.recap-mvp')).toHaveCount(0);
+  const recapBox = await page.locator('.battle-recap').boundingBox();
+  const statsBox = await page.locator('.recap-stats').boundingBox();
+  expect(recapBox).not.toBeNull();
+  expect(statsBox).not.toBeNull();
+  expect(statsBox.width).toBeGreaterThanOrEqual(recapBox.width - 2);
   await page.getByRole('button', { name: /Ajuster l’équipe/ }).click();
   await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
   await expect(page.locator('.enemy-list')).toContainText('Orakyn');

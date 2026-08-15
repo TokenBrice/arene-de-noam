@@ -533,6 +533,9 @@ body.reduced-motion .fighter-shadow {
   margin: 4px 0 12px;
   text-align: left;
 }
+.recap-stats--solo {
+  grid-column: 1 / -1;
+}
 .recap-mvp {
   display: grid;
   grid-template-columns: 76px 1fr;
