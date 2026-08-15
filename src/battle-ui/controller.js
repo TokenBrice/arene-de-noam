@@ -72,7 +72,8 @@ const {
 let battleSessionSequence = 0,
   battleStartPending = false,
   switchOpener = null,
-  switchFocusAfterUnlock = null;
+  switchFocusAfterUnlock = null,
+  battleRenderCache = { session: null, key: null, locked: false };
 
 function sessionIsActive(session) {
   return Boolean(
@@ -170,6 +171,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     battleStartPending = false;
     return;
   }
+  battleRenderCache = { session, key: null, locked: false };
   battleStartPending = false;
   disposeArena();
   screen.dataset.page = 'battle';
@@ -393,8 +395,13 @@ function closeBattleOverlay() {
 
 
 function bindBattleChoiceContext(session) {
-  const line = screen.querySelector('#action-line');
-  if (!line) return;
+  const moves = screen.querySelector('#moves'),
+    line = screen.querySelector('#action-line');
+  if (!moves || !line || moves.dataset.bound === 'true') return;
+  moves.dataset.bound = 'true';
+  let longPressTimer = 0,
+    longPressedButton = null;
+  const buttonFor = (target) => target instanceof Element && target.closest('[data-move]');
   const restore = () => {
     if (!sessionIsActive(session)) return;
     line.classList.remove('contextual');
@@ -402,31 +409,55 @@ function bindBattleChoiceContext(session) {
   };
   const show = (button) => {
     if (!sessionIsActive(session)) return;
-    const source = button.querySelector('.move-context-source');
+    const source = button?.querySelector('.move-context-source');
     if (!source) return;
     line.classList.add('contextual');
     line.innerHTML = source.innerHTML;
   };
-  screen.querySelectorAll('[data-move]').forEach((button) => {
-    let longPressTimer = 0;
-    button.addEventListener('pointerenter', () => show(button));
-    button.addEventListener('pointerleave', () => {
-      clearTimeout(longPressTimer);
-      if (document.activeElement !== button) restore();
-    });
-    button.addEventListener('focus', () => show(button));
-    button.addEventListener('blur', restore);
-    button.addEventListener('pointerdown', (event) => {
-      if (event.pointerType !== 'touch') return;
-      longPressTimer = window.setTimeout(() => {
-        if (!sessionIsActive(session)) return;
-        button.dataset.longPressed = 'true';
-        show(button);
-      }, 420);
-    });
-    const endLongPress = () => clearTimeout(longPressTimer);
-    button.addEventListener('pointerup', endLongPress);
-    button.addEventListener('pointercancel', endLongPress);
+  const endLongPress = () => {
+    clearTimeout(longPressTimer);
+    longPressTimer = 0;
+    longPressedButton = null;
+  };
+  moves.addEventListener('pointerover', (event) => {
+    const button = buttonFor(event.target);
+    if (button) show(button);
+  });
+  moves.addEventListener('pointerout', (event) => {
+    const button = buttonFor(event.target);
+    if (!button || button.contains(event.relatedTarget)) return;
+    endLongPress();
+    if (document.activeElement !== button) restore();
+  });
+  moves.addEventListener('focusin', (event) => show(buttonFor(event.target)));
+  moves.addEventListener('focusout', (event) => {
+    const button = buttonFor(event.target);
+    if (button && !button.contains(event.relatedTarget)) restore();
+  });
+  moves.addEventListener('pointerdown', (event) => {
+    const button = buttonFor(event.target);
+    if (!button || event.pointerType !== 'touch') return;
+    endLongPress();
+    longPressedButton = button;
+    longPressTimer = window.setTimeout(() => {
+      if (!sessionIsActive(session) || ctx.locked || !longPressedButton) return;
+      longPressedButton.dataset.longPressed = 'true';
+      show(longPressedButton);
+    }, 420);
+  });
+  moves.addEventListener('pointerup', endLongPress);
+  moves.addEventListener('pointercancel', endLongPress);
+  moves.addEventListener('click', (event) => {
+    const button = buttonFor(event.target);
+    if (!button || ctx.locked) return;
+    if (button.dataset.longPressed === 'true') {
+      delete button.dataset.longPressed;
+      return;
+    }
+    const move = MOVES[button.dataset.move];
+    if (!move) return;
+    if (move.allySwitch) openSwitch(move.id);
+    else handlePlayerAction({ type: 'move', moveId: move.id });
   });
 }
 
@@ -461,6 +492,49 @@ async function battleEntrance(session = ctx.battleSession) {
   }
 }
 
+function patchBattleHud(hud, side, view) {
+  const owner = view.sides[side],
+    c = activeOf(view, side),
+    plate = hud.querySelector('[data-plate-side]');
+  if (!plate) return;
+  const hpNumber = plate.querySelector('.plate-hp-number'),
+    hpFill = plate.querySelector('.hp-fill'),
+    barrierFill = plate.querySelector('.barrier-fill'),
+    surgeRow = plate.querySelector('.surge-row'),
+    surgeFill = plate.querySelector('.surge-track i'),
+    surgeNumber = plate.querySelector('.plate-surge-number');
+  if (hpNumber) hpNumber.textContent = `${c.hp}/${c.maxHp}`;
+  if (hpFill) {
+    hpFill.style.width = `${Math.max(0, (c.hp / c.maxHp) * 100)}%`;
+    hpFill.classList.toggle('low', c.hp / c.maxHp < 0.3);
+  }
+  if (c.barrier) {
+    const track = plate.querySelector('.hp-track'),
+      fill = barrierFill || document.createElement('i');
+    if (!barrierFill) {
+      fill.className = 'barrier-fill';
+      track?.append(fill);
+    }
+    fill.style.width = `${Math.min(100, (c.barrier / c.maxHp) * 100)}%`;
+  } else barrierFill?.remove();
+  const cost = signatureCostFor(c);
+  surgeRow?.classList.toggle('ready', owner.surge >= cost);
+  if (surgeFill) surgeFill.style.width = `${owner.surge}%`;
+  if (surgeNumber) surgeNumber.textContent = `✦ ${owner.surge}/${cost}`;
+  const statusIds = sortStatusIds(Object.keys(c.statuses)),
+    statusNames = [
+      ...(c.barrier ? [t('battle.barrierName')] : []),
+      ...statusIds.map((id) => t(`status.${id}`)),
+    ],
+    pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) => pip.getAttribute('aria-label'));
+  plate.setAttribute(
+    'aria-label',
+    [creatureName(c.id), `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`, statusNames.join(' · ') || t('battle.noStatuses'), pipLabels.join(' · ')]
+      .filter(Boolean)
+      .join(' · ')
+  );
+}
+
 function refreshBattle() {
   if (!ctx.battleSession || !screen.classList.contains('battle-screen')) return;
   const session = ctx.battleSession,
@@ -483,6 +557,45 @@ function refreshBattle() {
         (1 - Math.min(sideRatio('player'), sideRatio('enemy'))) * 0.58 +
         (lastStand ? 0.3 : 0)
     );
+  const hpBucket = (creature) => Math.floor((Math.max(0, creature.hp) / creature.maxHp) * 10),
+    statusSet = (creature) =>
+      `${creature.barrier ? `barrier:${creature.barrier}|` : ''}${Object.entries(creature.statuses)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([id, status]) => `${id}:${status.stacks || 1}:${status.remaining || 0}`)
+        .join(',')}`,
+    legalMoveIds = new Set(
+      getLegalActions(state, 'player')
+        .filter((action) => action.type === 'move')
+        .map((action) => action.moveId)
+    ),
+    moveStateKey = p.moves
+      .map((moveId) => {
+        const cooldown = p.cooldowns[moveId]?.remaining || 0,
+          tutorialAllowed =
+            session.mode !== 'tutorial' ||
+            session.tutorialStep >= 4 ||
+            (session.tutorialStep === 0 && moveId === 'lucid_arc') ||
+            (session.tutorialStep === 1 && moveId === 'slowing_riddle') ||
+            (session.tutorialStep === 2 && moveId === 'oracle_veil');
+        return `${moveId}:${cooldown}:${legalMoveIds.has(moveId) ? 0 : 1}:${tutorialAllowed ? 0 : 1}`;
+      })
+      .join('|'),
+    moveRenderKey = [
+      p.id,
+      e.id,
+      hpBucket(p),
+      hpBucket(e),
+      statusSet(p),
+      statusSet(e),
+      moveStateKey,
+      view.sides.player.surge >= signatureCostFor(p) ? 1 : 0,
+      view.sides.enemy.surge >= signatureCostFor(e) ? 1 : 0,
+    ].join('::'),
+    reuseLockedMoves =
+      ctx.locked &&
+      battleRenderCache.session === session &&
+      battleRenderCache.locked &&
+      battleRenderCache.key === moveRenderKey;
   screen.classList.toggle('locked', ctx.locked);
   screen.classList.toggle('expert-mode', expertMode);
   screen.classList.toggle('arena-imminent', until === 1);
@@ -529,6 +642,10 @@ function refreshBattle() {
       owner.surge >= signatureCostFor(c) && c.moves.some((id) => MOVES[id].signature)
     );
     const hud = screen.querySelector(`#hud-${side}`);
+    if (reuseLockedMoves) {
+      patchBattleHud(hud, side, view);
+      continue;
+    }
     hud.innerHTML = hudHtml(side, expertMode, view);
     const plate = hud.querySelector('[data-plate-side]');
     if (plate) {
@@ -569,29 +686,21 @@ function refreshBattle() {
     }
     hud.querySelector('[data-plate-side]')?.addEventListener('click', () => openPlateDetails(side));
   }
-  screen.querySelector('#moves').innerHTML = p.moves
-    .map((moveId, index) => moveButton(moveId, index, view, state))
-    .join('');
-  const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
-  if (forecastPlan && expertMode)
-    screen
-      .querySelectorAll('[data-move]')
-      .forEach((button) =>
-        button
-          .querySelector('.move-tags')
-          ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan, state))
-      );
-  screen.querySelectorAll('[data-move]').forEach((b) =>
-    b.addEventListener('click', () => {
-      if (b.dataset.longPressed === 'true') {
-        delete b.dataset.longPressed;
-        return;
-      }
-      const move = MOVES[b.dataset.move];
-      if (move.allySwitch) openSwitch(move.id);
-      else handlePlayerAction({ type: 'move', moveId: move.id });
-    })
-  );
+  if (!reuseLockedMoves) {
+    screen.querySelector('#moves').innerHTML = p.moves
+      .map((moveId, index) => moveButton(moveId, index, view, state))
+      .join('');
+    const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
+    if (forecastPlan && expertMode)
+      screen
+        .querySelectorAll('[data-move]')
+        .forEach((button) =>
+          button
+            .querySelector('.move-tags')
+            ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan, state))
+        );
+  }
+  battleRenderCache = { session, key: moveRenderKey, locked: ctx.locked };
   bindBattleChoiceContext(session);
   const switchButton = screen.querySelector('[data-action="open-switch"]');
   switchButton.disabled =
