@@ -57,8 +57,8 @@ export async function installCompletedTutorial(page, extra = {}) {
   );
 }
 
-export async function playVisibleBattle(page, { untilSelection = false } = {}) {
-  for (let turn = 0; turn < 300; turn++) {
+export async function playVisibleBattle(page, { untilSelection = false, maxIterations = 300 } = {}) {
+  for (let turn = 0; turn < maxIterations; turn++) {
     if (
       untilSelection &&
       (await page
