@@ -14,8 +14,9 @@
 }
 .trainer-command-btn small {
   overflow: visible;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 900;
+  line-height: 0.9;
   text-overflow: clip;
   white-space: normal;
 }
