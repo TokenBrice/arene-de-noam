@@ -57,9 +57,9 @@ function advanceGauntlet() {
   renderGauntletBoons();
 }
 
-function performanceHtml(grade, compact = false) {
+function performanceHtml(grade, compact = false, win = true) {
   if (!grade) return '';
-  const parts = ['victory', 'tempo', 'survival']
+  const parts = (win ? ['victory', 'tempo', 'survival'] : ['tempo', 'survival'])
     .map((key) => `<span>${t(`grade.${key}`)} <b>+${grade.breakdown[key] || 0}</b></span>`)
     .join('');
   return `<div class="performance-grade grade-${grade.letter.toLowerCase()} ${compact ? 'compact' : ''}"><div class="grade-letter"><small>${t('grade.title')}</small><b>${grade.letter}</b><em>${grade.score}/100</em></div><div class="grade-detail">${parts}${grade.bonusXp ? `<strong>★ ${t('grade.bonus', { xp: grade.bonusXp })}</strong>` : ''}</div></div>`;
