@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#090b22" />
+    <script>
+      try {
+        const params = new URLSearchParams(location.search),
+          saved = JSON.parse(localStorage.getItem('arene-de-noam-save') || 'null'),
+          root = document.documentElement,
+          urlLanguage = params.get('lang'),
+          language = urlLanguage === 'en' || urlLanguage === 'fr' ? urlLanguage : saved?.language;
+        if (saved?.reducedMotion) root.classList.add('reduced-motion');
+        if (saved?.highContrast) root.classList.add('high-contrast');
+        if (language === 'en' || language === 'fr') document.documentElement.lang = language;
+      } catch {}
+    </script>
     <title>Arène de Noam</title>
     <link rel="stylesheet" href="./styles/tokens.css?build=epic7" />
     <link rel="stylesheet" href="./styles/base.css?build=epic7" />

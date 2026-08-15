@@ -37,6 +37,7 @@ function syncBattleAnimationSpeed() {
 }
 
 function beginMoveFx(event) {
+  if (testAnimationScale === 0) return;
   const move = MOVES[event.moveId],
     a = AFFINITIES[move.affinity],
     stage = screen.querySelector('#fx-stage');
@@ -120,6 +121,7 @@ function beginMoveFx(event) {
 }
 
 function impactMoveFx(event) {
+  if (testAnimationScale === 0) return;
   const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
     fx = ctx.currentFxMove;
@@ -170,6 +172,7 @@ function impactMoveFx(event) {
 }
 
 function effectivenessCalloutFx(event) {
+  if (testAnimationScale === 0) return;
   if (!event.affinity || event.affinity === 1) return;
   const stage = screen.querySelector('#fx-stage'),
     impact = stage?.querySelector('.fx-impact');
@@ -185,6 +188,7 @@ function effectivenessCalloutFx(event) {
 }
 
 function tacticalFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const side = event.side,
@@ -223,6 +227,7 @@ function tacticalFx(event) {
 }
 
 function comboCreditFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const a = AFFINITIES[CREATURES[event.creatureId].affinity],
@@ -238,6 +243,7 @@ function comboCreditFx(event) {
 }
 
 function perfectRelayFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
@@ -255,6 +261,7 @@ function perfectRelayFx(event) {
 }
 
 function relayRushFx(event) {
+  if (testAnimationScale === 0) return;
   const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
     creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null;
@@ -274,6 +281,7 @@ function relayRushFx(event) {
 }
 
 function immaculateRelayFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId];
   if (!stage || !creature) return;
@@ -288,6 +296,7 @@ function immaculateRelayFx(event) {
 }
 
 function trainerCommandFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
@@ -302,6 +311,7 @@ function trainerCommandFx(event) {
 }
 
 function signatureReadyFx(event) {
+  if (testAnimationScale === 0) return;
   const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
     creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null,
@@ -328,6 +338,7 @@ function signatureReadyFx(event) {
 }
 
 function aceFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage'),
     creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
@@ -343,6 +354,7 @@ function aceFx(event) {
 }
 
 function statusTickFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const meta = STATUS_DEFINITIONS[event.status],
@@ -365,6 +377,7 @@ function statusTickFx(event) {
 }
 
 function arenaPulseFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const icons = { crystal: '◇', grove: '❧', tidal: '≋', volcano: '♨', astral: '✦', eclipse: '☾' },
@@ -391,6 +404,7 @@ function arenaPulseFx(event) {
 }
 
 function missWhiffFx(event) {
+  if (testAnimationScale === 0) return;
   const session = ctx.battleSession,
     stage = screen.querySelector('#fx-stage');
   if (!stage) return;
@@ -411,9 +425,10 @@ function missWhiffFx(event) {
 }
 
 function barrierShatterFx(event) {
+  if (testAnimationScale === 0) return;
   const session = ctx.battleSession,
     stage = screen.querySelector('#fx-stage');
-  if (!stage || testAnimationScale === 0) return;
+  if (!stage) return;
   // Same parent-layer trick as the whiff callout: the shards must outlive the
   // stage rebuild that the barrier-broken follow-up events trigger.
   const shards = document.createElement('div');
@@ -453,8 +468,9 @@ async function signatureClashIntro(events) {
 }
 
 function faintFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
-  if (!stage || testAnimationScale === 0) return;
+  if (!stage) return;
   const creature = CREATURES[event.creatureId],
     color = creature ? AFFINITIES[creature.affinity].color : '#cfd6ff',
     wisps = document.createElement('div');
@@ -494,14 +510,13 @@ function switchOutFx(event) {
 }
 
 function switchInFx(event) {
+  if (testAnimationScale === 0) return;
   const fighter = screen.querySelector(`#fighter-${event.side}`),
     creature = CREATURES[event.creatureId];
   if (!fighter || !creature || fighter.classList.contains('fainted')) return;
   fighter.classList.remove('switch-awaiting');
-  if (testAnimationScale !== 0) {
-    fighter.classList.add('entering');
-    ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
-  }
+  fighter.classList.add('entering');
+  ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
   sound.call(event.creatureId);
 }
 

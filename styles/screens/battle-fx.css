@@ -2248,15 +2248,11 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
     animation: switchOutReduced 0.18s ease forwards;
   }
   .battle-screen .fighter.entering img {
-    animation:
-      fxReduced 0.2s ease,
-      idle 2.4s ease-in-out 0.2s infinite;
+    animation: fxReduced 0.2s ease;
   }
   .battle-screen .fighter.victory-pose img,
   .battle-screen.outro-loss .fighter.victory-pose img {
-    animation:
-      fxReduced 0.25s ease,
-      idle 2.4s ease-in-out 0.25s infinite;
+    animation: fxReduced 0.25s ease;
   }
   .battle-screen.battle-exit .arena-canvas,
   .battle-screen.battle-exit .battle-vignette,
@@ -2288,15 +2284,11 @@ body.reduced-motion .switch-ghost {
   }
 }
 body.reduced-motion .battle-screen .fighter.entering img {
-  animation:
-    fxReduced 0.2s ease,
-    idle 2.4s ease-in-out 0.2s infinite;
+  animation: fxReduced 0.2s ease;
 }
 body.reduced-motion .battle-screen .fighter.victory-pose img,
 body.reduced-motion .battle-screen.outro-loss .fighter.victory-pose img {
-  animation:
-    fxReduced 0.25s ease,
-    idle 2.4s ease-in-out 0.25s infinite;
+  animation: fxReduced 0.25s ease;
 }
 body.reduced-motion .battle-screen.battle-exit .arena-canvas,
 body.reduced-motion .battle-screen.battle-exit .battle-vignette,
