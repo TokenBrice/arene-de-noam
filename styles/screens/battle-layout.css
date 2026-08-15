@@ -926,6 +926,25 @@ body.high-contrast .battle-screen .action-line {
   .battle-screen .quick-rule-chip {
     display: none;
   }
+
+  .battle-screen .trainer-command-btn {
+    grid-template-columns: 1fr;
+    width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    padding: 6px 3px;
+  }
+
+  .battle-screen .trainer-command-btn small {
+    display: block;
+    max-width: none;
+    overflow: visible;
+    font-size: 6px;
+    line-height: 1;
+    text-align: center;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 @media (max-width: 700px) and (orientation: portrait) {
@@ -952,6 +971,8 @@ body.high-contrast .battle-screen .action-line {
   .battle-screen .turn-chip {
     grid-column: 1;
     grid-row: 1;
+    height: 44px;
+    max-height: 44px;
   }
 
   .battle-screen .arena-nameplate {
@@ -980,11 +1001,8 @@ body.high-contrast .battle-screen .action-line {
     grid-column: 2;
     grid-row: 1;
     min-width: 0;
-  }
-
-  .battle-screen .battle-tools [data-action='toggle-mute'],
-  .battle-screen .battle-tools [data-action='battle-speed'] {
-    display: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .battle-plates {
@@ -1054,8 +1072,8 @@ body.high-contrast .battle-screen .action-line {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 14px minmax(22px, 1fr) 17px;
     align-items: stretch;
-    gap: 2px;
-    padding: 5px 8px 4px 10px;
+    gap: 1px;
+    padding: 4px 7px 3px 8px;
   }
 
   .battle-screen .move-name {
@@ -1080,7 +1098,7 @@ body.high-contrast .battle-screen .action-line {
   }
 
   .battle-screen .move-description {
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.15;
   }
 
@@ -1131,13 +1149,39 @@ body.high-contrast .battle-screen .action-line {
     --battle-move-h: 72px;
   }
 
-  .battle-screen .battle-tools [data-action='battle-log'] {
-    display: none;
+  .battle-info-zone {
+    grid-template-rows: 124px auto;
+  }
+
+  .battle-screen .battle-top {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 44px 44px 36px;
   }
 
   .battle-screen .turn-chip {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 44px;
     min-width: 82px;
+    max-height: 44px;
     padding-inline: 8px;
+  }
+
+  .battle-screen .battle-tools {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .battle-screen .arena-nameplate {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .battle-screen .battle-tools [data-action='battle-log'] {
+    display: none;
   }
 
   .battle-screen .turn-chip small {

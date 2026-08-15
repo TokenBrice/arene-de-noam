@@ -135,11 +135,11 @@
 }
 .switch-option > small:last-child {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .switch-passive {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .switch-statuses {
   display: flex;
