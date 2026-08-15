@@ -68,10 +68,12 @@ function installBestiaryDisclosureSync() {
     bestiaryCompactQuery = window.matchMedia('(max-width: 600px)');
     if (bestiaryCompactQuery.addEventListener)
       bestiaryCompactQuery.addEventListener('change', syncBestiaryDisclosureMode);
-    else bestiaryCompactQuery.addListener(syncBestiaryDisclosureMode);
-    if (!bestiaryResizeBound) {
-      window.addEventListener('resize', syncBestiaryDisclosureMode);
-      bestiaryResizeBound = true;
+    else {
+      bestiaryCompactQuery.addListener(syncBestiaryDisclosureMode);
+      if (!bestiaryResizeBound) {
+        window.addEventListener('resize', syncBestiaryDisclosureMode);
+        bestiaryResizeBound = true;
+      }
     }
   }
   syncBestiaryDisclosureMode();
