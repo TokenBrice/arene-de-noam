@@ -66,7 +66,7 @@ test('WebGL failure has a friendly nonblank screen', async ({ page }) => {
   await page.goto('/?failWebgl=1');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.getByText(/besoin de WebGL/)).toBeVisible();
+  await expect(page.getByText(/arène ne peut pas s’afficher/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Retour/ })).toBeVisible();
 });
 
@@ -76,6 +76,6 @@ test('lost graphics context becomes a friendly recovery screen', async ({ page }
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await page.locator('#arena').dispatchEvent('arena-context-lost');
-  await expect(page.getByText(/graphique s’est interrompue/)).toBeVisible();
+  await expect(page.getByText(/affichage de l’arène s’est arrêté/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Retour/ })).toBeVisible();
 });

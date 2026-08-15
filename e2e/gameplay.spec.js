@@ -12,24 +12,15 @@ test('visible tutorial teaches types, Combo, Signature, and switch, then complet
   await page.goto('/?seed=4242&animations=0');
   await page.getByRole('button', { name: /Jouer/ }).click();
   await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible();
-  await page.evaluate(() => {
-    const stage = document.getElementById('fx-stage');
-    window.__fxLog = [];
-    new MutationObserver(() =>
-      window.__fxLog.push({ cls: stage.className, color: stage.style.getPropertyValue('--fx-color') })
-    ).observe(stage, { attributes: true });
-  });
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('#hud-enemy')).toContainText('Marqué');
   const markedToken = page.locator('#hud-enemy .plate-status[data-status="marked"]');
   await expect(markedToken).toHaveClass(/negative/);
   await expect(markedToken.locator('.status-icon-target-lock')).toHaveCount(1);
   await expect(markedToken).toHaveCSS('--status-color', '#AD1457');
-  await expect
-    .poll(() =>
-      page.evaluate(() => window.__fxLog.find((entry) => entry.cls.includes('tactical-marked'))?.color)
-    )
-    .toBe('#AD1457');
+  await page.locator('[data-action="battle-log"]').click();
+  await expect(page.locator('.battle-log li').filter({ hasText: 'Marqué' })).toHaveCount(1);
+  await page.locator('[data-action="close-log"]').click();
   await expect(page.getByText(/Kordane est Marqué/)).toBeVisible();
   await page.locator('[data-move="slowing_riddle"]').click();
   await expect(page.locator('#hud-enemy')).not.toContainText('Marqué');
@@ -38,7 +29,7 @@ test('visible tutorial teaches types, Combo, Signature, and switch, then complet
   await page.locator('[data-move="oracle_veil"]').click();
   await expect(page.getByText(/Calderoc est de type Feu.*Eau sont super efficaces/)).toBeVisible();
   await page.locator('[data-action="open-switch"]').click();
-  await page.getByRole('button', { name: /Abyssar/ }).click();
+  await page.locator('[data-switch-index]').filter({ hasText: 'Abyssar' }).click();
   await expect(page.getByText(/À toi\. Observe les PV et termine le combat/)).toBeVisible();
   await playVisibleBattle(page, { untilSelection: true });
   await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
@@ -216,7 +207,7 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
   );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  const command = page.getByRole('button', { name: 'Ordre du dresseur' });
+  const command = page.locator('[data-action="trainer-command"]');
   await expect(command).toBeDisabled();
   await page.locator('[data-move="crystal_strike"]').click();
   await expect(page.locator('#hud-player')).toContainText('Sonné', { timeout: 5000 });
@@ -237,7 +228,7 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
   expect(after - before).toBe(15);
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.getByRole('button', { name: 'Codex du combat' }).click();
-  await expect(page.locator('.trainer-command-codex.used')).toContainText('Ordre donné');
+  await expect(page.locator('.trainer-command-codex.used')).toContainText('Coup de pouce utilisé');
 });
 
 test('restorative techniques display their recovered HP at the creature', async ({ page }) => {
@@ -508,7 +499,7 @@ test('a switched teammate converts a setup with visible Combo credit', async ({ 
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('[data-action="open-switch"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-action="open-switch"]').click();
-  await page.getByRole('button', { name: /Pyrolynx/ }).click();
+  await page.locator('[data-switch-index]').filter({ hasText: 'Pyrolynx' }).click();
   await expect(page.locator('[data-move="ninefold_inferno"]')).toBeEnabled({ timeout: 5000 });
   await expect(page.locator('[data-move="ninefold_inferno"] .move-combo-badge')).toContainText('Orakyn');
   await page.locator('[data-move="ninefold_inferno"]').click();
