@@ -49,10 +49,40 @@ function currentMusicScreen() {
 
 function bindCommon() {
   sound.setScreen(currentMusicScreen());
-  screen.querySelectorAll('[data-action="title"]').forEach((b) => b.addEventListener('click', renderTitle));
+  const settingsBackRoutes = {
+    title: renderTitle,
+    selection: () => renderTeamSelect(ctx.selection?.mode),
+    bestiary: renderBestiary,
+    academy: renderAcademy,
+    league: renderLeague,
+    trials: renderTrials,
+    draft: renderDraft,
+    'gauntlet-boon': renderGauntletBoons,
+    results: () => {
+      const session = ctx.settingsBattleSession;
+      ctx.settingsBattleSession = null;
+      if (!session) {
+        renderTitle();
+        return;
+      }
+      ctx.battleSession = session;
+      renderResults(session.state.winner === 'player');
+    },
+  };
+  screen.querySelectorAll('.topbar > [data-action]').forEach((button) => {
+    if (!button.classList.contains('subtle-btn')) return;
+    const handler = settingsBackRoutes[button.dataset.action] || renderTitle;
+    button.addEventListener('click', handler);
+  });
   screen
     .querySelectorAll('[data-action="settings"]')
-    .forEach((b) => b.addEventListener('click', () => renderSettings()));
+    .forEach((b) =>
+      b.addEventListener('click', () => {
+        ctx.settingsReturn = screen.dataset.page || 'title';
+        ctx.settingsBattleSession = ctx.battleSession;
+        renderSettings();
+      })
+    );
   screen.querySelectorAll('[data-action="toggle-mute"]').forEach((b) =>
     b.addEventListener('click', () => {
       ctx.save.muted = !ctx.save.muted;
