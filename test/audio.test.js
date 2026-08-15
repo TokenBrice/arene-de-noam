@@ -122,3 +122,61 @@ test('save versions are strict and persistence reports unavailable storage truth
     false
   );
 });
+test('scheduled audio chains disconnect every node when their source ends', () => {
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  const disconnected = [];
+  const makeNode = (name) => ({
+    disconnect() {
+      disconnected.push(name);
+    },
+  });
+  const source = {
+    listeners: {},
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    },
+    emit(type) {
+      this.listeners[type]?.();
+    },
+  };
+  const chain = [source, makeNode('filter'), makeNode('gain'), makeNode('send')];
+  const collection = new Set();
+
+  sound.trackSource(source, collection, chain);
+  assert.equal(collection.has(source), true);
+  source.emit('ended');
+  assert.deepEqual(disconnected, ['filter', 'gain', 'send']);
+  assert.equal(collection.has(source), false);
+});
+
+test('shared SFX nodes disconnect only after the final source ends', () => {
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  const disconnected = [];
+  const shared = {
+    disconnect() {
+      disconnected.push('shared');
+    },
+  };
+  const makeSource = () => {
+    const source = {
+      listeners: {},
+      addEventListener(type, listener) {
+        this.listeners[type] = listener;
+      },
+      emit(type) {
+        this.listeners[type]?.();
+      },
+    };
+    return source;
+  };
+  const first = makeSource();
+  const second = makeSource();
+  const collection = new Set();
+
+  sound.trackSource(first, collection, [first, shared]);
+  sound.trackSource(second, collection, [second, shared]);
+  first.emit('ended');
+  assert.deepEqual(disconnected, []);
+  second.emit('ended');
+  assert.deepEqual(disconnected, ['shared']);
+});
