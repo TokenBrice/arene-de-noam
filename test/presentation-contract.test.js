@@ -80,6 +80,10 @@ test('battle controls expose dialog, speed, plate, overflow, and mobile rule sem
   assert.match(controller, /battle\.speedLabel/);
   assert.match(controller, /className = 'plate-status-more'/);
   assert.match(controller, /battle\.statusOverflow/);
+  assert.match(
+    controller,
+    /closeSwitch\(\{[\s\S]*restoreFocus: !state\.sides\.player\.pendingReplacement,[\s\S]*focusAfterUnlock: !state\.sides\.player\.pendingReplacement/
+  );
   assert.match(styles, /-webkit-line-clamp:\s*2/);
   assert.match(styles, /\.battle-screen \.arena-nameplate > small[\s\S]*white-space:\s*normal/);
   assert.match(i18n, /'battle\.speedLabel': 'Vitesse du combat : ×\{speed\}'/);

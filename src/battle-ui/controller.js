@@ -70,7 +70,8 @@ const {
 
 let battleSessionSequence = 0,
   battleStartPending = false,
-  switchOpener = null;
+  switchOpener = null,
+  switchFocusAfterUnlock = null;
 
 function sessionIsActive(session) {
   return Boolean(
@@ -579,6 +580,11 @@ function refreshBattle() {
     ctx.locked ||
     (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 3) ||
     !getLegalActions(state, 'player').some((action) => action.type === 'switch');
+  if (!ctx.locked && switchFocusAfterUnlock) {
+    const focusTarget = screen.querySelector(switchFocusAfterUnlock);
+    switchFocusAfterUnlock = null;
+    focusTarget?.focus();
+  }
   switchButton.onclick = () => openSwitch();
   const speedButton = screen.querySelector('[data-action="battle-speed"]');
   speedButton.textContent = `×${ctx.save.battleSpeed}`;
@@ -619,12 +625,19 @@ function renderTutorialTip() {
   root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
 }
 
-function closeSwitch({ restoreFocus = true } = {}) {
+function closeSwitch({ restoreFocus = true, focusAfterUnlock = false } = {}) {
   const root = screen.querySelector('#replacement-root');
   if (!root?.querySelector('.replacement-card')) return false;
   root.innerHTML = '';
   const opener = switchOpener;
   switchOpener = null;
+  if (focusAfterUnlock && opener?.dataset) {
+    switchFocusAfterUnlock = opener.dataset.move
+      ? `[data-move="${opener.dataset.move}"]`
+      : opener.dataset.action
+        ? `[data-action="${opener.dataset.action}"]`
+        : null;
+  }
   if (restoreFocus && opener?.isConnected) opener.focus();
   return true;
 }
@@ -724,12 +737,13 @@ function openSwitch(relayMoveId = null) {
   replacementCard?.setAttribute('aria-modal', 'true');
   replacementTitle?.setAttribute('id', 'replacement-title');
   replacementCard?.setAttribute('aria-labelledby', 'replacement-title');
-  screen
-    .querySelectorAll('.switch-option>span')
-    .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
   screen.querySelectorAll('[data-switch-index]').forEach((button) =>
-    button.addEventListener('click', () => {
-      closeSwitch({ restoreFocus: false });
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeSwitch({
+        restoreFocus: !state.sides.player.pendingReplacement,
+        focusAfterUnlock: !state.sides.player.pendingReplacement,
+      });
       const index = Number(button.dataset.switchIndex);
       if (relayMoveId) handlePlayerAction({ type: 'move', moveId: relayMoveId, allyIndex: index });
       else if (state.sides.player.pendingReplacement) handleReplacement(index);
