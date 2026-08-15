@@ -29,7 +29,7 @@ This directory is the implementation map for coding agents. It is intentionally 
 | AI choice/scoring | `src/battle/ai.js` | Legality, immutability, seeded-replay tests; balance simulation |
 | Creature, move, type, class, passive | `src/data/` | Both locales, presentation contracts, data tests, balance simulation; move CSS when applicable |
 | Mode setup or progression | Relevant `src/data/` and `src/screens/` module | Save work if persisted; e2e flow coverage |
-| Battle controls/readouts | `src/battle-ui/controller.js`, `hud.js` | Keyboard/touch/gamepad and simple/expert mode checks |
+| Battle controls/readouts | `src/battle-ui/controller.js`, `hud.js` | Keyboard/touch and simple/expert mode checks |
 | Event animation/audio | `src/battle-ui/playback.js`, `fx.js`, `src/sound.js`, battle CSS | Reduced-motion and `?animations=0` behavior |
 | Screen/navigation UI | `src/screens/`, `src/app/shell.js` | `registerRoutes`, focus/escape behavior, responsive e2e |
 | Persisted shape | `src/save.js` | Bump `SAVE_VERSION`, add one migration, validate old/corrupt/future saves |
@@ -48,7 +48,7 @@ This directory is the implementation map for coding agents. It is intentionally 
 - Type, class, and status palettes/SVG geometry remain distinct as enforced by the presentation contract.
 - Every move keeps a unique `visual` id and a `.move-<moveId>` CSS selector.
 - Simple and tactical-detail modes expose different density, never different legal actions or mechanics.
-- Mouse, touch, keyboard, gamepad, reduced motion, high contrast, and friendly failure screens are product behavior, not optional polish.
+- Mouse, touch, keyboard, reduced motion, high contrast, and friendly failure screens are product behavior, not optional polish. Gamepad support is intentionally out of scope and must not be added without a new product requirement.
 - No runtime secrets, API keys, CDN dependencies, or network generation.
 
 ## Working method

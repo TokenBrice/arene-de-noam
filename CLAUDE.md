@@ -48,6 +48,7 @@ Everything loads from `index.html` as browser-native ES modules; `src/main.js` i
 
 ## Product constraints
 
-- The player is a child: pillars are fast battle entry, readable choices before confirmation, friendly defeat (no lost progress), concise spectacle, and full mouse/touch/keyboard/gamepad support. Reduced-motion must stay supported.
+- The player is a child: pillars are fast battle entry, readable choices before confirmation, friendly defeat (no lost progress), concise spectacle, and full mouse/touch/keyboard support. Reduced-motion must stay supported.
+- Gamepad support is intentionally out of scope. Do not add controller polling, mappings, UI copy, styling, or tests unless a new product requirement explicitly restores it.
 - All content is original — no names, wording, or artwork referencing existing monster franchises.
 - No runtime network calls or API keys. `tools/generate-pixellab.mjs` (sprite generation) is dev-only and reads its key from env.

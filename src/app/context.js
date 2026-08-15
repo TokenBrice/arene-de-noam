@@ -121,9 +121,6 @@ export const ctx = {
   gauntletRun: null,
   draftRun: null,
   theaterTimers: [],
-  gamepadButtons: [],
-  gamepadAxisLatch: false,
-  gamepadLoop: 0,
   routes: {},
 };
 

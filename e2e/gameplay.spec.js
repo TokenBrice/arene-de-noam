@@ -373,15 +373,6 @@ test('keyboard numbers choose moves and C opens switching', async ({ page }) => 
   await expect(page.locator('.switch-option.recommended')).toContainText('Relève conseillée');
 });
 
-test('gamepad connection activates navigation mode and exposes its controls', async ({ page }) => {
-  await installCompletedTutorial(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Réglages' }).click();
-  await expect(page.locator('.gamepad-help')).toContainText('croix/stick');
-  await expect(page.locator('.gamepad-help')).toContainText('A pour confirmer');
-  await expect(page.locator('.gamepad-help')).toContainText('Start');
-});
-
 test('a predicted resisted attack exposes and celebrates a Perfect Relay', async ({ page }) => {
   await installCompletedTutorial(page, {
     lastTeam: ['abyssar', 'orakyn', 'virelia'],

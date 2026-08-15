@@ -83,35 +83,6 @@
   }
 }
 
-.gamepad-help {
-  padding: 10px 12px;
-  border: 1px solid #b398ff35;
-  border-radius: 12px;
-  color: #dcd4f5;
-  background: linear-gradient(110deg, #8c66ff12, #58dfff0b);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-body.gamepad-active button:focus,
-body.gamepad-active select:focus,
-body.gamepad-active input:focus,
-body.gamepad-active [role='button']:focus {
-  outline: 3px solid var(--gold-bright);
-  outline-offset: 4px;
-  box-shadow:
-    0 0 0 7px #ffe8791c,
-    0 0 28px #ffe8793a;
-  animation: gamepadFocus 0.75s ease-in-out infinite alternate;
-}
-@keyframes gamepadFocus {
-  to {
-    outline-color: #7af1ff;
-    box-shadow:
-      0 0 0 9px #7af1ff15,
-      0 0 32px #7af1ff46;
-  }
-}
-
 .squad-report {
   margin: 10px 0 5px;
   text-align: left;

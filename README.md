@@ -1,6 +1,6 @@
 # Arène de Noam
 
-**Arène de Noam** (*Noam's Arena* in English) is a local, deterministic 3v3 creature-battle game for the browser. It includes 30 creatures, 90 authored moves, six readable classes, six animated arenas, French and English, progression, and mouse, touch, keyboard, and gamepad controls.
+**Arène de Noam** (*Noam's Arena* in English) is a local, deterministic 3v3 creature-battle game for the browser. It includes 30 creatures, 90 authored moves, six readable classes, six animated arenas, French and English, progression, and mouse, touch, and keyboard controls.
 
 There is no account, backend, analytics, build step, runtime generation, or network API dependency. Three.js is vendored locally; Playwright is development-only.
 
@@ -54,7 +54,6 @@ Team selection and Draft show type coverage, team roles, and cross-creature Comb
 - `L`: open the Battle Chronicle.
 - `M`: mute or unmute.
 - `Escape`: close an overlay or leave a non-battle screen.
-- Gamepad: D-pad/stick navigation, confirm/back, switch, Codex, and Chronicle shortcuts.
 
 Settings include independent music/effect volume, mute, normal/`×2` speed, reduced motion, high contrast, and French/English. **Tactical details** shows exact damage and absorption, predicted order, full move effects, extra status icons with durations and sources, and deeper battle context. It changes information density only; it never hides a legal action or mechanic.
 

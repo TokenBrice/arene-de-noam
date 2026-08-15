@@ -72,10 +72,6 @@ function bindCommon() {
       persist();
     });
   }
-  if (screen.dataset.page === 'settings' && !screen.querySelector('.gamepad-help'))
-    screen
-      .querySelector('.settings-card:last-child .cycle')
-      ?.insertAdjacentHTML('beforebegin', `<p class="gamepad-help">🎮 ${t('settings.gamepad')}</p>`);
   if (screen.dataset.page === 'bestiary' && screen.querySelector('.feat-hall .eyebrow')) {
     const visibleFeatIds = [
         ...CURRENT_FEAT_IDS,

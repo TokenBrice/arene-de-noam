@@ -79,9 +79,6 @@ const fr = {
   'record.signatures': 'Signatures',
   'settings.contrast': 'Contraste renforcé',
   'settings.contrastHint': 'Renforce les contours, les motifs et la lisibilité sans changer les règles.',
-  'settings.gamepad':
-    'Manette : croix/stick pour naviguer, A pour confirmer, B pour revenir, X pour changer, Y pour le Codex et Start pour la chronique.',
-  'settings.gamepadConnected': 'Manette connectée · navigation active',
   'battle.log': 'Chronique du combat',
   'battle.logSubtitle': 'DERNIERS ÉVÉNEMENTS',
   'battle.logEmpty': 'Le combat vient de commencer. Les actions importantes apparaîtront ici.',
@@ -535,9 +532,6 @@ const en = {
   'record.signatures': 'Signatures',
   'settings.contrast': 'High contrast',
   'settings.contrastHint': 'Strengthens outlines, patterns, and readability without changing the rules.',
-  'settings.gamepad':
-    'Controller: D-pad/stick to navigate, A to confirm, B to go back, X to switch, Y for the Codex, and Start for the chronicle.',
-  'settings.gamepadConnected': 'Controller connected · navigation active',
   'battle.log': 'Battle Chronicle',
   'battle.logSubtitle': 'RECENT EVENTS',
   'battle.logEmpty': 'The battle has just begun. Important actions will appear here.',

@@ -15,7 +15,7 @@ import './battle-ui/playback.js';
 import './screens/results.js';
 import './screens/bestiary.js';
 import './screens/settings.js';
-import './input/gamepad.js';
+import './input/keyboard.js';
 
 installScreenTransitions();
 ctx.routes.startInput();
