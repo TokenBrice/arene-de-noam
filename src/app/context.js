@@ -115,6 +115,7 @@ export const ctx = {
   arenaScene: null,
   battleStylesReady: null,
   toastTimer: null,
+  saveFailureNotified: false,
   locked: false,
   currentFxMove: null,
   pendingRewards: null,
@@ -149,10 +150,15 @@ document.addEventListener('visibilitychange', () => sound.handleVisibility(docum
 
 function persist() {
   ctx.save.language = i18n.lang;
-  persistSave(ctx.save);
+  const ok = persistSave(ctx.save);
+  if (!ok && !ctx.saveFailureNotified) {
+    ctx.saveFailureNotified = true;
+    notify(t('app.saveFailed'));
+  }
   sound.update(ctx.save);
   document.body.classList.toggle('reduced-motion', ctx.save.reducedMotion);
   document.body.classList.toggle('high-contrast', ctx.save.highContrast);
+  return ok;
 }
 
 function escapeHtml(value) {

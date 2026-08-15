@@ -30,6 +30,10 @@ test('French and English localization keys are complete and interpolation works'
   assert.deepEqual(Object.keys(DICTIONARIES.fr).sort(), Object.keys(DICTIONARIES.en).sort());
   assert.equal(createI18n('en').t('battle.turn', { turn: 7 }), 'Turn 7');
 });
+test('save failure copy is available in both locales', () => {
+  assert.equal(typeof DICTIONARIES.fr['app.saveFailed'], 'string');
+  assert.equal(typeof DICTIONARIES.en['app.saveFailed'], 'string');
+});
 test('legacy affinity ids expose the canonical type labels and parallel triangle copy', () => {
   assert.deepEqual(
     ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map((id) => DICTIONARIES.fr[`affinity.${id}`]),
