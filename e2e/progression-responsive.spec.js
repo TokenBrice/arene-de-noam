@@ -185,7 +185,7 @@ test('the tactical academy leads with eight essentials and every current effect'
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toHaveCount(1);
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toContainText('Brûlure');
   await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('Combo');
-  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('+40 %');
+  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('×1,4');
   await expect(page.locator('.academy-status-group.positive > h3')).toHaveText('▲ AVANTAGE');
   await expect(page.locator('.academy-status-group.negative > h3')).toHaveText('▼ MALUS');
   await expect(page.locator('.academy-status .status-icon')).toHaveCount(8);
@@ -258,11 +258,11 @@ test('mythic trials expose six rule-bending encounters and launch with modifiers
   await page.getByRole('button', { name: 'Épreuves' }).click();
   await expect(page.locator('.trial-card')).toHaveCount(6);
   await expect(page.getByText(/Les deux équipes commencent à 100 Éclat/)).toBeVisible();
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).first().click();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).first().click();
   await expect(page.getByRole('heading', { name: 'Tempête de Signatures' }).first()).toBeVisible();
   await expect(page.locator('[data-creature]')).toHaveCount(30);
   await expect(page.locator('.enemy-list img')).toHaveCount(3);
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).click();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
   await expect(page.getByText('Tempête de Signatures')).toBeVisible();
   await expect(page.locator('#hud-player').getByText('100/80')).toBeVisible();
   await expect(page.locator('[data-move="supernova"]')).toBeEnabled();
