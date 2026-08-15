@@ -85,6 +85,8 @@ function renderSettings() {
       localStorage.removeItem(SAVE_KEY);
       ctx.save = freshDefaultSave();
       ctx.save.language = i18n.lang;
+      persist();
+      renderTitle();
     });
     backdrop.querySelector('[data-action="reset-cancel"]').focus();
   });

@@ -176,11 +176,21 @@ test('save round-trips with validated ranges', () => {
   assert.equal('volume' in loadSave(memory).save, false);
   assert.equal('affinity' in loadSave(memory).save, false);
 });
-test('fresh save resets do not share records or custom squad collections', () => {
+test('fresh save resets rebuild every nested collection', () => {
   const firstReset = freshDefaultSave();
+  firstReset.mastery.orakyn = 99;
+  firstReset.feats.push('blitz');
+  firstReset.trials.push('trial-one');
+  firstReset.lastTeam[0] = 'kordane';
   firstReset.records.orakyn = { battles: 1, wins: 1 };
   firstReset.customSquads[0] = { team: ['orakyn', 'abyssar', 'virelia'], lead: 0 };
   const secondReset = freshDefaultSave();
+  for (const key of ['mastery', 'feats', 'trials', 'lastTeam', 'records', 'customSquads'])
+    assert.notEqual(secondReset[key], firstReset[key], `${key} should be a fresh collection`);
+  assert.deepEqual(secondReset.mastery, {});
+  assert.deepEqual(secondReset.feats, []);
+  assert.deepEqual(secondReset.trials, []);
+  assert.deepEqual(secondReset.lastTeam, ['orakyn', 'abyssar', 'virelia']);
   assert.deepEqual(secondReset.records, {});
   assert.deepEqual(secondReset.customSquads, [null, null, null]);
 });
