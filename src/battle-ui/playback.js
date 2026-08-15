@@ -57,13 +57,13 @@ function eventPresentationDelay(event) {
   if (event.type === 'move-skip') return 120 / ctx.save.battleSpeed;
   if (event.type === 'move-start')
     return (
-      (MOVES[event.moveId]?.signature ? 780 : (MOVES[event.moveId]?.power || 0) >= 46 ? 500 : 360) /
+      (MOVES[event.moveId]?.signature ? 780 : (MOVES[event.moveId]?.power || 0) >= 46 ? 420 : 300) /
       ctx.save.battleSpeed
     );
   if (event.type === 'trainer-command') return 760 / ctx.save.battleSpeed;
   if (event.type === 'damage')
     return (
-      (event.hp <= 0 ? 900 : event.affinity !== 1 ? 700 : ctx.currentFxMove?.strong ? 620 : 380) /
+      (event.hp <= 0 ? 900 : event.affinity !== 1 ? 700 : ctx.currentFxMove?.strong ? 620 : 300) /
       ctx.save.battleSpeed
     );
   if (event.type === 'arena-pulse') return 760 / ctx.save.battleSpeed;
@@ -81,8 +81,8 @@ function eventPresentationDelay(event) {
       event.type
     )
   )
-    return 340 / ctx.save.battleSpeed;
-  return 240 / ctx.save.battleSpeed;
+    return 250 / ctx.save.battleSpeed;
+  return 180 / ctx.save.battleSpeed;
 }
 
 async function playEvents(events) {
