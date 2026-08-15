@@ -737,6 +737,11 @@ body.reduced-motion .battle-vignette {
     min-height: 44px;
   }
 }
+@media (min-width: 901px) {
+  .select-aside > .primary-btn.wide[data-action='start-battle'] {
+    display: none;
+  }
+}
 .battle-plan > summary small {
   color: var(--muted);
   font-size: var(--text-xs);
