@@ -756,12 +756,15 @@
   position: absolute;
   z-index: 3;
   left: var(--battle-side-gap);
-  bottom: calc(var(--battle-move-h) + 8px);
+  bottom: calc(100% + 8px);
   max-width: min(380px, calc(100vw - var(--battle-side-gap) - var(--battle-side-gap)));
 }
 
 .battle-screen .tutorial-tip {
   position: static;
+  transform: none;
+  width: 100%;
+  max-width: min(420px, calc(100vw - 24px));
   min-height: 44px;
   font-size: var(--type-battle-micro);
 }
