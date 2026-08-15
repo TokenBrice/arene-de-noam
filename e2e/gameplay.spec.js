@@ -52,7 +52,7 @@ test('reduced-motion tutorial outro is presented before team select', async ({ p
   await page.locator('#motion').check();
   await page.getByRole('button', { name: /Retour/ }).click();
   await page.getByRole('button', { name: /Jouer/ }).click();
-  await page.getByText(/Le type Combat est faible face au type Psy/).toBeVisible();
+  await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible();
   await page.locator('[data-move="lucid_arc"]').click();
   await page.locator('[data-move="slowing_riddle"]').click();
   await page.locator('[data-move="oracle_veil"]').click();
