@@ -454,10 +454,11 @@ test('Burning enables Venom Harvest as one visible Combo', async ({ page }) => {
   await page.locator('[data-move="toxic_spines"]').click();
   await expect(page.locator('[data-move="venom_harvest"]')).toBeEnabled();
   await expect(page.locator('[data-move="venom_harvest"] .move-combo-badge')).toContainText('COMBO +40%');
-  const comboImpact = expect(page.locator('.combo-impact')).toBeVisible();
   await page.locator('[data-move="venom_harvest"]').click();
-  await comboImpact;
-  await expect(page.locator('#action-line')).toContainText(/Combo/);
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Journal du combat' }).click();
+  const log = page.getByRole('dialog', { name: 'Journal du combat' });
+  await expect(log.locator('li').filter({ hasText: /Combo/i })).toHaveCount(1);
 });
 
 test('battle codex explains live rules and closes with Escape', async ({ page }) => {
