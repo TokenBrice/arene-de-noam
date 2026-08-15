@@ -7,3 +7,6 @@ test-results/
 playwright-report/
 .DS_Store
 **/.DS_Store
+
+# Agent scratch area (plans, test outputs, artifacts)
+/agents/
