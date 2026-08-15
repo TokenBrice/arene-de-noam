@@ -82,6 +82,8 @@ export class ArenaScene {
     this.tension = 0;
     this.targetTension = 0;
     this.arenaCharge = 0;
+    this.showdown = 0;
+    this.targetShowdown = 0;
     try {
       this.renderer = new THREE.WebGLRenderer({
         canvas,
@@ -463,9 +465,10 @@ export class ArenaScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
   }
-  setBattleState({ tension = 0, imminent = false } = {}) {
+  setBattleState({ tension = 0, imminent = false, showdown = false } = {}) {
     this.targetTension = Math.max(0, Math.min(1, tension));
     this.arenaCharge = imminent ? 1 : 0;
+    this.targetShowdown = showdown ? 1 : 0;
   }
   burst(color = '#fff', targetSide = 'enemy', strength = 1) {
     if (!this.burstPoints) return;
@@ -514,9 +517,12 @@ export class ArenaScene {
     this.elapsed += dt;
     const t = this.elapsed;
     this.tension += (this.targetTension - this.tension) * Math.min(1, dt * 2.4);
+    // Final showdown: both sides on their last creature — the arena leans in
+    // (warmer rim light, slightly closer camera, brighter exposure).
+    this.showdown += (this.targetShowdown - this.showdown) * Math.min(1, dt * 1.6);
     const chargePulse = this.arenaCharge * (0.5 + Math.sin(t * 5) * 0.5);
-    this.renderer.toneMappingExposure = 1.15 + this.tension * 0.2 + chargePulse * 0.07;
-    if (this.rim) this.rim.intensity = 25 + this.tension * 19 + chargePulse * 12;
+    this.renderer.toneMappingExposure = 1.15 + this.tension * 0.2 + chargePulse * 0.07 + this.showdown * 0.12;
+    if (this.rim) this.rim.intensity = 25 + this.tension * 19 + chargePulse * 12 + this.showdown * 16;
     if (this.moon) this.moon.intensity = 3.4 + this.tension * 1.4;
     if (this.hemi) this.hemi.intensity = 1.8 + this.tension * 0.45;
     if (this.dust) {
@@ -530,8 +536,8 @@ export class ArenaScene {
       this.cameraKick.x *= 0.84;
       this.cameraKick.y *= 0.84;
       this.cameraKick.z *= 0.84;
-      this.cameraBase.z = 9.4 - this.tension * 0.5;
-      this.cameraBase.y = 5.2 - this.tension * 0.12;
+      this.cameraBase.z = 9.4 - this.tension * 0.5 - this.showdown * 0.55;
+      this.cameraBase.y = 5.2 - this.tension * 0.12 - this.showdown * 0.2;
       this.camera.position.set(
         this.cameraBase.x + this.cameraKick.x,
         this.cameraBase.y + this.cameraKick.y,

@@ -233,10 +233,7 @@ export function calculateTension(state = {}) {
   const lowHealth = 1 - Math.min(player, enemy);
   const closeFight = 1 - Math.min(1, Math.abs(player - enemy) * 1.6);
   return clamp01(
-    lowHealth * 0.48 +
-      closeFight * 0.12 +
-      Math.min(0.22, turn * 0.012) +
-      (state.signatureReady ? 0.12 : 0)
+    lowHealth * 0.48 + closeFight * 0.12 + Math.min(0.22, turn * 0.012) + (state.signatureReady ? 0.12 : 0)
   );
 }
 
@@ -782,6 +779,35 @@ export class SoundSystem {
     });
   }
 
+  shatter() {
+    this.patch({
+      seed: 'shatter',
+      freq: 1180,
+      endFreq: 390,
+      duration: 0.24,
+      wave: 'square',
+      gain: 0.036,
+      noiseGain: 0.052,
+      noiseFreq: 3600,
+      noiseDuration: 0.18,
+      filterStart: 4600,
+      filterEnd: 750,
+      reverb: 0.3,
+    });
+    this.patch({
+      seed: 'shatter-tinkle',
+      freq: 2350,
+      endFreq: 1560,
+      duration: 0.16,
+      wave: 'sine',
+      gain: 0.02,
+      delay: 0.05,
+      noiseGain: 0.02,
+      noiseFreq: 5200,
+      reverb: 0.42,
+    });
+  }
+
   heal() {
     [330, 440, 550].forEach((freq, index) =>
       this.patch({
@@ -868,30 +894,30 @@ export class SoundSystem {
     return [...String(value)].reduce((total, character) => (total * 31 + character.charCodeAt(0)) >>> 0, 7);
   }
 
-  call(id) {
+  call(id, { fall = false } = {}) {
     const families = { orakyn: 610, kordane: 180, farfombre: 420, abyssar: 118, calderoc: 150, virelia: 510 };
     const seed = this.hash(id);
     const freq = families[id] || 180 + (seed % 470);
     const waves = ['triangle', 'sine', 'square', 'sawtooth'];
     this.patch({
-      seed: `call:${id}`,
+      seed: `call:${id}${fall ? ':fall' : ''}`,
       freq,
-      endFreq: freq * (1.08 + (seed % 4) * 0.025),
-      duration: 0.22,
+      endFreq: fall ? freq * 0.52 : freq * (1.08 + (seed % 4) * 0.025),
+      duration: fall ? 0.48 : 0.22,
       wave: waves[seed % 4],
-      gain: 0.043,
+      gain: fall ? 0.038 : 0.043,
       noiseGain: 0.009 + (seed % 4) * 0.003,
       noiseFreq: 700 + (seed % 7) * 240,
       reverb: 0.38,
     });
     this.patch({
-      seed: `call:${id}:answer`,
-      freq: freq * (1.25 + (seed % 5) * 0.04),
-      endFreq: freq * 0.92,
-      duration: 0.25,
+      seed: `call:${id}:answer${fall ? ':fall' : ''}`,
+      freq: fall ? freq * 0.72 : freq * (1.25 + (seed % 5) * 0.04),
+      endFreq: fall ? freq * 0.38 : freq * 0.92,
+      duration: fall ? 0.55 : 0.25,
       wave: waves[(seed + 1) % 4],
-      gain: 0.026,
-      delay: 0.065,
+      gain: fall ? 0.022 : 0.026,
+      delay: fall ? 0.1 : 0.065,
       noiseGain: 0.004,
       reverb: 0.44,
     });

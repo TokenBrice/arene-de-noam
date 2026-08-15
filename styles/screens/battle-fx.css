@@ -642,7 +642,7 @@ body.reduced-motion .affinity-callout {
     drop-shadow(0 24px 14px #0009);
 }
 .fighter.hit img {
-  animation: fxCreatureHit 0.4s cubic-bezier(0.1, 0.8, 0.2, 1) !important;
+  animation: fxCreatureHit 0.45s cubic-bezier(0.1, 0.8, 0.2, 1) !important;
 }
 .action-line.epic {
   font-size: 18px;
@@ -789,13 +789,17 @@ body.reduced-motion .affinity-callout {
     transform: translate(0) scale(1);
     filter: brightness(1);
   }
-  15% {
-    transform: translate(-7%, 1%) scale(1.08, 0.9);
+  14% {
+    transform: translate(-8%, 2%) scale(1.12, 0.82);
     filter: brightness(4);
   }
-  35% {
-    transform: translate(6%, -1%) scale(0.92, 1.08);
+  36% {
+    transform: translate(7%, -2%) scale(0.9, 1.1);
     filter: brightness(1.5);
+  }
+  62% {
+    transform: translate(-2%, 1%) scale(1.03, 0.96);
+    filter: brightness(1.15);
   }
   100% {
     transform: translate(0) scale(1);
@@ -844,6 +848,7 @@ body.reduced-motion .affinity-callout {
     transform: none;
   }
   .fighter.windup img,
+  .fighter.attacking img,
   .fighter.hit img {
     animation: fxReduced 0.2s ease !important;
   }
@@ -871,6 +876,11 @@ body.reduced-motion .status-tick-icon {
   animation: none !important;
   transform: none;
   opacity: 1;
+}
+body.reduced-motion .fighter.windup img,
+body.reduced-motion .fighter.attacking img,
+body.reduced-motion .fighter.hit img {
+  animation: fxReduced 0.2s ease !important;
 }
 @keyframes statusApplyCore {
   from {
@@ -909,6 +919,407 @@ body.reduced-motion .status-tick-icon {
   to {
     opacity: 1;
   }
+}
+
+/* --- Visual archetypes (plan §4.1): the fifty-four moves without bespoke
+   .move-<id> styling share one of nine choreographies via the visual-<arch>
+   class on the FX root. Each archetype re-times and re-shapes the shared
+   scaffolding (projectile, trail, rings, particles, impact); the per-move
+   .fx-detail identity layer in battle-presentation.css stays untouched.
+   Extra bodies (slashes, pillars, drops, dash ghost) are built by beginMoveFx
+   and, except for self-targeted moves, gated on the .impact class so they land
+   exactly with the damage moment. --- */
+.fx-arch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fx-arch i {
+  position: absolute;
+  opacity: 0;
+}
+/* beam: a fast stretched lance and a sustained bright line. */
+.visual-beam .fx-projectile {
+  animation: fxBeamFlight 0.3s cubic-bezier(0.45, 0, 0.75, 0.3) forwards;
+}
+.visual-beam .fx-trail {
+  height: 12px;
+  animation: fxBeamTrail 0.55s ease-out forwards;
+}
+@keyframes fxBeamFlight {
+  0% {
+    left: var(--from-x);
+    top: var(--from-y);
+    transform: scale(0.4, 0.3) rotate(-20deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    left: var(--to-x);
+    top: var(--to-y);
+    transform: scale(2.1, 0.5) rotate(0deg);
+    opacity: 1;
+  }
+}
+@keyframes fxBeamTrail {
+  0% {
+    opacity: 0;
+    transform: rotate(-35deg) scaleX(0);
+  }
+  25% {
+    opacity: 1;
+    transform: rotate(-35deg) scaleX(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-35deg) scaleX(1);
+  }
+}
+/* lob: a parabolic arc, faint trail, debris scattering downward. */
+.visual-lob .fx-projectile {
+  animation: fxLobFlight 0.55s cubic-bezier(0.35, 0.1, 0.6, 1) forwards;
+}
+.visual-lob .fx-trail {
+  height: 4px;
+  opacity: 0.35;
+  filter: blur(1px);
+}
+.visual-lob .fx-particle {
+  animation-name: fxLobScatter;
+}
+@keyframes fxLobFlight {
+  0% {
+    left: var(--from-x);
+    top: var(--from-y);
+    transform: translateY(0) scale(0.45) rotate(-30deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(-110px) scale(0.9) rotate(8deg);
+  }
+  100% {
+    left: var(--to-x);
+    top: var(--to-y);
+    transform: translateY(0) scale(0.95) rotate(30deg);
+    opacity: 1;
+  }
+}
+@keyframes fxLobScatter {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), calc(var(--dy) + 58px)) rotate(calc(var(--spin, 1) * 160deg)) scale(0.35);
+  }
+}
+/* slash: no projectile — three streaks sweep the target at the hit. */
+.visual-slash .fx-projectile,
+.visual-slash .fx-trail {
+  display: none;
+}
+.fx-slashes i {
+  left: var(--to-x);
+  top: var(--to-y);
+  width: 150px;
+  height: 9px;
+  margin: -4px -75px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #fff 35%, var(--fx-color) 70%, transparent);
+  filter: drop-shadow(0 0 10px var(--fx-color));
+}
+.fx-stage.impact .fx-slashes i {
+  animation: slashSwipe 0.3s cubic-bezier(0.2, 0.7, 0.3, 1) calc(var(--i) * 75ms) forwards;
+}
+@keyframes slashSwipe {
+  0% {
+    opacity: 0;
+    transform: translateX(-58%) rotate(calc(-32deg + var(--i) * 30deg)) scaleX(0.4);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(46%) rotate(calc(-32deg + var(--i) * 30deg)) scaleX(1.15);
+  }
+}
+/* eruption: glowing pillars burst from below the target. */
+.visual-eruption .fx-projectile,
+.visual-eruption .fx-trail {
+  display: none;
+}
+.fx-pillars i {
+  left: var(--to-x);
+  top: var(--to-y);
+  width: 20px;
+  height: 170px;
+  margin-top: -170px;
+  transform-origin: bottom;
+  border-radius: 50% 50% 0 0;
+  background: linear-gradient(to top, #fff, var(--fx-color) 45%, transparent 92%);
+  filter: blur(1px) drop-shadow(0 0 12px var(--fx-color));
+}
+.fx-stage.impact .fx-pillars i {
+  animation: eruptPillar 0.5s cubic-bezier(0.15, 0.8, 0.25, 1) calc(var(--i) * 55ms) forwards;
+}
+@keyframes eruptPillar {
+  0% {
+    opacity: 0;
+    transform: translateX(var(--ox)) translateY(26px) scaleY(0.05);
+  }
+  35% {
+    opacity: 1;
+    transform: translateX(var(--ox)) translateY(0) scaleY(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(var(--ox)) translateY(-14px) scaleY(0.92);
+  }
+}
+/* vortex: spiraling flight, rings implode at the source, debris is pulled in. */
+.visual-vortex .fx-projectile {
+  animation: fxVortexFlight 0.55s cubic-bezier(0.4, 0.05, 0.55, 1) forwards;
+}
+.visual-vortex .fx-source-aura .fx-ring {
+  animation-name: fxVortexRing;
+}
+.visual-vortex .fx-particle {
+  animation-name: fxVortexPull;
+}
+.visual-vortex .fx-impact::before,
+.visual-vortex .fx-impact::after {
+  animation-duration: 0.7s;
+}
+@keyframes fxVortexFlight {
+  0% {
+    left: var(--from-x);
+    top: var(--from-y);
+    transform: scale(0.3) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    transform: scale(0.65) rotate(420deg);
+  }
+  100% {
+    left: var(--to-x);
+    top: var(--to-y);
+    transform: scale(1.05) rotate(760deg);
+    opacity: 1;
+  }
+}
+@keyframes fxVortexRing {
+  0% {
+    opacity: 0.9;
+    transform: scale(2.2) rotate(160deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.2) rotate(0deg);
+  }
+}
+@keyframes fxVortexPull {
+  0% {
+    opacity: 0;
+    transform: translate(calc(var(--dx) * 1.6), calc(var(--dy) * 1.6)) rotate(0deg) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(calc(var(--spin, 1) * 220deg)) scale(1.3);
+  }
+}
+/* charge: the attacker's glowing silhouette dashes across the arena. */
+.visual-charge .fx-projectile {
+  display: none;
+}
+.visual-charge .fx-trail {
+  height: 4px;
+  filter: blur(1px);
+  animation-duration: 0.3s;
+}
+.fx-dash-ghost {
+  position: absolute;
+  left: var(--from-x);
+  top: var(--from-y);
+  width: min(15vw, 150px);
+  margin-left: calc(min(15vw, 150px) / -2);
+  transform: translateY(-50%);
+  opacity: 0;
+  filter: brightness(2.6) saturate(0.35) drop-shadow(0 0 18px var(--fx-color));
+  pointer-events: none;
+  animation: dashAcross 0.38s cubic-bezier(0.55, 0.06, 0.35, 1) 0.08s forwards;
+}
+.from-enemy .fx-dash-ghost {
+  transform: translateY(-50%) scaleX(-1);
+}
+@keyframes dashAcross {
+  0% {
+    left: var(--from-x);
+    top: var(--from-y);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.92;
+  }
+  82% {
+    opacity: 0.92;
+  }
+  100% {
+    left: var(--to-x);
+    top: var(--to-y);
+    opacity: 0;
+  }
+}
+/* storm: streaks rain from the sky onto the target (or the caster for
+   self-targeted moves like healing_rain). */
+.visual-storm .fx-projectile,
+.visual-storm .fx-trail {
+  display: none;
+}
+.fx-drops i {
+  left: var(--to-x);
+  top: var(--to-y);
+  width: 5px;
+  height: 34px;
+  margin-top: -34px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent, #fff 55%, var(--fx-color));
+  filter: drop-shadow(0 0 7px var(--fx-color));
+}
+.self-fx .fx-drops i {
+  left: var(--from-x);
+  top: var(--from-y);
+}
+.fx-stage.impact .fx-drops i,
+.self-fx .fx-drops i {
+  animation: stormDrop 0.42s ease-in calc(var(--i) * 68ms) forwards;
+}
+@keyframes stormDrop {
+  0% {
+    opacity: 0;
+    transform: translateX(var(--ox)) translateY(-190px) scaleY(1.2);
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(var(--ox)) translateY(0) scaleY(0.7);
+  }
+}
+/* pulse: a small orb, then huge slow shockwaves and the radial aftershock. */
+.visual-pulse .fx-projectile {
+  animation-duration: 0.55s;
+}
+.visual-pulse .fx-impact::before,
+.visual-pulse .fx-impact::after {
+  animation: fxPulseWave 0.8s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
+}
+.visual-pulse .fx-impact::after {
+  animation-delay: 0.12s;
+}
+.visual-pulse .fx-aftershock {
+  display: block;
+}
+.self-fx.visual-pulse .fx-aftershock {
+  left: var(--from-x);
+  top: var(--from-y);
+}
+.visual-pulse .fx-source-aura .fx-ring {
+  animation-duration: 0.8s;
+}
+@keyframes fxPulseWave {
+  0% {
+    opacity: 1;
+    transform: scale(0.06) rotate(0deg);
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.9) rotate(40deg);
+  }
+}
+/* veil: self-cast support — slow double rings and a small sigil over the caster. */
+.visual-veil .fx-source-aura .fx-ring {
+  border-style: double;
+  animation-duration: 0.95s;
+}
+.visual-veil .fx-curtain {
+  background:
+    radial-gradient(
+      circle at var(--from-x) var(--from-y),
+      color-mix(in srgb, var(--fx-color) 38%, transparent),
+      transparent 30%
+    ),
+    #02030a55;
+}
+.visual-veil .fx-sky-symbol {
+  display: grid;
+  left: var(--from-x);
+  top: var(--from-y);
+  width: min(34vw, 320px);
+  height: min(34vw, 320px);
+}
+@media (max-width: 600px) {
+  .fx-slashes i {
+    width: 104px;
+    margin-left: -52px;
+  }
+  .fx-pillars i {
+    height: 118px;
+    margin-top: -118px;
+  }
+  .fx-dash-ghost {
+    width: 96px;
+    margin-left: -48px;
+  }
+  .fx-drops i {
+    height: 26px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-arch,
+  .fx-dash-ghost {
+    display: none;
+  }
+  .visual-beam .fx-trail,
+  .visual-pulse .fx-impact::before,
+  .visual-pulse .fx-impact::after,
+  .visual-vortex .fx-source-aura .fx-ring,
+  .visual-veil .fx-source-aura .fx-ring {
+    animation: fxReduced 0.2s ease forwards;
+  }
+}
+body.reduced-motion .fx-arch,
+body.reduced-motion .fx-dash-ghost {
+  display: none;
+}
+body.reduced-motion .visual-beam .fx-trail,
+body.reduced-motion .visual-pulse .fx-impact::before,
+body.reduced-motion .visual-pulse .fx-impact::after,
+body.reduced-motion .visual-vortex .fx-source-aura .fx-ring,
+body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
+  animation: fxReduced 0.2s ease forwards;
 }
 
 /* Eighteen move signatures. The shared layer handles readability; these details
@@ -1661,4 +2072,428 @@ body.high-contrast .immaculate-gate,
 body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   border-color: currentColor;
   outline: 2px solid currentColor;
+}
+
+/* --- Emotional moments (plan §3.2–3.4): faint wisps, switch recall/spawn,
+   and the battle-outro victory pose + exit fade. --- */
+.faint-wisps {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+}
+.faint-wisps i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 13px;
+  height: 13px;
+  margin: -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff, var(--fx-color) 55%, transparent 75%);
+  filter: drop-shadow(0 0 9px var(--fx-color));
+  opacity: 0;
+  animation: wispRise 1.05s ease-out calc(var(--wisp) * 95ms) forwards;
+}
+@keyframes wispRise {
+  12% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--wisp-dx), -96px) scale(0.35);
+  }
+}
+.switch-ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: switchOut 0.42s ease-in forwards;
+}
+@keyframes switchOut {
+  35% {
+    opacity: 0.9;
+    transform: translateY(4%) scaleY(0.92);
+    filter: brightness(1.8) drop-shadow(0 24px 14px #0009);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(30%) scaleY(0.55);
+    filter: brightness(2.4) blur(2px);
+  }
+}
+.switch-beam {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 34%;
+  height: 88%;
+  transform: translateX(-50%) scaleY(0);
+  transform-origin: bottom;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--fx-color, #9fd8ff) 70%, transparent),
+    transparent 80%
+  );
+  border-radius: 50% 50% 0 0;
+  filter: blur(6px);
+  pointer-events: none;
+  animation: switchBeam 0.5s ease-out forwards;
+}
+@keyframes switchBeam {
+  25% {
+    transform: translateX(-50%) scaleY(1);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(-50%) scaleY(1.05);
+    opacity: 0;
+  }
+}
+.battle-screen .fighter.entering img {
+  animation:
+    switchIn 0.52s cubic-bezier(0.22, 0.9, 0.36, 1),
+    idle 2.4s ease-in-out 0.52s infinite;
+}
+@keyframes switchIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-26%) scale(0.72);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(2%) scale(1.07, 0.88);
+  }
+  68% {
+    transform: translateY(-3%) scale(0.96, 1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.battle-screen .fighter.victory-pose img {
+  animation:
+    victoryPose 0.82s cubic-bezier(0.3, 0.9, 0.35, 1),
+    idle 2.4s ease-in-out 0.82s infinite;
+  filter: drop-shadow(0 24px 14px #0009) drop-shadow(0 0 26px #ffe9a866);
+}
+@keyframes victoryPose {
+  0% {
+    transform: scale(1);
+  }
+  28% {
+    transform: translateY(-9%) scale(1.14);
+  }
+  52% {
+    transform: translateY(2%) scale(1.05, 0.92);
+  }
+  74% {
+    transform: translateY(-4%) scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+.battle-screen.outro-loss .fighter.victory-pose img {
+  animation:
+    victoryPoseMuted 1.05s ease,
+    idle 2.4s ease-in-out 1.05s infinite;
+  filter: drop-shadow(0 24px 14px #0009) drop-shadow(0 0 16px #b9c4ff44);
+}
+@keyframes victoryPoseMuted {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: translateY(-4%) scale(1.05);
+  }
+  100% {
+    transform: none;
+  }
+}
+.battle-screen.battle-outro.outro-loss .battlefield {
+  filter: saturate(0.55) brightness(0.85);
+  transition: filter 0.8s ease;
+}
+.battle-screen.battle-exit .arena-canvas,
+.battle-screen.battle-exit .battle-vignette,
+.battle-screen.battle-exit .battlefield,
+.battle-screen.battle-exit .fx-stage {
+  opacity: 0;
+  filter: blur(16px);
+  transition:
+    opacity 0.42s ease,
+    filter 0.42s ease;
+}
+.battle-screen.battle-exit .battle-layout {
+  opacity: 0.25;
+  transition: opacity 0.42s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .faint-wisps,
+  .switch-beam {
+    display: none;
+  }
+  .battle-screen .fighter.ko img {
+    animation: koReduced 0.25s ease forwards;
+  }
+  .switch-ghost {
+    animation: switchOutReduced 0.18s ease forwards;
+  }
+  .battle-screen .fighter.entering img {
+    animation:
+      fxReduced 0.2s ease,
+      idle 2.4s ease-in-out 0.2s infinite;
+  }
+  .battle-screen .fighter.victory-pose img,
+  .battle-screen.outro-loss .fighter.victory-pose img {
+    animation:
+      fxReduced 0.25s ease,
+      idle 2.4s ease-in-out 0.25s infinite;
+  }
+  .battle-screen.battle-exit .arena-canvas,
+  .battle-screen.battle-exit .battle-vignette,
+  .battle-screen.battle-exit .battlefield,
+  .battle-screen.battle-exit .fx-stage {
+    filter: none;
+    transition: opacity 0.15s ease;
+  }
+}
+body.reduced-motion .faint-wisps,
+body.reduced-motion .switch-beam {
+  display: none;
+}
+body.reduced-motion .battle-screen .fighter.ko img {
+  animation: koReduced 0.25s ease forwards;
+}
+@keyframes koReduced {
+  to {
+    opacity: 0.62;
+    filter: grayscale(1) brightness(0.72) drop-shadow(0 8px 7px #0009);
+  }
+}
+body.reduced-motion .switch-ghost {
+  animation: switchOutReduced 0.18s ease forwards;
+}
+@keyframes switchOutReduced {
+  to {
+    opacity: 0;
+  }
+}
+body.reduced-motion .battle-screen .fighter.entering img {
+  animation:
+    fxReduced 0.2s ease,
+    idle 2.4s ease-in-out 0.2s infinite;
+}
+body.reduced-motion .battle-screen .fighter.victory-pose img,
+body.reduced-motion .battle-screen.outro-loss .fighter.victory-pose img {
+  animation:
+    fxReduced 0.25s ease,
+    idle 2.4s ease-in-out 0.25s infinite;
+}
+body.reduced-motion .battle-screen.battle-exit .arena-canvas,
+body.reduced-motion .battle-screen.battle-exit .battle-vignette,
+body.reduced-motion .battle-screen.battle-exit .battlefield,
+body.reduced-motion .battle-screen.battle-exit .fx-stage {
+  filter: none;
+  transition: opacity 0.15s ease;
+}
+
+/* --- Stakes and reactions (plan §4.2–4.3): cornered-attacker escalation,
+   miss whiff, and barrier shatter. --- */
+.battle-screen.stakes-high .battle-vignette {
+  animation: stakesVignette 0.85s ease-out;
+}
+@keyframes stakesVignette {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 #ff4d3d00;
+  }
+  30% {
+    box-shadow: inset 0 0 110px 30px #ff4d3d66;
+  }
+}
+/* Miss: the projectile overshoots the dodger and dissolves; the trail dies. */
+.whiff .fx-projectile {
+  animation: whiffPast 0.42s ease-in forwards !important;
+}
+.whiff .fx-trail {
+  animation: whiffTrail 0.3s ease forwards !important;
+}
+.whiff-callout {
+  position: absolute;
+  z-index: 6;
+  transform: translate(-50%, -150%);
+  color: #b8ecff;
+  font-size: 17px;
+  font-weight: 1000;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow:
+    0 2px #0e1c2e,
+    0 0 16px #69d6ff;
+  animation: whiffPop 0.85s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
+}
+.whiff-callout.side-player {
+  left: 23%;
+  top: 58%;
+}
+.whiff-callout.side-enemy {
+  left: 77%;
+  top: 22%;
+}
+@keyframes whiffPast {
+  0% {
+    left: var(--to-x);
+    top: var(--to-y);
+    opacity: 1;
+  }
+  100% {
+    left: calc(var(--to-x) + 14%);
+    top: calc(var(--to-y) - 10%);
+    transform: scale(0.6) rotate(55deg);
+    opacity: 0;
+    filter: blur(3px) drop-shadow(0 0 8px var(--fx-color));
+  }
+}
+.from-enemy.whiff .fx-projectile {
+  animation-name: whiffPastEnemy !important;
+}
+@keyframes whiffPastEnemy {
+  0% {
+    left: var(--to-x);
+    top: var(--to-y);
+    opacity: 1;
+  }
+  100% {
+    left: calc(var(--to-x) - 14%);
+    top: calc(var(--to-y) + 10%);
+    transform: scale(0.6) rotate(-55deg);
+    opacity: 0;
+    filter: blur(3px) drop-shadow(0 0 8px var(--fx-color));
+  }
+}
+@keyframes whiffTrail {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes whiffPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -110%) scale(0.55);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -165%) scale(1.1);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -185%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -215%) scale(0.95);
+  }
+}
+/* Barrier break: hex shards and a cracking ring burst from the defender. */
+.barrier-shatter {
+  position: absolute;
+  z-index: 5;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.barrier-shatter.side-player {
+  left: 23%;
+  top: 62%;
+}
+.barrier-shatter.side-enemy {
+  left: 77%;
+  top: 24%;
+}
+.shatter-hex {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 26px;
+  height: 30px;
+  margin: -15px -13px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(155deg, #fff, #a5ecff 45%, #3d7fa8);
+  filter: drop-shadow(0 0 9px #8fe9ff);
+  opacity: 0;
+  animation: shatterFly 0.62s cubic-bezier(0.2, 0.7, 0.3, 1) calc(var(--i) * 22ms) forwards;
+}
+.shatter-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 120px;
+  height: 120px;
+  margin: -60px;
+  border: 4px dashed #bdefff;
+  border-radius: 50%;
+  box-shadow: 0 0 22px #8fe9ff;
+  opacity: 0;
+  animation: shatterRing 0.5s ease-out forwards;
+}
+@keyframes shatterFly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(calc(var(--spin) * 210deg)) scale(0.55);
+  }
+}
+@keyframes shatterRing {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.55) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5) rotate(35deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-screen.stakes-high .battle-vignette {
+    animation: none;
+  }
+  .whiff .fx-projectile,
+  .whiff .fx-trail {
+    animation: whiffTrail 0.2s ease forwards !important;
+  }
+  .whiff-callout {
+    animation: fxReduced 0.4s ease forwards;
+  }
+  .shatter-hex {
+    display: none;
+  }
+  .shatter-ring {
+    animation: fxReduced 0.25s ease forwards;
+  }
+}
+body.reduced-motion .battle-screen.stakes-high .battle-vignette {
+  animation: none;
+}
+body.reduced-motion .whiff .fx-projectile,
+body.reduced-motion .whiff .fx-trail {
+  animation: whiffTrail 0.2s ease forwards !important;
+}
+body.reduced-motion .whiff-callout {
+  animation: fxReduced 0.4s ease forwards;
+}
+body.reduced-motion .shatter-hex {
+  display: none;
+}
+body.reduced-motion .shatter-ring {
+  animation: fxReduced 0.25s ease forwards;
 }

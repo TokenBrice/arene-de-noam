@@ -54,13 +54,26 @@ function beginMoveFx(event) {
     strong,
     kind: move.kind,
   };
-  stage.className = `fx-stage active fx-${move.affinity} move-${move.id} visual-${move.visual} owner-${move.owner} from-${source} ${strong ? 'signature' : ''} ${move.power === 0 ? 'self-fx' : ''}`;
+  // Stakes scaling (plan §4.2): a cornered attacker (low HP or last creature
+  // standing) gets a bigger show — more particles, hotter vignette, and the
+  // camera grammar bumps one tier.
+  const stakesSession = ctx.battleSession,
+    attackerState = sessionIsActive(stakesSession) ? activeOf(stakesSession.state, source) : null,
+    cornered =
+      attackerState &&
+      attackerState.hp > 0 &&
+      (attackerState.hp / attackerState.maxHp <= 0.25 ||
+        stakesSession.state.sides[source].team.filter((c) => c.hp > 0).length === 1);
+  const cameraBumped = cornered
+    ? { strike: 'heavy', rush: 'heavy', heavy: 'ultimate' }[cameraGrammar] || cameraGrammar
+    : cameraGrammar;
+  stage.className = `fx-stage active fx-${move.affinity} move-${move.id} visual-${move.archetype || move.visual} owner-${move.owner} from-${source} ${strong ? 'signature' : ''} ${move.power === 0 ? 'self-fx' : ''}`;
   stage.style.setProperty('--fx-color', a.color);
   stage.style.setProperty('--from-x', source === 'player' ? '23%' : '77%');
   stage.style.setProperty('--from-y', source === 'player' ? '68%' : '30%');
   stage.style.setProperty('--to-x', target === 'enemy' ? '77%' : '23%');
   stage.style.setProperty('--to-y', target === 'enemy' ? '30%' : '68%');
-  const particleCount = strong ? 42 : 24,
+  const particleCount = strong ? (cornered ? 52 : 42) : cornered ? 34 : 24,
     detailCount = strong ? 12 : 8;
   const particles = Array.from({ length: particleCount }, (_, i) => {
     const angle = (i / particleCount) * Math.PI * 2,
@@ -71,17 +84,30 @@ function beginMoveFx(event) {
     { length: strong ? 6 : 3 },
     (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 58}ms"></i>`
   ).join('');
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${echoes}</div><div class="fx-trail"></div><div class="fx-detail">${Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${echoes}</div><div class="fx-aftershock"></div>`;
+  // Archetype-specific extra bodies: slashes/eruption pillars/storm drops sync
+  // to the .impact class; the charge ghost replaces the projectile outright.
+  const archExtras =
+    move.archetype === 'slash'
+      ? `<div class="fx-arch fx-slashes">${Array.from({ length: 3 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>`
+      : move.archetype === 'eruption'
+        ? `<div class="fx-arch fx-pillars">${Array.from({ length: 5 }, (_, i) => `<i style="--i:${i};--ox:${(i - 2) * 34 + (i % 2 ? 9 : -7)}px"></i>`).join('')}</div>`
+        : move.archetype === 'storm'
+          ? `<div class="fx-arch fx-drops">${Array.from({ length: 9 }, (_, i) => `<i style="--i:${i};--ox:${((i * 53) % 130) - 65}px"></i>`).join('')}</div>`
+          : move.archetype === 'charge'
+            ? `<img class="fx-dash-ghost" src="${sprite(event.creatureId)}" alt="">`
+            : '';
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${echoes}</div><div class="fx-trail"></div><div class="fx-detail">${Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${echoes}</div><div class="fx-aftershock"></div>${archExtras}`;
   screen.classList.add(
     'cinematic',
     `cinematic-${move.affinity}`,
     `camera-${source}`,
-    `camera-${cameraGrammar}`
+    `camera-${cameraBumped}`
   );
   if (strong) screen.classList.add('cinematic-signature');
+  if (cornered) screen.classList.add('stakes-high');
   const attacker = screen.querySelector(`#fighter-${source}`);
   attacker?.style.setProperty('--attack-affinity-color', a.color);
-  attacker?.classList.add('windup', `attack-${move.affinity}`);
+  attacker?.classList.add('windup');
   screen.querySelector('#action-line')?.classList.toggle('epic', strong);
 }
 
@@ -117,6 +143,11 @@ function impactMoveFx(event) {
     if (!sessionIsActive(session)) return;
     session.lastLine = t('battle.finisher', { move: t(`move.${fx.moveId}`) });
     screen.querySelector('#action-line').textContent = session.lastLine;
+  } else if (MOVES[fx.moveId]?.signature) {
+    // Mini-finisher (plan §4.2): a non-lethal signature still gets a short
+    // slash and a brief canvas dim, softer and shorter than a K.O.
+    stage.classList.add('mini-finisher-impact');
+    screen.classList.add('mini-finisher-mode');
   }
   const color = AFFINITIES[fx.affinity]?.color || '#ffffff';
   ctx.arenaScene?.flash(fx.strong ? 'power' : 'hit', color, event.side);
@@ -337,15 +368,58 @@ function arenaPulseFx(event) {
       astral: '#c69cff',
       eclipse: '#e37aff',
     },
-    color = colors[event.arena] || '#fff';
-  stage.className = `fx-stage active arena-pulse-fx arena-pulse-${event.arena}`;
+    color = colors[event.arena] || '#fff',
+    // Volcano burns and eclipse marks: those pulses hurt, so they read hostile
+    // (jagged, hot) instead of benevolent. Others help both sides.
+    hostile = event.arena === 'volcano' || event.arena === 'eclipse';
+  stage.className = `fx-stage active arena-pulse-fx arena-pulse-${event.arena} ${hostile ? 'pulse-hostile' : 'pulse-kind'}`;
   stage.style.setProperty('--fx-color', color);
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="arena-pulse-rune"><b>${icons[event.arena]}</b><i></i><span>${t(`arena.${event.arena}`)}</span></div><div class="fx-aftershock"></div>`;
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="arena-pulse-rune pulse-player"><b>${icons[event.arena]}</b><i></i><span>${t(`arena.${event.arena}`)}</span></div><div class="arena-pulse-rune pulse-enemy"><b>${icons[event.arena]}</b><i></i></div><div class="fx-aftershock"></div>`;
   screen.classList.add('arena-awake');
   ctx.arenaScene?.flash('power', color, 'enemy');
   ctx.arenaScene?.burst(color, 'player', 1.4);
   ctx.arenaScene?.burst(color, 'enemy', 1.4);
   sound.guard();
+}
+
+function missWhiffFx(event) {
+  const session = ctx.battleSession,
+    stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
+  // The attack sailed past: the projectile keeps flying beyond the dodger and
+  // dissolves, and a callout pops where the hit would have landed. The callout
+  // lives on the stage's parent so the follow-up status-cleanse FX (which
+  // rebuilds the stage) does not wipe it early.
+  stage.classList.add('whiff');
+  const layer = stage.parentElement;
+  layer.querySelectorAll('.whiff-callout').forEach((node) => node.remove());
+  const call = document.createElement('b');
+  call.className = `whiff-callout side-${event.side}`;
+  call.textContent = t('battle.missCallout');
+  layer.append(call);
+  setTimeout(() => {
+    if (sessionIsActive(session)) call.remove();
+  }, 900 / ctx.save.battleSpeed);
+}
+
+function barrierShatterFx(event) {
+  const session = ctx.battleSession,
+    stage = screen.querySelector('#fx-stage');
+  if (!stage || testAnimationScale === 0) return;
+  // Same parent-layer trick as the whiff callout: the shards must outlive the
+  // stage rebuild that the barrier-broken follow-up events trigger.
+  const shards = document.createElement('div');
+  shards.className = `barrier-shatter side-${event.side}`;
+  shards.style.left = event.side === 'player' ? '23%' : '77%';
+  shards.style.top = event.side === 'player' ? '62%' : '24%';
+  shards.innerHTML = `<i class="shatter-ring"></i>${Array.from({ length: 8 }, (_, i) => {
+    const angle = (i / 8) * Math.PI * 2 + 0.4;
+    return `<i class="shatter-hex" style="--i:${i};--dx:${Math.cos(angle) * (58 + (i % 3) * 26)}px;--dy:${Math.sin(angle) * (44 + (i % 3) * 22) - 26}px;--spin:${i % 2 ? 1 : -1}"></i>`;
+  }).join('')}`;
+  stage.parentElement.append(shards);
+  setTimeout(() => {
+    if (sessionIsActive(session)) shards.remove();
+  }, 900 / ctx.save.battleSpeed);
 }
 
 async function signatureClashIntro(events) {
@@ -367,6 +441,83 @@ async function signatureClashIntro(events) {
   await wait((ctx.save.reducedMotion ? 260 : 1050) / ctx.save.battleSpeed);
   if (!sessionIsActive(session)) return;
   clearBattleFx();
+}
+
+function faintFx(event) {
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage || testAnimationScale === 0) return;
+  const creature = CREATURES[event.creatureId],
+    color = creature ? AFFINITIES[creature.affinity].color : '#cfd6ff',
+    wisps = document.createElement('div');
+  wisps.className = 'faint-wisps';
+  wisps.style.setProperty('--fx-color', color);
+  wisps.style.left = event.side === 'player' ? '23%' : '77%';
+  wisps.style.top = event.side === 'player' ? '62%' : '26%';
+  wisps.innerHTML = Array.from(
+    { length: 7 },
+    (_, i) => `<i style="--wisp:${i};--wisp-dx:${(i % 2 ? -1 : 1) * (8 + ((i * 13) % 26))}px"></i>`
+  ).join('');
+  stage.classList.add('active');
+  stage.append(wisps);
+  setTimeout(() => wisps.remove(), 1500 / ctx.save.battleSpeed);
+}
+
+function switchOutFx(event) {
+  if (testAnimationScale === 0) return;
+  const fighter = screen.querySelector(`#fighter-${event.side}`),
+    img = fighter?.querySelector('img');
+  if (!fighter || !img?.getAttribute('src') || fighter.classList.contains('fainted')) return;
+  const outgoing = CREATURES[fighter.dataset.creature],
+    color = outgoing ? AFFINITIES[outgoing.affinity].color : '#9fd8ff',
+    ghost = img.cloneNode(),
+    beam = document.createElement('i');
+  ghost.className = 'switch-ghost';
+  ghost.alt = '';
+  beam.className = 'switch-beam';
+  beam.style.setProperty('--fx-color', color);
+  fighter.append(ghost, beam);
+  setTimeout(() => {
+    ghost.remove();
+    beam.remove();
+  }, 640 / ctx.save.battleSpeed);
+}
+
+function switchInFx(event) {
+  const fighter = screen.querySelector(`#fighter-${event.side}`),
+    creature = CREATURES[event.creatureId];
+  if (!fighter || !creature || fighter.classList.contains('fainted')) return;
+  if (testAnimationScale !== 0) {
+    fighter.classList.add('entering');
+    ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
+  }
+  sound.call(event.creatureId);
+}
+
+async function battleOutroFx(state) {
+  const session = ctx.battleSession;
+  if (!session || testAnimationScale === 0 || !screen.classList.contains('battle-screen')) return;
+  const speed = ctx.save.battleSpeed,
+    reduced = ctx.save.reducedMotion,
+    winner = state?.winner,
+    champion = winner ? activeOf(state, winner) : null;
+  if (champion && champion.hp > 0) {
+    const color = AFFINITIES[champion.affinity]?.color || '#ffe9a8';
+    screen.querySelector(`#fighter-${winner}`)?.classList.add('victory-pose');
+    screen.classList.add('battle-outro', winner === 'player' ? 'outro-win' : 'outro-loss');
+    if (!reduced) {
+      sound.call(champion.id);
+      ctx.arenaScene?.burst(color, winner, 1.35);
+      setTimeout(() => {
+        if (sessionIsActive(session)) ctx.arenaScene?.burst('#fff6d8', winner, 0.85);
+      }, 240 / speed);
+    }
+  } else {
+    screen.classList.add('battle-outro', 'outro-draw');
+  }
+  await wait((reduced ? 340 : champion ? 820 : 520) / speed);
+  if (!sessionIsActive(session)) return;
+  screen.classList.add('battle-exit');
+  await wait((reduced ? 150 : 420) / speed);
 }
 
 function clearBattleFx() {
@@ -407,12 +558,17 @@ function clearBattleFx() {
     'command-mode',
     'ace-mode',
     'finisher-mode',
+    'mini-finisher-mode',
+    'stakes-high',
     'ko-shock'
   );
   screen.querySelectorAll('.fighter').forEach((fighter) => {
+    const fainted = fighter.classList.contains('fainted');
     fighter.className = fighter.classList.contains('enemy') ? 'fighter enemy' : 'fighter player';
+    if (fainted) fighter.classList.add('fainted');
     fighter.style.removeProperty('--attack-affinity-color');
   });
+  screen.querySelectorAll('.switch-ghost, .switch-beam').forEach((node) => node.remove());
   screen.querySelector('#action-line')?.classList.remove('epic');
   ctx.currentFxMove = null;
 }
@@ -431,6 +587,12 @@ registerRoutes({
   aceFx,
   statusTickFx,
   arenaPulseFx,
+  missWhiffFx,
+  barrierShatterFx,
   signatureClashIntro,
+  faintFx,
+  switchOutFx,
+  switchInFx,
+  battleOutroFx,
   clearBattleFx,
 });

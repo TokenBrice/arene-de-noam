@@ -21,6 +21,7 @@ const {
   classIcon,
   className,
   persist,
+  testAnimationScale,
 } = ctx;
 const {
   renderTitle,
@@ -81,8 +82,7 @@ function bindCommon() {
         ...(ctx.save.feats.includes('team_assist') ? ['team_assist'] : []),
       ],
       earnedVisible = visibleFeatIds.filter((id) => ctx.save.feats.includes(id)).length;
-    screen.querySelector('.feat-hall .eyebrow').textContent =
-      `${earnedVisible}/${visibleFeatIds.length}`;
+    screen.querySelector('.feat-hall .eyebrow').textContent = `${earnedVisible}/${visibleFeatIds.length}`;
   }
   if (screen.dataset.page === 'bestiary') {
     const emptyRecord = { battles: 0, wins: 0, damage: 0, kos: 0, signatures: 0, combos: 0, assists: 0 },
@@ -192,6 +192,49 @@ function renderCurrent() {
   else if (screen.dataset.page === 'gauntlet-boon') renderGauntletBoons();
   else if (screen.dataset.page === 'results') renderResults(ctx.battleSession?.state.winner === 'player');
   else renderSettings();
+}
+
+/* Minimal shared route transition: the outgoing screen is snapshotted and
+   fades/slides out as an inert overlay while the new screen renders underneath
+   and fades in. Rendering stays synchronous, so fast follow-up clicks always
+   land on the new screen. Skipped for same-page re-renders, the boot screen,
+   reduced motion, and ?animations=0. */
+const SCREEN_TRANSITION_PAGES = {
+  renderTitle: 'title',
+  renderAcademy: 'academy',
+  renderLeague: 'league',
+  renderTeamSelect: 'selection',
+  renderDraft: 'draft',
+  renderGauntletBoons: 'gauntlet-boon',
+  renderTrials: 'trials',
+  renderBestiary: 'bestiary',
+  renderSettings: 'settings',
+  renderBattle: 'battle',
+};
+function transitionScreen(render, targetPage) {
+  const samePage = !screen.dataset.page || screen.dataset.page === targetPage;
+  if (testAnimationScale === 0 || ctx.save.reducedMotion || samePage) {
+    render();
+    return;
+  }
+  const snapshot = screen.cloneNode(true);
+  render();
+  snapshot.removeAttribute('id');
+  snapshot.setAttribute('aria-hidden', 'true');
+  snapshot.inert = true;
+  snapshot.className = 'screen screen-snapshot';
+  screen.after(snapshot);
+  screen.classList.add('screen-entering');
+  setTimeout(() => {
+    snapshot.remove();
+    screen.classList.remove('screen-entering');
+  }, 340);
+}
+export function installScreenTransitions() {
+  for (const [name, page] of Object.entries(SCREEN_TRANSITION_PAGES)) {
+    const render = ctx.routes[name];
+    if (render) ctx.routes[name] = (...args) => transitionScreen(() => render(...args), page);
+  }
 }
 
 function handleEscape() {

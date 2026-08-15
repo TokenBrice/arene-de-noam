@@ -159,7 +159,7 @@ function renderBattle() {
         : circuit
           ? t(`circuit.effect.${circuit.condition.id}`)
           : t(`arena.rule.${ctx.battleSession.arena}`);
-  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info"><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate" tabindex="0" title="${escapeHtml(arenaRule)}" aria-label="${escapeHtml(`${arenaHeading} — ${arenaRule}`)}"><b>${arenaHeading}</b><small>${arenaRule}</small></div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battle-plates"><div class="hud-card player-hud" id="hud-player"></div><div class="hud-card enemy-hud" id="hud-enemy"></div></div></section><section class="battle-stage" data-battle-zone="stage"><div class="battle-stage-camera"><div class="battlefield"><div class="fighter enemy" id="fighter-enemy"><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player"><div class="status-orbits"></div><img alt=""></div></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div></div></section><section class="battle-command-dock" data-battle-zone="controls"><div id="tutorial-root"></div><div class="action-line" id="action-line" role="status" aria-live="polite"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span><b>${t('battle.switch')}</b></button></div></section></div><div id="replacement-root"></div>`;
+  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info"><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate" tabindex="0" title="${escapeHtml(arenaRule)}" aria-label="${escapeHtml(`${arenaHeading} — ${arenaRule}`)}"><b>${arenaHeading}</b><small>${arenaRule}</small></div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battle-plates"><div class="hud-card player-hud" id="hud-player"></div><div class="hud-card enemy-hud" id="hud-enemy"></div></div></section><section class="battle-stage" data-battle-zone="stage"><div class="battle-stage-camera"><div class="battlefield"><div class="fighter enemy" id="fighter-enemy"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div></div></section><section class="battle-command-dock" data-battle-zone="controls"><div id="tutorial-root"></div><div class="action-line" id="action-line" role="status" aria-live="polite"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span><b>${t('battle.switch')}</b></button></div></section></div><div id="replacement-root"></div>`;
   if (ctx.battleSession.quickRuleId && ctx.battleSession.quickRuleId !== 'standard') {
     const rule = quickRule(ctx.battleSession.quickRuleId);
     screen
@@ -436,10 +436,15 @@ function refreshBattle() {
   screen.classList.toggle('arena-imminent', until === 1);
   screen.classList.toggle('player-last-stand', state.sides.player.team.filter((c) => c.hp > 0).length === 1);
   screen.classList.toggle('enemy-last-stand', state.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
+  // Final showdown (plan §5): both sides down to their last creature.
+  const showdown = ['player', 'enemy'].every(
+    (side) => state.sides[side].team.filter((c) => c.hp > 0).length === 1
+  );
+  screen.classList.toggle('final-showdown', showdown);
   screen.classList.toggle('tension-rising', tension >= 0.38);
   screen.classList.toggle('tension-high', tension >= 0.68);
   screen.style.setProperty('--battle-tension', tension.toFixed(2));
-  ctx.arenaScene?.setBattleState({ tension, imminent: until === 1 });
+  ctx.arenaScene?.setBattleState({ tension, imminent: until === 1, showdown });
   screen.querySelector('#turn-chip').innerHTML =
     `<b>${t('battle.turn', { turn: state.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}</small>`;
   screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
@@ -466,6 +471,7 @@ function refreshBattle() {
     );
     fighter.classList.toggle('mastered', rank >= 3);
     fighter.classList.toggle('low-health', c.hp / c.maxHp <= 0.25);
+    fighter.classList.toggle('fainted', c.hp <= 0);
     fighter.classList.toggle(
       'signature-ready',
       owner.surge >= signatureCostFor(c) && c.moves.some((id) => MOVES[id].signature)

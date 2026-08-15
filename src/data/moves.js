@@ -1,5 +1,9 @@
 // Every move has a unique mechanical fingerprint. `visual` is also unique and
 // drives the cinematic layer, so even moves within an affinity read differently.
+// On top of that, the fifty-four moves without bespoke .move-<id> styling share
+// one of nine choreography archetypes (see battle-fx.css "visual archetypes"):
+// the archetype owns flight path and impact grammar, while `visual` keeps its
+// per-move identity details.
 export const MOVES = {
   lucid_arc: {
     id: 'lucid_arc',
@@ -1136,5 +1140,56 @@ export const MOVES = {
     signature: true,
   },
 };
+
+// Archetype grouping for the shared choreography layer. Moves with bespoke
+// .move-<id> styling (battle-fx.css signatures section) are deliberately
+// absent: their unique `visual` id keeps driving their authored look.
+const MOVE_ARCHETYPES = {
+  beam: ['crescendo_lock', 'refraction_lance', 'spectrum_break', 'static_wake', 'sun_spear', 'hex_bolt'],
+  lob: ['forgotten_name', 'bubble_burst', 'scorch_mark', 'toxic_spines'],
+  slash: ['razor_rush', 'momentum_claw', 'venom_harvest', 'ambush_claw', 'eclipse_execution'],
+  eruption: [
+    'seismic_reversal',
+    'gravity_fist',
+    'continental_divide',
+    'mossy_crush',
+    'forest_quake',
+    'wild_bloom',
+    'bramble_trap',
+  ],
+  vortex: ['memory_leech', 'rip_current', 'maw_of_maelstrom', 'nightmare_dive'],
+  charge: ['tectonic_ram', 'terminal_velocity', 'foam_blitz', 'flash_pounce', 'smoldering_charge'],
+  storm: [
+    'healing_rain',
+    'storm_chain',
+    'thunder_deluge',
+    'ninefold_inferno',
+    'pollen_dream',
+    'midnight_lullaby',
+  ],
+  pulse: [
+    'echo_chorus',
+    'finale_nova',
+    'tide_reversal',
+    'nectar_circle',
+    'sonic_gloom',
+    'fate_exchange',
+    'supernova',
+  ],
+  veil: [
+    'mirror_maze',
+    'deja_vu',
+    'iron_resolve',
+    'fortress_protocol',
+    'ember_armor',
+    'ash_rebirth',
+    'solar_wings',
+    'smoke_step',
+    'moonless_omen',
+    'ancient_bark',
+  ],
+};
+for (const [archetype, ids] of Object.entries(MOVE_ARCHETYPES))
+  for (const id of ids) MOVES[id].archetype = archetype;
 
 export const MOVE_IDS = Object.freeze(Object.keys(MOVES));
