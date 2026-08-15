@@ -407,9 +407,10 @@ test('Burning enables Venom Harvest as one visible Combo', async ({ page }) => {
   await page.locator('[data-move="toxic_spines"]').click();
   await expect(page.locator('[data-move="venom_harvest"]')).toBeEnabled();
   await expect(page.locator('[data-move="venom_harvest"] .move-combo-badge')).toContainText('COMBO +40%');
+  const comboImpact = expect(page.locator('.combo-impact')).toBeVisible();
   await page.locator('[data-move="venom_harvest"]').click();
-  await expect(page.locator('.combo-impact')).toBeVisible();
-  await expect(page.locator('#action-line')).toContainText('COMBO');
+  await comboImpact;
+  await expect(page.locator('#action-line')).toContainText(/Combo/);
 });
 
 test('battle codex explains live rules and closes with Escape', async ({ page }) => {
