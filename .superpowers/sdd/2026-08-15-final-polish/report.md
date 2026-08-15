@@ -91,3 +91,9 @@ Complete. Commit:
 ## Concerns
 - Playwright/e2e was not run per the track constraint; served-browser smoke checks covered the requested routes and breakpoints.
 - `node_modules/` remains pre-existing untracked workspace content and was not committed; screenshots remain under gitignored `agents/`.
+
+## Review fixes
+- Corrected the high-contrast academy surface contract to target the rendered `.academy-section`, `.academy-core`, and `.academy-type-triangle` panels.
+- Restored locked league rivals to full opacity and saturation with a dashed high-contrast border and lock cue; enemy last-stand badges remain readable instead of mirrored.
+- Added served HC screenshots covering league, academy, draft, boon, trials, expanded records/feats, and an active localized last-stand badge.
+- Review-fix verification: `npm test` 109 passed; `node --test test/presentation-contract.test.js` 5 passed.

@@ -102,7 +102,8 @@ test('high-contrast and compact presentation details keep their semantic cues', 
         'src/i18n.js',
       ].map((file) => readFile(new URL(file, root), 'utf8'))
     );
-  assert.match(accessibility, /body\.high-contrast\s+:is\(\.feat-hall, \.record-hero, \.league-rival, \.draft-card, \.boon-card, \.academy-card\)/);
+  assert.match(accessibility, /body\.high-contrast\s+:is\(\.feat-hall, \.record-hero, \.league-rival, \.draft-card, \.boon-card, \.academy-section, \.academy-core, \.academy-type-triangle\)/);
+  assert.match(accessibility, /body\.high-contrast \.league-rival\.locked[\s\S]*opacity:\s*1[\s\S]*border:\s*2px dashed/);
   assert.match(accessibility, /body\.high-contrast \.screen::before\s*\{[\s\S]*display:\s*none/);
   assert.match(accessibility, /body\.high-contrast \.move-btn:disabled[\s\S]*border:\s*2px dashed/);
   assert.match(accessibility, /body\.high-contrast \.move-btn:disabled::after[\s\S]*content:\s*['"]▦['"]/);

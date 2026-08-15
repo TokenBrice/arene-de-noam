@@ -17,13 +17,27 @@ body.high-contrast .screen {
 body.high-contrast .screen::before {
   display: none;
 }
-body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-card) {
+body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-section, .academy-core, .academy-type-triangle) {
   border: 2px solid #d5dcff99;
   background: #080a1c;
   color: var(--ink);
 }
-body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-card) :is(b, h2, h3, p, small) {
+body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-section, .academy-core, .academy-type-triangle) :is(b, h2, h3, p, small) {
   color: var(--ink);
+}
+body.high-contrast .league-rival.locked {
+  filter: none;
+  opacity: 1;
+  border: 2px dashed #d5dcff;
+}
+body.high-contrast .league-rival.locked::before {
+  content: '🔒';
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 12px;
+  color: #fff;
+  font-size: var(--text-xs);
 }
 body.high-contrast .glass-panel,
 body.high-contrast .boot-card,
