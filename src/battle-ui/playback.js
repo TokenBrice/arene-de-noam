@@ -58,6 +58,24 @@ function presentationCreature(state, event) {
   return state.sides[event.side].team.find((creature) => creature.id === event.creatureId) || null;
 }
 
+function applyProjectedStatus(creature, event, state) {
+  if (!creature || !event.status) return;
+  if (event.applied === false) {
+    delete creature.statuses[event.status];
+    return;
+  }
+  const previous = creature.statuses[event.status] || {},
+    next = {
+      ...previous,
+      appliedTurn: event.turn ?? state.turn,
+      stacks: event.stacks ?? previous.stacks ?? 1,
+    };
+  if (event.remaining == null) delete next.remaining;
+  else next.remaining = event.remaining;
+  if (event.sourceCreatureId) next.sourceCreatureId = event.sourceCreatureId;
+  creature.statuses[event.status] = next;
+}
+
 function advancePresentation(session, event) {
   const state = session?.displayState;
   if (!state) return;
@@ -65,24 +83,21 @@ function advancePresentation(session, event) {
   if (['damage', 'heal', 'recoil', 'status-tick'].includes(event.type) && creature && Number.isFinite(event.hp))
     creature.hp = Math.max(0, event.hp);
   if (event.type === 'ko' && creature) creature.hp = Number.isFinite(event.hp) ? Math.max(0, event.hp) : 0;
+  if (event.type === 'ace' && creature) {
+    if (Number.isFinite(event.maxHp)) creature.maxHp = Math.max(0, event.maxHp);
+    if (Number.isFinite(event.hp)) creature.hp = Math.max(0, event.hp);
+  }
   if (['barrier', 'barrier-hit', 'barrier-break'].includes(event.type) && creature && Number.isFinite(event.total))
     creature.barrier = Math.max(0, event.total);
   if (event.type === 'surge' && state.sides[event.side] && Number.isFinite(event.total))
     state.sides[event.side].surge = Math.max(0, event.total);
-  if (event.type === 'status' && creature) {
-    if (!event.applied) delete creature.statuses[event.status];
-    else {
-      const previous = creature.statuses[event.status] || {};
-      const next = {
-        ...previous,
-        appliedTurn: event.turn ?? state.turn,
-        stacks: event.stacks ?? previous.stacks ?? 1,
-      };
-      if (event.remaining == null) delete next.remaining;
-      else next.remaining = event.remaining;
-      if (event.sourceCreatureId) next.sourceCreatureId = event.sourceCreatureId;
-      creature.statuses[event.status] = next;
-    }
+  if (event.type === 'status') applyProjectedStatus(creature, event, state);
+  if (event.type === 'passive' && event.status) {
+    const target = presentationCreature(state, {
+      side: event.targetSide || event.side,
+      creatureId: event.targetCreatureId || event.creatureId,
+    });
+    applyProjectedStatus(target, { ...event, applied: true }, state);
   }
   if (event.type === 'status-tick' && creature && event.remaining != null) {
     if (event.remaining <= 0) delete creature.statuses[event.status];

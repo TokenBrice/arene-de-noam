@@ -1069,6 +1069,48 @@ test('trainer ace powers trigger exactly once when the final enemy enters', () =
   assert.equal(result.state.sides.enemy.surge, 100);
   assert.ok(activeOf(result.state, 'enemy').barrier >= 16);
 });
+test('entry and ace events expose resulting projection values', () => {
+  const state = createBattle({
+    playerTeam: ['kordane', 'voltide', 'hexalune'],
+    enemyTeam: ['kordane', 'calderoc', 'hexalune'],
+    enemyAce: 'titanheart',
+    seed: 19,
+  });
+  state.sides.enemy.team[0].hp = 0;
+  state.sides.enemy.team[1].hp = 0;
+  state.sides.enemy.active = 0;
+  state.sides.enemy.pendingReplacement = true;
+  state.phase = 'replacement';
+  const result = applyReplacement(state, 'enemy', { type: 'replace', index: 2 }),
+    replacement = result.events.find((event) => event.type === 'replace'),
+    passive = result.events.find((event) => event.type === 'passive' && event.side === 'enemy'),
+    ace = result.events.find((event) => event.type === 'ace');
+  assert.equal(replacement.activeIndex, 2);
+  assert.equal(passive.status, 'marked');
+  assert.equal(passive.remaining, 2);
+  assert.equal(passive.targetSide, 'player');
+  assert.equal(passive.targetCreatureId, activeOf(result.state, 'player').id);
+  assert.equal(ace.hp, activeOf(result.state, 'enemy').hp);
+  assert.equal(ace.maxHp, activeOf(result.state, 'enemy').maxHp);
+  const conductorState = createBattle({
+      playerTeam: ['kordane', 'voltide', 'hexalune'],
+      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+      seed: 22,
+    }),
+    conductor = (() => {
+      conductorState.sides.player.team[0].hp = 0;
+      conductorState.sides.player.active = 0;
+      conductorState.sides.player.pendingReplacement = true;
+      conductorState.phase = 'replacement';
+      return applyReplacement(conductorState, 'player', { type: 'replace', index: 1 }).events.find(
+        (event) => event.type === 'passive' && event.side === 'player'
+      );
+    })();
+  assert.equal(conductor.status, 'haste');
+  assert.equal(conductor.remaining, 2);
+  assert.equal(conductor.stacks, 1);
+});
+
 
 test('the last fighters add no synthetic duel event or reward', () => {
   const state = make();

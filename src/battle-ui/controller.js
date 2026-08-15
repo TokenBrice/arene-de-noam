@@ -835,8 +835,8 @@ async function handlePlayerAction(action) {
     beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
-    ctx.locked = false;
     if (session.state.phase === 'ended') {
+      ctx.locked = false;
       finishBattle();
       return;
     }
@@ -866,10 +866,13 @@ async function resolvePendingReplacements(session = ctx.battleSession) {
     state = session.state;
   }
   if (state.sides.player.pendingReplacement) {
+    ctx.locked = false;
     session.lastLine = t('battle.chooseReplacement');
     refreshBattle();
     openSwitch();
+    return;
   }
+  ctx.locked = false;
 }
 
 async function handleReplacement(index) {
@@ -884,7 +887,6 @@ async function handleReplacement(index) {
     beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
-    ctx.locked = false;
     await resolvePendingReplacements(session);
     if (!sessionIsActive(session)) return;
     refreshBattle();

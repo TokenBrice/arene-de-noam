@@ -187,8 +187,8 @@ function clone(state) {
 function push(events, type, data = {}) {
   events.push({ type, ...data });
 }
-function passiveEvent(events, side, creature) {
-  if (events) push(events, 'passive', { side, creatureId: creature.id, passive: creature.passive });
+function passiveEvent(events, side, creature, result = {}) {
+  if (events) push(events, 'passive', { side, creatureId: creature.id, passive: creature.passive, ...result });
 }
 function enterTalent(state, side, events = null) {
   const creature = activeOf(state, side),
@@ -196,7 +196,7 @@ function enterTalent(state, side, events = null) {
   if (creature.passive === 'foresight' && !creature.talent.entry) {
     applyStatus(creature, 'focused', state.turn, null);
     creature.talent.entry = true;
-    passiveEvent(events, side, creature);
+    passiveEvent(events, side, creature, { status: 'focused', remaining: null, stacks: 1 });
   }
   if (creature.passive === 'foundation' && !creature.talent.entry) {
     const before = creature.barrier;
@@ -215,21 +215,27 @@ function enterTalent(state, side, events = null) {
   if (creature.passive === 'living_shadow' && !creature.talent.entry) {
     applyStatus(creature, 'evasive', state.turn, null);
     creature.talent.entry = true;
-    passiveEvent(events, side, creature);
+    passiveEvent(events, side, creature, { status: 'evasive', remaining: null, stacks: 1 });
   }
   if (creature.passive === 'conductor' && !creature.talent.entry) {
     applyStatus(creature, 'haste', state.turn, 2);
     creature.talent.entry = true;
-    passiveEvent(events, side, creature);
+    passiveEvent(events, side, creature, { status: 'haste', remaining: 2, stacks: 1 });
   }
   if (creature.passive === 'apex_stalker' && !creature.talent.entry) {
     applyStatus(creature, 'focused', state.turn, null);
     creature.talent.entry = true;
-    passiveEvent(events, side, creature);
+    passiveEvent(events, side, creature, { status: 'focused', remaining: null, stacks: 1 });
   }
   if (creature.passive === 'ill_omen' && foe.hp > 0) {
     applyStatus(foe, 'marked', state.turn, 2, 1, creature.id);
-    passiveEvent(events, side, creature);
+    passiveEvent(events, side, creature, {
+      status: 'marked',
+      remaining: 2,
+      stacks: 1,
+      targetSide: otherSide(side),
+      targetCreatureId: foe.id,
+    });
     if (events)
       emitStatus(events, otherSide(side), foe, 'marked', true, {
         remaining: 2,
@@ -238,6 +244,7 @@ function enterTalent(state, side, events = null) {
       });
   }
 }
+
 function adjustSurge(state, side, amount, events, source) {
   const owner = state.sides[side],
     before = owner.surge;
@@ -262,6 +269,7 @@ function triggerAce(state, events) {
     addSelf = (statuses) => applyStatuses(creature, statuses, state, 'enemy', events, creature.id),
     addFoe = (statuses) => applyStatuses(foe, statuses, state, 'player', events, creature.id);
   push(events, 'ace', { side: 'enemy', creatureId: creature.id, ace });
+  const aceEvent = events[events.length - 1];
   if (ace === 'second_wind') {
     healCreature(creature, creature.maxHp * 0.18, 'enemy', events, 'ace');
     removeAndEmit(creature, 'negative', 1, 'enemy', events);
@@ -303,6 +311,8 @@ function triggerAce(state, events) {
     creature.maxHp = Math.round(creature.maxHp * 1.2);
     creature.hp += creature.maxHp - before;
     addBarrier(creature, 18, 'enemy', events);
+    aceEvent.hp = creature.hp;
+    aceEvent.maxHp = creature.maxHp;
   }
   if (ace === 'dark_fate')
     addFoe([
@@ -337,6 +347,7 @@ function resolveSwitch(
     side,
     from,
     to: action.index,
+    activeIndex: action.index,
     creatureId: activeOf(state, side).id,
     source,
   });
