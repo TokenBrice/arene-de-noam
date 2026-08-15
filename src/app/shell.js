@@ -49,6 +49,7 @@ function currentMusicScreen() {
 
 function bindCommon() {
   sound.setScreen(currentMusicScreen());
+  screen.querySelectorAll('[data-action="title"]').forEach((b) => b.addEventListener('click', renderTitle));
   const settingsBackRoutes = {
     title: renderTitle,
     selection: () => renderTeamSelect(ctx.selection?.mode),
@@ -69,11 +70,13 @@ function bindCommon() {
       renderResults(session.state.winner === 'player');
     },
   };
-  screen.querySelectorAll('.topbar > [data-action]').forEach((button) => {
-    if (!button.classList.contains('subtle-btn')) return;
-    const handler = settingsBackRoutes[button.dataset.action] || renderTitle;
-    button.addEventListener('click', handler);
-  });
+  if (screen.dataset.page === 'settings') {
+    screen.querySelectorAll('.topbar > [data-action]').forEach((button) => {
+      if (!button.classList.contains('subtle-btn') || button.dataset.action === 'title') return;
+      const handler = settingsBackRoutes[button.dataset.action] || renderTitle;
+      button.addEventListener('click', handler);
+    });
+  }
   screen
     .querySelectorAll('[data-action="settings"]')
     .forEach((b) =>
