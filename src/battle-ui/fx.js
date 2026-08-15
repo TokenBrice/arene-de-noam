@@ -29,6 +29,74 @@ function sessionIsActive(session) {
 }
 
 let lastAppliedSpeed = null;
+const beginFxTemplateCache = new Map(),
+  radialFxTemplateCache = new Map();
+let coarseRetinaParticleScale = null;
+
+function particleBudget(count) {
+  if (coarseRetinaParticleScale === null) {
+    coarseRetinaParticleScale =
+      typeof window !== 'undefined' &&
+      window.devicePixelRatio >= 2 &&
+      window.matchMedia?.('(pointer: coarse)').matches
+        ? 0.5
+        : 1;
+  }
+  return Math.max(1, Math.ceil(count * coarseRetinaParticleScale));
+}
+
+function radialParticles(count, cacheKey, distanceModulo, delayModulo, delayUnit = 24) {
+  const key = `${cacheKey}:${count}:${distanceModulo}:${delayModulo}:${delayUnit}`,
+    cached = radialFxTemplateCache.get(key);
+  if (cached) return cached;
+  const particles = Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2,
+      distance = 45 + (i % distanceModulo) * 12;
+    return `<i class="fx-particle" style="--dx:${Math.cos(angle) * distance}px;--dy:${Math.sin(angle) * distance}px;--delay:${(i % delayModulo) * delayUnit}ms"></i>`;
+  }).join('');
+  radialFxTemplateCache.set(key, particles);
+  return particles;
+}
+
+function beginFxTemplate(archetype, particleCount, detailCount, echoCount) {
+  const key = `${archetype}:${particleCount}:${detailCount}:${echoCount}`,
+    cached = beginFxTemplateCache.get(key);
+  if (cached) return cached;
+  const particles = Array.from({ length: particleCount }, (_, i) => {
+      const angle = (i / particleCount) * Math.PI * 2,
+        distance = 55 + ((i * 37) % 145);
+      return `<i class="fx-particle" style="--particle:${i};--dx:${Math.cos(angle) * distance}px;--dy:${Math.sin(angle) * distance}px;--delay:${(i % 9) * 16}ms;--spin:${i % 2 ? 1 : -1}"></i>`;
+    }).join(''),
+    echoes = Array.from(
+      { length: echoCount },
+      (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 58}ms"></i>`
+    ).join(''),
+    detail = Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join(''),
+    archExtras =
+      archetype === 'slash'
+        ? `<div class="fx-arch fx-slashes">${Array.from({ length: 3 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>`
+        : archetype === 'eruption'
+          ? `<div class="fx-arch fx-pillars">${Array.from({ length: 5 }, (_, i) => `<i style="--i:${i};--ox:${(i - 2) * 34 + (i % 2 ? 9 : -7)}px"></i>`).join('')}</div>`
+          : archetype === 'storm'
+            ? `<div class="fx-arch fx-drops">${Array.from({ length: 9 }, (_, i) => `<i style="--i:${i};--ox:${((i * 53) % 130) - 65}px"></i>`).join('')}</div>`
+            : '';
+  const template = { particles, echoes, detail, archExtras };
+  beginFxTemplateCache.set(key, template);
+  return template;
+}
+
+function tacticalFxTemplate(particleCount) {
+  const key = `tactical:${particleCount}`,
+    cached = radialFxTemplateCache.get(key);
+  if (cached) return cached;
+  const template = {
+    rings: Array.from({ length: 4 }, (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 85}ms"></i>`).join(''),
+    detail: Array.from({ length: 6 }, (_, i) => `<i style="--detail:${i}"></i>`).join(''),
+    particles: radialParticles(particleCount, 'tactical', 5, 6, 30),
+  };
+  radialFxTemplateCache.set(key, template);
+  return template;
+}
 
 function syncBattleAnimationSpeed() {
   const speed = ctx.save.battleSpeed;
@@ -118,30 +186,20 @@ function beginMoveFx(event) {
   stage.style.setProperty('--from-y', source === 'player' ? '68%' : '30%');
   stage.style.setProperty('--to-x', target === 'enemy' ? '77%' : '23%');
   stage.style.setProperty('--to-y', target === 'enemy' ? '30%' : '68%');
-  const particleCount = strong ? (cornered ? 52 : 42) : cornered ? 34 : 24,
-    detailCount = strong ? 12 : 8;
-  const particles = Array.from({ length: particleCount }, (_, i) => {
-    const angle = (i / particleCount) * Math.PI * 2,
-      distance = 55 + ((i * 37) % 145);
-    return `<i class="fx-particle" style="--particle:${i};--dx:${Math.cos(angle) * distance}px;--dy:${Math.sin(angle) * distance}px;--delay:${(i % 9) * 16}ms;--spin:${i % 2 ? 1 : -1}"></i>`;
-  }).join('');
-  const echoes = Array.from(
-    { length: strong ? 6 : 3 },
-    (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 58}ms"></i>`
-  ).join('');
+  const particleCount = particleBudget(strong ? (cornered ? 52 : 42) : cornered ? 34 : 24),
+    detailCount = strong ? 12 : 8,
+    archetype = move.archetype || move.visual || 'default',
+    template = beginFxTemplate(archetype, particleCount, detailCount, strong ? 6 : 3);
   // Archetype-specific extra bodies: slashes/eruption pillars/storm drops sync
-  // to the .impact class; the charge ghost replaces the projectile outright.
-  const archExtras =
-    move.archetype === 'slash'
-      ? `<div class="fx-arch fx-slashes">${Array.from({ length: 3 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>`
-      : move.archetype === 'eruption'
-        ? `<div class="fx-arch fx-pillars">${Array.from({ length: 5 }, (_, i) => `<i style="--i:${i};--ox:${(i - 2) * 34 + (i % 2 ? 9 : -7)}px"></i>`).join('')}</div>`
-        : move.archetype === 'storm'
-          ? `<div class="fx-arch fx-drops">${Array.from({ length: 9 }, (_, i) => `<i style="--i:${i};--ox:${((i * 53) % 130) - 65}px"></i>`).join('')}</div>`
-          : move.archetype === 'charge'
-            ? `<img class="fx-dash-ghost" src="${sprite(event.creatureId)}" alt="">`
-            : '';
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${echoes}</div><div class="fx-trail"></div><div class="fx-detail">${Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${echoes}</div><div class="fx-aftershock"></div>${archExtras}`;
+  // to the .impact class; the charge ghost is the only per-event template part.
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${template.echoes}</div><div class="fx-trail"></div><div class="fx-detail">${template.detail}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${template.particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${template.echoes}</div><div class="fx-aftershock"></div>${template.archExtras}`;
+  if (archetype === 'charge') {
+    const ghost = document.createElement('img');
+    ghost.className = 'fx-dash-ghost';
+    ghost.src = sprite(event.creatureId);
+    ghost.alt = '';
+    stage.append(ghost);
+  }
   screen.classList.add(
     'cinematic',
     `cinematic-${move.affinity}`,
@@ -248,17 +306,8 @@ function tacticalFx(event) {
   stage.className = `fx-stage active tactical-fx tactical-${['heal', 'barrier'].includes(event.type) ? event.type : event.status || 'cleanse'} ${numeric ? 'tactical-numeric' : ''} ${statusPolarity} ${statusChange} ${moveClass} from-${side}`;
   stage.style.setProperty('--fx-color', color);
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
-  stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');
-  stage.innerHTML = `<div class="fx-source-aura">${Array.from({ length: 4 }, (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 85}ms"></i>`).join('')}</div><div class="fx-detail">${Array.from({ length: 6 }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-impact">${Array.from(
-    { length: 18 },
-    (_, i) => {
-      const angle = (i / 18) * Math.PI * 2,
-        d = 45 + (i % 5) * 13;
-      return `<i class="fx-particle" style="--dx:${Math.cos(angle) * d}px;--dy:${Math.sin(angle) * d}px;--delay:${(i % 6) * 30}ms"></i>`;
-    }
-  ).join(
-    ''
-  )}<i class="fx-core ${numeric ? 'tactical-number' : ''}${meta?.lightInk ? ' light-ink' : ''}">${coreText}</i></div>`;
+  const tacticalTemplate = tacticalFxTemplate(particleBudget(18));
+  stage.innerHTML = `<div class="fx-source-aura">${tacticalTemplate.rings}</div><div class="fx-detail">${tacticalTemplate.detail}</div><div class="fx-impact">${tacticalTemplate.particles}<i class="fx-core ${numeric ? 'tactical-number' : ''}${meta?.lightInk ? ' light-ink' : ''}">${coreText}</i></div>`;
   ctx.arenaScene?.burst(color, side, event.type === 'heal' ? 1.2 : 0.8);
 }
 
@@ -399,16 +448,8 @@ function statusTickFx(event) {
   stage.style.setProperty('--fx-color', meta?.color || '#fff');
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
   stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-impact">${Array.from(
-    { length: 24 },
-    (_, i) => {
-      const a = (i / 24) * Math.PI * 2,
-        d = 45 + (i % 7) * 12;
-      return `<i class="fx-particle" style="--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--delay:${(i % 6) * 24}ms"></i>`;
-    }
-  ).join(
-    ''
-  )}<i class="status-tick-icon${meta?.lightInk ? ' light-ink' : ''}">${meta ? statusIcon(event.status) : ''}</i><i class="fx-core damage-number">−${event.amount}</i></div>`;
+  const particles = radialParticles(particleBudget(24), `status:${event.status}`, 7, 6);
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-impact">${particles}<i class="status-tick-icon${meta?.lightInk ? ' light-ink' : ''}">${meta ? statusIcon(event.status) : ''}</i><i class="fx-core damage-number">−${event.amount}</i></div>`;
   ctx.arenaScene?.burst(meta?.color || '#fff', side, 0.8);
 }
 
