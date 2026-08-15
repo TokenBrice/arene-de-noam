@@ -305,6 +305,7 @@ test('Eclipse of Grace purges the rival team after its aimed transaction', async
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('[data-move="eclipse_of_grace"]')).toBeEnabled();
   await page.locator('[data-move="eclipse_of_grace"]').click();
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await expect(page.locator('[data-action="battle-log"]')).toBeEnabled();
   await page.locator('[data-action="battle-log"]').click();
   await expect(page.getByRole('dialog', { name: 'Journal du combat' })).toContainText('Éclipse des grâces');
