@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DICTIONARIES, createI18n, validateDictionaries } from '../src/i18n.js';
-import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave, validateSave } from '../src/save.js';
+import {
+  DEFAULT_SAVE,
+  SAVE_KEY,
+  freshDefaultSave,
+  loadSave,
+  persistSave,
+  validateSave,
+} from '../src/save.js';
 import {
   CURRENT_FEAT_IDS,
   FEATS,
@@ -30,6 +37,50 @@ test('French and English localization keys are complete and interpolation works'
   assert.deepEqual(Object.keys(DICTIONARIES.fr).sort(), Object.keys(DICTIONARIES.en).sort());
   assert.equal(createI18n('en').t('battle.turn', { turn: 7 }), 'Turn 7');
 });
+test('live dictionary values are not shadowed by duplicate definitions', () => {
+  for (const [key, fr, en] of [
+    ['status.effect.marked', 'Combo : Marqué consommé, dégâts ×1,4.', 'Combo consumes Marked: +40% damage.'],
+    [
+      'move.effect.petal_ray',
+      'Inflige des dégâts et rend 3 % des PV à l’équipe.',
+      "Deals damage and restores 3% of the team's HP.",
+    ],
+    ['advice.title', 'Conseils de l’entraîneur', 'Coach Tips'],
+    ['battle.switchIncoming', 'Dégâts prévus : {damage}', 'Predicted damage: {damage}'],
+  ]) {
+    assert.equal(DICTIONARIES.fr[key], fr, `fr ${key}`);
+    assert.equal(DICTIONARIES.en[key], en, `en ${key}`);
+  }
+});
+test('battle playback and Chronicle copy is available in both locales', () => {
+  const expected = {
+    fr: {
+      'battle.action.consumed': '{actor} utilise son bonus {status} !',
+      'battle.action.skip': '{name} ne peut pas agir : K.O. !',
+      'battle.logEnd.win': 'Victoire !',
+      'battle.logEnd.loss': 'Défaite — belle bataille.',
+      'battle.logEnd.cap': 'Fin du combat : limite de tours.',
+      'battle.logSide.player': 'Ton {name}',
+      'battle.logSide.enemy': '{name} rival',
+    },
+    en: {
+      'battle.action.consumed': '{actor} uses up its {status} boost!',
+      'battle.action.skip': '{name} cannot act — K.O.!',
+      'battle.logEnd.win': 'Victory!',
+      'battle.logEnd.loss': 'Defeat — good battle.',
+      'battle.logEnd.cap': 'Battle over: turn limit.',
+      'battle.logSide.player': 'Your {name}',
+      'battle.logSide.enemy': 'Rival {name}',
+    },
+  };
+  for (const [language, entries] of Object.entries(expected))
+    for (const [key, value] of Object.entries(entries))
+      assert.equal(DICTIONARIES[language][key], value, `${language} ${key}`);
+});
+test('save failure copy is available in both locales', () => {
+  assert.equal(typeof DICTIONARIES.fr['app.saveFailed'], 'string');
+  assert.equal(typeof DICTIONARIES.en['app.saveFailed'], 'string');
+});
 test('legacy affinity ids expose the canonical type labels and parallel triangle copy', () => {
   assert.deepEqual(
     ['mind', 'force', 'tide', 'flame', 'grove', 'shadow'].map((id) => DICTIONARIES.fr[`affinity.${id}`]),
@@ -52,8 +103,8 @@ test('legacy affinity ids expose the canonical type labels and parallel triangle
   }
   assert.match(DICTIONARIES.fr['settings.affinities'], /×2.*×0,5.*×1/);
   assert.match(DICTIONARIES.en['settings.affinities'], /×2.*×0\.5.*×1/);
-  assert.match(DICTIONARIES.fr['academy.affinityHint'], /Entre les deux triangles : ×1/);
-  assert.match(DICTIONARIES.en['academy.affinityHint'], /Between triangles: ×1/);
+  assert.match(DICTIONARIES.fr['academy.affinityHint'], /Entre les triangles, c’est ×1/);
+  assert.match(DICTIONARIES.en['academy.affinityHint'], /Between the triangles, it is ×1/);
 });
 test('the eight kid-clear status labels are complete and dead ids are absent', () => {
   const dead = [
@@ -102,7 +153,10 @@ test('all ninety move effects are short, localized, and free of removed systems'
 test('thirty creatures and six classes are complete with no legacy role keys', () => {
   assert.equal(CREATURE_IDS.length, 30);
   for (const dictionary of Object.values(DICTIONARIES)) {
-    assert.equal(Object.keys(dictionary).some((key) => key.startsWith('role.')), false);
+    assert.equal(
+      Object.keys(dictionary).some((key) => key.startsWith('role.')),
+      false
+    );
     for (const classId of CLASS_ORDER) {
       assert.ok(dictionary[`class.${classId}`]);
       assert.ok(dictionary[`class.effect.${classId}`]);
@@ -126,9 +180,51 @@ test('save round-trips with validated ranges', () => {
   };
   assert.equal(persistSave(changed, memory), true);
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
-  assert.equal(loadSave(memory).save.version, 15);
+  assert.equal(loadSave(memory).save.version, 16);
+  assert.equal('volume' in loadSave(memory).save, false);
   assert.equal('affinity' in loadSave(memory).save, false);
 });
+test('fresh save resets rebuild every nested collection', () => {
+  const firstReset = freshDefaultSave();
+  firstReset.mastery.orakyn = 99;
+  firstReset.feats.push('blitz');
+  firstReset.trials.push('trial-one');
+  firstReset.lastTeam[0] = 'kordane';
+  firstReset.records.orakyn = { battles: 1, wins: 1 };
+  firstReset.customSquads[0] = { team: ['orakyn', 'abyssar', 'virelia'], lead: 0 };
+  const secondReset = freshDefaultSave();
+  for (const key of ['mastery', 'feats', 'trials', 'lastTeam', 'records', 'customSquads'])
+    assert.notEqual(secondReset[key], firstReset[key], `${key} should be a fresh collection`);
+  assert.deepEqual(secondReset.mastery, {});
+  assert.deepEqual(secondReset.feats, []);
+  assert.deepEqual(secondReset.trials, []);
+  assert.deepEqual(secondReset.lastTeam, ['orakyn', 'abyssar', 'virelia']);
+  assert.deepEqual(secondReset.records, {});
+  assert.deepEqual(secondReset.customSquads, [null, null, null]);
+});
+test('v15 saves migrate to v16 without dead fields and with consistent counters', () => {
+  const migrated = validateSave({
+    ...DEFAULT_SAVE,
+    version: 15,
+    emblems: ['trainer-a'],
+    cosmetics: ['crystal', 'grove'],
+    volume: 0.2,
+    battlesPlayed: 5,
+    wins: 12,
+    winStreak: 30,
+    bestStreak: 40,
+    records: { orakyn: { battles: 2, wins: 8 } },
+  });
+  assert.equal(migrated.version, 16);
+  assert.equal('emblems' in migrated, false);
+  assert.equal('cosmetics' in migrated, false);
+  assert.equal('volume' in migrated, false);
+  assert.equal(migrated.wins, 5);
+  assert.equal(migrated.records.orakyn.wins, 2);
+  assert.equal(migrated.winStreak, 5);
+  assert.equal(migrated.bestStreak, 5);
+});
+
 test('historical v15 saves stay valid and accept all six new creature ids', () => {
   const historical = validateSave({
     ...DEFAULT_SAVE,
@@ -137,7 +233,7 @@ test('historical v15 saves stay valid and accept all six new creature ids', () =
     mastery: { orakyn: 12, unknown: 90 },
     records: { orakyn: { battles: 4, wins: 3 }, unknown: { battles: 99 } },
   });
-  assert.equal(historical.version, 15);
+  assert.equal(historical.version, 16);
   assert.equal(historical.mastery.orakyn, 12);
   assert.equal(historical.mastery.unknown, undefined);
   assert.equal(historical.records.unknown, undefined);
@@ -186,6 +282,8 @@ test('older saves migrate and progression fields are bounded', () => {
     version: 1,
     tutorialComplete: true,
     ladderVictories: 80,
+    battlesPlayed: 10,
+    wins: 7,
     lastTeam: ['bad'],
     language: 'xx',
     difficulty: 'impossible',
@@ -203,7 +301,7 @@ test('older saves migrate and progression fields are bounded', () => {
     winStreak: 7,
     bestStreak: 3,
   });
-  assert.equal(migrated.version, 15);
+  assert.equal(migrated.version, 16);
   assert.equal(migrated.ladderVictories, 12);
   assert.deepEqual(migrated.lastTeam, DEFAULT_SAVE.lastTeam);
   assert.equal(migrated.language, 'fr');

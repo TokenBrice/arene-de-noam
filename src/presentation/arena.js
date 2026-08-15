@@ -73,9 +73,10 @@ function material(
 }
 
 export class ArenaScene {
-  constructor(canvas, theme = 'crystal', { reducedMotion = false } = {}) {
+  constructor(canvas, theme = 'crystal', { reducedMotion = false, testAnimationScale = 1 } = {}) {
     this.canvas = canvas;
     this.reducedMotion = reducedMotion;
+    this.testAnimationScale = testAnimationScale;
     this.theme = THEMES[theme] ? theme : 'crystal';
     this.disposed = false;
     this.animations = [];
@@ -94,7 +95,7 @@ export class ArenaScene {
     } catch (error) {
       throw new Error('WEBGL_UNAVAILABLE', { cause: error });
     }
-    this.renderer.setPixelRatio(Math.min(2, globalThis.devicePixelRatio || 1));
+    this.pixelRatioCap = null;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -460,7 +461,12 @@ export class ArenaScene {
     if (this.disposed) return;
     const rect = this.canvas.getBoundingClientRect(),
       w = Math.max(1, rect.width),
-      h = Math.max(1, rect.height);
+      h = Math.max(1, rect.height),
+      cap = this.canvas.clientWidth * this.canvas.clientHeight > 500000 ? 1.5 : 2;
+    if (this.pixelRatioCap !== cap) {
+      this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, cap));
+      this.pixelRatioCap = cap;
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
@@ -471,16 +477,23 @@ export class ArenaScene {
     this.targetShowdown = showdown ? 1 : 0;
   }
   burst(color = '#fff', targetSide = 'enemy', strength = 1) {
-    if (!this.burstPoints) return;
+    if (this.testAnimationScale === 0 || !this.burstPoints) return;
     const positions = this.burstPoints.geometry.attributes.position.array,
-      origin = targetSide === 'enemy' ? 2.35 : -2.35,
-      count = this.reducedMotion ? 34 : strength > 1 ? 180 : 112;
+      origin = targetSide === 'enemy' ? 2.35 : -2.35;
     this.burstPoints.material.color.set(color);
     this.burstPoints.material.size = 0.1 + 0.06 * strength;
-    this.burstPoints.material.opacity = 1;
+    this.burstPoints.material.opacity = 0;
     this.fxLight.color.set(color);
     this.fxLight.position.set(origin, 1.7, 0.5);
     this.fxLight.intensity = 30 * strength;
+    if (this.reducedMotion) {
+      this.burstLife = 0;
+      positions.fill(99);
+      this.burstPoints.geometry.attributes.position.needsUpdate = true;
+      return;
+    }
+    const count = strength > 1 ? 180 : 112;
+    this.burstPoints.material.opacity = 1;
     for (let i = 0; i < 180; i++) {
       const p = i * 3;
       if (i < count) {
@@ -498,14 +511,19 @@ export class ArenaScene {
     this.burstLife = 0.82;
   }
   flash(kind = 'hit', color = '#fff', targetSide = 'enemy') {
+    if (this.testAnimationScale === 0) return;
     this.burst(color, targetSide, kind === 'power' ? 1.65 : 1);
     if (this.reducedMotion) return;
+    const animationClass = kind === 'power' ? 'arena-power' : 'arena-hit';
     this.canvas.classList.remove('arena-hit', 'arena-power');
-    void this.canvas.offsetWidth;
-    this.canvas.classList.add(kind === 'power' ? 'arena-power' : 'arena-hit');
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!this.disposed) this.canvas.classList.add(animationClass);
+      })
+    );
   }
   punch(targetSide = 'enemy', strength = 1) {
-    if (this.reducedMotion) return;
+    if (this.testAnimationScale === 0 || this.reducedMotion) return;
     this.cameraKick.x = (targetSide === 'enemy' ? -0.22 : 0.22) * strength;
     this.cameraKick.y = 0.09 * strength;
     this.cameraKick.z = -0.42 * strength;
@@ -560,7 +578,7 @@ export class ArenaScene {
             0.5 + this.tension * 0.3 + Math.sin(phase * (item.speed || 1)) * (0.3 + chargePulse * 0.18);
       }
     }
-    if (this.burstLife > 0) {
+    if (!this.reducedMotion && this.burstLife > 0) {
       const positions = this.burstPoints.geometry.attributes.position.array;
       for (let i = 0; i < 180; i++) {
         const p = i * 3;
@@ -574,6 +592,8 @@ export class ArenaScene {
       this.burstPoints.material.opacity = Math.min(1, this.burstLife * 2);
       this.fxLight.intensity *= 0.87;
       this.burstPoints.geometry.attributes.position.needsUpdate = true;
+    } else if (this.reducedMotion && this.fxLight.intensity > 0.01) {
+      this.fxLight.intensity *= 0.87;
     }
     this.renderer.render(this.scene, this.camera);
     this.frame = requestAnimationFrame(this.animateBound);

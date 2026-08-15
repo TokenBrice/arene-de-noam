@@ -4,15 +4,12 @@ const {
   CREATURES,
   MOVES,
   activeOf,
-  STATUS_DEFINITIONS,
   testAnimationScale,
   t,
   screen,
   sound,
   LOG_EVENT_TYPES,
   creatureName,
-  affinity,
-  affinityName,
   wait,
 } = ctx;
 const {
@@ -48,25 +45,95 @@ function sessionIsActive(session) {
     screen.classList.contains('battle-screen')
   );
 }
+function beginPresentation(session, preTurnState) {
+  if (!session || !preTurnState) return;
+  session.displayState = structuredClone(preTurnState);
+}
+
+function presentationCreature(state, event) {
+  if (!state?.sides?.[event.side] || !event.creatureId) return null;
+  return state.sides[event.side].team.find((creature) => creature.id === event.creatureId) || null;
+}
+
+function applyProjectedStatus(creature, event, state) {
+  if (!creature || !event.status) return;
+  if (event.applied === false) {
+    delete creature.statuses[event.status];
+    return;
+  }
+  const previous = creature.statuses[event.status] || {},
+    next = {
+      ...previous,
+      appliedTurn: event.turn ?? state.turn,
+      stacks: event.stacks ?? previous.stacks ?? 1,
+    };
+  if (event.remaining == null) delete next.remaining;
+  else next.remaining = event.remaining;
+  if (event.sourceCreatureId) next.sourceCreatureId = event.sourceCreatureId;
+  creature.statuses[event.status] = next;
+}
+
+function advancePresentation(session, event) {
+  const state = session?.displayState;
+  if (!state) return;
+  const creature = presentationCreature(state, event);
+  if (
+    ['damage', 'heal', 'recoil', 'status-tick'].includes(event.type) &&
+    creature &&
+    Number.isFinite(event.hp)
+  )
+    creature.hp = Math.max(0, event.hp);
+  if (event.type === 'ko' && creature) creature.hp = Number.isFinite(event.hp) ? Math.max(0, event.hp) : 0;
+  if (event.type === 'ace' && creature) {
+    if (Number.isFinite(event.maxHp)) creature.maxHp = Math.max(0, event.maxHp);
+    if (Number.isFinite(event.hp)) creature.hp = Math.max(0, event.hp);
+  }
+  if (
+    ['barrier', 'barrier-hit', 'barrier-break'].includes(event.type) &&
+    creature &&
+    Number.isFinite(event.total)
+  )
+    creature.barrier = Math.max(0, event.total);
+  if (event.type === 'surge' && state.sides[event.side] && Number.isFinite(event.total))
+    state.sides[event.side].surge = Math.max(0, event.total);
+  if (event.type === 'status') applyProjectedStatus(creature, event, state);
+  if (event.type === 'passive' && event.status) {
+    const target = presentationCreature(state, {
+      side: event.targetSide || event.side,
+      creatureId: event.targetCreatureId || event.creatureId,
+    });
+    applyProjectedStatus(target, { ...event, applied: true }, state);
+  }
+  if (event.type === 'status-tick' && creature && event.remaining != null) {
+    if (event.remaining <= 0) delete creature.statuses[event.status];
+    else if (creature.statuses[event.status]) creature.statuses[event.status].remaining = event.remaining;
+  }
+  if ((event.type === 'switch' || event.type === 'replace') && state.sides[event.side]) {
+    const activeIndex = Number.isInteger(event.activeIndex) ? event.activeIndex : event.to;
+    if (Number.isInteger(activeIndex)) state.sides[event.side].active = activeIndex;
+  }
+}
 
 function eventPresentationDelay(event) {
   if (testAnimationScale === 0) return 1;
   if (ctx.save.reducedMotion) return 190 / ctx.save.battleSpeed;
+  if (event.type === 'status' && event.consumed && event.source === 'combo') return 60 / ctx.save.battleSpeed;
+  if (event.type === 'move-skip') return 120 / ctx.save.battleSpeed;
   if (event.type === 'move-start')
     return (
-      (MOVES[event.moveId]?.signature ? 780 : (MOVES[event.moveId]?.power || 0) >= 46 ? 580 : 430) /
+      (MOVES[event.moveId]?.signature ? 780 : (MOVES[event.moveId]?.power || 0) >= 46 ? 420 : 300) /
       ctx.save.battleSpeed
     );
   if (event.type === 'trainer-command') return 760 / ctx.save.battleSpeed;
   if (event.type === 'damage')
     return (
-      (event.hp <= 0 ? 900 : event.affinity !== 1 ? 700 : ctx.currentFxMove?.strong ? 620 : 430) /
+      (event.hp <= 0 ? 900 : event.affinity !== 1 ? 700 : ctx.currentFxMove?.strong ? 620 : 300) /
       ctx.save.battleSpeed
     );
   if (event.type === 'arena-pulse') return 760 / ctx.save.battleSpeed;
   if (event.type === 'surge')
     return (
-      (event.source === 'switch' && event.amount >= 24 ? 650 : event.ready ? 760 : 100) / ctx.save.battleSpeed
+      (event.source === 'switch' && event.amount >= 24 ? 650 : event.ready ? 760 : 60) / ctx.save.battleSpeed
     );
   if (event.type === 'assist') return 480 / ctx.save.battleSpeed;
   if (event.type === 'perfect-relay') return 620 / ctx.save.battleSpeed;
@@ -78,23 +145,45 @@ function eventPresentationDelay(event) {
       event.type
     )
   )
-    return 460 / ctx.save.battleSpeed;
-  return 300 / ctx.save.battleSpeed;
+    return 250 / ctx.save.battleSpeed;
+  return 180 / ctx.save.battleSpeed;
 }
 
 async function playEvents(events) {
-  const session = ctx.battleSession;
-  if (!sessionIsActive(session)) return;
+  const session = ctx.battleSession,
+    clearPresentation = () => {
+      if (session) session.displayState = null;
+    };
+  if (!sessionIsActive(session)) {
+    clearPresentation();
+    return;
+  }
   refreshBattle();
   await signatureClashIntro(events);
-  if (!sessionIsActive(session)) return;
+  if (!sessionIsActive(session)) {
+    clearPresentation();
+    return;
+  }
   for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
-    const event = events[eventIndex];
+    const event = events[eventIndex],
+      switchLeadIn =
+        event.type === 'switch' || event.type === 'replace'
+          ? (ctx.save.reducedMotion ? 70 : 220) / ctx.save.battleSpeed
+          : 0,
+      deferRefresh = event.type === 'status' && !event.applied,
+      deferProjection = Boolean(switchLeadIn || deferRefresh);
     while (document.hidden) {
       await wait(150);
-      if (!sessionIsActive(session)) return;
+      if (!sessionIsActive(session)) {
+        clearPresentation();
+        return;
+      }
     }
-    if (!sessionIsActive(session)) return;
+    if (!sessionIsActive(session)) {
+      clearPresentation();
+      return;
+    }
+    if (!deferProjection) advancePresentation(session, event);
     const actorSide = event.side;
     const fighter = screen.querySelector(`#fighter-${actorSide}`);
     if (event.type === 'trainer-command') {
@@ -141,15 +230,20 @@ async function playEvents(events) {
       sound.heal();
     }
     if (event.type === 'status' && !(event.consumed && event.source === 'combo')) {
-      session.lastLine = event.applied
-        ? t('battle.action.status', {
+      session.lastLine = event.consumed
+        ? t('battle.action.consumed', {
             actor: creatureName(event.creatureId),
             status: t(`status.${event.status}`),
           })
-        : t('battle.action.cleanse', {
-            actor: creatureName(event.creatureId),
-            status: t(`status.${event.status}`),
-          });
+        : event.applied
+          ? t('battle.action.status', {
+              actor: creatureName(event.creatureId),
+              status: t(`status.${event.status}`),
+            })
+          : t('battle.action.cleanse', {
+              actor: creatureName(event.creatureId),
+              status: t(`status.${event.status}`),
+            });
       tacticalFx(event);
       sound.guard();
     }
@@ -253,32 +347,56 @@ async function playEvents(events) {
       sound.call(event.creatureId, { fall: true });
       sound.ko();
     }
-    if (event.type === 'battle-end' && event.reason === 'turn-cap') session.lastLine = t('battle.cap');
+    if (event.type === 'move-skip') {
+      const skipped = activeOf(session.state, event.side);
+      session.lastLine = t('battle.action.skip', { name: creatureName(skipped.id) });
+    }
+    if (event.type === 'battle-end') {
+      session.lastLine =
+        event.reason === 'turn-cap'
+          ? t('battle.logEnd.cap')
+          : event.winner === 'player'
+            ? t('battle.logEnd.win')
+            : t('battle.logEnd.loss');
+    }
     if (LOG_EVENT_TYPES.has(event.type)) {
+      const timelineCreature =
+        event.creatureId || (event.type === 'move-skip' ? activeOf(session.state, event.side)?.id : null);
       session.timeline.push({
         type: event.type === 'damage' && event.combo ? 'combo' : event.type,
         side: event.side,
+        creatureId: timelineCreature,
         turn: event.turn || session.state.turn,
         text: session.lastLine,
       });
       if (session.timeline.length > 40) session.timeline.shift();
     }
-    const switchLeadIn =
-      event.type === 'switch' || event.type === 'replace'
-        ? (ctx.save.reducedMotion ? 70 : 220) / ctx.save.battleSpeed
-        : 0;
     if (switchLeadIn) {
       // Let the outgoing recall read before revealing the already-resolved
       // incoming fighter. The overlap begins near the end of the light beam.
       syncBattleAnimationSpeed();
       await wait(switchLeadIn);
-      if (!sessionIsActive(session)) return;
+      if (!sessionIsActive(session)) {
+        clearPresentation();
+        return;
+      }
     }
-    refreshBattle();
+    if (!deferProjection) refreshBattle();
+    else if (switchLeadIn) {
+      advancePresentation(session, event);
+      refreshBattle();
+    }
     if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
     syncBattleAnimationSpeed();
     await wait(Math.max(1, eventPresentationDelay(event) - switchLeadIn));
-    if (!sessionIsActive(session)) return;
+    if (!sessionIsActive(session)) {
+      clearPresentation();
+      return;
+    }
+    if (deferRefresh) {
+      advancePresentation(session, event);
+      refreshBattle();
+    }
     fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
     const next = events[eventIndex + 1];
     if (
@@ -290,8 +408,14 @@ async function playEvents(events) {
       event.type === 'move-skip' ||
       event.type === 'ko'
     )
-      clearBattleFx();
+      clearBattleFx({ preservePresentation: true });
   }
+  clearPresentation();
 }
 
-registerRoutes({ eventPresentationDelay, playEvents });
+registerRoutes({
+  eventPresentationDelay,
+  playEvents,
+  beginPresentation,
+  advancePresentation,
+});

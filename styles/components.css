@@ -217,17 +217,6 @@ body.reduced-motion .fighter-shadow {
   display: flex;
   gap: 5px;
 }
-.team-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 8px #74e38b66;
-}
-.team-dot.ko {
-  background: #4c4d63;
-  box-shadow: none;
-}
 .battle-controls {
   position: absolute;
   z-index: 7;
@@ -249,7 +238,7 @@ body.reduced-motion .fighter-shadow {
   min-height: 132px;
   text-align: left;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-s);
   background: linear-gradient(145deg, #202451eb, #0f1233f0);
   padding: 13px 14px;
   cursor: pointer;
@@ -341,7 +330,7 @@ body.reduced-motion .fighter-shadow {
 }
 .replacement {
   position: absolute;
-  z-index: 20;
+  z-index: var(--z-modal);
   inset: 0;
   display: grid;
   place-items: center;
@@ -432,12 +421,13 @@ body.reduced-motion .fighter-shadow {
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: start;
   gap: 18px;
 }
 .settings-card {
   border: 1px solid var(--line);
-  border-radius: 20px;
-  background: #ffffff08;
+  border-radius: var(--radius-m);
+  background: var(--panel);
   padding: 20px;
 }
 .toggle-row {
@@ -447,9 +437,56 @@ body.reduced-motion .fighter-shadow {
   min-height: 54px;
   border-bottom: 1px solid #ffffff0c;
 }
-.toggle-row input {
-  width: 24px;
-  height: 24px;
+.toggle-row input[type='checkbox'] {
+  inline-size: 24px;
+  block-size: 24px;
+}
+.range-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 140px;
+}
+.toggle-row input[type='range'] {
+  inline-size: 180px;
+  min-inline-size: 140px;
+  block-size: 24px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.toggle-row input[type='range']::-webkit-slider-runnable-track {
+  block-size: 4px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.toggle-row input[type='range']::-moz-range-track {
+  block-size: 4px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.toggle-row input[type='range']::-webkit-slider-thumb {
+  inline-size: 18px;
+  block-size: 18px;
+  margin-top: -7px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--gold);
+  appearance: none;
+}
+.toggle-row input[type='range']::-moz-range-thumb {
+  inline-size: 18px;
+  block-size: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--gold);
+}
+.range-control output {
+  min-inline-size: 3ch;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: end;
 }
 .language-buttons,
 .speed-buttons {
@@ -523,7 +560,7 @@ body.reduced-motion .fighter-shadow {
   animation-delay: 0.2s;
 }
 .result-team img.fallen {
-  filter: grayscale(0.8) brightness(0.55) drop-shadow(0 15px 12px #0008);
+  filter: grayscale(0.45) brightness(0.8) drop-shadow(0 15px 12px #0008);
   transform: rotate(8deg);
 }
 .battle-recap {
@@ -532,6 +569,9 @@ body.reduced-motion .fighter-shadow {
   gap: 12px;
   margin: 4px 0 12px;
   text-align: left;
+}
+.recap-stats--solo {
+  grid-column: 1 / -1;
 }
 .recap-mvp {
   display: grid;
@@ -615,7 +655,7 @@ body.reduced-motion .fighter-shadow {
 }
 .toast {
   position: fixed;
-  z-index: 100;
+  z-index: var(--z-toast);
   top: max(16px, env(safe-area-inset-top));
   left: 50%;
   transform: translate(-50%, -20px);
@@ -695,14 +735,14 @@ body.reduced-motion .fighter-shadow {
   }
 }
 .team-dot {
-  display: grid !important;
+  display: grid;
   place-items: center;
-  width: 22px !important;
-  height: 22px !important;
+  width: 22px;
+  height: 22px;
   padding: 2px;
   border-radius: 50%;
-  background: conic-gradient(var(--ok) calc(var(--team-hp) * 1%), #38394d 0) !important;
-  box-shadow: 0 0 8px #74e38b44 !important;
+  background: conic-gradient(var(--ok) calc(var(--team-hp) * 1%), #38394d 0);
+  box-shadow: 0 0 8px #74e38b44;
 }
 .team-dot img {
   width: 18px;
@@ -715,11 +755,11 @@ body.reduced-motion .fighter-shadow {
 .team-dot.active {
   outline: 2px solid #ffe37d;
   outline-offset: 1px;
-  box-shadow: 0 0 11px #ffe37d66 !important;
+  box-shadow: 0 0 11px #ffe37d66;
 }
 .team-dot.ko {
-  background: #4c4d63 !important;
-  box-shadow: none !important;
+  background: #4c4d63;
+  box-shadow: none;
   filter: grayscale(1) brightness(0.45);
 }
 .team-dot.signature-ready:not(.ko)::after {
@@ -733,7 +773,7 @@ body.reduced-motion .fighter-shadow {
 }
 .team-dot.signature-ready:not(.ko) {
   position: relative;
-  box-shadow: 0 0 13px #ffe06b77 !important;
+  box-shadow: 0 0 13px #ffe06b77;
 }
 @keyframes pipSignature {
   to {
@@ -783,6 +823,15 @@ body.reduced-motion .fighter-shadow {
   }
 }
 @media (max-width: 600px) {
+  .toggle-row:has(.range-control) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 8px;
+  }
+  .toggle-row:has(.range-control) > label {
+    flex: 1 1 100%;
+  }
   .shell {
     padding-left: 12px;
     padding-right: 12px;
@@ -806,7 +855,7 @@ body.reduced-motion .fighter-shadow {
     padding: 22px;
   }
   .roster-fan {
-    height: 150px;
+    height: 140px;
   }
   .roster-fan img {
     width: 88px;
@@ -970,6 +1019,12 @@ body.reduced-motion * {
   min-width: 0;
   padding: 2px;
   opacity: 0.45;
+}
+@media (max-width: 600px) {
+  .enemy-picker .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 .enemy-picker .icon-btn.active {
   opacity: 1;

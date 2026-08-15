@@ -218,7 +218,7 @@ export function resolveThemeId(screenId) {
 }
 
 export function computeMixerLevels(settings = {}) {
-  const master = settings.muted ? 0 : clamp01(settings.volume, 0.7);
+  const master = settings.muted ? 0 : 1;
   return Object.freeze({
     master,
     music: clamp01(settings.musicVolume, 0.45),
@@ -259,6 +259,36 @@ export class SoundSystem {
     this.noiseBuffers = new Map();
     this.failureNotified = false;
     this.suppressSfxUntil = 0;
+    this.audioDebug = new URLSearchParams(globalThis.location?.search || '').get('audiodebug') === '1';
+    this._nodeCount = this.audioDebug ? 0 : undefined;
+    this._createdNodeCount = this.audioDebug ? 0 : undefined;
+    this._disconnectedNodeCount = this.audioDebug ? 0 : undefined;
+    this._trackedNodes = new Set();
+    this._nodeUsers = new Map();
+    if (this.audioDebug) globalThis.__NOAM_SOUND__ = this;
+  }
+
+  createNode(method, ...args) {
+    const node = this.ctx[method](...args);
+    if (this.audioDebug) {
+      this._trackedNodes.add(node);
+      this._nodeCount += 1;
+      this._createdNodeCount += 1;
+    }
+    return node;
+  }
+
+  disconnectNode(node) {
+    if (!node) return;
+    try {
+      node.disconnect?.();
+    } catch {
+      // A node may already be disconnected by the browser.
+    }
+    if (this.audioDebug && this._trackedNodes.delete(node)) {
+      this._nodeCount -= 1;
+      this._disconnectedNodeCount += 1;
+    }
   }
 
   update(settings) {
@@ -321,15 +351,15 @@ export class SoundSystem {
 
   buildGraph() {
     const ctx = this.ctx;
-    const master = ctx.createGain();
-    const compressor = ctx.createDynamicsCompressor();
-    const musicLevel = ctx.createGain();
-    const tensionLevel = ctx.createGain();
-    const musicDuck = ctx.createGain();
-    const sfxBus = ctx.createGain();
-    const reverbIn = ctx.createGain();
-    const convolver = ctx.createConvolver();
-    const reverbReturn = ctx.createGain();
+    const master = this.createNode('createGain');
+    const compressor = this.createNode('createDynamicsCompressor');
+    const musicLevel = this.createNode('createGain');
+    const tensionLevel = this.createNode('createGain');
+    const musicDuck = this.createNode('createGain');
+    const sfxBus = this.createNode('createGain');
+    const reverbIn = this.createNode('createGain');
+    const convolver = this.createNode('createConvolver');
+    const reverbReturn = this.createNode('createGain');
 
     compressor.threshold.setValueAtTime(-18, ctx.currentTime);
     compressor.knee.setValueAtTime(18, ctx.currentTime);
@@ -440,8 +470,8 @@ export class SoundSystem {
   createThemeBuses(fadeIn) {
     if (!this.ctx || !this.graph) return;
     const now = this.ctx.currentTime;
-    this.themeBus = this.ctx.createGain();
-    this.tensionThemeBus = this.ctx.createGain();
+    this.themeBus = this.createNode('createGain');
+    this.tensionThemeBus = this.createNode('createGain');
     this.themeBus.gain.setValueAtTime(fadeIn ? 0.0001 : 1, now);
     this.tensionThemeBus.gain.setValueAtTime(fadeIn ? 0.0001 : 1, now);
     if (fadeIn) {
@@ -455,11 +485,16 @@ export class SoundSystem {
   fadeThemeBuses() {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    for (const bus of [this.themeBus, this.tensionThemeBus]) {
-      if (!bus) continue;
+    const fadingBuses = [this.themeBus, this.tensionThemeBus].filter(Boolean);
+    for (const bus of fadingBuses) {
       bus.gain.cancelScheduledValues(now);
       bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), now);
       bus.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    }
+    if (fadingBuses.length) {
+      globalThis.setTimeout(() => {
+        for (const bus of fadingBuses) this.disconnectNode(bus);
+      }, 260);
     }
     this.cancelSources(this.musicSources, 0.24);
   }
@@ -553,9 +588,9 @@ export class SoundSystem {
 
   musicNote(freq, time, duration, options) {
     if (!this.ctx || !this.themeBus) return;
-    const oscillator = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
+    const oscillator = this.createNode('createOscillator');
+    const filter = this.createNode('createBiquadFilter');
+    const gain = this.createNode('createGain');
     const attack = Math.max(0.005, Math.min(duration * 0.45, options.attack));
     const end = time + duration;
     oscillator.type = options.wave;
@@ -569,19 +604,19 @@ export class SoundSystem {
     gain.gain.exponentialRampToValueAtTime(0.0001, end);
     oscillator.connect(filter).connect(gain);
     gain.connect(options.tension ? this.tensionThemeBus : this.themeBus);
-    const send = this.ctx.createGain();
+    const send = this.createNode('createGain');
     send.gain.setValueAtTime(options.reverb, time);
     gain.connect(send).connect(this.graph.reverbIn);
-    this.trackSource(oscillator, this.musicSources);
+    this.trackSource(oscillator, this.musicSources, [oscillator, filter, gain, send]);
     oscillator.start(time);
     oscillator.stop(end + 0.02);
   }
 
   musicNoise(time, duration, cutoff) {
     if (!this.ctx || !this.themeBus) return;
-    const source = this.ctx.createBufferSource();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
+    const source = this.createNode('createBufferSource');
+    const filter = this.createNode('createBiquadFilter');
+    const gain = this.createNode('createGain');
     source.buffer = this.getNoiseBuffer('ambience', 2);
     source.loop = true;
     filter.type = 'bandpass';
@@ -593,10 +628,10 @@ export class SoundSystem {
     gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
     source.connect(filter).connect(gain);
     gain.connect(this.themeBus);
-    const send = this.ctx.createGain();
+    const send = this.createNode('createGain');
     send.gain.setValueAtTime(0.48, time);
     gain.connect(send).connect(this.graph.reverbIn);
-    this.trackSource(source, this.musicSources);
+    this.trackSource(source, this.musicSources, [source, filter, gain, send]);
     source.start(time);
     source.stop(time + duration + 0.02);
   }
@@ -611,16 +646,16 @@ export class SoundSystem {
     const start = ctx.currentTime + Math.max(0, options.delay || 0);
     const duration = Math.max(0.025, options.duration || 0.16);
     const end = start + duration;
-    const output = ctx.createGain();
+    const output = this.createNode('createGain');
     output.gain.setValueAtTime(1, start);
     output.connect(this.graph.sfxBus);
-    const send = ctx.createGain();
+    const send = this.createNode('createGain');
     send.gain.setValueAtTime(clamp01(options.reverb, 0.18), start);
     output.connect(send).connect(this.graph.reverbIn);
 
-    const body = ctx.createOscillator();
-    const bodyFilter = ctx.createBiquadFilter();
-    const bodyGain = ctx.createGain();
+    const body = this.createNode('createOscillator');
+    const bodyFilter = this.createNode('createBiquadFilter');
+    const bodyGain = this.createNode('createGain');
     const frequency = Math.max(30, options.freq || 260);
     body.type = options.wave || 'triangle';
     body.frequency.setValueAtTime(frequency, start);
@@ -634,26 +669,26 @@ export class SoundSystem {
     bodyFilter.Q.setValueAtTime(options.q || 1.1, start);
     this.envelope(bodyGain.gain, start, end, options.gain || 0.05, options.attack || 0.008);
     body.connect(bodyFilter).connect(bodyGain).connect(output);
-    this.trackSource(body, this.sfxSources);
+    this.trackSource(body, this.sfxSources, [body, bodyFilter, bodyGain, output, send]);
     body.start(start);
     body.stop(end + 0.02);
 
-    const transient = ctx.createOscillator();
-    const transientGain = ctx.createGain();
+    const transient = this.createNode('createOscillator');
+    const transientGain = this.createNode('createGain');
     const transientEnd = start + Math.min(duration * 0.32, 0.055);
     transient.type = options.transientWave || 'sine';
     transient.frequency.setValueAtTime(Math.max(40, options.transientFreq || frequency * 2.4), start);
     transient.frequency.exponentialRampToValueAtTime(Math.max(35, frequency * 0.8), transientEnd);
     this.envelope(transientGain.gain, start, transientEnd, options.transientGain || 0.018, 0.002);
     transient.connect(transientGain).connect(output);
-    this.trackSource(transient, this.sfxSources);
+    this.trackSource(transient, this.sfxSources, [transient, transientGain, output, send]);
     transient.start(start);
     transient.stop(transientEnd + 0.01);
 
     if ((options.noiseGain ?? 0.018) > 0) {
-      const noise = ctx.createBufferSource();
-      const noiseFilter = ctx.createBiquadFilter();
-      const noiseGain = ctx.createGain();
+      const noise = this.createNode('createBufferSource');
+      const noiseFilter = this.createNode('createBiquadFilter');
+      const noiseGain = this.createNode('createGain');
       const noiseDuration = Math.min(duration, options.noiseDuration || 0.11);
       noise.buffer = this.getNoiseBuffer(options.seed || 'patch', noiseDuration);
       noiseFilter.type = options.noiseType || 'bandpass';
@@ -661,7 +696,7 @@ export class SoundSystem {
       noiseFilter.Q.setValueAtTime(options.noiseQ || 0.8, start);
       this.envelope(noiseGain.gain, start, start + noiseDuration, options.noiseGain ?? 0.018, 0.002);
       noise.connect(noiseFilter).connect(noiseGain).connect(output);
-      this.trackSource(noise, this.sfxSources);
+      this.trackSource(noise, this.sfxSources, [noise, noiseFilter, noiseGain, output, send]);
       noise.start(start);
       noise.stop(start + noiseDuration + 0.01);
     }
@@ -688,9 +723,28 @@ export class SoundSystem {
     return buffer;
   }
 
-  trackSource(source, collection) {
+  trackSource(source, collection, chain = [source]) {
+    const nodes = [...new Set(chain)];
+    for (const node of nodes) this._nodeUsers.set(node, (this._nodeUsers.get(node) || 0) + 1);
     collection.add(source);
-    source.addEventListener?.('ended', () => collection.delete(source), { once: true });
+    let released = false;
+    source.addEventListener?.(
+      'ended',
+      () => {
+        if (released) return;
+        released = true;
+        collection.delete(source);
+        for (const node of nodes) {
+          const users = this._nodeUsers.get(node) || 0;
+          if (users > 1) this._nodeUsers.set(node, users - 1);
+          else {
+            this._nodeUsers.delete(node);
+            this.disconnectNode(node);
+          }
+        }
+      },
+      { once: true }
+    );
   }
 
   cancelSources(collection, delay = 0) {

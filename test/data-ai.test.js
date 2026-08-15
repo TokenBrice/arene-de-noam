@@ -68,12 +68,13 @@ test('six classes classify the full roster without legacy roles or singletons', 
   const classCounts = CLASS_ORDER.map(
     (classId) => CREATURE_IDS.filter((id) => CREATURES[id].classId === classId).length
   );
-  assert.deepEqual([...classCounts].sort((a, b) => a - b), [3, 5, 5, 5, 6, 6]);
+  assert.deepEqual(
+    [...classCounts].sort((a, b) => a - b),
+    [3, 5, 5, 5, 6, 6]
+  );
   assert.ok(classCounts.every((count) => count >= 2));
   assert.deepEqual(
-    AFFINITY_ORDER.map(
-      (affinity) => CREATURE_IDS.filter((id) => CREATURES[id].affinity === affinity).length
-    ),
+    AFFINITY_ORDER.map((affinity) => CREATURE_IDS.filter((id) => CREATURES[id].affinity === affinity).length),
     [5, 5, 5, 5, 5, 5]
   );
   for (const creature of Object.values(CREATURES)) {
@@ -464,7 +465,9 @@ test('Champion AI selects the useful protected-relay target as one complete lega
   const before = structuredClone(state),
     action = chooseAiAction(state, 'enemy', 'champion', 'endurance');
   assert.deepEqual(action, { type: 'move', moveId: 'immaculate_relay', allyIndex: 1 });
-  assert.ok(getLegalActions(before, 'enemy').some((candidate) => JSON.stringify(candidate) === JSON.stringify(action)));
+  assert.ok(
+    getLegalActions(before, 'enemy').some((candidate) => JSON.stringify(candidate) === JSON.stringify(action))
+  );
   assert.deepEqual({ ...state, rngState: before.rngState }, before);
 });
 

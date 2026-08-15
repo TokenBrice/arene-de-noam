@@ -58,7 +58,7 @@
   padding: 3px;
   border: 1px solid color-mix(in srgb, var(--kit-color) 24%, transparent);
   border-radius: 7px;
-  background: linear-gradient(120deg, color-mix(in srgb, var(--kit-color) 9%, transparent), #ffffff04);
+  background: var(--panel);
 }
 .kit-move i {
   display: grid;
@@ -83,7 +83,9 @@
 }
 .kit-move.signature {
   border-color: #ffe17155;
-  background: linear-gradient(120deg, #ffd85818, #ffffff04);
+  background:
+    linear-gradient(120deg, #ffd85818, transparent),
+    var(--panel);
 }
 .kit-move.signature i {
   color: #382500;
@@ -349,15 +351,18 @@
   text-transform: uppercase;
 }
 .bestiary-tools {
+  display: contents;
+}
+.bestiary-search-row {
   position: sticky;
   z-index: 7;
   top: 7px;
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto;
+  grid-template-columns: minmax(210px, 1fr) auto auto;
   align-items: center;
   gap: 10px;
-  margin: 0 0 16px;
-  padding: 9px 11px;
+  min-height: 52px;
+  padding: 3px 11px;
   border: 1px solid #ffffff1a;
   border-radius: 16px;
   background: #0b0e2bea;
@@ -368,10 +373,11 @@
   display: grid;
   grid-template-columns: 24px 1fr;
   align-items: center;
-  padding: 5px 8px;
+  min-height: 44px;
+  padding: 2px 8px;
   border: 1px solid #ffffff1b;
   border-radius: 10px;
-  background: #ffffff08;
+  background: var(--panel);
 }
 .bestiary-tools label > span {
   color: #91eaf5;
@@ -389,18 +395,16 @@
 .bestiary-tools input::placeholder {
   color: #8f91a8;
 }
-.bestiary-tools > div {
-  display: flex;
+.bestiary-tools .bestiary-filter-chips {
+  display: grid;
   gap: 4px;
+  margin: 8px 0 16px;
 }
 .bestiary-tools .bestiary-filter-row {
-  grid-column: 1 / -1;
+  display: flex;
   align-items: center;
+  gap: 4px;
   flex-wrap: wrap;
-}
-.bestiary-tools .bestiary-filter-row button {
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 .bestiary-filter-row > b {
   margin-right: 3px;
@@ -408,9 +412,14 @@
   font-size: var(--text-xs);
   text-transform: uppercase;
 }
+.bestiary-tools .bestiary-filter-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .bestiary-tools button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   min-width: 44px;
   min-height: 44px;
@@ -418,9 +427,12 @@
   border: 1px solid #ffffff15;
   border-radius: 9px;
   color: #b8b9cc;
-  background: #ffffff06;
+  background: var(--panel);
   font-size: var(--text-xs);
   cursor: pointer;
+}
+.bestiary-filter-toggle {
+  color: #91eaf5 !important;
 }
 .bestiary-tools button .affinity-icon {
   width: 16px;
@@ -446,17 +458,48 @@
   font-size: var(--text-xs);
   white-space: nowrap;
 }
-.bestiary-card[hidden] {
+.bestiary-empty {
+  display: grid;
+  grid-column: 1 / -1;
+  place-items: center;
+  gap: 12px;
+  min-height: 150px;
+  padding: 24px;
+  border: 1px dashed #ffffff2b;
+  border-radius: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+.bestiary-empty p {
+  margin: 0;
+}
+.bestiary-empty button {
+  color: var(--ink);
+  background: #ffffff0d;
+}
+.bestiary-card[hidden],
+.bestiary-empty[hidden] {
   display: none !important;
 }
-@media (max-width: 760px) {
-  .bestiary-tools {
-    grid-template-columns: 1fr auto;
+@media (min-width: 761px) {
+  .bestiary-filter-toggle {
+    display: none !important;
   }
-  .bestiary-tools > div {
-    grid-column: 1/-1;
+}
+@media (max-width: 760px) {
+  .bestiary-search-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .bestiary-tools .bestiary-filter-chips {
+    display: none;
     overflow: auto;
     padding-bottom: 2px;
+  }
+  .bestiary-tools.filters-open .bestiary-filter-chips {
+    display: grid;
+  }
+  .bestiary-tools .bestiary-filter-row {
+    flex-wrap: nowrap;
   }
   .bestiary-tools button {
     flex: 0 0 auto;
@@ -661,7 +704,39 @@ body.reduced-motion .battle-vignette {
   transition: none;
 }
 
-/* Selection is split into a scouting stage and a disclosed tactical plan. */
+/* Keep the confirmation action beside the selection count while the tactical
+   plan grows below it. The compact end-of-page action remains for keyboard
+   and reading-order continuity. */
+.selection-aside-ready {
+  position: sticky;
+  z-index: 3;
+  top: max(18px, env(safe-area-inset-top));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: 0 0 var(--space-3);
+  border-bottom: 1px solid #ffffff16;
+  background: linear-gradient(145deg, #1e2152f5, #0a0d28f5);
+}
+.selection-aside-ready > strong {
+  color: var(--ink);
+  font-size: var(--text-md);
+  white-space: nowrap;
+}
+.selection-aside-ready > .primary-btn {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding-inline: 14px;
+}
+/* The end-of-page CTA is the single mobile action; the dock and this CTA
+   already reserve the fixed bottom controls there. */
+@media (max-width: 900px) {
+  .selection-aside-ready {
+    display: none;
+  }
+}
 .selection-primary {
   display: grid;
   gap: var(--space-3);
@@ -694,6 +769,22 @@ body.reduced-motion .battle-vignette {
 .battle-plan > summary b {
   font-size: var(--text-md);
 }
+@media (max-width: 900px) {
+  [data-page='selection'] .shell {
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  }
+  .mobile-selection-dock {
+    min-height: 64px;
+  }
+  .mobile-selection-dock > button {
+    min-height: 44px;
+  }
+}
+@media (min-width: 901px) {
+  .select-aside > .primary-btn.wide[data-action='start-battle'] {
+    display: none;
+  }
+}
 .battle-plan > summary small {
   color: var(--muted);
   font-size: var(--text-xs);
@@ -715,17 +806,6 @@ body.reduced-motion .battle-vignette {
 .select-aside > .primary-btn {
   margin-top: var(--space-4);
   min-height: 48px;
-}
-@media (max-width: 900px) {
-  [data-page='selection'] .shell {
-    padding-bottom: calc(86px + env(safe-area-inset-bottom));
-  }
-  .mobile-selection-dock {
-    min-height: 64px;
-  }
-  .mobile-selection-dock > button {
-    min-height: 44px;
-  }
 }
 @media (max-width: 700px) {
   .battle-plan {

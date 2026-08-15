@@ -135,11 +135,11 @@
 }
 .switch-option > small:last-child {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .switch-passive {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
 }
 .switch-statuses {
   display: flex;
@@ -1211,12 +1211,6 @@
   }
   .trainer-badge .emblem {
     width: 90px;
-  }
-  .feat-hall {
-    grid-template-columns: 1fr;
-  }
-  .feat-gallery {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 @media (max-width: 900px) {

@@ -82,7 +82,7 @@
   gap: 4px;
 }
 .custom-squad-actions button {
-  min-height: 25px;
+  min-height: 44px;
   padding: 3px 7px;
   border: 1px solid #ffffff16;
   border-radius: 7px;
@@ -110,9 +110,12 @@
     grid-template-columns: 1fr;
   }
   .custom-squad-track {
+    position: relative;
     display: flex;
     overflow: auto;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: x proximity;
+    -webkit-mask-image: linear-gradient(to right, #000 0 calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0 calc(100% - 24px), transparent 100%);
   }
   .custom-squad {
     flex: 0 0 min(240px, 78vw);

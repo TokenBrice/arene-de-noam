@@ -22,7 +22,6 @@ const {
   t,
   sprite,
   creatureName,
-  affinity,
   affinityName,
   className,
   affinityIcon,
@@ -136,8 +135,8 @@ function teamPipsHtml(owner) {
     .join('');
 }
 
-function hudHtml(side, expertMode = Boolean(ctx.save.expertMode)) {
-  const state = ctx.battleSession.state,
+function hudHtml(side, expertMode = Boolean(ctx.save.expertMode), viewState = ctx.battleSession?.state) {
+  const state = viewState || ctx.battleSession.state,
     owner = state.sides[side],
     c = activeOf(state, side),
     a = AFFINITIES[c.affinity],
@@ -189,8 +188,8 @@ function hudHtml(side, expertMode = Boolean(ctx.save.expertMode)) {
   return `<button type="button" class="battle-plate-toggle" data-plate-side="${side}" aria-expanded="false" aria-label="${escapeHtml(t('battle.plateOpen', { name: creatureName(c.id) }))}"><span class="plate-line plate-primary"><strong>${creatureName(c.id)}${rank ? ` <i class="battle-rank">${'★'.repeat(rank)}</i>` : ''}</strong><i class="affinity-dot" style="--affinity-color:${a.color}">${affinityIcon(c.affinity)}</i><b class="plate-hp-number">${c.hp}/${c.maxHp}</b><span class="team-dots">${teamPipsHtml(owner)}</span></span><span class="plate-line plate-meters"><span class="hp-track"><i class="hp-fill ${ratio < 0.3 ? 'low' : ''}" style="width:${Math.max(0, ratio * 100)}%"></i>${c.barrier ? `<i class="barrier-fill" style="width:${Math.min(100, (c.barrier / c.maxHp) * 100)}%"></i>` : ''}</span><span class="surge-row ${surge >= cost ? 'ready' : ''}" title="${escapeHtml(`${gaugeLabel} ${surge}/${cost}`)}"><span class="surge-caption">${gaugeLabel}</span><span class="surge-track"><i style="width:${surge}%"></i></span><b class="plate-surge-number">✦ ${surge}/${cost}</b></span><span class="plate-statuses">${visibleStatuses.map((entry) => (entry.id === 'barrier' ? `<i class="plate-status status-barrier" style="--status-color:${entry.color}" title="${escapeHtml(visibleStatusLabel(entry))}">${entry.icon}</i>` : `<i class="plate-status status-${entry.id} ${entry.positive ? 'positive' : 'negative'}${entry.lightInk ? ' light-ink' : ''}" data-status="${entry.id}" data-icon="${entry.iconKey}" data-polarity="${entry.positive ? 'positive' : 'negative'}" style="--status-color:${entry.color}" title="${escapeHtml(visibleStatusLabel(entry))}">${entry.icon}</i>`)).join('')}${overflow ? `<b class="plate-status-more">+${overflow}</b>` : ''}</span></span><span class="plate-state-text">${escapeHtml(stateText)}</span></button>${side === 'enemy' ? enemyIntentHtml() : ''}`;
 }
 
-function hudDetailHtml(side) {
-  const state = ctx.battleSession.state,
+function hudDetailHtml(side, viewState = ctx.battleSession?.state) {
+  const state = viewState || ctx.battleSession.state,
     owner = state.sides[side],
     c = activeOf(state, side),
     passive = PASSIVES[c.passive],
@@ -227,11 +226,17 @@ function hudDetailHtml(side) {
   return `<article class="plate-detail-talent"><span>${passive.icon}</span><div><small>${t('battle.talent')}</small><b>${t(`passive.${c.passive}`)}</b><p>${t(`passive.effect.${c.passive}`)}</p></div></article><div class="plate-detail-statuses">${statusItems.join('') || `<p>${t('battle.noStatuses')}</p>`}</div>${side === 'enemy' ? `<div class="plate-detail-intent">${enemyIntentHtml()}</div>` : ''}`;
 }
 
-function moveButton(moveId, index) {
-  const state = ctx.battleSession.state,
-    owner = state.sides.player,
-    c = activeOf(state, 'player'),
-    enemy = activeOf(state, 'enemy'),
+function moveButton(
+  moveId,
+  index,
+  viewState = ctx.battleSession?.state,
+  legalityState = ctx.battleSession?.state
+) {
+  const state = legalityState || ctx.battleSession.state,
+    view = viewState || state,
+    owner = view.sides.player,
+    c = activeOf(view, 'player'),
+    enemy = activeOf(view, 'enemy'),
     move = MOVES[moveId],
     a = AFFINITIES[move.affinity],
     cd = c.cooldowns[moveId]?.remaining || 0,
@@ -269,11 +274,15 @@ function moveButton(moveId, index) {
     ),
     cost = signatureCostFor(c),
     signatureLabel = move.signature
-      ? state.sides.player.surge >= cost
+      ? owner.surge >= cost
         ? t('battle.signatureReady')
-        : t('battle.signatureCost', { cost: cost - state.sides.player.surge })
+        : t('battle.signatureCost', { cost: cost - owner.surge })
       : '';
-  const preview = previewMove(state, 'player', moveId);
+  const preview = previewMove(state, 'player', moveId),
+    shortPreview =
+      move.power && preview
+        ? `<span class="simple-preview">${t('battle.previewShort', { damage: preview.damage })}</span>`
+        : '';
   const archetype = moveArchetype(move);
   const dominant = preview?.damage
       ? `<b>⚔ ${preview.damage}</b>`
@@ -303,7 +312,7 @@ function moveButton(moveId, index) {
       : '',
     cooldownState = cd ? `<span class="move-badge simple-cooldown">⌛ ${cd}</span>` : '',
     comboState = preview?.combo ? `<span class="combo-ready move-combo-badge">COMBO +40%</span>` : '';
-  return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${signatureState}${cooldownState}${comboState}</span></button>`;
+  return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${shortPreview}${signatureState}${cooldownState}${comboState}</span></button>`;
 }
 
 function exchangeForecastHtml(moveId, enemyAction) {

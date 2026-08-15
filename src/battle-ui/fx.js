@@ -4,7 +4,6 @@ const {
   AFFINITIES,
   CREATURES,
   MOVES,
-  quickRule,
   activeOf,
   STATUS_DEFINITIONS,
   statusIcon,
@@ -14,7 +13,6 @@ const {
   sound,
   sprite,
   creatureName,
-  affinity,
   affinityIcon,
   wait,
 } = ctx;
@@ -28,22 +26,139 @@ function sessionIsActive(session) {
   );
 }
 
+let lastAppliedSpeed = null;
+const beginFxTemplateCache = new Map(),
+  radialFxTemplateCache = new Map();
+let coarseRetinaParticleScale = null;
+
+function particleBudget(count) {
+  if (coarseRetinaParticleScale === null) {
+    coarseRetinaParticleScale =
+      typeof window !== 'undefined' &&
+      window.devicePixelRatio >= 2 &&
+      window.matchMedia?.('(pointer: coarse)').matches
+        ? 0.5
+        : 1;
+  }
+  return Math.max(1, Math.ceil(count * coarseRetinaParticleScale));
+}
+
+function radialParticles(count, cacheKey, distanceModulo, delayModulo, delayUnit = 24) {
+  const key = `${cacheKey}:${count}:${distanceModulo}:${delayModulo}:${delayUnit}`,
+    cached = radialFxTemplateCache.get(key);
+  if (cached) return cached;
+  const particles = Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2,
+      distance = 45 + (i % distanceModulo) * 12;
+    return `<i class="fx-particle" style="--dx:${Math.cos(angle) * distance}px;--dy:${Math.sin(angle) * distance}px;--delay:${(i % delayModulo) * delayUnit}ms"></i>`;
+  }).join('');
+  radialFxTemplateCache.set(key, particles);
+  return particles;
+}
+
+function beginFxTemplate(archetype, particleCount, detailCount, echoCount) {
+  const key = `${archetype}:${particleCount}:${detailCount}:${echoCount}`,
+    cached = beginFxTemplateCache.get(key);
+  if (cached) return cached;
+  const particles = Array.from({ length: particleCount }, (_, i) => {
+      const angle = (i / particleCount) * Math.PI * 2,
+        distance = 55 + ((i * 37) % 145);
+      return `<i class="fx-particle" style="--particle:${i};--dx:${Math.cos(angle) * distance}px;--dy:${Math.sin(angle) * distance}px;--delay:${(i % 9) * 16}ms;--spin:${i % 2 ? 1 : -1}"></i>`;
+    }).join(''),
+    echoes = Array.from(
+      { length: echoCount },
+      (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 58}ms"></i>`
+    ).join(''),
+    detail = Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join(''),
+    archExtras =
+      archetype === 'slash'
+        ? `<div class="fx-arch fx-slashes">${Array.from({ length: 3 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>`
+        : archetype === 'eruption'
+          ? `<div class="fx-arch fx-pillars">${Array.from({ length: 5 }, (_, i) => `<i style="--i:${i};--ox:${(i - 2) * 34 + (i % 2 ? 9 : -7)}px"></i>`).join('')}</div>`
+          : archetype === 'storm'
+            ? `<div class="fx-arch fx-drops">${Array.from({ length: 9 }, (_, i) => `<i style="--i:${i};--ox:${((i * 53) % 130) - 65}px"></i>`).join('')}</div>`
+            : '';
+  const template = { particles, echoes, detail, archExtras };
+  beginFxTemplateCache.set(key, template);
+  return template;
+}
+
+function tacticalFxTemplate(particleCount) {
+  const key = `tactical:${particleCount}`,
+    cached = radialFxTemplateCache.get(key);
+  if (cached) return cached;
+  const template = {
+    rings: Array.from(
+      { length: 4 },
+      (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 85}ms"></i>`
+    ).join(''),
+    detail: Array.from({ length: 6 }, (_, i) => `<i style="--detail:${i}"></i>`).join(''),
+    particles: radialParticles(particleCount, 'tactical', 5, 6, 30),
+  };
+  radialFxTemplateCache.set(key, template);
+  return template;
+}
+
 function syncBattleAnimationSpeed() {
+  const speed = ctx.save.battleSpeed;
+  if (speed === 1 && lastAppliedSpeed === 1) return;
   queueMicrotask(() => {
-    if (!screen.classList.contains('battle-screen')) return;
-    for (const animation of screen.getAnimations({ subtree: true }))
-      animation.updatePlaybackRate(ctx.save.battleSpeed);
+    const apply = () => {
+      if (!screen.classList.contains('battle-screen')) return;
+      const currentSpeed = ctx.save.battleSpeed;
+      if (currentSpeed === 1 && lastAppliedSpeed === 1) return;
+      for (const animation of screen.getAnimations({ subtree: true })) {
+        animation.updatePlaybackRate(currentSpeed);
+        animation.playbackRate = currentSpeed;
+      }
+      lastAppliedSpeed = currentSpeed;
+    };
+    apply();
+    if (ctx.save.battleSpeed !== 1) requestAnimationFrame(apply);
   });
+}
+
+const theaterFxTimers = new Set();
+
+function fxTimerRegistry() {
+  return ctx.battleSession?.fxTimers || theaterFxTimers;
+}
+
+function scheduleFxTimer(callback, delay) {
+  const timers = fxTimerRegistry();
+  let timer;
+  timer = setTimeout(() => {
+    timers.delete(timer);
+    callback();
+  }, delay);
+  timers.add(timer);
+  return timer;
+}
+
+function clearFxTimers() {
+  const timers = ctx.battleSession?.fxTimers || theaterFxTimers;
+  timers.forEach(clearTimeout);
+  timers.clear();
 }
 
 function beginMoveFx(event) {
   const move = MOVES[event.moveId],
     a = AFFINITIES[move.affinity],
-    stage = screen.querySelector('#fx-stage');
+    source = event.side,
+    target = source === 'player' ? 'enemy' : 'player';
+  ctx.currentFxMove = {
+    moveId: event.moveId,
+    creatureId: event.creatureId,
+    affinity: move.affinity,
+    source,
+    target,
+    strong: Boolean(move.signature) || move.power >= 46,
+    kind: move.kind,
+  };
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
-  const source = event.side,
-    target = source === 'player' ? 'enemy' : 'player',
-    strong = Boolean(move.signature) || move.power >= 46,
+  const strong = ctx.currentFxMove.strong,
     cameraGrammar = move.signature
       ? 'ultimate'
       : move.kind !== 'damage'
@@ -53,15 +168,6 @@ function beginMoveFx(event) {
           : move.power >= 42
             ? 'heavy'
             : 'strike';
-  ctx.currentFxMove = {
-    moveId: event.moveId,
-    creatureId: event.creatureId,
-    affinity: move.affinity,
-    source,
-    target,
-    strong,
-    kind: move.kind,
-  };
   // Stakes scaling (plan §4.2): a cornered attacker (low HP or last creature
   // standing) gets a bigger show — more particles, hotter vignette, and the
   // camera grammar bumps one tier.
@@ -81,30 +187,20 @@ function beginMoveFx(event) {
   stage.style.setProperty('--from-y', source === 'player' ? '68%' : '30%');
   stage.style.setProperty('--to-x', target === 'enemy' ? '77%' : '23%');
   stage.style.setProperty('--to-y', target === 'enemy' ? '30%' : '68%');
-  const particleCount = strong ? (cornered ? 52 : 42) : cornered ? 34 : 24,
-    detailCount = strong ? 12 : 8;
-  const particles = Array.from({ length: particleCount }, (_, i) => {
-    const angle = (i / particleCount) * Math.PI * 2,
-      distance = 55 + ((i * 37) % 145);
-    return `<i class="fx-particle" style="--particle:${i};--dx:${Math.cos(angle) * distance}px;--dy:${Math.sin(angle) * distance}px;--delay:${(i % 9) * 16}ms;--spin:${i % 2 ? 1 : -1}"></i>`;
-  }).join('');
-  const echoes = Array.from(
-    { length: strong ? 6 : 3 },
-    (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 58}ms"></i>`
-  ).join('');
+  const particleCount = particleBudget(strong ? (cornered ? 52 : 42) : cornered ? 34 : 24),
+    detailCount = strong ? 12 : 8,
+    archetype = move.archetype || move.visual || 'default',
+    template = beginFxTemplate(archetype, particleCount, detailCount, strong ? 6 : 3);
   // Archetype-specific extra bodies: slashes/eruption pillars/storm drops sync
-  // to the .impact class; the charge ghost replaces the projectile outright.
-  const archExtras =
-    move.archetype === 'slash'
-      ? `<div class="fx-arch fx-slashes">${Array.from({ length: 3 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>`
-      : move.archetype === 'eruption'
-        ? `<div class="fx-arch fx-pillars">${Array.from({ length: 5 }, (_, i) => `<i style="--i:${i};--ox:${(i - 2) * 34 + (i % 2 ? 9 : -7)}px"></i>`).join('')}</div>`
-        : move.archetype === 'storm'
-          ? `<div class="fx-arch fx-drops">${Array.from({ length: 9 }, (_, i) => `<i style="--i:${i};--ox:${((i * 53) % 130) - 65}px"></i>`).join('')}</div>`
-          : move.archetype === 'charge'
-            ? `<img class="fx-dash-ghost" src="${sprite(event.creatureId)}" alt="">`
-            : '';
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${echoes}</div><div class="fx-trail"></div><div class="fx-detail">${Array.from({ length: detailCount }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${echoes}</div><div class="fx-aftershock"></div>${archExtras}`;
+  // to the .impact class; the charge ghost is the only per-event template part.
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-sky-symbol"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-source-aura">${template.echoes}</div><div class="fx-trail"></div><div class="fx-detail">${template.detail}</div><div class="fx-projectile"><b>${affinityIcon(move.affinity)}</b><span></span></div><div class="fx-impact">${template.particles}<i class="fx-core">${affinityIcon(move.affinity)}</i>${template.echoes}</div><div class="fx-aftershock"></div>${template.archExtras}`;
+  if (archetype === 'charge') {
+    const ghost = document.createElement('img');
+    ghost.className = 'fx-dash-ghost';
+    ghost.src = sprite(event.creatureId);
+    ghost.alt = '';
+    stage.append(ghost);
+  }
   screen.classList.add(
     'cinematic',
     `cinematic-${move.affinity}`,
@@ -120,6 +216,7 @@ function beginMoveFx(event) {
 }
 
 function impactMoveFx(event) {
+  if (testAnimationScale === 0) return;
   const session = ctx.battleSession;
   const stage = screen.querySelector('#fx-stage'),
     fx = ctx.currentFxMove;
@@ -161,15 +258,16 @@ function impactMoveFx(event) {
   ctx.arenaScene?.flash(fx.strong ? 'power' : 'hit', color, event.side);
   ctx.arenaScene?.punch(event.side, fx.strong ? 1.55 : (event.hits || 1) > 1 ? 0.8 : 1);
   screen.classList.add('hit-stop');
-  setTimeout(
+  scheduleFxTimer(
     () => {
-      if (sessionIsActive(session)) screen.classList.remove('hit-stop');
+      screen.classList.remove('hit-stop');
     },
     ctx.save.reducedMotion ? 20 : 72 / ctx.save.battleSpeed
   );
 }
 
 function effectivenessCalloutFx(event) {
+  if (testAnimationScale === 0) return;
   if (!event.affinity || event.affinity === 1) return;
   const stage = screen.querySelector('#fx-stage'),
     impact = stage?.querySelector('.fx-impact');
@@ -185,6 +283,7 @@ function effectivenessCalloutFx(event) {
 }
 
 function tacticalFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const side = event.side,
@@ -209,23 +308,19 @@ function tacticalFx(event) {
   stage.style.setProperty('--fx-color', color);
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
   stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');
-  stage.innerHTML = `<div class="fx-source-aura">${Array.from({ length: 4 }, (_, i) => `<i class="fx-ring" style="--ring:${i};--delay:${i * 85}ms"></i>`).join('')}</div><div class="fx-detail">${Array.from({ length: 6 }, (_, i) => `<i style="--detail:${i}"></i>`).join('')}</div><div class="fx-impact">${Array.from(
-    { length: 18 },
-    (_, i) => {
-      const angle = (i / 18) * Math.PI * 2,
-        d = 45 + (i % 5) * 13;
-      return `<i class="fx-particle" style="--dx:${Math.cos(angle) * d}px;--dy:${Math.sin(angle) * d}px;--delay:${(i % 6) * 30}ms"></i>`;
-    }
-  ).join(
-    ''
-  )}<i class="fx-core ${numeric ? 'tactical-number' : ''}${meta?.lightInk ? ' light-ink' : ''}">${coreText}</i></div>`;
+  const tacticalTemplate = tacticalFxTemplate(particleBudget(18));
+  stage.innerHTML = `<div class="fx-source-aura">${tacticalTemplate.rings}</div><div class="fx-detail">${tacticalTemplate.detail}</div><div class="fx-impact">${tacticalTemplate.particles}<i class="fx-core ${numeric ? 'tactical-number' : ''}${meta?.lightInk ? ' light-ink' : ''}">${coreText}</i></div>`;
   ctx.arenaScene?.burst(color, side, event.type === 'heal' ? 1.2 : 0.8);
 }
 
 function comboCreditFx(event) {
+  const creature = CREATURES[event.creatureId];
+  sound.call(event.creatureId);
+  sound.comboCredit(creature.affinity);
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
-  const a = AFFINITIES[CREATURES[event.creatureId].affinity],
+  const a = AFFINITIES[creature.affinity],
     call = document.createElement('div');
   call.className = `combo-credit-call ${event.side}`;
   call.style.setProperty('--combo-credit-color', a.color);
@@ -233,14 +328,14 @@ function comboCreditFx(event) {
   stage.append(call);
   screen.classList.add('combo-credit-mode');
   ctx.arenaScene?.burst(a.color, event.side, 1);
-  sound.call(event.creatureId);
-  sound.comboCredit(CREATURES[event.creatureId].affinity);
 }
-
 function perfectRelayFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId],
+  const creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
+  sound.guard();
+  sound.ui();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   stage.className = `fx-stage active perfect-relay-fx from-${event.side}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -250,15 +345,17 @@ function perfectRelayFx(event) {
   screen.classList.add('perfect-relay-mode', `relay-${event.side}`);
   ctx.arenaScene?.flash('hit', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.2);
-  sound.guard();
-  sound.ui();
 }
 
 function relayRushFx(event) {
-  const session = ctx.battleSession;
-  const stage = screen.querySelector('#fx-stage'),
+  const session = ctx.battleSession,
     creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null;
-  if (!stage || !creature) return;
+  if (!creature) return;
+  sound.comboCredit(creature.affinity);
+  sound.ui();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   const a = AFFINITIES[creature.affinity];
   stage.className = `fx-stage active relay-rush-fx from-${event.side}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -269,28 +366,28 @@ function relayRushFx(event) {
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.5);
   ctx.arenaScene?.punch(event.side, 1.15);
-  sound.comboCredit(creature.affinity);
-  sound.ui();
 }
-
 function immaculateRelayFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId];
-  if (!stage || !creature) return;
+  const creature = CREATURES[event.creatureId];
+  if (!creature) return;
   const color = AFFINITIES[creature.affinity].color;
+  sound.guard();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   stage.className = `fx-stage active immaculate-relay-fx from-${event.side}`;
   stage.style.setProperty('--fx-color', color);
   stage.innerHTML = `<div class="immaculate-gate"></div><div class="immaculate-feathers">${Array.from({ length: 7 }, (_, index) => `<i style="--feather:${index}"></i>`).join('')}</div><div class="immaculate-call"><img src="${sprite(event.creatureId)}" alt=""><span><small>${t('move.immaculate_relay')}</small><b>${creatureName(event.creatureId)}</b></span></div>`;
   screen.classList.add('immaculate-relay-mode', `relay-${event.side}`);
   ctx.arenaScene?.flash('power', color, event.side);
   ctx.arenaScene?.burst(color, event.side, 1.4);
-  sound.guard();
 }
-
 function trainerCommandFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId],
+  const creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
+  sound.clash();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   stage.className = `fx-stage active trainer-command-fx command-${event.command}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -298,15 +395,18 @@ function trainerCommandFx(event) {
   screen.classList.add('command-mode');
   ctx.arenaScene?.flash('power', a.color, 'player');
   ctx.arenaScene?.burst(a.color, 'player', 1.25);
-  sound.clash();
 }
 
 function signatureReadyFx(event) {
-  const session = ctx.battleSession;
-  const stage = screen.querySelector('#fx-stage'),
+  const session = ctx.battleSession,
     creature = sessionIsActive(session) ? activeOf(session.state, event.side) : null,
     signature = creature?.moves.find((id) => MOVES[id].signature);
-  if (!stage || !creature || !signature) return;
+  if (!creature || !signature) return;
+  sound.call(creature.id);
+  sound.ui();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   stage.classList.add('active');
   stage.querySelector('.signature-ready-call')?.remove();
   const a = AFFINITIES[creature.affinity],
@@ -317,20 +417,19 @@ function signatureReadyFx(event) {
   stage.append(call);
   ctx.arenaScene?.flash('power', a.color, event.side);
   ctx.arenaScene?.burst(a.color, event.side, 1.15);
-  sound.call(creature.id);
-  sound.ui();
-  setTimeout(
+  scheduleFxTimer(
     () => {
-      if (sessionIsActive(session)) call.remove();
+      call.remove();
     },
     (ctx.save.reducedMotion ? 180 : 900) / ctx.save.battleSpeed
   );
 }
-
 function aceFx(event) {
-  const stage = screen.querySelector('#fx-stage'),
-    creature = CREATURES[event.creatureId],
+  const creature = CREATURES[event.creatureId],
     a = AFFINITIES[creature.affinity];
+  sound.clash();
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   stage.className = `fx-stage active ace-phase ace-${event.ace}`;
   stage.style.setProperty('--fx-color', a.color);
@@ -339,10 +438,10 @@ function aceFx(event) {
   ctx.arenaScene?.flash('power', a.color, 'enemy');
   ctx.arenaScene?.burst(a.color, 'enemy', 1.7);
   ctx.arenaScene?.punch('enemy', 1.3);
-  sound.clash();
 }
 
 function statusTickFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const meta = STATUS_DEFINITIONS[event.status],
@@ -351,20 +450,14 @@ function statusTickFx(event) {
   stage.style.setProperty('--fx-color', meta?.color || '#fff');
   stage.style.setProperty('--from-x', side === 'player' ? '23%' : '77%');
   stage.style.setProperty('--from-y', side === 'player' ? '68%' : '30%');
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-impact">${Array.from(
-    { length: 24 },
-    (_, i) => {
-      const a = (i / 24) * Math.PI * 2,
-        d = 45 + (i % 7) * 12;
-      return `<i class="fx-particle" style="--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--delay:${(i % 6) * 24}ms"></i>`;
-    }
-  ).join(
-    ''
-  )}<i class="status-tick-icon${meta?.lightInk ? ' light-ink' : ''}">${meta ? statusIcon(event.status) : ''}</i><i class="fx-core damage-number">−${event.amount}</i></div>`;
+  const particles = radialParticles(particleBudget(24), `status:${event.status}`, 7, 6);
+  stage.innerHTML = `<div class="fx-curtain"></div><div class="fx-impact">${particles}<i class="status-tick-icon${meta?.lightInk ? ' light-ink' : ''}">${meta ? statusIcon(event.status) : ''}</i><i class="fx-core damage-number">−${event.amount}</i></div>`;
   ctx.arenaScene?.burst(meta?.color || '#fff', side, 0.8);
 }
 
 function arenaPulseFx(event) {
+  sound.guard();
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   const icons = { crystal: '◇', grove: '❧', tidal: '≋', volcano: '♨', astral: '✦', eclipse: '☾' },
@@ -377,8 +470,6 @@ function arenaPulseFx(event) {
       eclipse: '#e37aff',
     },
     color = colors[event.arena] || '#fff',
-    // Volcano burns and eclipse marks: those pulses hurt, so they read hostile
-    // (jagged, hot) instead of benevolent. Others help both sides.
     hostile = event.arena === 'volcano' || event.arena === 'eclipse';
   stage.className = `fx-stage active arena-pulse-fx arena-pulse-${event.arena} ${hostile ? 'pulse-hostile' : 'pulse-kind'}`;
   stage.style.setProperty('--fx-color', color);
@@ -387,12 +478,11 @@ function arenaPulseFx(event) {
   ctx.arenaScene?.flash('power', color, 'enemy');
   ctx.arenaScene?.burst(color, 'player', 1.4);
   ctx.arenaScene?.burst(color, 'enemy', 1.4);
-  sound.guard();
 }
 
 function missWhiffFx(event) {
-  const session = ctx.battleSession,
-    stage = screen.querySelector('#fx-stage');
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
   if (!stage) return;
   // The attack sailed past: the projectile keeps flying beyond the dodger and
   // dissolves, and a callout pops where the hit would have landed. The callout
@@ -405,15 +495,13 @@ function missWhiffFx(event) {
   call.className = `whiff-callout side-${event.side}`;
   call.textContent = t('battle.missCallout');
   layer.append(call);
-  setTimeout(() => {
-    if (sessionIsActive(session)) call.remove();
-  }, 900 / ctx.save.battleSpeed);
+  scheduleFxTimer(() => call.remove(), 900 / ctx.save.battleSpeed);
 }
 
 function barrierShatterFx(event) {
-  const session = ctx.battleSession,
-    stage = screen.querySelector('#fx-stage');
-  if (!stage || testAnimationScale === 0) return;
+  if (testAnimationScale === 0) return;
+  const stage = screen.querySelector('#fx-stage');
+  if (!stage) return;
   // Same parent-layer trick as the whiff callout: the shards must outlive the
   // stage rebuild that the barrier-broken follow-up events trigger.
   const shards = document.createElement('div');
@@ -425,9 +513,7 @@ function barrierShatterFx(event) {
     return `<i class="shatter-hex" style="--i:${i};--dx:${Math.cos(angle) * (58 + (i % 3) * 26)}px;--dy:${Math.sin(angle) * (44 + (i % 3) * 22) - 26}px;--spin:${i % 2 ? 1 : -1}"></i>`;
   }).join('')}`;
   stage.parentElement.append(shards);
-  setTimeout(() => {
-    if (sessionIsActive(session)) shards.remove();
-  }, 900 / ctx.save.battleSpeed);
+  scheduleFxTimer(() => shards.remove(), 900 / ctx.save.battleSpeed);
 }
 
 async function signatureClashIntro(events) {
@@ -449,12 +535,13 @@ async function signatureClashIntro(events) {
   syncBattleAnimationSpeed();
   await wait((ctx.save.reducedMotion ? 260 : 1050) / ctx.save.battleSpeed);
   if (!sessionIsActive(session)) return;
-  clearBattleFx();
+  clearBattleFx({ preservePresentation: true });
 }
 
 function faintFx(event) {
+  if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
-  if (!stage || testAnimationScale === 0) return;
+  if (!stage) return;
   const creature = CREATURES[event.creatureId],
     color = creature ? AFFINITIES[creature.affinity].color : '#cfd6ff',
     wisps = document.createElement('div');
@@ -468,7 +555,7 @@ function faintFx(event) {
   ).join('');
   stage.classList.add('active');
   stage.append(wisps);
-  setTimeout(() => wisps.remove(), 1500 / ctx.save.battleSpeed);
+  scheduleFxTimer(() => wisps.remove(), 1500 / ctx.save.battleSpeed);
 }
 
 function switchOutFx(event) {
@@ -487,7 +574,7 @@ function switchOutFx(event) {
   beam.style.setProperty('--fx-color', color);
   fighter.classList.add('switch-awaiting');
   fighter.append(ghost, beam);
-  setTimeout(() => {
+  scheduleFxTimer(() => {
     ghost.remove();
     beam.remove();
   }, 640 / ctx.save.battleSpeed);
@@ -497,12 +584,11 @@ function switchInFx(event) {
   const fighter = screen.querySelector(`#fighter-${event.side}`),
     creature = CREATURES[event.creatureId];
   if (!fighter || !creature || fighter.classList.contains('fainted')) return;
-  fighter.classList.remove('switch-awaiting');
-  if (testAnimationScale !== 0) {
-    fighter.classList.add('entering');
-    ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
-  }
   sound.call(event.creatureId);
+  if (testAnimationScale === 0) return;
+  fighter.classList.remove('switch-awaiting');
+  fighter.classList.add('entering');
+  ctx.arenaScene?.burst(AFFINITIES[creature.affinity].color, event.side, 0.9);
 }
 
 async function battleOutroFx(state) {
@@ -520,7 +606,7 @@ async function battleOutroFx(state) {
     if (!reduced) {
       sound.call(champion.id);
       ctx.arenaScene?.burst(color, winner, 1.35);
-      setTimeout(() => {
+      scheduleFxTimer(() => {
         if (sessionIsActive(session)) ctx.arenaScene?.burst('#fff6d8', winner, 0.85);
       }, 240 / speed);
     }
@@ -535,7 +621,9 @@ async function battleOutroFx(state) {
   await wait((reduced ? 150 : 420) / speed);
 }
 
-function clearBattleFx() {
+function clearBattleFx({ preservePresentation = false } = {}) {
+  clearFxTimers();
+  if (!preservePresentation && ctx.battleSession) ctx.battleSession.displayState = null;
   const stage = screen.querySelector('#fx-stage');
   if (stage) {
     stage.className = 'fx-stage';
@@ -592,7 +680,9 @@ function clearBattleFx() {
     );
     fighter.style.removeProperty('--attack-affinity-color');
   });
-  screen.querySelectorAll('.switch-ghost, .switch-beam').forEach((node) => node.remove());
+  screen
+    .querySelectorAll('.switch-ghost, .switch-beam, .whiff-callout, .barrier-shatter')
+    .forEach((node) => node.remove());
   screen.querySelector('#action-line')?.classList.remove('epic');
   ctx.currentFxMove = null;
 }

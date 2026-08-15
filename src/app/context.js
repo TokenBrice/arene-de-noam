@@ -48,7 +48,7 @@ import {
   statusIcon,
 } from '../battle/statuses.js';
 import { createI18n, validateDictionaries } from '../i18n.js';
-import { DEFAULT_SAVE, SAVE_KEY, loadSave, persistSave } from '../save.js';
+import { DEFAULT_SAVE, SAVE_KEY, freshDefaultSave, loadSave, persistSave } from '../save.js';
 import { ArenaScene } from '../presentation/arena.js';
 import { SoundSystem } from '../sound.js';
 
@@ -67,6 +67,7 @@ const toast = document.querySelector('#toast');
 const LADDER_COUNT = TRAINERS.length;
 const LOG_EVENT_TYPES = new Set([
   'move-start',
+  'move-skip',
   'trainer-command',
   'perfect-relay',
   'damage',
@@ -84,6 +85,7 @@ const LOG_EVENT_TYPES = new Set([
   'switch',
   'replace',
   'ko',
+  'battle-end',
 ]);
 const LOG_TYPE_GROUPS = {
   'move-start': 'move',
@@ -115,6 +117,7 @@ export const ctx = {
   arenaScene: null,
   battleStylesReady: null,
   toastTimer: null,
+  saveFailureNotified: false,
   locked: false,
   currentFxMove: null,
   pendingRewards: null,
@@ -149,10 +152,22 @@ document.addEventListener('visibilitychange', () => sound.handleVisibility(docum
 
 function persist() {
   ctx.save.language = i18n.lang;
-  persistSave(ctx.save);
+  const ok = persistSave(ctx.save);
+  if (!ok && !ctx.saveFailureNotified) {
+    ctx.saveFailureNotified = true;
+    notify(t('app.saveFailed'));
+  }
   sound.update(ctx.save);
-  document.body.classList.toggle('reduced-motion', ctx.save.reducedMotion);
-  document.body.classList.toggle('high-contrast', ctx.save.highContrast);
+  syncPreferenceClasses();
+  return ok;
+}
+
+function syncPreferenceClasses() {
+  const { reducedMotion, highContrast } = ctx.save;
+  document.documentElement.classList.toggle('reduced-motion', reducedMotion);
+  document.documentElement.classList.toggle('high-contrast', highContrast);
+  document.body.classList.toggle('reduced-motion', reducedMotion);
+  document.body.classList.toggle('high-contrast', highContrast);
 }
 
 function escapeHtml(value) {
@@ -173,10 +188,10 @@ function affinityIcon(id, { title = '', className = '' } = {}) {
   return `<svg class="affinity-icon${className ? ` ${escapeHtml(className)}` : ''}" viewBox="0 0 24 24" focusable="false" ${accessible ? `role="img" aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"'}>${titleMarkup}<path d="${meta.iconPath}" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"/>${strokeMarkup}</svg>`;
 }
 
-/* Battle-only stylesheets ship as <link rel="preload"> in index.html and are
-   promoted to real stylesheets on first use (battle entry or move theater).
-   Each sheet is inserted before the first always-loaded sheet that originally
-   followed it, so the cascade order is byte-identical to eager loading. */
+/* Battle-only stylesheets are promoted to real stylesheets before the first
+   battle or move theater is shown. Each sheet is inserted before the first
+   always-loaded sheet that originally followed it, so the cascade order stays
+   byte-identical to eager loading. */
 const BATTLE_STYLESHEETS = [
   ['./styles/screens/battle-fx.css', 'screens/progression'],
   ['./styles/screens/battle-presentation.css', 'screens/draft'],
@@ -328,6 +343,7 @@ Object.assign(ctx, {
   statusBadgeHtml,
   statusIcon,
   DEFAULT_SAVE,
+  freshDefaultSave,
   SAVE_KEY,
   persistSave,
   ArenaScene,
@@ -378,6 +394,5 @@ export function registerRoutes(routes) {
   Object.assign(ctx.routes, routes);
 }
 
-document.body.classList.toggle('reduced-motion', ctx.save.reducedMotion);
-document.body.classList.toggle('high-contrast', ctx.save.highContrast);
+syncPreferenceClasses();
 persistSave(ctx.save);

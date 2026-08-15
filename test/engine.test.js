@@ -550,6 +550,7 @@ test('multi-hit, barriers, drains, recoil, and damage-over-time emit semantic ev
     (event) => event.type === 'status-tick' && event.side === 'player' && event.status === 'burning'
   );
   assert.equal(burnTick.amount, Math.round(state.sides.player.team[0].maxHp * 0.1));
+  assert.equal(burnTick.remaining, 1, 'status ticks expose the resulting remaining turns');
   assert.ok(result.state.sides.player.team[0].hp <= hpBeforeBurn - burnTick.amount);
 
   const capped = createBattle({
@@ -755,10 +756,7 @@ test('Burning powers Venom Harvest through the single Combo rule', () => {
   assert.ok(
     result.events.some(
       (event) =>
-        event.type === 'status' &&
-        event.status === 'burning' &&
-        event.consumed &&
-        event.source === 'combo'
+        event.type === 'status' && event.status === 'burning' && event.consumed && event.source === 'combo'
     )
   );
   assert.equal(result.events.filter((event) => event.type === 'damage' && event.combo).length, 1);
@@ -808,7 +806,10 @@ test('a teammate Combo credits its helper once and grants no assist Surge', () =
   assert.ok(hits.slice(1).every((hit) => hit.combo === null));
   assert.equal(result.state.sides.enemy.team[0].statuses.marked, undefined);
   assert.equal(result.events.filter((event) => event.type === 'assist').length, 1);
-  assert.equal(result.events.filter((event) => event.type === 'surge' && event.source === 'assist').length, 0);
+  assert.equal(
+    result.events.filter((event) => event.type === 'surge' && event.source === 'assist').length,
+    0
+  );
 });
 
 test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consume it', () => {
@@ -858,7 +859,10 @@ test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consum
     { type: 'move', moveId: 'shade_spark' }
   );
   assert.ok(missResult.state.sides.enemy.team[0].statuses.marked);
-  assert.equal(missResult.events.some((event) => event.type === 'damage' && event.combo), false);
+  assert.equal(
+    missResult.events.some((event) => event.type === 'damage' && event.combo),
+    false
+  );
 });
 
 test('damage previews are exact, barrier-aware, immutable, and honest about guaranteed survival', () => {
@@ -956,6 +960,45 @@ test('support control, evasion, counters, roots, and team healing alter legal pl
     'team healing reaches conscious allies'
   );
 });
+test('Night Terror extends Midnight Lullaby stun in the support path', () => {
+  const state = createBattle({
+    playerTeam: ['nocturnyx', 'orakyn'],
+    enemyTeam: ['kordane', 'calderoc'],
+    seed: 74,
+  });
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'midnight_lullaby' },
+    { type: 'move', moveId: 'crystal_strike' }
+  );
+  assert.equal(result.state.sides.enemy.team[0].statuses.stunned?.remaining, 3);
+});
+test('Shell Bastion cleanses one caster penalty and one per living teammate', () => {
+  const state = createBattle({
+    playerTeam: ['abyssar', 'orakyn', 'virelia'],
+    enemyTeam: ['kordane', 'calderoc'],
+    seed: 75,
+  });
+  state.sides.player.surge = 100;
+  const [caster, firstAlly, secondAlly] = state.sides.player.team;
+  caster.statuses.marked = { appliedTurn: state.turn };
+  caster.statuses.rooted = { appliedTurn: state.turn };
+  caster.statuses.burning = { appliedTurn: state.turn, stacks: 1 };
+  firstAlly.statuses.marked = { appliedTurn: state.turn };
+  firstAlly.statuses.rooted = { appliedTurn: state.turn };
+  secondAlly.statuses.marked = { appliedTurn: state.turn };
+  secondAlly.statuses.rooted = { appliedTurn: state.turn };
+  const result = resolveTurn(
+    state,
+    { type: 'move', moveId: 'shell_bastion' },
+    { type: 'move', moveId: 'crystal_strike' }
+  );
+  const penaltyCount = (creature) =>
+    ['marked', 'stunned', 'rooted', 'burning'].filter((id) => creature.statuses[id]).length;
+  assert.equal(penaltyCount(result.state.sides.player.team[0]), 2);
+  assert.equal(penaltyCount(result.state.sides.player.team[1]), 1);
+  assert.equal(penaltyCount(result.state.sides.player.team[2]), 1);
+});
 
 test('defensive Signatures spend Surge on distinct team-saving effects', () => {
   const state = createBattle({
@@ -966,6 +1009,7 @@ test('defensive Signatures spend Surge on distinct team-saving effects', () => {
   state.sides.player.surge = 100;
   state.sides.player.team.forEach((creature) => (creature.hp -= 20));
   state.sides.player.team[1].statuses.stunned = { remaining: 2, appliedTurn: state.turn, stacks: 1 };
+  state.sides.player.team[0].statuses.marked = { appliedTurn: state.turn };
   const result = resolveTurn(
     state,
     { type: 'move', moveId: 'leaf_mantle' },
@@ -976,6 +1020,7 @@ test('defensive Signatures spend Surge on distinct team-saving effects', () => {
     4
   );
   assert.ok(result.events.filter((event) => event.type === 'heal' && event.side === 'player').length >= 3);
+  assert.equal(result.state.sides.player.team[0].statuses.marked, undefined);
   assert.equal(result.state.sides.player.team[1].statuses.stunned, undefined);
   assert.ok(result.events.some((event) => event.type === 'surge' && event.amount === -100));
 });
@@ -992,7 +1037,8 @@ test('knockout skips the second move and requires a free replacement', () => {
     { type: 'move', moveId: 'shade_spark' },
     { type: 'move', moveId: 'crystal_strike' }
   );
-  assert.ok(result.events.some((e) => e.type === 'ko'));
+  const knockout = result.events.find((e) => e.type === 'ko');
+  assert.equal(knockout.hp, 0, 'knockout events expose the resulting HP');
   assert.ok(result.events.some((e) => e.type === 'move-skip'));
   assert.equal(result.state.sides.enemy.pendingReplacement, true);
   const replacement = getLegalActions(result.state, 'enemy')[0];
@@ -1002,7 +1048,10 @@ test('knockout skips the second move and requires a free replacement', () => {
   assert.equal(replaced.state.phase, 'choice');
   assert.equal(replaced.state.sides.enemy.surge, beforeSurge);
   assert.equal(activeOf(replaced.state, 'enemy').statuses.focused, undefined);
-  assert.equal(replaced.events.some((e) => e.type === 'rally'), false);
+  assert.equal(
+    replaced.events.some((e) => e.type === 'rally'),
+    false
+  );
 });
 
 test('trainer ace powers trigger exactly once when the final enemy enters', () => {
@@ -1024,6 +1073,47 @@ test('trainer ace powers trigger exactly once when the final enemy enters', () =
   assert.equal(result.state.aceTriggered, true);
   assert.equal(result.state.sides.enemy.surge, 100);
   assert.ok(activeOf(result.state, 'enemy').barrier >= 16);
+});
+test('entry and ace events expose resulting projection values', () => {
+  const state = createBattle({
+    playerTeam: ['kordane', 'voltide', 'hexalune'],
+    enemyTeam: ['kordane', 'calderoc', 'hexalune'],
+    enemyAce: 'titanheart',
+    seed: 19,
+  });
+  state.sides.enemy.team[0].hp = 0;
+  state.sides.enemy.team[1].hp = 0;
+  state.sides.enemy.active = 0;
+  state.sides.enemy.pendingReplacement = true;
+  state.phase = 'replacement';
+  const result = applyReplacement(state, 'enemy', { type: 'replace', index: 2 }),
+    replacement = result.events.find((event) => event.type === 'replace'),
+    passive = result.events.find((event) => event.type === 'passive' && event.side === 'enemy'),
+    ace = result.events.find((event) => event.type === 'ace');
+  assert.equal(replacement.activeIndex, 2);
+  assert.equal(passive.status, 'marked');
+  assert.equal(passive.remaining, 2);
+  assert.equal(passive.targetSide, 'player');
+  assert.equal(passive.targetCreatureId, activeOf(result.state, 'player').id);
+  assert.equal(ace.hp, activeOf(result.state, 'enemy').hp);
+  assert.equal(ace.maxHp, activeOf(result.state, 'enemy').maxHp);
+  const conductorState = createBattle({
+      playerTeam: ['kordane', 'voltide', 'hexalune'],
+      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+      seed: 22,
+    }),
+    conductor = (() => {
+      conductorState.sides.player.team[0].hp = 0;
+      conductorState.sides.player.active = 0;
+      conductorState.sides.player.pendingReplacement = true;
+      conductorState.phase = 'replacement';
+      return applyReplacement(conductorState, 'player', { type: 'replace', index: 1 }).events.find(
+        (event) => event.type === 'passive' && event.side === 'player'
+      );
+    })();
+  assert.equal(conductor.status, 'haste');
+  assert.equal(conductor.remaining, 2);
+  assert.equal(conductor.stacks, 1);
 });
 
 test('the last fighters add no synthetic duel event or reward', () => {
@@ -1124,7 +1214,10 @@ test('Eclipse of Grace purges every enemy boost and barrier after counterplay', 
     { type: 'move', moveId: 'eclipse_of_grace' },
     { type: 'move', moveId: 'kindred_halo' }
   );
-  assert.ok(result.events.some((event) => event.type === 'miss'), 'Evasive answers the hit first');
+  assert.ok(
+    result.events.some((event) => event.type === 'miss'),
+    'Evasive answers the hit first'
+  );
   for (const creature of result.state.sides.enemy.team) {
     assert.equal(creature.barrier, 0);
     assert.deepEqual(Object.keys(creature.statuses), ['burning']);
@@ -1146,9 +1239,7 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
     marked: { appliedTurn: 0, remaining: 2 },
     burning: { appliedTurn: 0, remaining: 2, stacks: 1 },
   };
-  const variants = getLegalActions(state, 'player').filter(
-    (action) => action.moveId === 'immaculate_relay'
-  );
+  const variants = getLegalActions(state, 'player').filter((action) => action.moveId === 'immaculate_relay');
   assert.deepEqual(
     variants.map(({ allyIndex }) => allyIndex),
     [1, 2]
@@ -1162,11 +1253,7 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
       ),
     /Illegal/
   );
-  const result = resolveTurn(
-    state,
-    variants[0],
-    { type: 'move', moveId: 'lucid_arc' }
-  );
+  const result = resolveTurn(state, variants[0], { type: 'move', moveId: 'lucid_arc' });
   const outgoing = result.state.sides.player.team[0],
     incoming = result.state.sides.player.team[1];
   assert.ok(outgoing.hp < outgoing.maxHp);
@@ -1175,13 +1262,10 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
   assert.deepEqual(Object.keys(incoming.statuses), ['focused']);
   assert.equal(incoming.barrier, 0);
   assert.equal(result.state.sides.player.pendingReplacement, false);
-  assert.ok(
-    result.events.find((event) => event.type === 'switch' && event.source === 'signature')
-  );
+  assert.ok(result.events.find((event) => event.type === 'switch' && event.source === 'signature'));
   assert.equal(
     result.events.some(
-      (event) =>
-        event.type === 'surge' && ['switch', 'perfect-relay'].includes(event.source)
+      (event) => event.type === 'surge' && ['switch', 'perfect-relay'].includes(event.source)
     ),
     false
   );

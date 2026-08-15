@@ -20,11 +20,9 @@ export async function installCompletedTutorial(page, extra = {}) {
         localStorage.setItem(
           'arene-de-noam-save',
           JSON.stringify({
-            version: 15,
+            version: 16,
             tutorialComplete: true,
             ladderVictories: 0,
-            emblems: [],
-            cosmetics: ['crystal'],
             mastery: {},
             records: {},
             customSquads: [null, null, null],
@@ -42,7 +40,6 @@ export async function installCompletedTutorial(page, extra = {}) {
             difficulty: 'apprentice',
             language: 'fr',
             muted: true,
-            volume: 0.7,
             musicVolume: 0.45,
             sfxVolume: 0.8,
             reducedMotion: true,
@@ -57,8 +54,8 @@ export async function installCompletedTutorial(page, extra = {}) {
   );
 }
 
-export async function playVisibleBattle(page, { untilSelection = false } = {}) {
-  for (let turn = 0; turn < 300; turn++) {
+export async function playVisibleBattle(page, { untilSelection = false, maxIterations = 300 } = {}) {
+  for (let turn = 0; turn < maxIterations; turn++) {
     if (
       untilSelection &&
       (await page

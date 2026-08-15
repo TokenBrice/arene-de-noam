@@ -6,7 +6,7 @@ import {
   watchRuntime,
 } from './helpers.js';
 
-test('a ladder victory awards an emblem and opens the next authored opponent', async ({ page }) => {
+test('a ladder victory awards progress and opens the next authored opponent', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=1&animations=0&player=voltide,brontusk,mossaur&enemyHp=1');
   await page.getByRole('button', { name: /Continuer/ }).click();
@@ -18,7 +18,6 @@ test('a ladder victory awards an emblem and opens the next authored opponent', a
   await expect(page.getByRole('heading', { name: 'Maître de la Vélocité' })).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
   expect(saved.ladderVictories).toBe(1);
-  expect(saved.emblems).toContain('dawn');
   expect(saved.records.voltide.battles).toBe(1);
   expect(saved.records.brontusk.battles).toBe(1);
   expect(saved.records.mossaur.battles).toBe(1);
@@ -28,7 +27,7 @@ test('a ladder victory awards an emblem and opens the next authored opponent', a
 });
 
 test('League map reveals progress, conceals future rivals, and replays cleared duels', async ({ page }) => {
-  await installCompletedTutorial(page, { ladderVictories: 2, emblems: ['dawn', 'velocity'] });
+  await installCompletedTutorial(page, { ladderVictories: 2 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Ligue des rivaux' }).first().click();
   await expect(page.getByRole('heading', { name: 'Carte de la Ligue' })).toBeVisible();
@@ -113,7 +112,7 @@ test('three personal squad slots save, reload, and clear a team with its lead', 
   await page.locator('[data-custom-load="0"]').click();
   await expect(page.locator('[data-creature="voltide"]')).toHaveClass(/selected/);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
-  expect(stored.version).toBe(15);
+  expect(stored.version).toBe(16);
   expect(stored.customSquads[0]).toEqual({ team: ['voltide', 'nymbloom', 'riptalon'], lead: 0 });
   await page.reload();
   await page.getByRole('button', { name: /Combat rapide/ }).click();
@@ -185,7 +184,7 @@ test('the tactical academy leads with eight essentials and every current effect'
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toHaveCount(1);
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toContainText('Brûlure');
   await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('Combo');
-  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('+40 %');
+  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('×1,4');
   await expect(page.locator('.academy-status-group.positive > h3')).toHaveText('▲ AVANTAGE');
   await expect(page.locator('.academy-status-group.negative > h3')).toHaveText('▼ MALUS');
   await expect(page.locator('.academy-status .status-icon')).toHaveCount(8);
@@ -258,11 +257,11 @@ test('mythic trials expose six rule-bending encounters and launch with modifiers
   await page.getByRole('button', { name: 'Épreuves' }).click();
   await expect(page.locator('.trial-card')).toHaveCount(6);
   await expect(page.getByText(/Les deux équipes commencent à 100 Éclat/)).toBeVisible();
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).first().click();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).first().click();
   await expect(page.getByRole('heading', { name: 'Tempête de Signatures' }).first()).toBeVisible();
   await expect(page.locator('[data-creature]')).toHaveCount(30);
   await expect(page.locator('.enemy-list img')).toHaveCount(3);
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).click();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
   await expect(page.getByText('Tempête de Signatures')).toBeVisible();
   await expect(page.locator('#hud-player').getByText('100/80')).toBeVisible();
   await expect(page.locator('[data-move="supernova"]')).toBeEnabled();
@@ -339,15 +338,22 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
     const size = await page.evaluate(() => ({ body: document.body.scrollWidth, view: innerWidth }));
     expect(size.body).toBeLessThanOrEqual(size.view);
   }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?seed=4&animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await expect(page.getByRole('button', { name: /Entrer dans/ })).toHaveCount(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?seed=4&animations=0');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await expect(page.getByRole('button', { name: /Entrer dans/ })).toHaveCount(1);
   await expect(page.locator('.mobile-selection-dock')).toBeVisible();
   await expect(page.locator('.mobile-selection-dock img')).toHaveCount(3);
   await page.getByRole('button', { name: /Plan de bataille/ }).click();
-  const planBox = await page.locator('.select-aside').boundingBox();
-  expect(planBox.y).toBeGreaterThanOrEqual(-1);
-  expect(planBox.y).toBeLessThan(844);
+  const planSummary = page.locator('.battle-plan > summary');
+  await expect(planSummary).toBeFocused();
+  await expect.poll(async () => (await planSummary.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+  const summaryBox = await planSummary.boundingBox();
+  expect(summaryBox.y).toBeLessThan(80);
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('.arena-nameplate')).toBeVisible();
   await expect(page.locator('#contract-chip')).toHaveCount(0);
@@ -369,4 +375,53 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(page.getByText('Tour 1')).toBeVisible();
   await expect(page.locator('[data-move]').first()).toBeVisible();
+});
+
+test('navigation and control rerenders preserve keyboard focus', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+
+  const difficulty = page.locator('#difficulty');
+  await difficulty.focus();
+  await difficulty.selectOption('champion');
+  await expect(page.locator('#difficulty')).toBeFocused();
+
+  await page.locator('#screen').evaluate((node) => node.scrollTo(0, node.scrollHeight));
+  await page.locator('[data-action="title"]').first().click();
+  await page.getByRole('button', { name: /Bestiaire/ }).click();
+  await expect(page.getByRole('heading', { name: 'Bestiaire' })).toBeFocused();
+  await expect(page.locator('#screen')).toHaveJSProperty('scrollTop', 0);
+
+  await page.locator('[data-action="settings"]').click();
+  const language = page.locator('[data-lang="en"]');
+  await language.focus();
+  await language.click();
+  await expect(page.locator('[data-lang="en"]')).toBeFocused();
+});
+
+test('cold boot does not steal focus during initial title render', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await expect(page.locator('.screen-transition-veil')).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+});
+
+test('custom slot clearing restores focus to its replacement save control', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?animations=0');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.locator('[data-squad="storm_circuit"]').click();
+  await page.locator('[data-custom-save="0"]').click();
+  const clear = page.locator('[data-custom-clear="0"]');
+  await clear.click();
+  await expect(page.locator('[data-custom-save="0"]')).toBeFocused();
+});
+
+test('final draft pick hands focus to its lead control', async ({ page }) => {
+  await installCompletedTutorial(page);
+  await page.goto('/?seed=20260814&animations=0');
+  await page.getByRole('button', { name: 'Draft du jour' }).click();
+  for (let round = 0; round < 3; round++) await page.locator('[data-draft-pick]').first().click();
+  await expect(page.locator('[data-focus-key="draft-lead-2"]')).toBeFocused();
 });

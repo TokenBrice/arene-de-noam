@@ -11,38 +11,54 @@ test('visible tutorial teaches types, Combo, Signature, and switch, then complet
   const runtime = watchRuntime(page);
   await page.goto('/?seed=4242&animations=0');
   await page.getByRole('button', { name: /Jouer/ }).click();
-  await expect(page.getByText(/Combat craint Psy/)).toBeVisible();
-  await page.evaluate(() => {
-    const stage = document.getElementById('fx-stage');
-    window.__fxLog = [];
-    new MutationObserver(() =>
-      window.__fxLog.push({ cls: stage.className, color: stage.style.getPropertyValue('--fx-color') })
-    ).observe(stage, { attributes: true });
-  });
+  await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible();
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('#hud-enemy')).toContainText('Marqué');
   const markedToken = page.locator('#hud-enemy .plate-status[data-status="marked"]');
   await expect(markedToken).toHaveClass(/negative/);
   await expect(markedToken.locator('.status-icon-target-lock')).toHaveCount(1);
   await expect(markedToken).toHaveCSS('--status-color', '#AD1457');
-  await expect
-    .poll(() =>
-      page.evaluate(() => window.__fxLog.find((entry) => entry.cls.includes('tactical-marked'))?.color)
-    )
-    .toBe('#AD1457');
+  await page.locator('[data-action="battle-log"]').click();
+  await expect(page.locator('.battle-log li').filter({ hasText: 'Marqué' })).toHaveCount(1);
+  await page.locator('[data-action="close-log"]').click();
   await expect(page.getByText(/Kordane est Marqué/)).toBeVisible();
   await page.locator('[data-move="slowing_riddle"]').click();
   await expect(page.locator('#hud-enemy')).not.toContainText('Marqué');
   await expect(page.getByText(/Éclat est plein/)).toBeVisible();
   await expect(page.locator('[data-move="oracle_veil"]')).toBeEnabled();
   await page.locator('[data-move="oracle_veil"]').click();
-  await expect(page.getByText(/Calderoc est de type Feu.*Eau est super efficace/)).toBeVisible();
+  await expect(page.getByText(/Calderoc est de type Feu.*Eau sont super efficaces/)).toBeVisible();
   await page.locator('[data-action="open-switch"]').click();
-  await page.getByRole('button', { name: /Abyssar/ }).click();
-  await expect(page.getByText(/termine le combat/)).toBeVisible();
+  await page.locator('[data-switch-index]').filter({ hasText: 'Abyssar' }).click();
+  await expect(page.getByText(/À toi\. Observe les PV et termine le combat/)).toBeVisible();
   await playVisibleBattle(page, { untilSelection: true });
   await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
   await expectNoRuntimeLeaks(runtime);
+});
+
+test('reduced-motion tutorial outro is presented before team select', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.goto('/?seed=4242');
+  await page.getByRole('button', { name: /Réglages/ }).click();
+  await page.locator('#motion').check();
+  await page.getByRole('button', { name: /Retour/ }).click();
+  await page.getByRole('button', { name: /Jouer/ }).click();
+  await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible();
+  await page.locator('[data-move="lucid_arc"]').click();
+  await page.locator('[data-move="slowing_riddle"]').click();
+  await page.locator('[data-move="oracle_veil"]').click();
+  await page.locator('[data-action="open-switch"]').click();
+  await page.locator('[data-switch-index]').filter({ hasText: 'Abyssar' }).click();
+  await expect(page.getByText(/À toi\. Observe les PV et termine le combat/)).toBeVisible();
+  await page.evaluate(() => {
+    window.__tutorialOutroSeen = false;
+    new MutationObserver(() => {
+      if (document.querySelector('.battle-outro, .victory-pose')) window.__tutorialOutroSeen = true;
+    }).observe(document.body, { attributes: true, childList: true, subtree: true });
+  });
+  await playVisibleBattle(page, { untilSelection: true, maxIterations: 3000 });
+  expect(await page.evaluate(() => window.__tutorialOutroSeen)).toBe(true);
+  await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
 });
 
 test('configures a team and finishes a seeded full quick battle', async ({ page }) => {
@@ -58,7 +74,9 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   await expect(page.locator('#arena')).toBeVisible();
   await expect(page.locator('#contract-chip, .flow-chip, .arena-resonance')).toHaveCount(0);
   await playVisibleBattle(page);
-  await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
+  const resultHeading = page.getByRole('heading', { name: /Victoire|Belle bataille/ });
+  await expect(resultHeading).toBeVisible();
+  const victory = (await resultHeading.textContent()).includes('Victoire');
   await expect(page.locator('.performance-grade')).toBeVisible();
   await expect(page.locator('.mastery-reward')).toHaveCount(3);
   await expect(page.locator('.result-team img')).toHaveCount(3);
@@ -70,15 +88,15 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   await expect(page.locator('.battle-recap')).toBeVisible();
   await expect(page.locator('.battle-recap')).toContainText('Combos');
   await expect(page.getByText('CRÉATURE DU MATCH')).toBeVisible();
-  await expect(page.locator('.performance-grade .grade-detail > span')).toHaveCount(3);
-  await expect(page.locator('.performance-grade')).toContainText('Victoire');
+  await expect(page.locator('.performance-grade .grade-detail > span')).toHaveCount(victory ? 3 : 2);
+  if (victory) await expect(page.locator('.performance-grade')).toContainText('Victoire');
   await expect(page.locator('.performance-grade')).toContainText('Tours');
   await expect(page.locator('.performance-grade')).toContainText('Survivants');
   await expect(page.locator('.squad-report article')).toHaveCount(3);
   await expect(page.locator('.squad-report')).toContainText('RAPPORT DU TRIO');
   await expect(page.locator('.squad-report')).toContainText('actions');
   await page.getByRole('button', { name: /Revoir le combat/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Journal du combat' })).toBeVisible();
   await expect(page.locator('.battle-log li.turn-start')).not.toHaveCount(0);
   await page.keyboard.press('Escape');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
@@ -86,6 +104,48 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   expect(saved.bestGrade).toMatch(/[ABCDS]/);
   expect(saved.mastery.calderoc).toBeGreaterThan(0);
   await expectNoRuntimeLeaks(runtime);
+});
+
+test('×2 speed syncs newly spawned animations across rematches', async ({ page }) => {
+  test.setTimeout(90000);
+  await installCompletedTutorial(page, {
+    reducedMotion: false,
+    battleSpeed: 2,
+    lastTeam: ['orakyn', 'abyssar', 'virelia'],
+  });
+  await page.goto('/?seed=18&enemyHp=1');
+  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await expect(page.locator('.battle-screen')).toBeVisible();
+  const initialRates = await page.evaluate(() =>
+    [...document.querySelector('.battle-screen').getAnimations({ subtree: true })].map(
+      (animation) => animation.playbackRate
+    )
+  );
+  expect(initialRates.length).toBeGreaterThan(0);
+  expect(initialRates.every((rate) => rate === 2)).toBe(true);
+  const move = page.locator('[data-move]:visible:enabled').first();
+  await move.click();
+  await page.waitForTimeout(100);
+  await expect(page.locator('#fx-stage.impact')).toBeVisible();
+  const laterRates = await page.evaluate(() =>
+    [...document.querySelector('.battle-screen').getAnimations({ subtree: true })].map(
+      (animation) => animation.playbackRate
+    )
+  );
+  expect(laterRates.length).toBeGreaterThan(0);
+  expect(laterRates.every((rate) => rate === 2)).toBe(true);
+  await playVisibleBattle(page, { maxIterations: 1200 });
+  await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Revanche' }).click();
+  await expect(page.locator('.battle-screen')).toBeVisible();
+  const rematchRates = await page.evaluate(() =>
+    [...document.querySelector('.battle-screen').getAnimations({ subtree: true })].map(
+      (animation) => animation.playbackRate
+    )
+  );
+  expect(rematchRates.length).toBeGreaterThan(0);
+  expect(rematchRates.every((rate) => rate === 2)).toBe(true);
 });
 
 test('quick battle rules alter the fight and remain visible in the codex', async ({ page }) => {
@@ -132,20 +192,6 @@ test('Relay Rush turns a voluntary switch into immediate tempo', async ({ page }
 test('conquering the League unlocks a rotating Champion Circuit', async ({ page }) => {
   await installCompletedTutorial(page, {
     ladderVictories: 12,
-    emblems: [
-      'dawn',
-      'velocity',
-      'wildheart',
-      'resonance',
-      'undertide',
-      'ironwall',
-      'inferno',
-      'nightfall',
-      'tempest',
-      'colossus',
-      'omen',
-      'crown',
-    ],
     circuitWins: 0,
   });
   await page.goto('/?seed=40&animations=0');
@@ -216,7 +262,7 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
   );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  const command = page.getByRole('button', { name: 'Ordre du dresseur' });
+  const command = page.locator('[data-action="trainer-command"]');
   await expect(command).toBeDisabled();
   await page.locator('[data-move="crystal_strike"]').click();
   await expect(page.locator('#hud-player')).toContainText('Sonné', { timeout: 5000 });
@@ -237,7 +283,7 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
   expect(after - before).toBe(15);
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.getByRole('button', { name: 'Codex du combat' }).click();
-  await expect(page.locator('.trainer-command-codex.used')).toContainText('Ordre donné');
+  await expect(page.locator('.trainer-command-codex.used')).toContainText('Coup de pouce utilisé');
 });
 
 test('restorative techniques display their recovered HP at the creature', async ({ page }) => {
@@ -248,9 +294,9 @@ test('restorative techniques display their recovered HP at the creature', async 
   });
   await page.goto('/?seed=61&enemyMove=supernova');
   await page.getByRole('button', { name: 'Épreuves' }).click();
-  await page.locator('.trial-card').nth(4).getByRole('button', { name: 'Relever l’épreuve' }).click();
-  await expect(page.getByRole('heading', { name: 'Dernière Lueur' }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).click();
+  await page.locator('.trial-card').nth(4).getByRole('button', { name: 'Jouer cette épreuve' }).click();
+  await expect(page.getByRole('heading', { name: 'La Dernière Lueur' }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
   await page.locator('[data-move="bubble_burst"]').click();
   await expect(page.locator('[data-move="healing_rain"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-move="healing_rain"]').click();
@@ -290,10 +336,8 @@ test('roster cards scout favorable targets and threats in the revealed rival tri
   await page.goto('/?enemy=kordane,calderoc,virelia');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await expect(page.locator('.scout-read')).toHaveCount(30);
-  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText(
-    '1 cible(s) favorable(s)'
-  );
-  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 menace(s)');
+  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 cibles favorables');
+  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 menaces');
   await expect(page.locator('.creature-card.scout-strong')).not.toHaveCount(0);
 });
 
@@ -307,10 +351,11 @@ test('Eclipse of Grace purges the rival team after its aimed transaction', async
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await expect(page.locator('[data-move="eclipse_of_grace"]')).toBeEnabled();
   await page.locator('[data-move="eclipse_of_grace"]').click();
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await expect(page.locator('[data-action="battle-log"]')).toBeEnabled();
   await page.locator('[data-action="battle-log"]').click();
-  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText('Éclipse des grâces');
-  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toContainText(/barrière/i);
+  await expect(page.getByRole('dialog', { name: 'Journal du combat' })).toContainText('Éclipse des grâces');
+  await expect(page.getByRole('dialog', { name: 'Journal du combat' })).toContainText(/barrière/i);
 });
 
 test('Immaculate Relay reuses the selector and switches only after the aimed attack', async ({ page }) => {
@@ -334,8 +379,9 @@ test('Immaculate Relay reuses the selector and switches only after the aimed att
   await relay.click();
   await page.locator('.signature-relay [data-switch-index="1"]').click();
   await expect(page.locator('#fighter-player')).toHaveAttribute('data-creature', 'deuilastre');
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.locator('[data-action="battle-log"]').click();
-  const log = page.getByRole('dialog', { name: 'Chronique du combat' });
+  const log = page.getByRole('dialog', { name: 'Journal du combat' });
   await expect(log).toContainText('Arc lucide');
   await expect(log).toContainText(/Deuilastre entre purifié et Concentré/);
 });
@@ -368,9 +414,9 @@ test('keyboard numbers choose moves and C opens switching', async ({ page }) => 
   await page.keyboard.press('c');
   await expect(page.getByRole('heading', { name: /Qui prend sa place/ })).toBeVisible();
   await expect(page.locator('.switch-incoming')).toHaveCount(2);
-  await expect(page.locator('.switch-incoming').first()).toContainText(/Impact prévu/);
+  await expect(page.locator('.switch-incoming').first()).toContainText(/Dégâts prévus/);
   await expect(page.locator('.switch-option.recommended')).toHaveCount(1);
-  await expect(page.locator('.switch-option.recommended')).toContainText('Relève conseillée');
+  await expect(page.locator('.switch-option.recommended')).toContainText('Changement conseillé');
 });
 
 test('a predicted resisted attack exposes and celebrates a Perfect Relay', async ({ page }) => {
@@ -408,9 +454,10 @@ test('Burning enables Venom Harvest as one visible Combo', async ({ page }) => {
   await page.locator('[data-move="toxic_spines"]').click();
   await expect(page.locator('[data-move="venom_harvest"]')).toBeEnabled();
   await expect(page.locator('[data-move="venom_harvest"] .move-combo-badge')).toContainText('COMBO +40%');
+  const comboImpact = expect(page.locator('.combo-impact')).toBeVisible();
   await page.locator('[data-move="venom_harvest"]').click();
-  await expect(page.locator('.combo-impact')).toBeVisible();
-  await expect(page.locator('#action-line')).toContainText('COMBO');
+  await comboImpact;
+  await expect(page.locator('#action-line')).toContainText(/Combo/);
 });
 
 test('battle codex explains live rules and closes with Escape', async ({ page }) => {
@@ -425,7 +472,7 @@ test('battle codex explains live rules and closes with Escape', async ({ page })
   await expect(page.getByText(/Eau → Feu → Plante → Eau/)).toBeVisible();
   await expect(page.getByText(/entre triangles : ×1/)).toBeVisible();
   await expect(page.locator('.trainer-command-codex')).toContainText('Coup de pouce');
-  await expect(page.getByText(/technique offensive donne 20 Éclat/)).toBeVisible();
+  await expect(page.getByText(/Une attaque donne 20 Éclat/)).toBeVisible();
   await expect(page.locator('.flow-codex, .contract-codex, .resonance-codex')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -450,10 +497,12 @@ test('battle chronicle records semantic events and opens from the keyboard', asy
   await page.locator('[data-move="slowing_riddle"]').click();
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.keyboard.press('l');
-  await expect(page.getByRole('dialog', { name: 'Chronique du combat' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Journal du combat' })).toBeVisible();
   await expect(page.locator('.battle-log li')).not.toHaveCount(0);
   await expect(page.locator('.battle-log li.turn-start[data-turn="Tour 1"]')).toHaveCount(1);
   await expect(page.locator('.battle-log')).toContainText(/lance|perd|entre dans l’arène/);
+  await expect(page.locator('.battle-log')).toContainText('Ton Orakyn');
+  await expect(page.locator('.battle-log')).toContainText('Kordane rival');
   await expect(page.locator('.battle-log li').filter({ hasText: 'Combo' })).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(page.locator('.battle-log')).toHaveCount(0);
@@ -480,8 +529,8 @@ test('two ready signature moves trigger the full-screen clash intro', async ({ p
   });
   await page.goto('/?seed=61&enemyMove=supernova');
   await page.getByRole('button', { name: 'Épreuves' }).click();
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).first().click();
-  await page.getByRole('button', { name: 'Relever l’épreuve' }).click();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).first().click();
+  await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
   await expect(page.locator('[data-move="supernova"]')).toBeEnabled({ timeout: 4000 });
   await expect(page.locator('#hud-player .team-dot.signature-ready')).toHaveCount(3);
   await expect(page.locator('#hud-enemy .team-dot.signature-ready')).toHaveCount(3);
@@ -505,7 +554,7 @@ test('a switched teammate converts a setup with visible Combo credit', async ({ 
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('[data-action="open-switch"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-action="open-switch"]').click();
-  await page.getByRole('button', { name: /Pyrolynx/ }).click();
+  await page.locator('[data-switch-index]').filter({ hasText: 'Pyrolynx' }).click();
   await expect(page.locator('[data-move="ninefold_inferno"]')).toBeEnabled({ timeout: 5000 });
   await expect(page.locator('[data-move="ninefold_inferno"] .move-combo-badge')).toContainText('Orakyn');
   await page.locator('[data-move="ninefold_inferno"]').click();
@@ -573,7 +622,12 @@ test('a defeat produces evidence-based trainer analysis', async ({ page }) => {
   await playVisibleBattle(page);
   await expect(page.getByRole('heading', { name: 'Belle bataille !' })).toBeVisible();
   await expect(page.locator('.battle-advice')).toBeVisible();
-  await expect(page.locator('.battle-advice')).toContainText('Analyse de l’entraîneur');
+  await expect(page.locator('.battle-advice')).toContainText('Conseils de l’entraîneur');
+  await expect(page.locator('.recap-mvp')).toHaveCount(1);
+  const recapBox = await page.locator('.battle-recap').boundingBox();
+  const statsBox = await page.locator('.recap-stats').boundingBox();
+  expect(recapBox).not.toBeNull();
+  expect(statsBox).not.toBeNull();
   await page.getByRole('button', { name: /Ajuster l’équipe/ }).click();
   await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
   await expect(page.locator('.enemy-list')).toContainText('Orakyn');

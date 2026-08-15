@@ -9,7 +9,6 @@ const {
   masteryRank,
   quickRule,
   TRAINERS,
-  ARENAS,
   TRIALS,
   GAUNTLET_STAGES,
   circuitMatch,
@@ -38,8 +37,6 @@ const {
   LOG_TYPE_GROUPS,
   sprite,
   creatureName,
-  affinity,
-  affinityName,
   affinityIcon,
   classIcon,
   className,
@@ -64,12 +61,16 @@ const {
   tutorialEnemyAction,
   clearBattleFx,
   playEvents,
+  beginPresentation,
   completeTutorial,
   finishBattle,
 } = route;
 
 let battleSessionSequence = 0,
-  battleStartPending = false;
+  battleStartPending = false,
+  switchOpener = null,
+  switchFocusAfterUnlock = null,
+  battleRenderCache = { session: null, key: null, locked: false };
 
 function sessionIsActive(session) {
   return Boolean(
@@ -79,9 +80,11 @@ function sessionIsActive(session) {
     screen.classList.contains('battle-screen')
   );
 }
-
 function cancelBattleSession(session) {
-  if (session) session.cancelled = true;
+  if (session) {
+    session.cancelled = true;
+    session.displayState = null;
+  }
   ctx.locked = false;
   clearBattleFx();
 }
@@ -134,6 +137,8 @@ function startBattle(config) {
     tutorialStep: config.tutorialStep ?? null,
     sessionToken: ++battleSessionSequence,
     cancelled: false,
+    displayState: null,
+    fxTimers: new Set(),
   };
   void route.renderBattle(ctx.battleSession, screen.dataset.page);
 }
@@ -163,6 +168,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     battleStartPending = false;
     return;
   }
+  battleRenderCache = { session, key: null, locked: false };
   battleStartPending = false;
   disposeArena();
   screen.dataset.page = 'battle';
@@ -187,7 +193,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
         : circuit
           ? t(`circuit.effect.${circuit.condition.id}`)
           : t(`arena.rule.${ctx.battleSession.arena}`);
-  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info"><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate" tabindex="0" title="${escapeHtml(arenaRule)}" aria-label="${escapeHtml(`${arenaHeading} — ${arenaRule}`)}"><b>${arenaHeading}</b><small>${arenaRule}</small></div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battle-plates"><div class="hud-card player-hud" id="hud-player"></div><div class="hud-card enemy-hud" id="hud-enemy"></div></div></section><section class="battle-stage" data-battle-zone="stage"><div class="battle-stage-camera"><div class="battlefield"><div class="fighter enemy" id="fighter-enemy"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div></div></section><section class="battle-command-dock" data-battle-zone="controls"><div id="tutorial-root"></div><div class="action-line" id="action-line" role="status" aria-live="polite"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span><b>${t('battle.switch')}</b></button></div></section></div><div id="replacement-root"></div>`;
+  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info"><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate" tabindex="0" title="${escapeHtml(arenaRule)}" aria-label="${escapeHtml(`${arenaHeading} — ${arenaRule}`)}"><b>${arenaHeading}</b><small>${arenaRule}</small></div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battle-plates"><div class="hud-card player-hud" id="hud-player"></div><div class="hud-card enemy-hud" id="hud-enemy"></div></div></section><section class="battle-stage" data-battle-zone="stage"><div class="battle-stage-camera"><div class="battlefield"><div class="fighter enemy" id="fighter-enemy" data-last-label="${escapeHtml(t('battle.lastBadge'))}"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player" data-last-label="${escapeHtml(t('battle.lastBadge'))}"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div></div></section><section class="battle-command-dock" data-battle-zone="controls"><div id="tutorial-root"></div><div class="action-line" id="action-line" role="status" aria-live="polite"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span><b>${t('battle.switch')}</b></button></div></section></div><div id="replacement-root"></div>`;
   if (ctx.battleSession.quickRuleId && ctx.battleSession.quickRuleId !== 'standard') {
     const rule = quickRule(ctx.battleSession.quickRuleId);
     screen
@@ -214,6 +220,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
     ctx.arenaScene = new ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
       reducedMotion: ctx.save.reducedMotion,
+      testAnimationScale,
     });
   } catch (error) {
     cancelBattleSession(session);
@@ -329,8 +336,14 @@ function openBattleLog() {
       ? entries
           .map((entry, index) => {
             const turn = entry.turn || 1,
-              turnStart = index === 0 || entries[index - 1].turn !== turn;
-            return `<li class="log-${entry.side || 'field'} ${index === 0 ? 'latest' : ''} ${turnStart ? 'turn-start' : ''}" data-turn="${t('battle.turn', { turn })}"><i>${icons[entry.side] || '✦'}</i><span><small>${t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`)}</small>${escapeHtml(entry.text)}</span></li>`;
+              turnStart = index === 0 || entries[index - 1].turn !== turn,
+              active = entry.side ? activeOf(ctx.battleSession.state, entry.side) : null,
+              sideCreature = entry.creatureId || active?.id,
+              sideLabel =
+                entry.side && sideCreature
+                  ? t(`battle.logSide.${entry.side}`, { name: creatureName(sideCreature) })
+                  : '';
+            return `<li class="log-${entry.side || 'field'} ${index === 0 ? 'latest' : ''} ${turnStart ? 'turn-start' : ''}" data-turn="${t('battle.turn', { turn })}"><i>${icons[entry.side] || '✦'}</i><span><small>${t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`)}</small>${sideLabel ? `<b class="log-side-label">${escapeHtml(sideLabel)}</b> ` : ''}${escapeHtml(entry.text)}</span></li>`;
           })
           .join('')
       : `<li class="empty">${t('battle.logEmpty')}</li>`
@@ -351,10 +364,11 @@ function openPlateDetails(side) {
   const session = ctx.battleSession,
     root = screen.querySelector('#replacement-root'),
     trigger = screen.querySelector(`[data-plate-side="${side}"]`),
-    creature = activeOf(session.state, side);
+    view = session.displayState ?? session.state,
+    creature = activeOf(view, side);
   if (!root || !trigger || !creature) return;
   trigger.setAttribute('aria-expanded', 'true');
-  root.innerHTML = `<div class="replacement plate-detail-overlay"><section class="glass-panel plate-detail-card" role="dialog" aria-modal="true" aria-labelledby="plate-detail-title"><button type="button" class="codex-close icon-btn" data-action="close-plate" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.plateHint')}</span><h2 id="plate-detail-title">${t('battle.plateTitle', { name: creatureName(creature.id) })}</h2>${hudDetailHtml(side)}</section></div>`;
+  root.innerHTML = `<div class="replacement plate-detail-overlay"><section class="glass-panel plate-detail-card" role="dialog" aria-modal="true" aria-labelledby="plate-detail-title"><button type="button" class="codex-close icon-btn" data-action="close-plate" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.plateHint')}</span><h2 id="plate-detail-title">${t('battle.plateTitle', { name: creatureName(creature.id) })}</h2>${hudDetailHtml(side, view)}</section></div>`;
   const close = () => {
     if (!sessionIsActive(session)) return;
     root.innerHTML = '';
@@ -367,10 +381,23 @@ function openPlateDetails(side) {
   });
   root.querySelector('[data-action="close-plate"]')?.focus();
 }
+function closeBattleOverlay() {
+  const closeButton = screen
+    .querySelector('#replacement-root')
+    ?.querySelector('[data-action="close-codex"],[data-action="close-log"],[data-action="close-plate"]');
+  if (!closeButton) return false;
+  closeButton.click();
+  return true;
+}
 
 function bindBattleChoiceContext(session) {
-  const line = screen.querySelector('#action-line');
-  if (!line) return;
+  const moves = screen.querySelector('#moves'),
+    line = screen.querySelector('#action-line');
+  if (!moves || !line || moves.dataset.bound === 'true') return;
+  moves.dataset.bound = 'true';
+  let longPressTimer = 0,
+    longPressedButton = null;
+  const buttonFor = (target) => target instanceof Element && target.closest('[data-move]');
   const restore = () => {
     if (!sessionIsActive(session)) return;
     line.classList.remove('contextual');
@@ -378,31 +405,55 @@ function bindBattleChoiceContext(session) {
   };
   const show = (button) => {
     if (!sessionIsActive(session)) return;
-    const source = button.querySelector('.move-context-source');
+    const source = button?.querySelector('.move-context-source');
     if (!source) return;
     line.classList.add('contextual');
     line.innerHTML = source.innerHTML;
   };
-  screen.querySelectorAll('[data-move]').forEach((button) => {
-    let longPressTimer = 0;
-    button.addEventListener('pointerenter', () => show(button));
-    button.addEventListener('pointerleave', () => {
-      clearTimeout(longPressTimer);
-      if (document.activeElement !== button) restore();
-    });
-    button.addEventListener('focus', () => show(button));
-    button.addEventListener('blur', restore);
-    button.addEventListener('pointerdown', (event) => {
-      if (event.pointerType !== 'touch') return;
-      longPressTimer = window.setTimeout(() => {
-        if (!sessionIsActive(session)) return;
-        button.dataset.longPressed = 'true';
-        show(button);
-      }, 420);
-    });
-    const endLongPress = () => clearTimeout(longPressTimer);
-    button.addEventListener('pointerup', endLongPress);
-    button.addEventListener('pointercancel', endLongPress);
+  const endLongPress = () => {
+    clearTimeout(longPressTimer);
+    longPressTimer = 0;
+    longPressedButton = null;
+  };
+  moves.addEventListener('pointerover', (event) => {
+    const button = buttonFor(event.target);
+    if (button) show(button);
+  });
+  moves.addEventListener('pointerout', (event) => {
+    const button = buttonFor(event.target);
+    if (!button || button.contains(event.relatedTarget)) return;
+    endLongPress();
+    if (document.activeElement !== button) restore();
+  });
+  moves.addEventListener('focusin', (event) => show(buttonFor(event.target)));
+  moves.addEventListener('focusout', (event) => {
+    const button = buttonFor(event.target);
+    if (button && !button.contains(event.relatedTarget)) restore();
+  });
+  moves.addEventListener('pointerdown', (event) => {
+    const button = buttonFor(event.target);
+    if (!button || event.pointerType !== 'touch') return;
+    endLongPress();
+    longPressedButton = button;
+    longPressTimer = window.setTimeout(() => {
+      if (!sessionIsActive(session) || ctx.locked || !longPressedButton) return;
+      longPressedButton.dataset.longPressed = 'true';
+      show(longPressedButton);
+    }, 420);
+  });
+  moves.addEventListener('pointerup', endLongPress);
+  moves.addEventListener('pointercancel', endLongPress);
+  moves.addEventListener('click', (event) => {
+    const button = buttonFor(event.target);
+    if (!button || ctx.locked) return;
+    if (button.dataset.longPressed === 'true') {
+      delete button.dataset.longPressed;
+      return;
+    }
+    const move = MOVES[button.dataset.move];
+    if (!move) return;
+    if (move.allySwitch) openSwitch(move.id);
+    else handlePlayerAction({ type: 'move', moveId: move.id });
   });
 }
 
@@ -437,36 +488,140 @@ async function battleEntrance(session = ctx.battleSession) {
   }
 }
 
+function patchBattleHud(hud, side, view) {
+  const owner = view.sides[side],
+    c = activeOf(view, side),
+    plate = hud.querySelector('[data-plate-side]');
+  if (!plate) return;
+  const hpNumber = plate.querySelector('.plate-hp-number'),
+    hpFill = plate.querySelector('.hp-fill'),
+    barrierFill = plate.querySelector('.barrier-fill'),
+    surgeRow = plate.querySelector('.surge-row'),
+    surgeFill = plate.querySelector('.surge-track i'),
+    surgeNumber = plate.querySelector('.plate-surge-number');
+  if (hpNumber) hpNumber.textContent = `${c.hp}/${c.maxHp}`;
+  if (hpFill) {
+    hpFill.style.width = `${Math.max(0, (c.hp / c.maxHp) * 100)}%`;
+    hpFill.classList.toggle('low', c.hp / c.maxHp < 0.3);
+  }
+  if (c.barrier) {
+    const track = plate.querySelector('.hp-track'),
+      fill = barrierFill || document.createElement('i');
+    if (!barrierFill) {
+      fill.className = 'barrier-fill';
+      track?.append(fill);
+    }
+    fill.style.width = `${Math.min(100, (c.barrier / c.maxHp) * 100)}%`;
+  } else barrierFill?.remove();
+  const cost = signatureCostFor(c);
+  surgeRow?.classList.toggle('ready', owner.surge >= cost);
+  if (surgeFill) surgeFill.style.width = `${owner.surge}%`;
+  if (surgeNumber) surgeNumber.textContent = `✦ ${owner.surge}/${cost}`;
+  const pips = [...plate.querySelectorAll('.team-dot')];
+  owner.team.forEach((teamCreature, index) => {
+    const pip = pips[index];
+    if (!pip) return;
+    const ready =
+      teamCreature.hp > 0 &&
+      owner.surge >= signatureCostFor(teamCreature) &&
+      teamCreature.moves.some((id) => MOVES[id].signature);
+    pip.classList.toggle('active', index === owner.active);
+    pip.classList.toggle('ko', teamCreature.hp <= 0);
+    pip.classList.toggle('signature-ready', ready);
+    pip.style.setProperty('--team-hp', `${Math.max(0, (teamCreature.hp / teamCreature.maxHp) * 100)}`);
+    pip.setAttribute(
+      'aria-label',
+      `${creatureName(teamCreature.id)} · ${className(teamCreature.classId)} · ${teamCreature.hp}/${teamCreature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`
+    );
+  });
+  const statusIds = sortStatusIds(Object.keys(c.statuses)),
+    statusNames = [
+      ...(c.barrier ? [t('battle.barrierName')] : []),
+      ...statusIds.map((id) => t(`status.${id}`)),
+    ],
+    pipLabels = pips.map((pip) => pip.getAttribute('aria-label'));
+  plate.setAttribute(
+    'aria-label',
+    [
+      creatureName(c.id),
+      `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`,
+      statusNames.join(' · ') || t('battle.noStatuses'),
+      pipLabels.join(' · '),
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  );
+}
+
 function refreshBattle() {
   if (!ctx.battleSession || !screen.classList.contains('battle-screen')) return;
   const session = ctx.battleSession,
     state = session.state,
-    p = activeOf(state, 'player'),
-    e = activeOf(state, 'enemy'),
+    view = session.displayState ?? state,
+    p = activeOf(view, 'player'),
+    e = activeOf(view, 'enemy'),
     expertMode = Boolean(ctx.save.expertMode);
-  const cadence = state.modifiers?.includes('rapid_arena') ? 2 : 4,
-    until = cadence - ((state.turn - 1) % cadence),
+  const cadence = view.modifiers?.includes('rapid_arena') ? 2 : 4,
+    until = cadence - ((view.turn - 1) % cadence),
     sideRatio = (side) =>
-      state.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
-      state.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
+      view.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
+      view.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
     lastStand = ['player', 'enemy'].some(
-      (side) => state.sides[side].team.filter((c) => c.hp > 0).length === 1
+      (side) => view.sides[side].team.filter((c) => c.hp > 0).length === 1
     ),
     tension = Math.min(
       1,
-      (state.turn - 1) / 25 +
+      (view.turn - 1) / 25 +
         (1 - Math.min(sideRatio('player'), sideRatio('enemy'))) * 0.58 +
         (lastStand ? 0.3 : 0)
     );
+  const hpBucket = (creature) => Math.floor((Math.max(0, creature.hp) / creature.maxHp) * 10),
+    statusSet = (creature) =>
+      `${creature.barrier ? `barrier:${creature.barrier}|` : ''}${Object.entries(creature.statuses)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([id, status]) => `${id}:${status.stacks || 1}:${status.remaining || 0}`)
+        .join(',')}`,
+    legalMoveIds = new Set(
+      getLegalActions(state, 'player')
+        .filter((action) => action.type === 'move')
+        .map((action) => action.moveId)
+    ),
+    moveStateKey = p.moves
+      .map((moveId) => {
+        const cooldown = p.cooldowns[moveId]?.remaining || 0,
+          tutorialAllowed =
+            session.mode !== 'tutorial' ||
+            session.tutorialStep >= 4 ||
+            (session.tutorialStep === 0 && moveId === 'lucid_arc') ||
+            (session.tutorialStep === 1 && moveId === 'slowing_riddle') ||
+            (session.tutorialStep === 2 && moveId === 'oracle_veil');
+        return `${moveId}:${cooldown}:${legalMoveIds.has(moveId) ? 0 : 1}:${tutorialAllowed ? 0 : 1}`;
+      })
+      .join('|'),
+    moveRenderKey = [
+      p.id,
+      e.id,
+      hpBucket(p),
+      hpBucket(e),
+      statusSet(p),
+      statusSet(e),
+      moveStateKey,
+      view.sides.player.surge,
+      view.sides.enemy.surge,
+    ].join('::'),
+    reuseLockedMoves =
+      ctx.locked &&
+      battleRenderCache.session === session &&
+      battleRenderCache.locked &&
+      battleRenderCache.key === moveRenderKey;
   screen.classList.toggle('locked', ctx.locked);
   screen.classList.toggle('expert-mode', expertMode);
-  screen.classList.toggle('simple-mode', !expertMode);
   screen.classList.toggle('arena-imminent', until === 1);
-  screen.classList.toggle('player-last-stand', state.sides.player.team.filter((c) => c.hp > 0).length === 1);
-  screen.classList.toggle('enemy-last-stand', state.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
+  screen.classList.toggle('player-last-stand', view.sides.player.team.filter((c) => c.hp > 0).length === 1);
+  screen.classList.toggle('enemy-last-stand', view.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
   // Final showdown (plan §5): both sides down to their last creature.
   const showdown = ['player', 'enemy'].every(
-    (side) => state.sides[side].team.filter((c) => c.hp > 0).length === 1
+    (side) => view.sides[side].team.filter((c) => c.hp > 0).length === 1
   );
   screen.classList.toggle('final-showdown', showdown);
   screen.classList.toggle('tension-rising', tension >= 0.38);
@@ -474,11 +629,11 @@ function refreshBattle() {
   screen.style.setProperty('--battle-tension', tension.toFixed(2));
   ctx.arenaScene?.setBattleState({ tension, imminent: until === 1, showdown });
   screen.querySelector('#turn-chip').innerHTML =
-    `<b>${t('battle.turn', { turn: state.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}</small>`;
+    `<b>${t('battle.turn', { turn: view.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}</small>`;
   screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
   for (const side of ['player', 'enemy']) {
-    const owner = state.sides[side],
-      c = activeOf(state, side),
+    const owner = view.sides[side],
+      c = activeOf(view, side),
       fighter = screen.querySelector(`#fighter-${side}`),
       img = fighter.querySelector('img'),
       rank = side === 'player' ? masteryRank(ctx.save.mastery[c.id] || 0) : 0;
@@ -505,50 +660,107 @@ function refreshBattle() {
       owner.surge >= signatureCostFor(c) && c.moves.some((id) => MOVES[id].signature)
     );
     const hud = screen.querySelector(`#hud-${side}`);
-    hud.innerHTML = hudHtml(side, expertMode);
+    if (reuseLockedMoves) {
+      patchBattleHud(hud, side, view);
+      continue;
+    }
+    hud.innerHTML = hudHtml(side, expertMode, view);
+    const plate = hud.querySelector('[data-plate-side]');
+    if (plate) {
+      const statusIds = sortStatusIds(Object.keys(c.statuses)),
+        statusNames = [
+          ...(c.barrier ? [t('battle.barrierName')] : []),
+          ...statusIds.map((id) => t(`status.${id}`)),
+        ],
+        pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) =>
+          pip.getAttribute('aria-label')
+        );
+      plate.setAttribute(
+        'aria-label',
+        [
+          creatureName(c.id),
+          `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`,
+          statusNames.join(' · ') || t('battle.noStatuses'),
+          pipLabels.join(' · '),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      );
+      if (!expertMode) {
+        const overflowChip = plate.querySelector('.plate-status-more'),
+          hiddenStatusNames = statusNames.slice(2);
+        if (overflowChip && hiddenStatusNames.length) {
+          const overflowButton = document.createElement('button');
+          overflowButton.type = 'button';
+          overflowButton.className = 'plate-status-more';
+          overflowButton.textContent = overflowChip.textContent;
+          overflowButton.setAttribute(
+            'aria-label',
+            t('battle.statusOverflow', { statuses: hiddenStatusNames.join(', ') })
+          );
+          const plateWrap = document.createElement('div');
+          plateWrap.className = 'battle-plate-wrap';
+          plate.replaceWith(plateWrap);
+          plateWrap.append(plate, overflowButton);
+          overflowButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openPlateDetails(side);
+          });
+        }
+      }
+    }
     hud.querySelector('[data-plate-side]')?.addEventListener('click', () => openPlateDetails(side));
   }
-  screen.querySelector('#moves').innerHTML = p.moves.map(moveButton).join('');
-  const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
-  if (forecastPlan && expertMode)
-    screen
-      .querySelectorAll('[data-move]')
-      .forEach((button) =>
-        button
-          .querySelector('.move-tags')
-          ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan))
-      );
-  screen.querySelectorAll('[data-move]').forEach((b) =>
-    b.addEventListener('click', () => {
-      if (b.dataset.longPressed === 'true') {
-        delete b.dataset.longPressed;
-        return;
-      }
-      const move = MOVES[b.dataset.move];
-      if (move.allySwitch) openSwitch(move.id);
-      else handlePlayerAction({ type: 'move', moveId: move.id });
-    })
-  );
+  if (!reuseLockedMoves) {
+    screen.querySelector('#moves').innerHTML = p.moves
+      .map((moveId, index) => moveButton(moveId, index, view, state))
+      .join('');
+    const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
+    if (forecastPlan && expertMode)
+      screen
+        .querySelectorAll('[data-move]')
+        .forEach((button) =>
+          button
+            .querySelector('.move-tags')
+            ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan, state))
+        );
+  }
+  battleRenderCache = { session, key: moveRenderKey, locked: ctx.locked };
   bindBattleChoiceContext(session);
   const switchButton = screen.querySelector('[data-action="open-switch"]');
   switchButton.disabled =
     ctx.locked ||
     (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 3) ||
     !getLegalActions(state, 'player').some((action) => action.type === 'switch');
+  if (!ctx.locked && switchFocusAfterUnlock) {
+    const focusTarget = screen.querySelector(switchFocusAfterUnlock);
+    switchFocusAfterUnlock = null;
+    focusTarget?.focus();
+  }
   switchButton.onclick = () => openSwitch();
   const speedButton = screen.querySelector('[data-action="battle-speed"]');
   speedButton.textContent = `×${ctx.save.battleSpeed}`;
   speedButton.setAttribute('aria-pressed', String(ctx.save.battleSpeed === 2));
+  speedButton.setAttribute('aria-label', t('battle.speedLabel', { speed: ctx.save.battleSpeed }));
   const mute = screen.querySelector('[data-action="toggle-mute"]');
   mute.textContent = ctx.save.muted ? '🔇' : '🔊';
   mute.setAttribute('aria-pressed', String(ctx.save.muted));
   const commandButton = screen.querySelector('[data-action="trainer-command"]');
   if (commandButton) {
-    const used = state.sides.player.commandUsed;
-    commandButton.disabled = ctx.locked || !canUseTrainerCommand(state, 'player');
+    const used = state.sides.player.commandUsed,
+      available = canUseTrainerCommand(state, 'player'),
+      disabled = ctx.locked || !available;
+    commandButton.disabled = disabled;
     commandButton.classList.toggle('used', used);
     commandButton.innerHTML = `<span>${used ? '✓' : '⚑'}</span><small>${used ? t('battle.commandUsed') : t('command.coach')}</small>`;
-    commandButton.title = t('command.effect.coach');
+    if (disabled && !used) {
+      const unavailable = t('command.unavailable');
+      commandButton.title = unavailable;
+      commandButton.setAttribute('aria-label', unavailable);
+    } else {
+      commandButton.title = t('command.effect.coach');
+      commandButton.setAttribute('aria-label', used ? t('battle.commandUsed') : t('battle.command'));
+    }
   }
   renderTutorialTip();
   route.syncBattleAnimationSpeed?.();
@@ -563,6 +775,23 @@ function renderTutorialTip() {
   const step = Math.min(4, ctx.battleSession.tutorialStep);
   root.innerHTML = `<div class="tutorial-tip"><strong>${t('tutorial.title')}</strong><br>${t(`tutorial.${step + 1}`)} ${step < 4 ? `<button class="subtle-btn" data-action="skip-tutorial">${t('app.skip')}</button>` : ''}</div>`;
   root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
+}
+
+function closeSwitch({ restoreFocus = true, focusAfterUnlock = false } = {}) {
+  const root = screen.querySelector('#replacement-root');
+  if (!root?.querySelector('.replacement-card')) return false;
+  root.innerHTML = '';
+  const opener = switchOpener;
+  switchOpener = null;
+  if (focusAfterUnlock && opener?.dataset) {
+    switchFocusAfterUnlock = opener.dataset.move
+      ? `[data-move="${opener.dataset.move}"]`
+      : opener.dataset.action
+        ? `[data-action="${opener.dataset.action}"]`
+        : null;
+  }
+  if (restoreFocus && opener?.isConnected) opener.focus();
+  return true;
 }
 
 function openSwitch(relayMoveId = null) {
@@ -588,6 +817,7 @@ function openSwitch(relayMoveId = null) {
         ? enemyPlan()
         : null;
   if (!options.length) return;
+  switchOpener = returnFocus;
   const forecastFor = (index) => {
     if (!plan) return null;
     if (plan.type === 'switch') return { icon: '↺', text: t('battle.switchIncomingSwitch'), lethal: false };
@@ -653,80 +883,107 @@ function openSwitch(relayMoveId = null) {
     : 'battle.switchBonus';
   screen.querySelector('#replacement-root').innerHTML =
     `<div class="replacement ${relayMoveId ? 'signature-relay' : ''}"><section class="glass-panel replacement-card"><span class="eyebrow">${relayMoveId ? t('move.immaculate_relay') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchForecast')}</span><h2>${relayMoveId ? t('battle.relayChoose') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchTitle')}</h2><p>${relayMoveId ? t('battle.relayHint') : state.sides.player.pendingReplacement ? t('battle.replacementHint') : t('battle.switchHint')}</p><div class="replacement-options">${optionHtml}</div>${!state.sides.player.pendingReplacement ? `${relayMoveId ? '' : `<div class="switch-bonus">✦ ${t(switchBonusKey)}</div>`}${actionButton(t('battle.cancel'), 'cancel-switch', 'subtle-btn')}` : ''}</section></div>`;
+  const replacementCard = screen.querySelector('.replacement-card'),
+    replacementTitle = replacementCard?.querySelector('h2');
+  replacementCard?.setAttribute('role', 'dialog');
+  replacementCard?.setAttribute('aria-modal', 'true');
+  replacementTitle?.setAttribute('id', 'replacement-title');
+  replacementCard?.setAttribute('aria-labelledby', 'replacement-title');
   screen
     .querySelectorAll('.switch-option>span')
     .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
   screen.querySelectorAll('[data-switch-index]').forEach((button) =>
-    button.addEventListener('click', () => {
-      screen.querySelector('#replacement-root').innerHTML = '';
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeSwitch({
+        restoreFocus: !state.sides.player.pendingReplacement,
+        focusAfterUnlock: !state.sides.player.pendingReplacement,
+      });
       const index = Number(button.dataset.switchIndex);
       if (relayMoveId) handlePlayerAction({ type: 'move', moveId: relayMoveId, allyIndex: index });
       else if (state.sides.player.pendingReplacement) handleReplacement(index);
       else handlePlayerAction({ type: 'switch', index });
     })
   );
-  screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => {
-    screen.querySelector('#replacement-root').innerHTML = '';
-    returnFocus?.focus();
-  });
+  screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => closeSwitch());
   screen.querySelector('[data-switch-index]')?.focus();
 }
 
-async function handleTrainerCommand() {
-  if (ctx.locked || !canUseTrainerCommand(ctx.battleSession.state, 'player')) return;
-  const session = ctx.battleSession;
-  await sound.unlock();
-  if (!sessionIsActive(session)) return;
+function claimBattleLock() {
+  if (ctx.locked) return false;
   ctx.locked = true;
-  refreshBattle();
-  const result = applyTrainerCommand(session.state, 'player');
-  session.state = result.state;
-  await playEvents(result.events);
-  if (!sessionIsActive(session)) return;
-  ctx.locked = false;
-  session.lastLine = t('battle.yourTurn');
-  refreshBattle();
+  return true;
+}
+
+async function handleTrainerCommand() {
+  if (!canUseTrainerCommand(ctx.battleSession.state, 'player')) return;
+  if (!claimBattleLock()) return;
+  const session = ctx.battleSession;
+  try {
+    refreshBattle();
+    await sound.unlock();
+    if (!sessionIsActive(session)) return;
+    const preTurnState = structuredClone(session.state),
+      result = applyTrainerCommand(session.state, 'player');
+    session.state = result.state;
+    beginPresentation(session, preTurnState);
+    await playEvents(result.events);
+    if (!sessionIsActive(session)) return;
+    ctx.locked = false;
+    session.lastLine = t('battle.yourTurn');
+    refreshBattle();
+  } catch (error) {
+    if (sessionIsActive(session)) ctx.locked = false;
+    throw error;
+  }
 }
 
 async function handlePlayerAction(action) {
-  if (ctx.locked) return;
+  if (!claimBattleLock()) return;
   const session = ctx.battleSession;
-  await sound.unlock();
-  if (!sessionIsActive(session)) return;
-  ctx.locked = true;
-  refreshBattle();
-  const tutorialStep = session.tutorialStep;
-  const enemyAction = session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
-  if (session.mode === 'tutorial') {
-    if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
-    else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;
-    else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
-    else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
-  }
-  if (
-    action?.type === 'move' &&
-    MOVES[action.moveId]?.signature &&
-    enemyAction?.type === 'move' &&
-    MOVES[enemyAction.moveId]?.signature
-  )
-    session.committedClash = {
-      left: { creatureId: activeOf(session.state, 'player').id, moveId: action.moveId },
-      right: { creatureId: activeOf(session.state, 'enemy').id, moveId: enemyAction.moveId },
-    };
-  const result = resolveTurn(session.state, action, enemyAction);
-  session.state = result.state;
-  await playEvents(result.events);
-  if (!sessionIsActive(session)) return;
-  ctx.locked = false;
-  if (session.state.phase === 'ended') {
-    finishBattle();
-    return;
-  }
-  await resolvePendingReplacements(session);
-  if (!sessionIsActive(session)) return;
-  if (session.state.phase !== 'ended') {
-    session.lastLine = t('battle.yourTurn');
+  try {
     refreshBattle();
+    await sound.unlock();
+    if (!sessionIsActive(session)) return;
+    const preTurnState = structuredClone(session.state),
+      tutorialStep = session.tutorialStep;
+    const enemyAction =
+      session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
+    if (session.mode === 'tutorial') {
+      if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
+      else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;
+      else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
+      else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
+    }
+    if (
+      action?.type === 'move' &&
+      MOVES[action.moveId]?.signature &&
+      enemyAction?.type === 'move' &&
+      MOVES[enemyAction.moveId]?.signature
+    )
+      session.committedClash = {
+        left: { creatureId: activeOf(session.state, 'player').id, moveId: action.moveId },
+        right: { creatureId: activeOf(session.state, 'enemy').id, moveId: enemyAction.moveId },
+      };
+    const result = resolveTurn(session.state, action, enemyAction);
+    session.state = result.state;
+    beginPresentation(session, preTurnState);
+    await playEvents(result.events);
+    if (!sessionIsActive(session)) return;
+    if (session.state.phase === 'ended') {
+      ctx.locked = false;
+      finishBattle();
+      return;
+    }
+    await resolvePendingReplacements(session);
+    if (!sessionIsActive(session)) return;
+    if (session.state.phase !== 'ended') {
+      session.lastLine = t('battle.yourTurn');
+      refreshBattle();
+    }
+  } catch (error) {
+    if (sessionIsActive(session)) ctx.locked = false;
+    throw error;
   }
 }
 
@@ -734,32 +991,44 @@ async function resolvePendingReplacements(session = ctx.battleSession) {
   if (!sessionIsActive(session)) return;
   let state = session.state;
   if (state.sides.enemy.pendingReplacement) {
-    const action = chooseAiAction(state, 'enemy', session.difficulty, session.style);
-    const result = applyReplacement(state, 'enemy', action);
+    const action = chooseAiAction(state, 'enemy', session.difficulty, session.style),
+      preTurnState = structuredClone(state),
+      result = applyReplacement(state, 'enemy', action);
     session.state = result.state;
+    beginPresentation(session, preTurnState);
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
     state = session.state;
   }
   if (state.sides.player.pendingReplacement) {
+    ctx.locked = false;
     session.lastLine = t('battle.chooseReplacement');
     refreshBattle();
     openSwitch();
+    return;
   }
+  ctx.locked = false;
 }
 
 async function handleReplacement(index) {
+  if (!claimBattleLock()) return;
   const session = ctx.battleSession;
-  if (!sessionIsActive(session)) return;
-  ctx.locked = true;
-  const result = applyReplacement(session.state, 'player', { type: 'replace', index });
-  session.state = result.state;
-  await playEvents(result.events);
-  if (!sessionIsActive(session)) return;
-  ctx.locked = false;
-  await resolvePendingReplacements(session);
-  if (!sessionIsActive(session)) return;
-  refreshBattle();
+  try {
+    refreshBattle();
+    if (!sessionIsActive(session)) return;
+    const preTurnState = structuredClone(session.state),
+      result = applyReplacement(session.state, 'player', { type: 'replace', index });
+    session.state = result.state;
+    beginPresentation(session, preTurnState);
+    await playEvents(result.events);
+    if (!sessionIsActive(session)) return;
+    await resolvePendingReplacements(session);
+    if (!sessionIsActive(session)) return;
+    refreshBattle();
+  } catch (error) {
+    if (sessionIsActive(session)) ctx.locked = false;
+    throw error;
+  }
 }
 
 registerRoutes({
@@ -768,10 +1037,12 @@ registerRoutes({
   openBattleCodex,
   openBattleLog,
   openPlateDetails,
+  closeBattleOverlay,
   battleEntrance,
   refreshBattle,
   renderTutorialTip,
   openSwitch,
+  closeSwitch,
   handleTrainerCommand,
   handlePlayerAction,
   resolvePendingReplacements,

@@ -60,7 +60,7 @@ test('music themes cover every screen family and authored arena', () => {
 });
 
 test('mixer settings clamp independently and mute only the master', () => {
-  assert.deepEqual(computeMixerLevels({ volume: 2, musicVolume: -1, sfxVolume: 0.35 }), {
+  assert.deepEqual(computeMixerLevels({ volume: 0, musicVolume: -1, sfxVolume: 0.35 }), {
     master: 1,
     music: 0,
     sfx: 0.35,
@@ -77,9 +77,9 @@ test('mixer settings clamp independently and mute only the master', () => {
   assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99 }), 0.82);
 });
 
-test('the explicit migration chain advances every historical version to v15', () => {
-  assert.equal(SAVE_VERSION, 15);
-  assert.equal(SAVE_MIGRATIONS.length, 14);
+test('the explicit migration chain advances every historical version to v16', () => {
+  assert.equal(SAVE_VERSION, 16);
+  assert.equal(SAVE_MIGRATIONS.length, 15);
   let save = { version: 1 };
   for (let index = 0; index < SAVE_MIGRATIONS.length; index++) {
     save = SAVE_MIGRATIONS[index](save);
@@ -88,8 +88,8 @@ test('the explicit migration chain advances every historical version to v15', ()
   assert.equal(save.musicVolume, 0.45);
   assert.equal(save.sfxVolume, 0.8);
   assert.equal(save.expertMode, false);
-  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 15);
-  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 15);
+  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 16);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 16);
   assert.deepEqual(
     migrateSave({
       version: 14,
@@ -121,4 +121,147 @@ test('save versions are strict and persistence reports unavailable storage truth
     }),
     false
   );
+});
+test('scheduled audio chains disconnect every node when their source ends', () => {
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  const disconnected = [];
+  const makeNode = (name) => ({
+    disconnect() {
+      disconnected.push(name);
+    },
+  });
+  const source = {
+    listeners: {},
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    },
+    emit(type) {
+      this.listeners[type]?.();
+    },
+  };
+  const chain = [source, makeNode('filter'), makeNode('gain'), makeNode('send')];
+  const collection = new Set();
+
+  sound.trackSource(source, collection, chain);
+  assert.equal(collection.has(source), true);
+  source.emit('ended');
+  assert.deepEqual(disconnected, ['filter', 'gain', 'send']);
+  assert.equal(collection.has(source), false);
+});
+
+test('shared SFX nodes disconnect only after the final source ends', () => {
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  const disconnected = [];
+  const shared = {
+    disconnect() {
+      disconnected.push('shared');
+    },
+  };
+  const makeSource = () => {
+    const source = {
+      listeners: {},
+      addEventListener(type, listener) {
+        this.listeners[type] = listener;
+      },
+      emit(type) {
+        this.listeners[type]?.();
+      },
+    };
+    return source;
+  };
+  const first = makeSource();
+  const second = makeSource();
+  const collection = new Set();
+
+  sound.trackSource(first, collection, [first, shared]);
+  sound.trackSource(second, collection, [second, shared]);
+  first.emit('ended');
+  assert.deepEqual(disconnected, []);
+  second.emit('ended');
+  assert.deepEqual(disconnected, ['shared']);
+});
+
+test('patch starts every SFX source before stopping and cleans each chain on ended', () => {
+  const makeParam = () => ({
+    value: 1,
+    setValueAtTime() {},
+    exponentialRampToValueAtTime() {},
+    setTargetAtTime() {},
+    cancelScheduledValues() {},
+  });
+  class FakeNode {
+    constructor(kind) {
+      this.kind = kind;
+      this.gain = makeParam();
+      this.frequency = makeParam();
+      this.Q = makeParam();
+      this.listeners = {};
+      this.started = [];
+      this.stopped = [];
+      this.disconnects = 0;
+    }
+    connect(node) {
+      return node;
+    }
+    disconnect() {
+      this.disconnects += 1;
+    }
+    addEventListener(type, listener) {
+      this.listeners[type] = listener;
+    }
+    start(time) {
+      this.started.push(time);
+    }
+    stop(time) {
+      assert.ok(this.started.length, `${this.kind} stopped before start`);
+      this.stopped.push(time);
+    }
+    emitEnded() {
+      this.listeners.ended?.();
+    }
+  }
+  class FakeAudioContext {
+    constructor() {
+      this.currentTime = 1;
+      this.sampleRate = 100;
+      this.state = 'running';
+      this.destination = new FakeNode('destination');
+      this.nodes = [];
+    }
+    node(kind) {
+      const node = new FakeNode(kind);
+      this.nodes.push(node);
+      return node;
+    }
+    createGain() {
+      return this.node('gain');
+    }
+    createOscillator() {
+      return this.node('oscillator');
+    }
+    createBufferSource() {
+      return this.node('buffer-source');
+    }
+    createBiquadFilter() {
+      return this.node('filter');
+    }
+    createBuffer(channels, length) {
+      return { numberOfChannels: channels, getChannelData: () => new Float32Array(length) };
+    }
+  }
+
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  const ctx = new FakeAudioContext();
+  sound.ctx = ctx;
+  sound.graph = { sfxBus: ctx.createGain(), reverbIn: ctx.createGain() };
+  sound.patch({ duration: 0.16, noiseGain: 0.02 });
+
+  assert.equal(sound.sfxSources.size, 3);
+  for (const source of sound.sfxSources) {
+    assert.equal(source.started.length, 1);
+    assert.equal(source.stopped.length, 1);
+    source.emitEnded();
+  }
+  assert.equal(sound.sfxSources.size, 0);
+  assert.ok(ctx.nodes.slice(2).every((node) => node.disconnects === 1));
 });

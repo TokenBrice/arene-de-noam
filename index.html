@@ -4,6 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#090b22" />
+    <script>
+      const params = new URLSearchParams(location.search),
+        urlLanguage = params.get('lang');
+      if (urlLanguage === 'en' || urlLanguage === 'fr') document.documentElement.lang = urlLanguage;
+      try {
+        const saved = JSON.parse(localStorage.getItem('arene-de-noam-save') || 'null'),
+          root = document.documentElement,
+          language = urlLanguage === 'en' || urlLanguage === 'fr' ? urlLanguage : saved?.language;
+        if (saved?.reducedMotion) root.classList.add('reduced-motion');
+        if (saved?.highContrast) root.classList.add('high-contrast');
+        if (language === 'en' || language === 'fr') root.lang = language;
+      } catch {}
+    </script>
     <title>Arène de Noam</title>
     <link rel="stylesheet" href="./styles/tokens.css?build=epic7" />
     <link rel="stylesheet" href="./styles/base.css?build=epic7" />
@@ -18,19 +31,28 @@
     <link rel="stylesheet" href="./styles/overrides/selection.css?build=epic7" />
     <link rel="stylesheet" href="./styles/overrides/academy.css?build=epic7" />
     <link rel="stylesheet" href="./styles/screens/results.css?build=epic7" />
-    <!-- Battle-only sheets are preloaded here and promoted to real stylesheets
-         on first battle entry or move-theater preview (ctx.ensureBattleStyles),
-         keeping the title screen's critical CSS small. -->
-    <link rel="preload" as="style" href="./styles/screens/battle-fx.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-presentation.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-combos.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-ace-log.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/overrides/battle-moves.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/overrides/battle-command.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/overrides/battle-preview.css?build=epic7" />
-    <link rel="preload" as="style" href="./styles/screens/battle-layout.css?build=epic7" />
+    <!-- Battle-sheet asset manifest; ctx.ensureBattleStyles() promotes these
+         paths only when selection or a battle-adjacent screen is opened.
+         Keeping the manifest here lets tooling validate every move choreography
+         without making the title load the battle CSS. -->
+    <!-- href="./styles/screens/battle-fx.css" -->
+    <!-- href="./styles/screens/battle-presentation.css" -->
+    <!-- href="./styles/screens/battle-combos.css" -->
+    <!-- href="./styles/screens/battle-ace-log.css" -->
+    <!-- href="./styles/overrides/battle-moves.css" -->
+    <!-- href="./styles/overrides/battle-command.css" -->
+    <!-- href="./styles/overrides/battle-preview.css" -->
+    <!-- href="./styles/screens/battle-layout.css" -->
   </head>
   <body>
+    <script>
+      try {
+        const root = document.documentElement,
+          body = document.body;
+        body.classList.toggle('reduced-motion', root.classList.contains('reduced-motion'));
+        body.classList.toggle('high-contrast', root.classList.contains('high-contrast'));
+      } catch {}
+    </script>
     <div id="game">
       <main id="screen" class="screen boot-screen">
         <section class="boot-card">

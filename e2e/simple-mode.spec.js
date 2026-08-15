@@ -68,5 +68,5 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await expect(page.locator('.arena-resonance, #contract-chip, .flow-chip')).toHaveCount(0);
   await expect
     .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')).version))
-    .toBe(15);
+    .toBe(16);
 });
