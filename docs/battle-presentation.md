@@ -1,0 +1,917 @@
+# Battle presentation contract ("Stade Lumière", Phase 3)
+
+This is the binding interface between the six Phase 3 units of the upgrade plan
+([`superpowers/plans/2026-09-29-state-of-the-art-upgrade.md`](superpowers/plans/2026-09-29-state-of-the-art-upgrade.md) §3):
+
+| Unit | Scope |
+| --- | --- |
+| **3A** | Stage: `ArenaScene` v2 in `src/presentation/arena.js` (+ optional `src/presentation/stage/*.js`) |
+| **3B** | WebGL fighters: `FighterLayer` in `src/presentation/fighters.js`, DOM proxies |
+| **3C-1** | Director (`src/battle-ui/director.js`), GPU `FxLayer` (`src/presentation/fx-layer.js`), `#fx-text` numbers/stamps, `playback.js` rewrite |
+| **3C-2** | Choreography data (`src/data/choreo.js`), FX atlas, banners (`src/battle-ui/banners.js`), presentation-contract test |
+| **3D** | Battle HUD, dock, sheets, narration box, stage geometry |
+| **3E** | Sound cue API in `src/sound.js` |
+
+Three real modules ship with this contract and are the only shared runtime code the units build on:
+[`src/battle-ui/fx-clock.js`](../src/battle-ui/fx-clock.js), [`src/battle-ui/beats.js`](../src/battle-ui/beats.js),
+[`src/battle-ui/cues.js`](../src/battle-ui/cues.js) (tests: `test/fx-clock.test.js`, `test/beats.test.js`).
+
+Rules that apply everywhere below:
+
+- Engine determinism is untouched. Presentation reads events and `state`; it never calls the engine RNG and never
+  `Math.random()`. All FX randomness comes from `fxSeed(...)` / `fxRandom(seed)` (§3.5).
+- "×1 ms" means **virtual milliseconds on the session fx-clock at ×1**. Real milliseconds are written "real ms".
+- A "side" is `'player' | 'enemy'`. A "view" is the presented battle state (`session.displayState ?? session.state`).
+- No runtime stub, placeholder, no-op API or fake fallback ships at Gate 3 (§16).
+
+---
+
+## 1. Pipeline and lifecycle
+
+```mermaid
+flowchart LR
+  E[engine events<br/>resolveTurn / applyReplacement / applyTrainerCommand] --> P[playback.playEvents]
+  P --> G[beats.groupBeats]
+  G --> D[director: beat → timeline<br/>choreo.js data]
+  D --> C[session.clock<br/>FxClock]
+  C --> A[ArenaScene<br/>shot · punch · grade · cheer]
+  C --> F[arena.fighters<br/>react · setCreature]
+  C --> X[arena.fx<br/>emit]
+  C --> T[#fx-text<br/>numbers · stamps · banners]
+  C --> H[HUD<br/>patchHud · drainHp · narrate]
+  C --> B[session.cues<br/>CueBus → sound.cue]
+```
+
+Per battle session (`ctx.battleSession`):
+
+1. `startBattle` creates the session (controller, unchanged shape: `sessionToken`, `cancelled`, `timeline`, `displayState`).
+2. `renderBattle` builds the DOM (§11.1), creates `ArenaScene` (§7), awaits `route.patchFighters(session.state)` (§8.4), calls
+   `arena.warmUp()`, then `battleEntrance(session)`, which awaits `route.playIntro(session)` (§6.6).
+3. The first of `playIntro` / `playEvents` creates the presentation pair with `ensurePresentation(session)` (director.js):
+   - `session.clock = new FxClock({ speed: ctx.save.battleSpeed, instant: ctx.testAnimationScale === 0, alive })`,
+     where `alive = () => ctx.battleSession === session && !session.cancelled && screen.classList.contains('battle-screen')`;
+   - `session.cues = new CueBus()`, with `session.cues.on('*', (payload, name) => ctx.sound.cue(name, payload))`;
+   - `ctx.arenaScene?.setClock(session.clock)`.
+4. Each player action: controller locks input, `beginPresentation(session, preTurnState)`, `await playEvents(result.events)`,
+   then (enemy replacement) `await playEvents(replacement.events)`, then unlocks. Unchanged controller flow.
+5. End: `finishBattle` (results.js, unchanged) awaits `route.battleOutroFx(state)` (§6.7).
+6. Leaving the battle: any cancellation path makes `alive()` false; the clock disposes itself on its next use or tick
+   (pending waits resolve `false`), and `disposeArena()` disposes the scene (fighters and FX included). The director also
+   calls `session.cues.dispose()` when `playEvents`/`battleOutroFx` observe a dead session. Nothing is global.
+
+`ctx.currentFxMove` keeps its meaning for the quality governor (`src/app/quality.js`, `atBoundary`): the director sets it
+to the playing beat object at beat start and to `null` at beat end, so tier demotions only apply between beats.
+
+---
+
+## 2. Engine event catalogue (after Phase 2F)
+
+Source of truth: `src/battle/engine.js`. Every event also carries `turn` (stamped by the engine). There is **no**
+`arena-pulse` event: arena weather is continuous (`state.weather` = `{ [moveAffinity]: multiplier }`, `{}` for Crystal)
+and appears only as `damage.weather`.
+
+| Type | Payload fields | Emitted by / notes |
+| --- | --- | --- |
+| `move-start` | `side, creatureId, moveId, allyIndex?` | Opens every executed move. `allyIndex` only for `allySwitch` moves (Relève immaculée). |
+| `move-skip` | `side, reason: 'ko'` | The actor was K.O.'d earlier this turn. Always directly follows the `ko` events that caused it. |
+| `damage` | `side` (target), `sourceSide, sourceCreatureId, creatureId` (target), `amount` (HP lost, ≥ 0), `rawAmount, absorbed, hit, hits, hp, maxHp, affinity` (0.5 / 1 / 2), `moveAffinity, combo` (`{ multiplier: 1.3, helperId: id \| null }` on hit 1 only, else `null`), `critical: boolean` (same value on every hit of the action), `weather` (applied arena multiplier, 1 when neutral) | One per landed hit. `hits` is the move's declared count: a lethal hit ends the loop early, so fewer `damage` events than `hits` can exist. `amount === 0 && absorbed > 0` is a fully blocked hit. |
+| `barrier-hit` | `side, creatureId, amount` (absorbed this hit), `total` (barrier left) | Immediately before its `damage` (a `nine_lives` `passive` may sit in between). |
+| `barrier` | `side, creatureId, amount` (gain actually applied), `total, source?: 'passive'` | Move/talent/Ace/team barriers. |
+| `barrier-break` | `side, creatureId, amount, total, source: 'passive' \| 'purge'` | `heartwood_wedge` and purge moves. |
+| `heal` | `side, creatureId, amount, hp, maxHp, source: 'move' \| 'team' \| 'drain' \| 'passive' \| 'ace'` | Only when `amount > 0`. Team heals emit one per healed ally (bench included). |
+| `status` | `side, creatureId, status, applied: boolean`; applied: `remaining` (number \| null), `stacks, sourceCreatureId` (\| null); `ill_omen` entry adds `source: 'passive'`; consumption adds `consumed: true` (`focused`; Marqué uses `source: 'combo'`; moves' `consume` list) | Removal (`applied: false`) without `consumed` = cleanse, purge, or the engine using up Esquive (after `miss`) / Riposte (after its `recoil`). |
+| `miss` | `side` (dodger), `sourceSide, creatureId` (dodger), `moveId` | Esquive consumed; followed by the `evasive` removal. |
+| `recoil` | `side` (attacker), `creatureId, amount, hp, maxHp, source: 'countering' \| 'bramblehide' \| 'recoil'` | |
+| `status-tick` | `side, creatureId, status: 'burning', amount, hp, maxHp, remaining` | End of turn, active creatures only. |
+| `surge` | `side, amount` (signed change), `total, source` (`'signature' \| 'damage' \| 'support' \| 'heal' \| 'switch' \| 'resolve' \| 'passive' \| 'command' \| 'perfect-relay' \| 'ace'`), `ready: boolean` (`total === 100`) | Only when the gauge changes. The Signature spend is negative and follows its `move-start`. |
+| `assist` | `side` (attacker side), `creatureId` (helper), `attackerId, combo: true` | Combo finished on a Marqué set by an ally. |
+| `passive` | `side, creatureId, passive`; entry talents add `status, remaining, stacks`, `ill_omen` adds `targetSide, targetCreatureId` | Talent trigger; its effect follows as its own event. |
+| `trainer-command` | `side, creatureId, command: 'coach'` | Only from `applyTrainerCommand`, followed by removals and `surge`. |
+| `perfect-relay` | `side` (switched defender), `sourceSide, creatureId, moveId` | After the switches, before any move. |
+| `switch` | `side, from, to, activeIndex, creatureId` (incoming), `source: 'switch' \| 'signature'` | Voluntary switch (turn start) or queued relay (after both actions). |
+| `replace` | same as `switch`, `source: 'replacement'` | Only from `applyReplacement`. |
+| `ko` | `side, creatureId, hp` | Attacker K.O. can be recorded mid-action (reflected damage); target K.O. at the end of the action; burn K.O. in the tick. |
+| `ace` | `side: 'enemy', creatureId, ace, hp?, maxHp?` (`titanheart`) | After an enemy `replace` when one creature is left; its effects follow. |
+| `battle-end` | `winner, reason: 'knockout' \| 'turn-cap'` (no `side`) | Always the last event. |
+
+Action shapes, legality and the damage formula are in [`battle-system.md`](battle-system.md).
+
+---
+
+## 3. Beats (`src/battle-ui/beats.js`)
+
+`groupBeats(events)` is pure (no DOM, no ctx, no randomness) and returns ordered beats. **Every input event lands in exactly
+one beat**, and each beat's `events` keep engine order. The director plays beats in array order.
+
+### 3.1 Grouping rules
+
+| Event | Rule |
+| --- | --- |
+| `move-start` | Opens an **ActionBeat**. |
+| `switch`, `replace` | Open a **SwitchBeat** (entry talents, relay cleanse/buffs and the switch Surge follow into it). |
+| `perfect-relay`, `trainer-command`, `ace` | Open a **CutInBeat** (`cutIn` = the event type); their effects follow into it. |
+| `status-tick` | Opens a **ChipBeat** `chip: 'tick'`; later ticks of the same run join it. |
+| `battle-end` | Opens the **EndBeat** (always last). |
+| `ko` | Goes to a **KoBeat** inserted right after the beat being filled; several `ko` of the same beat (double K.O.) share one KoBeat. Events after the `ko` still belong to the earlier beat. |
+| `move-skip` | Absorbed by the KoBeat right before it (`skips`). Unabsorbed (never produced by the engine) → ChipBeat `chip: 'skip'`. |
+| `surge` | Never a beat: it rides in `beat.surges` of the beat being filled (**non-blocking**). `ready: true` adds the side to `beat.readySides`. |
+| `status` with `consumed`, or the Esquive/Riposte removal the engine emits when using them up | ActionBeat `consumed` (small HUD motion only, never a chip). |
+| `barrier-hit` | Attached to the next `damage` as `hit.barrierHit` ("absorbed N" on the same impact). |
+| `damage` | One `hit` per event (multi-hit = per-hit sub-cues). |
+| `assist` | ActionBeat `assist` (combo credit tag on the number). |
+| `miss` | ActionBeat `miss`. |
+| other (`status`, `passive`, `heal`, `barrier`, `barrier-break`, `recoil`) | Between two hits → `hits[i].between`; otherwise the beat's `effects` (the trailing row). |
+| anything before a first opener (not produced by the engine) | ChipBeat `chip: 'effects'`. |
+
+After grouping:
+
+- **Trailing statuses → one chip row**: `beat.chips` merges the beat's `status` effects by `(side, creatureId, status)`,
+  last event wins, first-appearance order. `beat.talents` = `passive` effects; `beat.readouts` = `heal`, `barrier`,
+  `barrier-break`, `recoil` effects (numbers overlapping the contact readout window).
+- **Critical**: `beat.critical` = any hit critical; `beat.tier = min(3, baseTier + 1)`; stamp `'critical'` first.
+- **Signature clash**: when both sides have a Signature ActionBeat in the same list, the first gets `clash: true`.
+
+### 3.2 Beat shapes
+
+```js
+// Common rows on action / switch / cutin / chip beats
+{ effects: Event[], chips: Chip[], talents: Event[], readouts: Event[], surges: Event[], readySides: Side[], events: Event[] }
+Chip = { side, creatureId, status, applied: boolean, stacks: number | null, remaining: number | null, event }
+
+ActionBeat = { kind: 'action', side, targetSide, creatureId, moveId,
+  signature: boolean, baseTier: 1|2|3, tier: 1|2|3, critical: boolean, lethal: boolean, clash: boolean,
+  seed: uint32,                    // fxSeed(moveId, turn, 0)
+  start: Event /* move-start */, hits: Hit[], miss: Event | null, assist: Event | null,
+  combo: { multiplier, helperId } | null, consumed: Event[],
+  stamps: ('miss' | 'blocked' | 'critical' | 'effective' | 'resisted')[], ...rows }
+Hit = { hit, hits, damage: Event, barrierHit: Event | null, between: Event[], amount, absorbed, affinity,
+  critical: boolean, blocked: boolean /* amount 0, absorbed > 0 */, lethal: boolean /* hp <= 0 */,
+  seed: uint32 /* fxSeed(moveId, turn, hit) */ }
+SwitchBeat = { kind: 'switch', side, creatureId /* incoming */, from, to, source: 'switch'|'signature'|'replacement',
+  replacement: boolean, start: Event, ...rows }
+CutInBeat  = { kind: 'cutin', cutIn: 'perfect-relay'|'trainer-command'|'ace', side, creatureId, start: Event, ...rows }
+ChipBeat   = { kind: 'chip', chip: 'tick'|'skip'|'effects', ticks: Event[], skips: Event[], ...rows }
+KoBeat     = { kind: 'ko', kos: { side, creatureId }[], skips: Event[] /* absorbed move-skip */, events }
+EndBeat    = { kind: 'end', winner, reason, events }
+```
+
+Stamps (ActionBeat, in display order): a miss → `['miss']`; every landed hit fully absorbed → `['blocked']` only;
+otherwise `'critical'` (any non-blocked critical hit) then `'effective'` / `'resisted'` from the first non-blocked hit.
+A lethal hit keeps its stamps; "K.O. !" belongs to the KoBeat that follows. Support/heal moves have no stamps.
+
+`moveTier(move)`: Signature → 3; `power × hits ≥ 34` → 2; else 1. Tier drives intensity (hit-stop, shake, knockback,
+quads, timeline stretch). **Only `signature` triggers the cut-in band**: a crit-bumped T3 has no cut-in.
+
+### 3.3 Real sequences (from `test/beats.test.js`)
+
+| Turn | Beats |
+| --- | --- |
+| Voltide `storm_chain` ×3 vs Kordane | `action(storm_chain, T1, 3 hits, chips [stunned+])`, `action(crystal_strike)` |
+| Pyrolynx `flash_pounce` K.O.s a 1-HP Kordane | `action(flash_pounce, lethal)`, `ko(kordane, skips: [enemy move-skip])`; then `applyReplacement` → `switch(replacement)`, `cutin(ace)` |
+| Switch to Abyssar vs a Feu move | `switch(abyssar, surges [switch])`, `cutin(perfect-relay)`, `action(cinder_burst, stamps [resisted])`, `chip(tick)` |
+| Both Signatures, Supernova recoil faints Solflare | `action(fault_charge, clash)`, `action(supernova, combo 1.3)`, `ko(kordane + solflare)` |
+
+### 3.4 Timing budget per beat (`BEAT_BUDGET_MS`, `beatBudgetMs(beat, { reducedMotion })`)
+
+Budgets are **wall-clock ms at ×1, hit-stops included** (a hit-stop freezes the clock, so the director's virtual timeline for
+a beat is `budget − Σ hit-stops`). ×2 and hurry divide them through the clock rate. The director must end every beat at its
+budget (it may end earlier, never later) and uses `waitUntil(beatStart + budget)` so frame lag never accumulates.
+
+| Beat | ×1 budget | Notes |
+| --- | --- | --- |
+| Action T1 / T2 / T3 | 700 / 1000 / 1150 | With the chip add-on and the Signature cut-in below they give the plan's ≈ 0.8 / 1.1 / 1.7 s beats. |
+| + Signature cut-in band | +450 (clash beat: +600) | Only when `signature`. |
+| + each extra landed hit | +220 (T1/T2), +120 (T3) | Per-hit spacing of the `perHit` block (§10.3). |
+| + chip row add-on | +250 | When `chips` or `talents` is non-empty (≤ 0.3 s). Number readouts (`readouts`) overlap and add nothing. |
+| Action cap | 1500 (T1/T2), 1800 (T3) | Includes cut-in, hits and add-on. A Signature beat is ≤ 1.8 s. |
+| Lethal action | −400 | The KoBeat takes over the readout: the K.O. stamp replaces the number. Non-lethal numbers keep ≥ 450 ms. |
+| K.O. | 1200 (+300 per extra K.O. in the beat) | Absorbed `move-skip` adds nothing. |
+| Voluntary / relay switch | 700 (+250 add-on) | Recall 180, empty 60, drop and land. |
+| Replacement | 500 (+250 add-on) | Enters an empty pad: no recall. |
+| Cut-in | perfect-relay 600, trainer-command 700, ace 900 (+250 add-on) | |
+| Chip `tick` / `effects` / `skip` | 500 / 300 / 0 | |
+| End | 0 | The finale is the outro (§6.7), not the turn. |
+| **Reduced motion** | every beat 450; action +150 per extra hit; skip and end 0 | Readout beats ≥ 450 ms; cosmetic time (cut-in, travel, hit-stop, add-on) is 0. |
+
+Not included, added by the director: the **once-per-player-creature Signature-ready banner** is non-blocking (§6.4), so it
+adds nothing. Turn pacing proof: `test/beats.test.js` runs seeded AI battles (the turn window = the turn plus the enemy's
+free replacement) and asserts median ≤ 2.4 s and p90 ≤ 3.5 s; measured nominal values are median ≈ 2.2 s and
+p90 ≈ 3.3 s across Apprentice/Standard/Champion mixes. The remaining margin is the director's only overhead allowance
+(`timing.mjs` phone ×1 must still read median ≤ 2.4 s, p90 ≤ 3.5 s).
+
+### 3.5 FX randomness
+
+`fxSeed(...parts)` is FNV-1a over `parts.join('|')`; `fxRandom(seed)` returns a mulberry32 `[0, 1)` stream. Seeds:
+ActionBeat `seed = fxSeed(moveId, turn, 0)`, hit `seed = fxSeed(moveId, turn, hit)`. Other beats use
+`fxSeed(kind, creatureId, turn)`; per-creature idle phase uses `fxSeed(creatureId)`. The same battle replays
+identical FX, so contact sheets and screenshots are reproducible.
+
+---
+
+## 4. The session clock (`src/battle-ui/fx-clock.js`)
+
+```js
+new FxClock({
+  speed = 1,            // ctx.save.battleSpeed (1 | 2)
+  instant = false,      // ctx.testAnimationScale === 0
+  alive = () => true,   // session predicate (§1)
+  now, requestFrame, cancelFrame, setTimer, clearTimer, // injectable time sources (tests)
+  maxStepMs = 100,      // MAX_STEP_MS
+})
+```
+
+| Member | Contract |
+| --- | --- |
+| `now()` | Virtual ms since creation, monotonic. Each read advances by `min(realDelta, maxStepMs) × rate` unless paused. Frequent readers (arena frames, director ticks) therefore see continuous time; a stall (hidden tab, long task) never jumps a turn ahead. |
+| `rate` | `speed × (hurry ? HURRY_RATE : 1)`; `HURRY_RATE = 3`. Changes apply from "now", never retroactively. |
+| `setSpeed(speed)` / `speed` | Speed button (×1 / ×2). Throws `RangeError` for non-positive values. |
+| `setHurry(on)` / `hurry` | Hold-to-hurry (§6.5). |
+| `pause(reason = 'manual')` / `resume(reason)` / `paused` | Reason-keyed holds: time is frozen while any hold exists. A paused clock requests no frames (only a running hit-stop keeps ticking until its release). Reasons in use: `'sheet'` (3D, §11.5). |
+| `hitStop(ms)` → `Promise<boolean>` | True hit-stop: freezes virtual time for `ms / rate` real ms (a T2 80 ms hit-stop at ×2 lasts 40 real ms). Overlapping hit-stops extend to the latest end. Resolves `true` when released, `false` if cancelled. No-op (`true`) in instant mode. |
+| `wait(ms, { minRealMs })` / `waitUntil(time, { minRealMs })` → `Promise<boolean>` | Resolves `true` once virtual time reaches the deadline **and** `minRealMs` real ms elapsed since the call; `false` if cancelled/disposed. Use `waitUntil` with absolute deadlines for timelines. |
+| `at(ms, fn)` / `atTime(time, fn)` → `cancel()` | Calls `fn(virtualNow)` at the deadline, in deadline then scheduling order. A throwing callback is reported asynchronously and does not stop the others. |
+| `realMs(virtualMs)` | `virtualMs / rate`; `0` in instant mode. Converts durations for WAAPI/CSS sinks (HP drain, text animations). |
+| `instant` | `true` under `?animations=0`; the director's switch to the readout-only path (§6.5). |
+| `cancelAll()` | Resolves every pending wait/hit-stop with `false` and drops callbacks. The clock stays usable. |
+| `dispose()` / `disposed` | `cancelAll()` and refuse further scheduling (waits resolve `false` immediately). Also happens automatically when `alive()` returns `false` (checked on each tick and each scheduling call). |
+
+Exported constants: `HURRY_RATE = 3`, `READOUT_MIN_REAL_MS = 350`, `MAX_STEP_MS = 100`.
+
+Frame-rate independence: virtual time comes from real time, not frame counts; timers fire on the first frame at or after
+their deadline and absolute deadlines never drift (tested at 30/60/120 Hz). Consumers integrate motion with the virtual
+`dt` between two `now()` reads.
+
+**Instant mode (`?animations=0`)**: virtual time no longer follows real time; each tick (a ~1 ms timer, not rAF) jumps to
+the earliest pending deadline and fires it, so every timed step costs one ~1 ms tick, in order. `minRealMs`, hit-stops
+and `realMs` are 0.
+
+Relation to Phase 1's `ArenaScene.setPaused`: the arena pause stops rendering; the clock pause freezes choreography. A
+covering sheet does both (§11.5). The clock does not watch `document.hidden`: rAF stops in a hidden tab and the stall
+clamp resumes the turn where it was.
+
+---
+
+## 5. Cue bus (`src/battle-ui/cues.js`)
+
+```js
+const bus = new CueBus();          // one per session: session.cues
+const off = bus.on(name | '*', (payload, name) => {});
+bus.emit(name, payload);           // returns the number of handlers called
+bus.dispose();
+```
+
+- Names are checked against `CUE_NAMES`; an unknown name throws `TypeError` in `on` and `emit` (typos fail loudly).
+- Handlers get a **shallow-frozen copy** of the payload; `'*'` handlers run after the specific ones. A throwing handler is
+  reported asynchronously and never stops other handlers or the director.
+- After `dispose()`, `emit` is a no-op returning 0 and `on` returns a no-op unsubscribe. No module-level state exists.
+- Subscribers: sound (3E) through the director's `'*'` subscription to `ctx.sound.cue(name, payload)`; haptics (4G) adds its
+  own subscription in `director.js` in Phase 4. No placeholder subscriber exists before then.
+- **Timing rule**: the director emits a cue at the presented moment on the clock (the contact frame, the readout, the
+  dissolve start), never at engine-event time. No audio may precede its visible event. Cues are emitted in every mode,
+  including `?animations=0` (where they arrive ~1 ms apart) and reduced motion.
+
+Every payload carries `beat` (session beat serial, for "one dominant cue per beat"), `speed` (`clock.rate` at emit time)
+and `reducedMotion`. Specific fields:
+
+| Cue | When | Payload |
+| --- | --- | --- |
+| `windup` | Actor anticipation starts (ActionBeat t = 0, after any cut-in) | `side, creatureId, moveId, affinity` (move), `archetype, tier, signature` |
+| `release` | Projectile/beam leaves, lunge starts (authored `cue` op) | same as `windup` + `hit` |
+| `contact` | Each landed hit's contact frame (before hit-stop) | `side` (target), `sourceSide, creatureId` (target), `moveId, affinity` (move), `hit, hits, amount, absorbed, critical, effectiveness` (`damage.affinity`), `blocked, lethal, tier` |
+| `readout` | A number appears (damage, heal, recoil, tick, barrier gain) | `side, creatureId, kind: 'damage'\|'heal'\|'recoil'\|'tick'\|'barrier', amount, hit?, hits?` |
+| `critical` / `effective` / `resisted` / `miss` / `blocked` | Its stamp appears | `side` (target), `creatureId, moveId` |
+| `status+` / `status-` | A chip row appears (one cue per polarity per row) | `side, creatureId, statuses: string[]` |
+| `heal` | A heal readout appears | `side, creatureId, amount, team: boolean` |
+| `break` | A barrier reaches 0 (`barrier-hit` with `total 0`, or `barrier-break`) | `side, creatureId, amount` |
+| `ko` | Each K.O. flash | `side, creatureId` |
+| `faint-cry` | Each dissolve start | `side, creatureId` |
+| `switch-out` | Recall starts (not for replacements) | `side, creatureId` (outgoing) |
+| `switch-in` | Incoming lands (also both leads in the intro) | `side, creatureId, source: 'switch'\|'signature'\|'replacement'\|'intro'` |
+| `signature-ready` | A side's gauge reaches 100 in a played beat | `side, creatureId, first: boolean` (`true` = the banner plays) |
+| `signature-cutin` | Cut-in band starts | `side, creatureId, moveId, clash: boolean` |
+| `victory` / `defeat` | Outro starts (player perspective) | `winner, reason` |
+
+---
+
+## 6. Director (3C-1, `src/battle-ui/director.js` + `playback.js`)
+
+### 6.1 Public entry points (route names are stable)
+
+| Route / export | Contract |
+| --- | --- |
+| `playEvents(events)` → `Promise<void>` (playback.js) | Unchanged signature. `groupBeats(events)`, then plays each beat. Returns when all beats end or the session dies. Clears `session.displayState` at the end (as today). |
+| `beginPresentation(session, preTurnState)` / `advancePresentation(session, event)` | Unchanged semantics (display-state projection). The director advances each event **when it is presented** (a `damage` at its contact, statuses at their chip row, `switch` on landing) and every event of a beat is advanced exactly once by the beat end. |
+| `playIntro(session)` → `Promise<boolean>` (playback.js) | §6.6. |
+| `battleOutroFx(state)` → `Promise<void>` (fx.js) | §6.7. Name and contract kept for `results.js`. |
+| `clearBattleFx()` (fx.js) | Kept: clears `#fx-text` pools/banners in battle, the theater stage in the Move Theater. |
+| `ensurePresentation(session)` (director.js export) | Creates `session.clock` / `session.cues` once and binds the arena clock (§1). |
+
+### 6.2 Per-beat duties
+
+For each beat: set `ctx.currentFxMove = beat`; narrate once (§6.3); push the timeline entries; run the beat timeline
+(§10) on the clock; advance and patch the HUD at presentation time; end at the budget (§3.4) with
+`waitUntil(start + budget, { minRealMs })` where `minRealMs` keeps the last readout visible ≥ `READOUT_MIN_REAL_MS`;
+set `ctx.currentFxMove = null`. The director never calls the engine, never mutates `session.state`, and never reads
+`state.rngState`.
+
+- **Contact routine** (per hit, at the timeline's `contact` cue): `session.cues.emit('contact')`;
+  `clock.hitStop(TIERS[tier].hitStopMs)` (hits ≥ 2: `min(hitStopMs, 40)`; none under reduced motion);
+  target `react('hit')` + `react('knockback', { px: TIERS[tier].knockPx })`; `arena.punch(target, TIERS[tier])`; impact
+  emitters; then the readout: damage number in `#fx-text` (WAAPI transform/opacity, started now), `drainHp(target, from, to, clock.realMs(450))`,
+  stamps (first applicable hit), `readout` cue, combo tag on hit 1, barrier "absorbed N" on the same number when
+  `hit.barrierHit`; `blocked` hits show the shield stamp and no "−0". A `miss` replaces the contact routine with the target's
+  `dodge` reaction, the "Esquivé !" stamp and the `miss` cue (projectiles whiff past).
+- **Chip row** (timeline `chips` op): status motifs pop on the fighter (status loops, §9.5), HUD chips via `patchHud`,
+  one `status+` / `status-` cue each, persistent `react('tint', { status })` with the first negative status of the target's
+  view statuses in `STATUS_DISPLAY_ORDER` (`null` when none is left).
+- **Readouts** (`beat.readouts`): heal "+N" (green), barrier "+N" shield, recoil "−N" on the attacker with `react('recoil')`;
+  they overlap the contact readout window.
+- **Surges**: advanced and patched when the beat's readout plays; never wait.
+- **K.O.** (KoBeat): per K.O. `react('ko')` + `ko` cue, `arena.shot('ko', { side })`, `arena.cheer()`, the softened screen flash
+  (§9.6), `react('faint')` + `faint-cry`, centred "K.O. !" stamp, HUD team balls; `shot('cut')` at the next beat.
+- **Switch**: `react('recall')` (not for replacements) → empty 60 ms → `await route.patchFighters(view)` → `react('enter')` →
+  "X, à toi !" banner → HUD patch on landing (±50 ms of the landing).
+- **Signature**: cut-in band (§9.6) then the tier-3 timeline; `signature-cutin` cue; the first ActionBeat with `clash` shows
+  the split clash band instead.
+
+### 6.3 Narration and log
+
+- One narration line per beat that carries news: ActionBeat (`battle.action.move`), KoBeat (`battle.ko`), SwitchBeat
+  (`battle.action.switch` / `battle.immaculateRelay`), CutInBeat (existing relay/command/Ace keys), tick ChipBeat
+  (`battle.action.tick`), EndBeat (`battle.logEnd.*`). Chip rows, surges and readouts add no line (≈ 2 lines per turn).
+  `route.narrate(text, { emphasis, minMs: clock.realMs(budget) })` (§11.4); `emphasis` = the first stamp's text
+  (`battle.hitEffective`, `battle.hitWeak`, `battle.critical`, `battle.missCallout`, `battle.blocked`, or "K.O. !").
+  `session.lastLine` is set to `text`, followed by the emphasis (space-separated) when there is one.
+- `session.timeline` is still fed **per semantic event**: every `LOG_EVENT_TYPES` event of the beat, in engine order, at
+  beat start, with today's per-event line text and `type: 'combo'` for combo damage; capped at 40.
+
+### 6.4 Signature-ready
+
+On a beat whose `readySides` contains a side: the active creature of that side in the view gets the `signature-ready` cue.
+For a **player** creature seen for the first time this battle (`session.signatureReadyShown: Set<creatureId>`), the
+`signature-ready` banner plays **non-blocking** (≤ 600 ms, over the next beat or the returning dock, never over the
+fighters) and `first: true`; otherwise `first: false` and the HUD glint only (3D renders the ready state from `view`).
+
+### 6.5 Speed, hurry, reduced motion, `?animations=0`
+
+| Mode | Behaviour |
+| --- | --- |
+| ×1 / ×2 | `clock.setSpeed(ctx.save.battleSpeed)`; the speed button updates it live, mid-turn included. ×1 stays the default. |
+| Hold-to-hurry | While `playEvents` runs, the director binds `pointerdown` on `.battle-stage` → `clock.setHurry(true)`; `pointerup`, `pointercancel`, `lostpointercapture` → `false`; also `Space` keydown (non-repeat) / keyup on `document`. Unbound and reset to `false` when `playEvents` returns. Every readout stays ≥ 350 real ms (`minRealMs`). Gate: holding finishes a 5-hit turn in ≤ 1.2 s. |
+| Reduced motion (`ctx.save.reducedMotion`) | Budgets from §3.4 (readout beats 450, cosmetic 0). No cut-in band, no hit-stop, no shake/punch, no travel, shots are cuts (§7.4), particles become in-place fades (§9.3), fighters: single-frame flash, fade instead of dissolve, no breathing (§8.2), no screen flash. Stamps and numbers fade in place. |
+| `?animations=0` | Clock `instant`. Readout-only path: display state, `patchHud`, `patchFighters` (end states), narration, timeline and cues only. No `#fx-text` nodes, no emits, no shots, no reactions except instant end states. Intro and outro return immediately. |
+
+### 6.6 Intro
+
+`playIntro(session)`: portrait VS stack (3C-2 banner, ≤ 1.0 s) over `arena.shot('intro')` (1.2 s), both leads
+`switch-in` cues with `source: 'intro'`, then the arena weather banner ("Forge du volcan : Feu +20 %, Plante −20 %",
+omitted for Crystal) ≤ 800 ms. Total ≤ 2.0 s at ×1; reduced motion: static VS 300 ms + weather banner 450 ms;
+`?animations=0`: returns `true` immediately. Returns `false` if the session died.
+
+### 6.7 Outro
+
+`battleOutroFx(state)`: keeps `screen.classList` `battle-outro` while it runs (e2e hook), `victory`/`defeat` cue, winner
+`react('victory')`, `arena.shot('victory', { side: winner })`, `arena.cheer(1.5)`, GPU confetti on the winner, "VICTOIRE !"
+banner visible ≥ 800 ms (defeat: "Défaite… Bien joué !", no shake), then the opacity-only `.battle-exit` fade and
+`arena.setPaused(true)`. The results fanfare stays owned by `results.js` / `sound.victory()` (AUD-01): the `victory` cue is
+an on-stage accent only.
+
+---
+
+## 7. `ArenaScene` v2 (3A, `src/presentation/arena.js`)
+
+### 7.1 Construction and public fields
+
+```js
+new ArenaScene(canvas, theme, { quality, governor = null, reducedMotion = false, highContrast = false, testAnimationScale = 1 })
+```
+
+- `canvas` is `#arena`, the **first child of `.battle-stage`** (§11.1), CSS-sized to the stage box (`position:absolute; inset:0`).
+- `theme`: arena id (`crystal | grove | tidal | volcano | astral | eclipse`, unknown → `crystal`). `quality`: `ctx.quality`
+  (2A tier budget, single source). `governor`: `ctx.qualityGovernor` (`attach` on construct, `sample` per animation
+  frame, `detach` on dispose, as in Phase 1). `highContrast`: `ctx.save.highContrast` (new; drives the fighter outline).
+- Throws `Error('WEBGL_UNAVAILABLE')` when the context fails (unchanged friendly path; `?failWebgl=1` unchanged). Dispatches
+  bubbling `arena-context-lost` on the canvas on context loss (unchanged).
+- Writes `--arena-sky-top`, `--arena-sky-bottom`, `--arena-accent` on the closest `.battle-screen` at construction, for 3D's
+  static CSS plate behind the HUD zones.
+- Public read-only fields (tooling and gates rely on them): `renderer`, `scene`, `camera`, `canvas`, `fighters` (§8),
+  `fx` (§9), `paused`, `disposed`.
+
+### 7.2 Methods
+
+| Method | Contract |
+| --- | --- |
+| `fitToStage(stageRect)` → `Anchors` | `stageRect` = `{ width, height }` in CSS px of `.battle-stage` (a DOMRect is fine). Sets the drawing buffer (DPR capped by `quality.arena`), picks the framing preset (portrait when `width / height < 1.25`), frames the camera, places pads and fighters (`fighters.setLayout`), recomputes anchors, writes the CSS vars (§7.3) and renders one frame. Called by the constructor, by the arena's own `ResizeObserver` on `.battle-stage`, and on `setQuality`. |
+| `anchors()` → `Anchors` | Cached **rest** anchors (no layout read). |
+| `worldAnchor(side, point = 'center', out?)` → `THREE.Vector3` | **Live** world position of `'feet' \| 'center' \| 'head'`, including the fighter's current reaction offset. Used by the FX layer. |
+| `setClock(clock \| null)` | Choreography time source (§7.5). |
+| `shot(name, { side, duration })` → `Promise<boolean>` | §7.4. |
+| `punch(targetSide, { kick = 1, shakePx = 0, shakeMs = 0 } = {})` | The Phase 1 camera kick (direction keyed to `targetSide`; `kick` 1 = its amplitude 0.22 / 0.09 / 0.42 world units) plus a screen shake of `shakePx` CSS px for `shakeMs` virtual ms, decaying on clock time (frozen by hit-stops). No-op under reduced motion and `?animations=0`. |
+| `setGrade({ saturation = 1, exposure = 0, contrast = 1 } = {}, { ms = 0 } = {})` | Colour-grade target for stage and fighter materials (not the FX layer), tweened over `ms` virtual ms, persistent until changed. Ranges: saturation 0–2, exposure −1…1 (colour × (1 + exposure)), contrast 0.5–1.5 around 0.5. Combined with the tension grade. Replaces every canvas CSS filter and the cinematic dims (Signature cut-in: `exposure −0.35`). Reduced motion: applied instantly. `?animations=0`: ignored. |
+| `cheer(strength = 1)` | Crowd flash-bulbs (pool: low 12, mid/high 20), fired on super-effective hits, K.O. and victory. No-op under reduced motion and `?animations=0`. |
+| `setBattleState({ tension = 0, showdown = false })` | Unchanged signature; drives the tension grade, motes and showdown framing. |
+| `setPaused(paused)` | Unchanged Phase 1 semantics: one final frame, then no rendering until resumed. Also calls `fighters.setPaused` / `fx.setPaused`. Does not pause the clock (§11.5 pairs them). |
+| `setQuality(quality)` | Unchanged: frame caps, DPR, motes, FX budget now; MSAA with the next arena. Re-runs `fitToStage` with the last rect. |
+| `warmUp()` → `Promise<boolean>` | Compiles every program (stage, fighters, FX layer, hidden pools), awaits `fx.ready`; `false` if disposed first. |
+| `stats()` → `{ draws, triangles, programs, drawingBuffer: [w, h], pixelRatio, fxLive, fxPeak }` | Gate probe; renders nothing extra. |
+| `dispose()` | Unchanged: stops the loop, detaches the governor, disposes fighters, FX, geometries, materials, textures, `forceContextLoss()`. |
+
+**Removed** (clean cutover): `burst()`, `flash()` and the `arena-hit` / `arena-power` canvas classes (replaced by `fx.emit`,
+fighter reactions and grade), `setAnchorResolver()` / `anchorPoint()` (the scene owns the anchors now), `resize()` (use
+`fitToStage`). Removal waits for their last callers (§16).
+
+```ts
+type Anchors = { player: SideAnchors; enemy: SideAnchors };
+type SideAnchors = {
+  feet: { x: number; y: number };   // bottom-centre of the opaque sprite bbox at rest
+  center: { x: number; y: number }; // midpoint of feet and head
+  head: { x: number; y: number };   // top-centre of the opaque sprite bbox at rest
+  sizePx: number;                   // feet.y − head.y
+};
+// CSS px relative to the .battle-stage top-left corner, x → right, y → down.
+```
+
+### 7.3 Anchor CSS variables
+
+Written on `.battle-stage` with `style.setProperty`, values in `px` rounded to 0.5:
+`--player-x`, `--player-y` (= `center`), `--player-size` (= `sizePx`), `--player-head-y`, `--player-feet-y`, and the same
+five for `--enemy-*`. **Update timing**: synchronously inside `fitToStage()` (construction, stage resize, orientation change,
+quality change) and when `fighters.setCreature()` resolves for that side. Never per frame, never during shots or
+reactions: DOM text is anchored to rest poses; GPU FX use `worldAnchor` (live). Before a creature is loaded the anchors
+assume a full-height sprite on the pad.
+
+### 7.4 Shots
+
+All shots run on the fx-clock (×2, hurry and hit-stops apply) and return `Promise<boolean>`: `true` at completion, `false`
+if superseded by another `shot()` or disposed. A new shot starts from the current framing.
+
+| Name | `side` | Default duration | Motion | Ends |
+| --- | --- | --- | --- | --- |
+| `intro` | – | 1200 | High wide → battle framing; pads light up in turn | base framing |
+| `attack` | attacker | 700 | There-and-back: 35 % in (push 5 % toward `side` + ≤ 3° yaw), hold, 35 % out | base |
+| `impact` | target | 240 | There-and-back micro push 3 % toward `side` | base |
+| `ko` | fallen | 600 | Push-in 8 % toward `side` + grade saturation → 0.6 | holds until the next shot |
+| `victory` | winner | 2400 per sweep | Yaw orbit ±10° (hard cap ±12°) around the winner; loops; the promise resolves after one sweep | holds |
+| `cut` | – | 0 | Instant base framing and neutral grade | base |
+
+The move grammar (`strike / rush / heavy / ultimate`) maps to `attack`/`impact` durations in choreography data. Reduced
+motion: shots are cuts (only the `ko` desaturation applies; the camera stays on the base framing). `?animations=0`: every
+shot resolves `true` immediately and changes nothing.
+
+### 7.5 Clock integration and render policy
+
+With a clock, each rendered frame reads `clock.now()` once: `fxDt = clamp(now − last, 0, 100)` virtual ms drives fighter
+reactions, FX particles, shots, punch/shake and grade tweens (all frozen by a hit-stop, all faster at ×2/hurry). Real `dt`
+drives ambient motion only (motes, crowd, idle breathing). Without a clock, choreography uses real time.
+`isActive()` is true while any reaction, particle, shot, punch, grade tween or tension lerp is live → `activeFps`, else
+`ambientFps` (2A values); reduced motion has no ambient frames. 0 renders while paused.
+
+### 7.6 Stage geometry and framing
+
+- The canvas **is** the `.battle-stage` box (no full-screen canvas, no `setViewOffset` needed); the area behind the HUD
+  shows 3D's static CSS plate. Camera aspect = stage `width / height`.
+- **Portrait** (`width / height < 1.25`, the primary layout): diagonal staging. Player pad near-left, feet at ≈ (0.30 W,
+  0.93 H); enemy pad far-right, feet at ≈ (0.70 W, 0.62 H). The 128-texel sprite canvas is **65–70 %** of stage height for
+  the player and **55–60 %** for the enemy (owner decision; size classes stay visible because 2C normalised mass within
+  the canvas).
+- **Wide** (`≥ 1.25`, landscape and desktop): pads spread (≈ 0.28 W / 0.72 W), player canvas 60–65 %, enemy 52–56 % of
+  stage height (78 % / 68 % when the aspect exceeds 3.5).
+- Precedence when constraints collide: (1) the opaque bbox of both fighters and both pads stays inside the stage with
+  ≥ 4 % margins; (2) the height ranges above; (3) integer texel snapping (`k` device px per texel from `sprite-metrics.js`)
+  applies only when an integer `k` lands inside the range; otherwise the exact range scale is used with nearest sampling.
+- Landmark visible in the upper stage at 360×800, 412×915, 800×360 and 1440×900.
+
+---
+
+## 8. `FighterLayer` (3B, `src/presentation/fighters.js`)
+
+`arena.fighters` is created by `ArenaScene` (3A) as
+`new FighterLayer({ scene, camera, stage /* .battle-stage element */, quality, reducedMotion, highContrast, testAnimationScale })`.
+It imports `three` itself (it lives in the lazy arena chunk; never import it from eager modules).
+
+### 8.1 Public API (used by the director and `patchFighters`)
+
+| Member | Contract |
+| --- | --- |
+| `setCreature(side, creatureId, { variant = 'normal' } = {})` → `Promise<boolean>` | Loads `./assets/monsters/<id>/battle.png` (`variant: 'chromatique'` is reserved for 4E's `battle-shiny.png`), decodes, uploads, sizes and places the sprite. Resolves `true` once the texture is on the GPU and placed, `false` if superseded by a newer `setCreature` for that side, disposed, or the image failed (logged with `console.error`). Same id → resolves `true` immediately. **Keeps the current phase**: after `recall` or `faint` the new sprite stays hidden until `enter`; in `idle` it shows at once. |
+| `react(side, reaction, opts = {})` → `Promise<boolean>` | Plays a reaction on the fx-clock (§8.2). `true` when it completes, `false` if superseded on the same channel or disposed. Resolves `true` immediately under `?animations=0` after applying the end state. |
+| `phase(side)` → `'idle' \| 'recall' \| 'enter' \| 'fainted'` | Mirrors the proxy `data-phase`. |
+
+Internal (3A ↔ 3B only): `setLayout({ player: { position: [x, y, z], canvasHeight }, enemy: {…} })` (world units, feet on the pad
+top), `restAnchor(side, point, out)`, `worldAnchor(side, point, out)`, `update(fxDtMs, realDtMs)`, `isActive()`,
+`setGrade(grade)`, `setPaused(paused)`, `ready` (both current textures loaded), `dispose()`. Blob contact shadow and foot
+occlusion belong to the fighter (they follow it); the pad belongs to the stage.
+
+### 8.2 Reactions
+
+Channels: **motion** (every reaction below except `flash` and `tint`; a new motion reaction supersedes the running one
+from its current pose), **overlay** (`flash`) and **tint** (persistent). Durations are virtual ms at ×1; distances are CSS
+px at the fighter's depth (converted with the camera); `toward` defaults to the other side.
+
+| Reaction | Options (defaults) | Motion / easing | Reduced motion |
+| --- | --- | --- | --- |
+| `windup` | `ms: 120, squash: 0.08` | Squash about the feet (scaleY 1 − s, scaleX 1 + s·0.7), `easeOutQuad`, returns to rest by the end | resolves at once |
+| `lunge` | `reach: 0.62, outMs: 110, holdMs: 70, backMs: 180, toward` | Travels `reach` × the feet-to-feet vector, `easeInQuad` out, holds, `easeOutCubic` back. Contact is the director's cue at `outMs` | resolves at once |
+| `hit` | `ms: 280, color` (move type colour) | 1 rendered frame white `uFlash`, then `color` tint fading over 120 ms, squash 0.94 spring back | 1-frame white flash only |
+| `knockback` | `px: 12, ms: 200, from` (attacker side) | Pushed away from `from`, `easeOutExpo`, recovers `easeInOutSine` | resolves at once |
+| `recoil` | `px: 6, ms: 180` | Attacker flinch backwards and back | resolves at once |
+| `dodge` | `px: 18, ms: 260, from` | Sidestep perpendicular to the attack, back with `easeOutBack` | resolves at once |
+| `tint` | `status` (id or `null`), `amount: 0.15, ms: 200` | Persistent `uTint` with `STATUS_DEFINITIONS[status].color`; `null` clears | instant |
+| `flash` | `color: '#ffffff', ms: 90` | Overlay `uFlash` pulse | 1 frame |
+| `ko` | `ms: 250` | 1-frame white flash, squash, 6 % drop | 1-frame flash |
+| `faint` | `ms: 700` | Pixel-cell `uDissolve` 0 → 1 (or sink through the pad), then hidden; phase `fainted` | 300 ms opacity fade |
+| `recall` | `ms: 180, color` (creature type colour) | Shrinks into a light point on the pad; hidden at the end; phase `recall` | 150 ms fade |
+| `enter` | `dropPx: 20, ms: 360` | Drops from above onto the pad with one squash bounce; phase `enter` → `idle` | 150 ms fade-in |
+| `victory` | `hops: 2, ms: 600` | Parabolic hops | resolves at once |
+| `idle` | – | Clears transient offsets back to rest (breathing continues) | – |
+
+All reaction motion integrates `fxDt` (§7.5), so hit-stops freeze it and ×2/hurry speed it up. Idle breathing uses real
+time with a per-creature phase from `fxSeed(creatureId)`: low tier = quantised ±1 texel bob, mid = vertex squash about
+the feet, high = + top-heavy sway; off under reduced motion. High contrast: `uOutline` 1-px outline on both fighters.
+
+### 8.3 DOM proxies (accessibility and e2e)
+
+3B's `.battle-stage` markup (§11.1) contains, for each side:
+
+```html
+<div class="fighter-proxy player" id="fighter-player" data-creature="orakyn" data-affinity="mind" data-phase="idle">
+  <img src="./assets/monsters/orakyn/battle.png" alt="Orakyn" width="128" height="128">
+</div>
+```
+
+- Visually hidden (clip pattern, never `display:none`), `pointer-events:none`. The `<canvas>` stays `aria-hidden="true"`.
+- `data-creature`, `data-affinity`, `img.src` and `img.alt` (`creatureName(id)`) are written by `patchFighters` (controller)
+  **at the moment of the swap** (after `recall`, before `enter`).
+- `data-phase` (`idle | recall | enter | fainted`) is written by `FighterLayer` as reactions start/end.
+- The e2e switch test asserts `#fighter-player[data-phase="recall"]` then the new `data-creature` (replaces the
+  `.switch-ghost` assertion).
+
+### 8.4 `patchFighters(view)` → `Promise<void>` (3B, controller route)
+
+Idempotent sync of both sides to `view`: proxy attributes, `arena.fighters.setCreature(side, activeOf(view, side).id)`, and
+a K.O.'d active creature forced to `fainted` without animation. Resolves when both `setCreature` promises settle. During
+playback (`ctx.locked`) only the director calls it (switch landing, beat end); 3D's refresh paths call it only while
+unlocked.
+
+### 8.5 Move Theater
+
+The bestiary Move Theater keeps its DOM fighters (`.theater-battlefield .fighter img`) and the legacy DOM FX path
+(`beginMoveFx`, `impactMoveFx`, `tacticalFx`, `clearBattleFx`, kept in fx.js for the theater only), including the
+`move-<id>` class on its `#fx-stage`. 3B keeps the theater's fighter CSS scoped under `.theater-battlefield` while
+deleting the battle fighter blocks.
+
+---
+
+## 9. `FxLayer` (3C-1, `src/presentation/fx-layer.js`) and atlas (3C-2)
+
+### 9.1 Construction (3A creates it)
+
+```js
+arena.fx = new FxLayer({ scene, worldAnchor: (side, point, out) => arena.worldAnchor(side, point, out),
+  quality, reducedMotion, testAnimationScale });
+```
+
+One `THREE.InstancedMesh` of camera-facing quads (billboarded in the vertex shader), one 1024² atlas, one custom
+`ShaderMaterial` (per-instance colour, uv cell, age/life, additive or alpha), CPU integration with a fixed 1/60 s step in
+preallocated `Float32Array`s: one draw call, no per-frame allocation.
+
+### 9.2 API
+
+| Member | Contract |
+| --- | --- |
+| `emit(emitter, opts)` → `{ stop() } \| null` | Spawns an emitter (§9.3). `null` under `?animations=0`, when disposed or when `count` rounds to 0. `stop()` ends persistent emitters (`orbit`, `trailFollow`). |
+| `update(fxDtMs)` | Called by the arena each rendered frame with the virtual dt (0 during a hit-stop). |
+| `clear()` | Kills every live quad and emitter (session cancel, `clearBattleFx`). |
+| `setPaused(paused)` | Freezes integration and spawning (mirrors `ArenaScene.setPaused`). |
+| `setQuality(quality)` | New budget from `quality.fx` (§14); excess live quads die oldest-first. |
+| `isActive()`, `stats()` → `{ live, peak, budget, areaViewports }`, `ready` (atlas decoded), `dispose()` | Under `?fxdebug=1` 3C-1 shows `stats()` in a corner overlay. |
+
+### 9.3 Emitters and options
+
+Common options: `side` (anchor owner), `at: 'feet' | 'center' | 'head'` (default `'center'`), `to: { side, at }` (target for
+travelling emitters), `cell` (atlas cell name), `color` (`'#rrggbb'`, the move type palette), `count` (quads before
+budget clamping), `life` (virtual ms), `size` / `speed` / `gravity` in **fighter heights** (h = world height of the anchor
+side's 128-texel canvas; speeds per second), `spread` (radians), `additive` (default `true`), `seed` (uint32 from §3.5).
+Positions resolve through `worldAnchor` at emit time; `orbit` and `trailFollow` re-resolve every update.
+
+| Emitter | Extra options | Shape |
+| --- | --- | --- |
+| `burst` | `speed: 1.2, spread: 2π, gravity: 0.8, drag: 0.9` | Radial explosion from the anchor |
+| `ring` | `r0: 0.1, r1: 0.7` | One ring quad expanding in the fighter plane |
+| `streak` | `travelMs: 180` | Short stretched quads from `side`/`at` to `to` (bolts, projectiles, whiffs) |
+| `beamQuad` | `width: 0.18, scroll: 2` | One quad stretched between the anchors, uv-scrolled |
+| `pillar` | `height: 1.2, width: 0.25, staggerMs: 60` | Quads rising from the feet (roots, geysers), `scaleY` grow |
+| `rain` | `area: 1.2, fall: 3` | Quads falling from above the target to its feet |
+| `orbit` | `radius: 0.45, periodMs: 1400, life: Infinity` | Quads circling the anchor (status loops) until `stop()` |
+| `trailFollow` | `intervalMs: 30` | Afterimage quads sampled from the live fighter position (lunges) until `life` or `stop()` |
+| `groundDecal` | `radius: 0.6` | Flat quad on the court under the anchor (impact flash, dust ring) |
+
+Reduced motion: no travel or expansion; every emitter becomes one in-place glow quad per call that fades over `life`
+(persistent `orbit` loops show a static motif). Budget: when the live count would exceed the tier budget, the oldest
+non-persistent quads are recycled; persistent status loops are never stolen.
+
+### 9.4 Atlas cells (3C-2 authors the image, both units use these names)
+
+`assets/fx/atlas.png`, 1024², 8 × 8 grid of 128 px cells, `index = row × 8 + column`, premultiplied alpha, white-on-alpha
+art tinted by `color`. Generic cells in index order: `glow, spark, streak, ring, shard, leaf, drop, bolt, rune, star, smoke,
+crescent, ember, bubble, petal, feather, dust, reticle, vine, eye, spike, speedline, shield, cross`; then `motif-<creatureId>`
+for the 30 creatures (indices 24–53); 54–63 free. The name → index map is exported by `src/data/choreo.js` as
+`ATLAS = { url: './assets/fx/atlas.png', size: 1024, grid: 8, cells: { glow: 0, … } }`; `fx-layer.js` imports it.
+
+### 9.5 Status loops (3C-2 data, director plays them)
+
+`STATUS_LOOPS` in choreo.js: one looping emitter recipe (≤ 8 quads) per status: Brûlure embers, Sonné three orbiting
+stars, Enraciné vines at the feet, Marqué reticle, Accéléré speed lines, Esquive afterimage, Concentré eye glint, Riposte
+spikes. The director starts a loop when a chip row applies the status and `stop()`s it when a removal or consumption is
+presented; it resyncs loops to `view` statuses at every beat end. Colours come from `STATUS_DEFINITIONS` (the presentation
+contract palettes stay disjoint).
+
+### 9.6 Banners (3C-2, `src/battle-ui/banners.js`)
+
+`showBanner(kind, data, { layer, clock, reducedMotion })` → `{ done: Promise<boolean>, remove() }`: DOM inside `layer`
+(the `#fx-text` element; one pooled node per kind). Kinds: `signature` (band: `creatureId, moveId`; pixel-scaled sprite crop + move name 28 px FR; 450 ms),
+`clash` (`left`, `right`; 600 ms), `signature-ready` (`creatureId, moveId`), `switch-in` ("X, à toi !" / enemy line),
+`intro` (portrait VS stack), `weather` (arena, weather map), `victory`, `defeat`, `perfect-relay`, `trainer-command`, `ace`,
+and `ko-flash`: the softened full-screen white (≤ 0.3 opacity, ≤ 150 ms, one node appended to the `.battle-screen` root,
+never stacked with another flash, absent under reduced motion). Durations are virtual ms: the WAAPI duration is
+`clock.realMs(duration)` computed at start, and `done` is `clock.wait(duration)` (so it resolves `false` if the session
+dies). Transform/opacity only. The director never calls `showBanner` under `?animations=0`.
+
+---
+
+## 10. Choreography data (3C-2, `src/data/choreo.js`)
+
+Pure data, no DOM/Three imports, validated by `test/presentation-contract.test.js` (3C-2).
+
+### 10.1 Exports
+
+```js
+export const ARCHETYPES = ['DASH','SLASH','QUAKE','BEAM','PROJ','LOB','RAIN','WAVE','VORTEX','NOVA','HEX','GUARD','BOOST','HEAL','RELAY'];
+export const MOVE_FX = { [moveId]: { archetype, motif } };   // all 90 moves; motif = an ATLAS cell name
+export const TIERS = { 1: {...}, 2: {...}, 3: {...} };      // §10.2
+export const TIMELINES = { [archetype]: Timeline };         // 15
+export const BEAT_TIMELINES = { ko, switch, replacement, 'perfect-relay', 'trainer-command', ace, tick, intro, victory, defeat };
+export const STATUS_LOOPS = { [statusId]: EmitterRecipe };  // 8
+export const ATLAS = { url, size, grid, cells };            // §9.4
+```
+
+Contract test (replaces "every move has a `.move-<id>` CSS rule"): every move has a `MOVE_FX` entry with a valid archetype
+and motif; a creature's three moves are not all the same archetype; every damage archetype has exactly one `contact` op
+(in `perHit` when present); support archetypes have a `readout` or `chips` op and no `contact`; at every tier, the stretched
+authored `end` plus the hit-stops of one hit and of the move's declared hit count fits `beatBudgetMs` (§3.4). Type/class/status
+palette and geometry disjointness stays.
+
+### 10.2 Tier parameters
+
+| | T1 | T2 | T3 |
+| --- | --- | --- | --- |
+| `hitStopMs` | 50 | 80 | 110 |
+| `shakePx` / `shakeMs` | 3 / 90 | 5 / 130 | 8 / 180 |
+| `knockPx` | 10 | 14 | 18 |
+| `reach` (lunge) | 0.55 | 0.62 | 0.70 |
+| `kick` (punch) | 0.6 | 1 | 1.4 |
+| `quadScale` | 1 | 1.5 | 2 |
+
+Quality scaling on top (director): quads × low 0.6 / mid 1 / high 1.4, shake × low 0.6; `FxLayer` still clamps to the
+tier budget.
+
+### 10.3 Timeline format
+
+```js
+Timeline = { cues: Cue[], perHit?: { at: number, cues: Cue[] } };
+Cue = { at: number /* virtual ms from beat start, authored for T1 */, op: string, ...params };
+```
+
+- Timing: the director stretches `at` and every `ms`-like param of action timelines by
+  `s(tier) = (BEAT_BUDGET_MS.action[tier] − hitStopMs[tier]) / (BEAT_BUDGET_MS.action[1] − hitStopMs[1])` (T1 1, T2 ≈ 1.415,
+  T3 1.6) and offsets them by the cut-in (450/600) for Signatures. `perHit` runs once per landed hit, hit *i* starting at
+  `s × perHit.at + (i − 1) × BEAT_BUDGET_MS.extraHit[tier]` (spacing not stretched); hits after the first use a
+  `min(hitStopMs[tier], 40)` hit-stop so the spacing holds at T3.
+- Actors: `who: 'actor' | 'target' | 'both'` resolve to the beat's `side` / `targetSide`.
+- Ops (the director throws on an unknown op in development):
+
+| Op | Params | Sink |
+| --- | --- | --- |
+| `fighter` | `who, reaction`, reaction options (§8.2) | `arena.fighters.react` |
+| `emit` | `emitter, from: who, at, to?: { who, at }, cell` (or `'motif'` → `MOVE_FX.motif`), `q` (count before tier/quality scaling), emitter options | `arena.fx.emit` (seeded by the hit/beat seed) |
+| `shot` | `name, who?, ms?` | `arena.shot` |
+| `punch` | `kick?, shakePx?, shakeMs?` (defaults from `TIERS`) | `arena.punch` |
+| `grade` | `saturation?, exposure?, contrast?, ms` | `arena.setGrade` |
+| `cheer` | `strength?` | `arena.cheer` |
+| `contact` | – | Director contact routine for the current hit (§6.2) |
+| `readout` | – | Director readouts for non-contact beats (heals, barriers) |
+| `chips` | – | Director chip row (§6.2). Damage archetypes do not author it: the director plays `beat.chips` / `talents` at the start of the add-on window, right after the authored `end`. Support archetypes author it where their effect lands. |
+| `band` | `kind: 'signature' \| 'clash'` | `showBanner` |
+| `banner` | `kind` | `showBanner` |
+| `cue` | `name` (a `CUE_NAMES` entry) | `session.cues.emit` |
+| `end` | – | Marks the authored end; must be ≤ the beat budget |
+
+Worked example (DASH, T1, `flash_pounce`): `fighter actor windup` @0; `cue release` + `fighter actor lunge` + `emit trailFollow`
+@120; `perHit.at` 230: `contact`, `emit burst (q 20)`, `emit groundDecal`, `punch`; `fighter actor idle` @300; `end` @650
+(650 + 50 hit-stop = the 700 T1 budget). At T2 every time is × 1.415 (650 → 920, + 80 hit-stop = 1000); a K.O. hands off
+400 ms early.
+
+---
+
+## 11. Battle HUD (3D)
+
+### 11.1 Battle screen DOM (controller template)
+
+3B owns the `.battle-stage` inner markup, 3D everything else. Target structure:
+
+```html
+<div class="battle-layout">
+  <section class="battle-info-zone" data-battle-zone="info">…top row, plates (3D)…</section>
+  <section class="battle-stage" data-battle-zone="stage">
+    <canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas>
+    <div class="fighter-proxy enemy" id="fighter-enemy" …><img …></div>
+    <div class="fighter-proxy player" id="fighter-player" …><img …></div>
+    <div id="fx-text" class="fx-text" aria-hidden="true"></div>
+  </section>
+  <section class="battle-command-dock" data-battle-zone="controls">…dock, #action-line (3D)…</section>
+</div>
+<div id="replacement-root"></div>
+```
+
+`.battle-stage-camera`, `.battlefield`, `#fx-stage` (battle), `.battle-vignette` and the DOM `.fighter` layers leave the
+battle screen (tension and cinematic dims are grade uniforms now). `#fx-text` is empty in the template; 3C-1 creates its
+pooled nodes on first use. Stacking inside the stage: canvas < proxies < `#fx-text`; plates live outside the stage.
+
+### 11.2 Stage geometry (3D)
+
+At 360×800 `.battle-stage` is ≥ 420 CSS px tall (≥ 470 at 412×915); landscape = stage left + 304 px dock right; the stage
+rect **does not change** when the dock swaps to the narration box (no re-fit mid-turn). Plates sit in the corners opposite
+their creature (enemy plate top-left, player plate bottom-right) and may overlap the stage edges; they never cover a fighter's
+rest bbox (check against `--*-x/y` and `--*-size`). The static plate behind the HUD zones uses `--arena-sky-top/-bottom`.
+
+### 11.3 Plate API
+
+| Route | Contract |
+| --- | --- |
+| `patchHud(side, view)` | Patches one plate in place from `view` (name, level tag, type, statuses, barrier, Signature meter, team balls, aria-label). No `innerHTML` rebuild after the first render; changed nodes only. HP fill and number follow `view` **unless a drain is in flight** for that side. Recomputes tension/showdown from `view` and forwards them to `arena.setBattleState` and `ctx.sound.setBattleState(view)` (both change-gated), and patches the top row. Cheap enough to call per presented event. |
+| `drainHp(side, fromHp, toHp, ms)` → `Promise<void>` | `ms` in **real ms** (the director passes `clock.realMs(450)`). Damage: fill `transform: scaleX` from → to over `ms` (ease-out) while a ghost chunk holds at `from` for `min(250, ms / 2)` then shrinks to `to`; the number ticks down; 3-state colour by current value (> 50 % green, 20–50 % yellow, < 20 % red). Heal (`to > from`): green growth, no ghost. A new drain on the same side restarts from the displayed value. `ms ≤ 0` or `?animations=0` → instant. Reduced motion: instant fill, ghost fades over 300 ms. `maxHp` is the plate's last patched value. |
+| `renderCommands()` | Rebuilds the dock (2×2 type tiles, Signature tile, Changer tile, coach chip) from `session.state`. Only while unlocked (control return, settings change); never during playback. Preview parity: previews are read-only engine calls, unchanged. |
+| `refreshBattle()` | Kept as a composition. Unlocked: `patchHud` both sides, `patchFighters(view)`, `renderCommands()`, top row. Locked (playback): `patchHud` both sides and the top row only, so any caller during playback stays safe. |
+
+Ownership of text on the stage: **3C-1** owns numbers, stamps ("Super efficace !", "Peu efficace…", "Coup critique !",
+"Esquivé !", "Bloqué !", "K.O. !"; 22–26 px solid pill, clamped 8 px inside the stage box, anchored at the target's
+`--*-x` / `--*-head-y`), the chain counter and the combo tag, all in `#fx-text`. **3C-2** owns banners (§9.6).
+**3D** owns the narration box and everything outside the stage.
+
+### 11.4 Narration box
+
+`narrate(text, { emphasis = null, minMs = 0 } = {})`: while `ctx.locked` the dock is replaced (transform/opacity only;
+reduced motion swaps instantly) by the narration box, which **is `#action-line`** (`role="status" aria-live="polite"`,
+text ≥ 18 px, emphasis 26 px display line rendered inside the same element so its `textContent` contains both). The line is
+replaced immediately unless the current line has been visible for less than its own `minMs`; then the new line waits, and a
+newer call replaces a waiting one (only the latest survives). `?animations=0` ignores `minMs`. When unlocked, `#action-line`
+returns to the choice-time contextual hints (simple mode) and the dock returns.
+
+### 11.5 Pause sheet, speed, sheets during playback
+
+- `route.openBattlePause()`: opens the pause sheet (2B `openSheet`) with Comment ça marche ?, Journal, Vitesse, Son,
+  Abandonner (in-sheet confirm; `confirm(` leaves `src/`), Reprendre. Works **while `ctx.locked`** (back gesture in 4D,
+  Escape now: `shell.js handleEscape` opens it on the battle page when no sheet is open).
+- `syncArenaPause()` pairs every covering sheet: `ctx.arenaScene?.setPaused(covered)` and
+  `session.clock?.[covered ? 'pause' : 'resume']('sheet')`, so a sheet opened mid-turn freezes the turn exactly.
+- Speed button: `ctx.save.battleSpeed` toggle, `persist()`, `session.clock?.setSpeed(speed)` (live mid-turn).
+- Abandon: `cancelBattleSession(session)` then the title; the clock disposes itself.
+- Wake Lock during battle (released on results/hidden).
+
+---
+
+## 12. Sound (3E, `src/sound.js`)
+
+- `sound.cue(name, payload)`: never throws, no-op when audio is disabled/locked/hidden. One dominant cue per `payload.beat`
+  with priority impact / Signature / K.O. > identity (cries) > utility (status, heal, break) > UI; lower cues of the same beat
+  may be dropped or ducked, never delayed. `payload.speed ≥ 2` selects trimmed variants (never pitch-shifted cries).
+  Multi-hit audio follows the real `contact` cues. Cries only on `switch-in`, `signature-cutin` and `faint-cry` (plus the
+  4B team-select pick). `victory` / `defeat` cues are on-stage accents; the fanfares stay `sound.victory()` /
+  `sound.defeat()` from results.
+- `sound.setBattleState(view)` is called by 3D's HUD patch with the presented view (hysteresis inside sound.js; at most a
+  one-time low-HP cue).
+- The legacy battle methods (`move`, `impact`, `hit`, `guard`, `shatter`, `heal`, `ko`, `call`, `comboCredit`, `clash`,
+  `finisher`) stay only for the Move Theater and UI; battle playback uses cues exclusively after 3C-1 lands.
+
+---
+
+## 13. Mode matrix
+
+| | ×1 | ×2 | Hurry (held) | Reduced motion | `?animations=0` |
+| --- | --- | --- | --- | --- | --- |
+| Clock rate | 1 | 2 | speed × 3 | unchanged | instant (~1 ms per step) |
+| Beat budgets | §3.4 | ÷ 2 | ÷ 3 (÷ 6 at ×2) | 450 / beat, cosmetic 0 | 1 ms per step |
+| Readout floor | – | 350 real ms | 350 real ms | 350 real ms | none |
+| Cut-in band, hit-stop, shake, travel, screen flash | yes | yes | yes | no | no |
+| Numbers / stamps | yes | yes | yes | fade in place | no DOM text |
+| HUD drain | 450 ms | 225 real ms | clock-scaled | instant + ghost fade | instant |
+| Narration | per beat | per beat | per beat (latest wins) | instant swap | per beat, no `minMs` |
+| Cues | yes | yes (`speed` 2) | yes (`speed` 3/6) | yes | yes |
+| Shots | yes | yes | yes | cuts | none |
+
+High contrast: fighter `uOutline`, plates per 3D's contrast rules. Quality tiers change budgets only (§14), never timing.
+
+---
+
+## 14. Quality-tier budgets
+
+Single source: `src/app/quality.js` (`ctx.quality`). 3C-1 replaces the dead `fx.maxTransientNodes` field with the GPU
+budget in the same change (`fx.particleScale` stays for the Move Theater's DOM particles).
+
+| | Low (every Galaxy A GPU) | Mid | High |
+| --- | --- | --- | --- |
+| DPR cap / MSAA (2A, unchanged) | 1 / off | 1.5 / off | 2 / on |
+| Ambient / active fps (2A) | 30 / 30 | 30 / 60 | 60 / 60 |
+| Stage backing store at 360×800 | ≤ 0.35 Mpx | – | – |
+| Draw calls (stage + fighters + FX) | ≤ 12 | ≤ 14 | ≤ 18 |
+| Lights / PBR materials | 0 | 0 | 0 |
+| Motes (`quality.arena.dust`) | 60 | 120 | 170 |
+| Floor reflection | off | glossy courts | glossy courts |
+| Crowd flash-bulbs | 12 | 20 | 20 |
+| **FX live quads** (`quality.fx.quads`) | **96** | **160** | **256** |
+| Summed quad area (`quality.fx.quadArea`, stage viewports) | ≤ 0.6 | ≤ 1 | ≤ 1.5 |
+| Fighter breathing | quantised bob | vertex squash | + sway |
+| Composited layers idle / during FX | ≤ 10 / ≤ 16 | same | same |
+| `#fx-text` pooled nodes | ≤ 12 | ≤ 12 | ≤ 12 |
+| Full-screen passes, canvas CSS filters, `backdrop-filter` over the stage | 0 | 0 | 0 |
+
+---
+
+## 15. File ownership (Phase 3)
+
+| File | Owner | Notes |
+| --- | --- | --- |
+| `docs/battle-presentation.md`, `src/battle-ui/{fx-clock,beats,cues}.js`, `test/{fx-clock,beats}.test.js` | 3.0 | Frozen after 3.0; changes go through the orchestrator. |
+| `src/presentation/arena.js`, new `src/presentation/stage/*.js` | 3A | |
+| new `src/presentation/fighters.js` | 3B | |
+| `src/battle-ui/controller.js` | 3B **then** 3D | 3B first lands one slice: the `.battle-stage` markup (§11.1), `patchFighters` (+ route), removal of `fighterSpriteRect` / `setAnchorResolver`, the ArenaScene options (`highContrast`), the `await patchFighters` in `renderBattle`, and the fighter class toggles leaving `refreshBattle`. Then 3D owns the file (HUD, commands, sheets, pause, `syncArenaPause`, speed, `battleEntrance` → `route.playIntro`). |
+| `styles/components.css`, `styles/screens/progression.css`, `styles/screens/league.css`, `styles/screens/accessibility.css` (fighter blocks, `.arena-canvas.arena-hit/-power`) | 3B | Theater fighter rules stay scoped under `.theater-battlefield`. |
+| new `src/battle-ui/director.js`, new `src/presentation/fx-layer.js`, `src/battle-ui/playback.js`, `src/battle-ui/fx.js` | 3C-1 | |
+| `styles/screens/battle-fx.css` | 3C-1 | `#fx-text` numbers/stamps; retires its stage-rebuild and per-move rules (the theater keeps the generic archetype scaffold). |
+| `src/app/quality.js` (`QUALITY_BUDGETS[*].fx` only) | 3C-1 | §14. |
+| `e2e/gameplay.spec.js` | 3C-1 | Single editor; 3B sends the switch-proxy assertion, 3C-2 the cut-in assertions (`.perfect-relay-fx`, etc.). |
+| new `src/data/choreo.js`, new `src/battle-ui/banners.js`, new `assets/fx/` | 3C-2 | |
+| `styles/screens/battle-presentation.css`, `styles/screens/battle-combos.css` | 3C-2 | Banners, cut-ins; per-move rule retirement. |
+| `test/presentation-contract.test.js` | 3C-2 | New contract (§10.1); update `CLAUDE.md` / `docs/README.md` contract lines at the gate. |
+| `tools/build.mjs` (static copy list: `assets/fx/`) | 3C-2 | One entry so `dist/` and the service worker ship the atlas. |
+| `src/battle-ui/hud.js`, `styles/screens/battle-layout.css`, `styles/overrides/battle-command.css`, `styles/overrides/battle-moves.css`, `styles/overrides/battle-preview.css`, `styles/screens/battle-ace-log.css`, `e2e/battle-layout.spec.js`, `e2e/simple-mode.spec.js` | 3D | |
+| `src/app/shell.js` (`handleEscape` battle branch only) | 3D | 2B/4D own the rest. |
+| `src/sound.js`, `test/audio.test.js` | 3E | |
+| `src/data/moves.js`, `src/data/creatures.js`, `src/data/passives.js`, `src/i18n.js`, `tools/simulate-balance.mjs`, data tests | 3F | Phase 3 i18n owner. |
+| `docs/architecture.md`, `docs/README.md`, `CLAUDE.md` | Orchestrator at Gate 3 | Link this contract; fighters become scene objects with DOM proxies; the new presentation contract replaces the `.move-<id>` rule. |
+
+A unit that retires a class or selector lists it to the owners of the sheets that still style it; the sheet owner deletes
+those rules (e.g. 3C-1's retired `finisher-mode`, `mini-finisher-mode`, `ko-shock`, `cinematic*` and `surge-flash` classes
+in 3B's `progression.css` / `components.css`). 3D puts its high-contrast plate rules in `battle-layout.css`
+(`html.high-contrast …`), since `accessibility.css` is 3B's this phase.
+
+i18n: every unit appends its new keys in a delimited block (`// --- 3C-1 keys ---`) at the end of **both** dictionaries,
+re-reading `src/i18n.js` before each edit; 3F merges them at the gate. Keys known now: 3C-1 `battle.comboTag`
+("COMBO ×{multiplier}", locale decimal); 3C-2 `battle.switchInBanner`, `battle.enemySwitchInBanner`, `battle.victoryBanner`,
+`battle.defeatBanner`, `battle.weatherBanner`; 3D pause-sheet, weather-badge, "Niv." and switch-verdict keys. Existing
+stamp keys are reused (`battle.hitEffective`, `battle.hitWeak`, `battle.critical`, `battle.missCallout`, `battle.blocked`);
+"K.O. !" is language-neutral.
+
+Phase 3 adds no stylesheet (the lazy battle-sheet list in `index.html` and `src/app/battle-stylesheets.js` is unowned
+this phase). Unowned files that go dead are listed for the gate cleanup: `.battle-vignette` rules in
+`styles/overrides/selection.css`.
+
+---
+
+## 16. Integration order and stub-testing
+
+Real now (3.0): `FxClock`, `groupBeats` + budgets + `fxSeed`, `CueBus`, this contract. Every unit may import them.
+
+1. **3B landing slice first** (controller markup + `patchFighters` + removal of the anchor resolver call). 3B messages 3A,
+   3C-1 and 3D when it lands; 3D starts editing `controller.js` only after it.
+2. **In parallel**: 3A, 3B (rest), 3C-1, 3C-2, 3D, 3E, 3F.
+3. 3B and 3C-1 create `fighters.js` / `fx-layer.js` early with the exact exported class and constructor (§8.1, §9.1) so 3A's
+   imports resolve; they complete them in place (a partial file is mid-flight work, never shipped).
+4. 3C-1 integrates last in each loop: the director drives real `ArenaScene`, `FighterLayer`, `FxLayer`, banners, HUD and
+   cue bus.
+5. **Cutovers that wait for callers**: 3A removes `burst()` / `flash()` after 3C-1 reports no caller left in fx.js /
+   playback.js; `setAnchorResolver()` after 3B's slice; 3D removes `route.syncBattleAnimationSpeed` calls when 3C-1 deletes it.
+
+What each unit may test against before its dependencies land (test doubles live only in `agents/impl/<unit>/`, never in `src/`):
+
+| Unit | Real dependencies | Scratch doubles allowed |
+| --- | --- | --- |
+| 3A | FxClock, quality.js, sprite-metrics.js, the 3B markup | Minimal `FighterLayer` / `FxLayer` classes implementing §8.1 internal and §9.2 in a scratch harness page; the stage prototype `agents/review-2026-09/stage/proto/` |
+| 3B | FxClock, sprite-metrics.js | A bare Three scene + camera harness calling `setLayout` / `update` |
+| 3C-1 | FxClock, beats, CueBus, choreo.js once 3C-2 lands its schema | Recording doubles of `ArenaScene` / `FighterLayer` / HUD routes in a Node or page harness driven by seeded engine turns (`groupBeats` output) |
+| 3C-2 | beats (`BEAT_BUDGET_MS`), `MOVES`, `STATUS_DEFINITIONS` | A scratch page rendering banners in a `#fx-text` box; timeline budget checks in the contract test |
+| 3D | Current playback until 3C-1 lands (it keeps working through `refreshBattle` until then) | A scratch driver calling `narrate` / `drainHp` / `patchHud` with seeded views |
+| 3E | CueBus, beats | A scratch driver emitting cue sequences from seeded turns through `groupBeats` |
+
+**No runtime stubs ship**: at Gate 3 no `src/` function is a placeholder, no emitter/reaction is a no-op outside the
+documented reduced-motion / `?animations=0` rules, and no compatibility alias of a removed API remains.
+
+---
+
+## 17. Gate hooks
+
+- `timing.mjs` (`agents/review-2026-09/vfx/`): phone ×1 median ≤ 2.4 s, p90 ≤ 3.5 s; holding finishes a 5-hit turn ≤ 1.2 s.
+- `ctx.arenaScene.stats()` and `?fxdebug=1` (`fx.stats()`): draws, backing store, live quads ≤ budget.
+- `tools/perf/gpu-budget.mjs` keeps using `arenaScene.renderer/scene/camera`.
+- e2e hooks: `#fighter-*[data-creature][data-phase]`, `#action-line`, `.battle-outro` during the outro, `#arena` visible,
+  `arena-context-lost`, theater `#fx-stage.move-<id>` and `.theater-battlefield .fighter img`.
