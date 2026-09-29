@@ -76,9 +76,9 @@ test('mixer settings clamp independently and mute only the master', () => {
   assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99 }), 0.82);
 });
 
-test('the explicit migration chain advances every historical version to v16', () => {
-  assert.equal(SAVE_VERSION, 16);
-  assert.equal(SAVE_MIGRATIONS.length, 15);
+test('the explicit migration chain advances every historical version to v17', () => {
+  assert.equal(SAVE_VERSION, 17);
+  assert.equal(SAVE_MIGRATIONS.length, 16);
   let save = { version: 1 };
   for (let index = 0; index < SAVE_MIGRATIONS.length; index++) {
     save = SAVE_MIGRATIONS[index](save);
@@ -87,8 +87,8 @@ test('the explicit migration chain advances every historical version to v16', ()
   assert.equal(save.musicVolume, 0.45);
   assert.equal(save.sfxVolume, 0.8);
   assert.equal(save.expertMode, false);
-  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 16);
-  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 16);
+  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 17);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 17);
   assert.deepEqual(
     migrateSave({
       version: 14,

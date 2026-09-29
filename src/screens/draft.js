@@ -28,7 +28,6 @@ const {
   actionButton,
   persist,
   disposeArena,
-  comboRoutesHtml,
   topbar,
   draftInsightHtml,
 } = ctx;
@@ -94,7 +93,7 @@ function renderDraft() {
     })
     .join('');
   const reveal = complete
-    ? `<section class="draft-final"><div><span class="eyebrow">${t('draft.rival')}</span><h2>${t(TRAINERS[ctx.draftRun.trainerIndex].nameKey)}</h2><div class="draft-rival-team">${ctx.draftRun.enemyTeam.map((id) => `<span><img src="${sprite(id)}" alt=""><b>${creatureName(id)}</b></span>`).join('')}</div><div class="arena-rule"><b>${t('arena.ruleTitle')} · ${t(`arena.${ctx.draftRun.arena}`)}</b><span>${t(`arena.rule.${ctx.draftRun.arena}`)}</span></div></div><aside>${teamProfileHtml(ctx.draftRun.team)}${comboRoutesHtml(ctx.draftRun.team, true)}${actionButton(t('draft.enter'), 'draft-battle', 'primary-btn wide')}</aside></section>`
+    ? `<section class="draft-final"><div><span class="eyebrow">${t('draft.rival')}</span><h2>${t(TRAINERS[ctx.draftRun.trainerIndex].nameKey)}</h2><div class="draft-rival-team">${ctx.draftRun.enemyTeam.map((id) => `<span><img src="${sprite(id)}" alt=""><b>${creatureName(id)}</b></span>`).join('')}</div><div class="arena-rule"><b>${t('arena.ruleTitle')} · ${t(`arena.${ctx.draftRun.arena}`)}</b><span>${t(`arena.rule.${ctx.draftRun.arena}`)}</span></div></div><aside>${teamProfileHtml(ctx.draftRun.team)}${actionButton(t('draft.enter'), 'draft-battle', 'primary-btn wide')}</aside></section>`
     : '';
   const carousel = complete
     ? ''

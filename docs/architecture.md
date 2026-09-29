@@ -2,7 +2,7 @@
 
 ## System shape
 
-Arène de Noam is one static page backed by browser-native ES modules. There is no compilation or framework lifecycle. Most modules initialize through import side effects, render HTML strings into `#screen`, and attach event listeners after each render.
+Arène de Noam is one static page backed by browser-native ES modules. Development runs the sources directly, with no compilation or framework lifecycle; the deployed site is a CI-only production build of the same modules (see [Production build](#production-build-and-offline)). Most modules initialize through import side effects, render HTML strings into `#screen`, and attach event listeners after each render.
 
 The principal data flow is:
 
@@ -20,13 +20,13 @@ index.html
 
 ## Bootstrap and shared registry
 
-[`index.html`](../index.html) supplies the DOM shell, CSS order, Three.js import map, and a friendly boot failure fallback. It dynamically imports [`src/main.js`](../src/main.js).
+[`index.html`](../index.html) supplies the DOM shell, CSS order, Three.js import map, the Nunito font preload, and a friendly boot failure fallback. It dynamically imports [`src/main.js`](../src/main.js).
 
-`main.js` imports all screen, battle UI, and input modules for their registration side effects. Only after every import does it install screen-transition wrappers, start global input, and render the title.
+`main.js` imports all screen, battle UI, and input modules for their registration side effects. Only after every import does it install screen-transition wrappers, start global input, and render the title. Once the title is idle it prefetches the arena chunk (`ctx.loadArena()`), then, in the built `dist/` only, registers the service worker.
 
 [`src/app/context.js`](../src/app/context.js) is the composition root:
 
-- Imports data, engine functions, persistence, localization, sound, and arena rendering.
+- Imports data, engine functions, persistence, localization, and sound. It does **not** import Three.js: `ctx.loadArena()` is a memoised `import('../presentation/arena.js')`, and `renderBattle` awaits it beside `ensureBattleStyles()`. Browsers keep a failed module load for the page's lifetime, so a failed load takes the friendly error path with a reload hint (`error.arenaLoad`); `?failWebgl=1` still shows the WebGL error.
 - Loads and validates the save, applies a `?lang=fr|en` override, and validates dictionary parity.
 - Creates the mutable `ctx` application registry and attaches shared values/helpers with `Object.assign`.
 - Exposes `registerRoutes({ name: handler })`, which merges handlers into `ctx.routes`.
@@ -79,7 +79,7 @@ Title rendering clears transient runs and the current battle. Battle sessions ca
 [`src/battle-ui/controller.js`](../src/battle-ui/controller.js) owns the imperative battle lifecycle:
 
 1. `startBattle(config)` creates deterministic engine state and wraps it in `ctx.battleSession`.
-2. `renderBattle()` loads battle-only CSS, constructs the HUD/stage/controls, creates `ArenaScene`, and binds controls.
+2. `renderBattle()` awaits battle-only CSS and the lazy arena chunk, constructs the HUD/stage/controls, creates `ArenaScene` (then `warmUp()`), and binds controls.
 3. `hud.js` renders legal buttons, previews, enemy intent, and state plates from the current state.
 4. A player action is paired with one cached/planned AI action and passed to `resolveTurn`.
 5. The returned state replaces the prior state. `playback.js` serially consumes the returned events while input is locked.
@@ -97,7 +97,7 @@ Title rendering clears transient runs and the current battle. Battle sessions ca
 - `engine.js`: state creation, legality, previews, turn/replacement/command resolution, events.
 - `damage.js`: the base damage formula and affinity multiplier application.
 - `statuses.js`: status metadata and pure status operations.
-- `rng.js`: the only combat randomness primitive.
+- `rng.js`: the only combat randomness primitive. `normalizeSeed` mixes a raw seed once (murmur3 `fmix32`, never 0) before it becomes xorshift32 state, so small seeds do not share their first rolls; `randomFromState` only advances an existing state.
 - `ai.js`: scores legal actions against a safe snapshot; only the source RNG cursor is advanced.
 
 Inputs are treated as immutable. Public resolution functions clone before mutation and return a new state. See [`battle-system.md`](battle-system.md) for the exact contracts.
@@ -131,6 +131,16 @@ CSS order is part of behavior:
 tokens.css -> base.css -> components.css -> screen layers -> overrides
 ```
 
-`index.html` eagerly loads common sheets. Battle sheets are declared as `preload` in intended cascade order, while `context.js` creates real stylesheet links on first battle/theater entry and inserts each before a known eager anchor. When adding or moving a battle stylesheet, update both lists without changing the effective cascade.
+`index.html` eagerly loads common sheets and lists the battle sheets in a comment manifest (read by tooling and the build). [`src/app/battle-stylesheets.js`](../src/app/battle-stylesheets.js) is the single list of battle sheets in cascade order, each with its eager anchor (the eager sheet that follows it, or `null` for the end). `ctx.ensureBattleStyles()` creates the real stylesheet links on first selection/battle/theater entry and inserts each before its anchor. When adding or moving a battle stylesheet, update the manifest and that list together without changing the effective cascade; the build fails if they disagree.
 
-Three.js is local under `vendor/`. `ArenaScene` is presentational and must fail into the controller's friendly WebGL recovery path. Creature runtime sprites live at `assets/monsters/<id>/battle.png`; provenance/processing metadata belongs in `assets/asset-manifest.json`. `art/` and `tools/generate-pixellab.mjs` are development-only and must never become runtime dependencies.
+Three.js is local under `vendor/` and reached through the `three` import-map specifier; only `src/presentation/arena.js` imports it, and only through the lazy `ctx.loadArena()`. Never import `arena.js` statically, or Three.js returns to the title's critical path. `ArenaScene` is presentational and must fail into the controller's friendly WebGL recovery path; `warmUp()` compiles every scene material (hidden FX pools included) during the battle intro so the first hit never stalls on a shader link. Creature runtime sprites live at `assets/monsters/<id>/battle.png`; provenance/processing metadata belongs in `assets/asset-manifest.json`. `art/` and `tools/generate-pixellab.mjs` are development-only and must never become runtime dependencies.
+
+## Production build and offline
+
+[`tools/build.mjs`](../tools/build.mjs) (`npm run build`, run by `.github/workflows/pages.yml` after `npm test`) writes `dist/`, which GitHub Pages deploys:
+
+- **JS:** one minified ESM bundle of `src/main.js` (esbuild, code splitting). The dynamic `arena.js` import makes `arena.js` + Three.js a lazy chunk; `three` resolves to `vendor/three.module.min.js`. Static chunk imports get `<link rel="modulepreload">`.
+- **CSS:** eager sheets are bundled in cascade order and split only at battle-sheet anchors, so each lazy battle file still slots into the exact eager cascade; battle sheets sharing an anchor share one lazy file. `url()` assets (fonts) are hashed and the font preload is rewritten to match.
+- **Asset map:** the build defines `__ASSET_MAP__` (source stylesheet path → hashed file) for `ensureBattleStyles()`; in development it is undefined and the map is the identity. `__DIST__` marks the bundle so only it registers the service worker.
+- **Static files** copied unchanged: `manifest.webmanifest`, `assets/icons/`, `assets/monsters/*/battle.png`, font licences. Runtime code may build URLs only for these.
+- **Service worker:** [`sw.js`](../sw.js) is minified into `dist/sw.js` with `__BUILD_ID__` (hash of every dist file) and `__PRECACHE__` (every dist file). It precaches on install (hashed files may come from the HTTP cache, others are revalidated), serves same-origin GET cache-first (every navigation gets the cached `index.html`), and uses `skipWaiting` + `clients.claim`. It keeps the previous build's cache one generation so a page still running that build can lazy-load its battle CSS and arena chunk; older caches are deleted. It is never registered in development or under `navigator.webdriver`, so e2e always hits the network.

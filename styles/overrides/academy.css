@@ -285,7 +285,8 @@
   font-size: 34px;
 }
 .circuit-brief b {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: 20px;
 }
 .circuit-brief em {

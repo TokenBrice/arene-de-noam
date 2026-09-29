@@ -3,6 +3,7 @@ const clamp01 = (value, fallback = 0) =>
 
 export const SCHEDULER_INTERVAL_MS = 25;
 // Music lookahead (not SFX latency): long enough to ride out a ~250 ms main-thread stall.
+// This is the default; the low quality tier stretches it with setQuality().
 export const SCHEDULER_HORIZON_SECONDS = 0.25;
 // A step later than this is dropped (the grid jumps to the next boundary) instead of firing a
 // burst of past notes; a step late by less starts at `currentTime` with its full envelope.
@@ -17,6 +18,10 @@ const SFX_TRIM = 9.75;
 const MUSIC_REVERB_SECONDS = 1.7;
 const MUSIC_REVERB_RETURN = 0.5;
 const SFX_ROOM_SECONDS = 0.55;
+// Low quality tier: shorter mono impulses. A mono voice then costs one convolution instead of
+// two, and the shorter tail shrinks the convolver's FFT work.
+const MUSIC_REVERB_LITE_SECONDS = 0.8;
+const SFX_ROOM_LITE_SECONDS = 0.35;
 const SFX_ROOM_RETURN = 0.45;
 const TENSION_LEVEL = 0.34;
 const TENSION_REVERB_SEND = 0.12;
@@ -290,6 +295,9 @@ export class SoundSystem {
     this.stingArmed = false;
     this.noiseBuffers = new Map();
     this.failureNotified = false;
+    // Quality-tier budget (see src/app/quality.js); the defaults are the mid/high costs.
+    this.horizon = SCHEDULER_HORIZON_SECONDS;
+    this.reverb = 'full';
     this.audioDebug = new URLSearchParams(globalThis.location?.search || '').get('audiodebug') === '1';
     this._nodeCount = this.audioDebug ? 0 : undefined;
     this._createdNodeCount = this.audioDebug ? 0 : undefined;
@@ -333,6 +341,17 @@ export class SoundSystem {
     } else if (this.ctx.state === 'running' && !this.hidden) {
       this.startScheduler();
     }
+  }
+
+  // Tier hook: `horizon` is the music lookahead in seconds, `reverb` is 'full' or 'lite'.
+  // Swapping an impulse on the live convolvers keeps every routing connection in place.
+  setQuality({ horizon, reverb }) {
+    this.horizon = horizon;
+    if (reverb === this.reverb) return;
+    this.reverb = reverb;
+    if (!this.graph) return;
+    this.graph.musicReverb.buffer = this.musicImpulse();
+    this.graph.sfxRoom.buffer = this.roomImpulse();
   }
 
   async unlock() {
@@ -410,13 +429,13 @@ export class SoundSystem {
     compressor.ratio.setValueAtTime(3.5, now);
     compressor.attack.setValueAtTime(0.004, now);
     compressor.release.setValueAtTime(0.2, now);
-    musicReverb.buffer = this.createImpulse(MUSIC_REVERB_SECONDS, 2.8);
+    musicReverb.buffer = this.musicImpulse();
     musicReturn.gain.setValueAtTime(MUSIC_REVERB_RETURN, now);
     tensionSend.gain.setValueAtTime(TENSION_REVERB_SEND, now);
     sfxRoomFilter.type = 'highpass';
     sfxRoomFilter.frequency.setValueAtTime(220, now);
     sfxRoomFilter.Q.setValueAtTime(0.6, now);
-    sfxRoom.buffer = this.createImpulse(SFX_ROOM_SECONDS, 3.4);
+    sfxRoom.buffer = this.roomImpulse();
     sfxReturn.gain.setValueAtTime(SFX_ROOM_RETURN, now);
     musicDuck.gain.setValueAtTime(1, now);
 
@@ -457,9 +476,19 @@ export class SoundSystem {
     this.graph.sfxRoom = room;
   }
 
-  createImpulse(seconds, decay) {
+  musicImpulse() {
+    const lite = this.reverb === 'lite';
+    return this.createImpulse(lite ? MUSIC_REVERB_LITE_SECONDS : MUSIC_REVERB_SECONDS, 2.8, lite ? 1 : 2);
+  }
+
+  roomImpulse() {
+    const lite = this.reverb === 'lite';
+    return this.createImpulse(lite ? SFX_ROOM_LITE_SECONDS : SFX_ROOM_SECONDS, 3.4, lite ? 1 : 2);
+  }
+
+  createImpulse(seconds, decay, channels) {
     const rate = this.ctx.sampleRate || 44100;
-    const buffer = this.ctx.createBuffer(2, Math.max(1, Math.floor(rate * seconds)), rate);
+    const buffer = this.ctx.createBuffer(channels, Math.max(1, Math.floor(rate * seconds)), rate);
     for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
       const data = buffer.getChannelData(channel);
       let seed = 0x91e10da5 ^ channel;
@@ -608,7 +637,7 @@ export class SoundSystem {
       this.nextStepTime += skipped * stepDuration;
       this.stepIndex += skipped;
     }
-    while (this.nextStepTime < now + SCHEDULER_HORIZON_SECONDS) {
+    while (this.nextStepTime < now + this.horizon) {
       this.scheduleMusicStep(config, this.stepIndex, Math.max(now, this.nextStepTime), stepDuration);
       this.nextStepTime += stepDuration;
       this.stepIndex += 1;

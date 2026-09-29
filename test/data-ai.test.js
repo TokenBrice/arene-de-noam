@@ -10,7 +10,7 @@ import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../src/data/gauntlet.js';
 import { SQUAD_PRESETS } from '../src/data/squads.js';
 import { QUICK_RULES, quickRule } from '../src/data/battle-rules.js';
 import { battleAchievementSignals } from '../src/data/progression.js';
-import { comboSetupStatus, moveCanCombo, teamComboRoutes } from '../src/data/combos.js';
+import { COMBO_SETUP_STATUS, moveCanCombo, teamComboRoutes } from '../src/data/combos.js';
 import { TRAINERS } from '../src/data/trainers.js';
 import { CIRCUIT_CONDITIONS, circuitMatch } from '../src/data/circuit.js';
 import { createDraft } from '../src/data/draft.js';
@@ -354,10 +354,13 @@ test('team combo routes expose cross-creature setups and never self-credit', () 
   assert.ok(routes.every((route) => route.setterId !== route.finisherId));
   assert.ok(routes.every((route) => !('statuses' in route) && !('detonation' in route)));
   assert.ok(
-    teamComboRoutes(['calderoc', 'thornox']).some(
-      (route) => route.setupMoveId === 'cinder_burst' && route.finishMoveId === 'venom_harvest'
+    routes.every(
+      (route) =>
+        MOVES[route.setupMoveId].targetStatuses.some(({ id }) => id === COMBO_SETUP_STATUS) &&
+        moveCanCombo(MOVES[route.finishMoveId])
     )
   );
+  assert.deepEqual(teamComboRoutes(['calderoc', 'thornox']), []);
   assert.deepEqual(teamComboRoutes(['kordane', 'monolith', 'virelia']), []);
 });
 
@@ -418,16 +421,12 @@ test('move status data uses exactly the eight-status contract', () => {
   assert.ok(
     Object.entries(STATUS_DEFINITIONS).every(([id, definition]) => id === 'burning' || !definition.stackable)
   );
-  const comboMoves = Object.values(MOVES).filter(moveCanCombo);
-  assert.equal(comboMoves.length, 9);
   for (const move of Object.values(MOVES)) {
-    for (const legacy of ['bonusAgainst', 'bonusMultiplier', 'detonate', 'detonatePower'])
+    for (const legacy of ['bonusAgainst', 'bonusMultiplier', 'detonate', 'detonatePower', 'combo'])
       assert.equal(legacy in move, false, `${move.id} still has ${legacy}`);
-    if (!moveCanCombo(move)) continue;
-    assert.ok(move.power > 0);
-    assert.ok(SURVIVING_STATUSES.has(comboSetupStatus(move)));
-    assert.equal(move.targetStatuses?.some(({ id }) => id === comboSetupStatus(move)) || false, false);
+    assert.equal(moveCanCombo(move), move.kind === 'damage', `${move.id} Combo eligibility`);
   }
+  assert.ok(SURVIVING_STATUSES.has(COMBO_SETUP_STATUS));
 });
 
 test('every AI difficulty chooses legal actions while mutating only the deterministic RNG cursor', () => {
@@ -488,10 +487,10 @@ test('successive tied AI decisions advance RNG and replay identically from the s
     replay = makeTiedState(),
     decideThree = (state) =>
       Array.from({ length: 3 }, () => chooseAiAction(state, 'player', 'champion', 'direct').index);
-  assert.deepEqual(decideThree(first), [1, 1, 2]);
-  assert.deepEqual(decideThree(replay), [1, 1, 2]);
+  assert.deepEqual(decideThree(first), [1, 2, 2]);
+  assert.deepEqual(decideThree(replay), [1, 2, 2]);
   assert.equal(first.rngState, replay.rngState);
-  assert.notEqual(first.rngState, 1);
+  assert.notEqual(first.rngState, makeTiedState().rngState);
 });
 
 test('Champion AI saves defensive Signatures for genuine team pressure', () => {
@@ -527,34 +526,23 @@ test('Champion AI can pivot into a resistant bench answer to a ready Signature',
   assert.deepEqual(state, before);
 });
 
-test('Champion replacement scoring prefers an available Combo finisher', () => {
-  const makeState = (marked, cooldown = false) => {
+test('Apprentice AI only switches when no move is available', () => {
+  for (let seed = 1; seed <= 200; seed++) {
     const state = createBattle({
-      playerTeam: ['calderoc', 'pyrolynx', 'magmoth'],
-      enemyTeam: ['monolith', 'kordane', 'brontusk'],
-      seed: 3,
+      playerTeam: ['orakyn', 'abyssar', 'virelia'],
+      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+      seed,
     });
-    state.phase = 'replacement';
-    state.sides.player.pendingReplacement = true;
-    state.sides.player.team[0].hp = 0;
-    state.sides.player.team[1].hp = Math.round(state.sides.player.team[1].maxHp * 0.6);
-    state.sides.player.surge = 100;
-    if (marked) state.sides.enemy.team[0].statuses.marked = { appliedTurn: 1, remaining: 2, stacks: 1 };
-    if (cooldown) state.sides.player.team[1].cooldowns.ninefold_inferno = { appliedTurn: 1, remaining: 2 };
-    return state;
-  };
-  assert.deepEqual(chooseAiAction(makeState(false), 'player', 'champion', 'direct'), {
-    type: 'replace',
-    index: 2,
+    assert.equal(chooseAiAction(state, 'enemy', 'apprentice', 'direct').type, 'move');
+  }
+  const cornered = createBattle({
+    playerTeam: ['orakyn', 'abyssar', 'virelia'],
+    enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+    seed: 4,
   });
-  assert.deepEqual(chooseAiAction(makeState(true), 'player', 'champion', 'direct'), {
-    type: 'replace',
-    index: 1,
-  });
-  assert.deepEqual(chooseAiAction(makeState(true, true), 'player', 'champion', 'direct'), {
-    type: 'replace',
-    index: 2,
-  });
+  for (const moveId of cornered.sides.enemy.team[0].moves)
+    cornered.sides.enemy.team[0].cooldowns[moveId] = { appliedTurn: 0, remaining: 2 };
+  assert.equal(chooseAiAction(cornered, 'enemy', 'apprentice', 'direct').type, 'switch');
 });
 
 test('Standard AI cannot inspect a player action committed outside its safe snapshot', () => {

@@ -3,7 +3,8 @@ import { FEAT_IDS } from './data/progression.js';
 import { TRIAL_IDS } from './data/trials.js';
 
 export const SAVE_KEY = 'arene-de-noam-save';
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
+export const QUALITY_CHOICES = Object.freeze(['auto', 'low', 'mid', 'high']);
 export const DEFAULT_SAVE = Object.freeze({
   version: SAVE_VERSION,
   tutorialComplete: false,
@@ -31,6 +32,7 @@ export const DEFAULT_SAVE = Object.freeze({
   highContrast: false,
   expertMode: false,
   battleSpeed: 1,
+  quality: 'auto',
 });
 
 // v1 -> v2: arena cosmetics became a persisted collection.
@@ -83,7 +85,7 @@ export const migrateV14 = (save) => ({
     : save.customSquads,
 });
 // v15 -> v16: dead reward/master-volume fields were removed and progression counters are consistent.
-export const migrateV16 = (save) => {
+export const migrateV15 = (save) => {
   const { emblems: _emblems, cosmetics: _cosmetics, volume: _volume, ...rest } = save;
   const bounded = (value, max) => (Number.isInteger(value) ? Math.min(max, Math.max(0, value)) : 0);
   const battlesPlayed = bounded(save.battlesPlayed, 9999);
@@ -108,6 +110,8 @@ export const migrateV16 = (save) => {
     records,
   };
 };
+// v16 -> v17: graphics quality became a player choice; automatic detection stays the default.
+export const migrateV16 = (save) => ({ ...save, version: 17, quality: 'auto' });
 
 export const SAVE_MIGRATIONS = Object.freeze([
   migrateV1,
@@ -124,6 +128,7 @@ export const SAVE_MIGRATIONS = Object.freeze([
   migrateV12,
   migrateV13,
   migrateV14,
+  migrateV15,
   migrateV16,
 ]);
 
@@ -243,6 +248,7 @@ export function validateSave(value) {
     highContrast: Boolean(migrated.highContrast),
     expertMode: Boolean(migrated.expertMode),
     battleSpeed: migrated.battleSpeed === 2 ? 2 : 1,
+    quality: QUALITY_CHOICES.includes(migrated.quality) ? migrated.quality : 'auto',
   };
 }
 

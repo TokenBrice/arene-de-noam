@@ -97,7 +97,8 @@
   letter-spacing: 0.24em;
 }
 .command-stripe b {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: clamp(28px, 5vw, 58px);
   line-height: 1;
   color: #fff;
@@ -256,7 +257,8 @@ body.reduced-motion .trainer-command-fx::after {
   letter-spacing: 0.16em;
 }
 .signature-ready-call b {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: 26px;
   line-height: 1;
 }

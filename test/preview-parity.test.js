@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createBattle, previewMove, resolveTurn } from '../src/battle/engine.js';
 import { CREATURES, CREATURE_IDS } from '../src/data/creatures.js';
 import { MOVES } from '../src/data/moves.js';
+import { ARENAS } from '../src/data/trainers.js';
 
 function teamWithLead(id) {
   return [id, ...CREATURE_IDS.filter((candidate) => candidate !== id).slice(0, 2)];
@@ -17,8 +18,11 @@ const HP_SCENARIOS = [
   { id: 'evasive', ratio: 0.25, barrier: 7, status: 'evasive' },
 ];
 
+// Critical hits are a live-only ×1.5 surprise: previews always show the
+// non-critical value, so parity is asserted on every non-critical action.
 test('seeded roster sweep keeps preview damage and lethality identical to live per-hit resolution', () => {
   let checked = 0,
+    critical = 0,
     seed = 0x5eedc0de;
   for (const attackerId of CREATURE_IDS) {
     const damageMoves = CREATURES[attackerId].moves.filter((moveId) => MOVES[moveId].kind === 'damage');
@@ -30,6 +34,7 @@ test('seeded roster sweep keeps preview damage and lethality identical to live p
             playerTeam: teamWithLead(attackerId),
             enemyTeam: teamWithLead(defenderId),
             seed,
+            arena: ARENAS[checked % ARENAS.length],
           });
           const attacker = state.sides.player.team[0],
             defender = state.sides.enemy.team[0];
@@ -58,6 +63,15 @@ test('seeded roster sweep keeps preview damage and lethality identical to live p
             ),
             liveDamage = damageEvents.reduce((sum, event) => sum + event.amount, 0),
             liveLethal = damageEvents.at(-1)?.hp === 0;
+          assert.equal(preview.critical, false);
+          if (damageEvents.some((event) => event.critical)) {
+            assert.ok(damageEvents.every((event) => event.critical));
+            critical++;
+            continue;
+          }
+          assert.ok(
+            damageEvents.every((event) => event.weather === (state.weather[MOVES[moveId].affinity] ?? 1))
+          );
           assert.equal(
             preview.damage,
             liveDamage,
@@ -73,4 +87,5 @@ test('seeded roster sweep keeps preview damage and lethality identical to live p
         }
   }
   assert.ok(checked >= 7_000, `expected a broad roster sweep, checked ${checked}`);
+  assert.ok(critical > 0 && critical < checked / 8, `critical hits stay a minority: ${critical}`);
 });

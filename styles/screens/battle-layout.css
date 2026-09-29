@@ -85,8 +85,7 @@
   line-height: 1.05;
 }
 
-.battle-screen .turn-chip b,
-.battle-screen .turn-chip small {
+.battle-screen .turn-chip b {
   font-size: var(--type-battle-micro);
 }
 
@@ -1228,13 +1227,6 @@ body.high-contrast .battle-screen .action-line {
 
   .battle-screen .battle-tools [data-action='battle-log'] {
     display: none;
-  }
-
-  .battle-screen .turn-chip small {
-    overflow: hidden;
-    max-width: 12ch;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .battle-screen .move-index {

@@ -7,6 +7,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
+    <link rel="preload" href="./fonts/nunito-latin.woff2" as="font" type="font/woff2" crossorigin />
     <script>
       const params = new URLSearchParams(location.search),
         urlLanguage = params.get('lang');
@@ -21,23 +22,25 @@
       } catch {}
     </script>
     <title>Arène de Noam</title>
-    <link rel="stylesheet" href="./styles/tokens.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/base.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/components.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/progression.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/draft.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/accessibility.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/league.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/bestiary.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/selection.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/gauntlet.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/overrides/selection.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/overrides/academy.css?build=epic7" />
-    <link rel="stylesheet" href="./styles/screens/results.css?build=epic7" />
+    <link rel="stylesheet" href="./styles/tokens.css" />
+    <link rel="stylesheet" href="./styles/base.css" />
+    <link rel="stylesheet" href="./styles/components.css" />
+    <link rel="stylesheet" href="./styles/screens/progression.css" />
+    <link rel="stylesheet" href="./styles/screens/draft.css" />
+    <link rel="stylesheet" href="./styles/screens/accessibility.css" />
+    <link rel="stylesheet" href="./styles/screens/league.css" />
+    <link rel="stylesheet" href="./styles/screens/bestiary.css" />
+    <link rel="stylesheet" href="./styles/screens/selection.css" />
+    <link rel="stylesheet" href="./styles/screens/gauntlet.css" />
+    <link rel="stylesheet" href="./styles/overrides/selection.css" />
+    <link rel="stylesheet" href="./styles/overrides/academy.css" />
+    <link rel="stylesheet" href="./styles/screens/results.css" />
     <!-- Battle-sheet asset manifest; ctx.ensureBattleStyles() promotes these
-         paths only when selection or a battle-adjacent screen is opened.
-         Keeping the manifest here lets tooling validate every move choreography
-         without making the title load the battle CSS. -->
+         paths (src/app/battle-stylesheets.js, with their cascade anchors) only
+         when selection or a battle-adjacent screen is opened. Keeping the
+         manifest here lets tooling validate every move choreography without
+         making the title load the battle CSS. tools/build.mjs replaces the
+         stylesheet links and this manifest with hashed bundles in dist/. -->
     <!-- href="./styles/screens/battle-fx.css" -->
     <!-- href="./styles/screens/battle-presentation.css" -->
     <!-- href="./styles/screens/battle-combos.css" -->
@@ -97,7 +100,7 @@
       { "imports": { "three": "./vendor/three.module.min.js" } }
     </script>
     <script type="module">
-      import('./src/main.js?build=epic7').catch((error) => {
+      import('./src/main.js').catch((error) => {
         console.error(error);
         const screen = document.querySelector('#screen');
         if (screen)

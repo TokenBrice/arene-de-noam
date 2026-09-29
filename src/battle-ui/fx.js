@@ -32,18 +32,10 @@ const ANCHOR = { player: { x: 23, y: 68 }, enemy: { x: 77, y: 30 } };
 
 const beginFxTemplateCache = new Map(),
   radialFxTemplateCache = new Map();
-let coarseRetinaParticleScale = null;
 
+// Particle counts follow the active quality tier (src/app/quality.js).
 function particleBudget(count) {
-  if (coarseRetinaParticleScale === null) {
-    coarseRetinaParticleScale =
-      typeof window !== 'undefined' &&
-      window.devicePixelRatio >= 2 &&
-      window.matchMedia?.('(pointer: coarse)').matches
-        ? 0.5
-        : 1;
-  }
-  return Math.max(1, Math.ceil(count * coarseRetinaParticleScale));
+  return Math.max(1, Math.ceil(count * ctx.quality.fx.particleScale));
 }
 
 function radialParticles(count, cacheKey, distanceModulo, delayModulo, delayUnit = 24) {
@@ -721,34 +713,6 @@ function statusTickFx(event) {
   ctx.arenaScene?.burst(meta?.color || '#fff', side, 0.8);
 }
 
-function arenaPulseFx(event) {
-  sound.guard();
-  if (testAnimationScale === 0) return;
-  const stage = screen.querySelector('#fx-stage');
-  if (!stage) return;
-  // The pulse runes and their label take the whole stage: earlier readouts
-  // (a recoil number, a last hit) fade out instead of sitting under the label.
-  settleReadouts();
-  const icons = { crystal: '◇', grove: '❧', tidal: '≋', volcano: '♨', astral: '✦', eclipse: '☾' },
-    colors = {
-      crystal: '#73eaff',
-      grove: '#8dff8a',
-      tidal: '#54dfff',
-      volcano: '#ff653d',
-      astral: '#c69cff',
-      eclipse: '#e37aff',
-    },
-    color = colors[event.arena] || '#fff',
-    hostile = event.arena === 'volcano' || event.arena === 'eclipse';
-  stage.className = `fx-stage active arena-pulse-fx arena-pulse-${event.arena} ${hostile ? 'pulse-hostile' : 'pulse-kind'}`;
-  stage.style.setProperty('--fx-color', color);
-  stage.innerHTML = `<div class="fx-curtain"></div><div class="arena-pulse-rune pulse-player"><b>${icons[event.arena]}</b><i></i><span>${t(`arena.${event.arena}`)}</span></div><div class="arena-pulse-rune pulse-enemy"><b>${icons[event.arena]}</b><i></i></div><div class="fx-aftershock"></div>`;
-  rateNewAnimations(stage);
-  ctx.arenaScene?.flash('power', color, 'enemy');
-  ctx.arenaScene?.burst(color, 'player', 1.4);
-  ctx.arenaScene?.burst(color, 'enemy', 1.4);
-}
-
 function missWhiffFx(event) {
   if (testAnimationScale === 0) return;
   const stage = screen.querySelector('#fx-stage');
@@ -975,7 +939,6 @@ registerRoutes({
   surgeFlashFx,
   aceFx,
   statusTickFx,
-  arenaPulseFx,
   missWhiffFx,
   barrierShatterFx,
   landMoveFx,

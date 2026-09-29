@@ -14,7 +14,7 @@ export function createDraft(seed = 1) {
   }
   const offers = [order.slice(0, 3), order.slice(3, 6), order.slice(6, 9)];
   return Object.freeze({
-    seed: normalizeSeed(seed),
+    seed: Number(seed) >>> 0,
     offers: Object.freeze(offers.map((offer) => Object.freeze(offer))),
     enemyTeam: Object.freeze(order.slice(9, 12)),
     arena: DRAFT_ARENAS[state % DRAFT_ARENAS.length],

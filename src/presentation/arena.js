@@ -85,32 +85,6 @@ const BURST_POOL_SIZE = 3;
 const BURST_POINTS = 180;
 const SPARK_POINTS = 48;
 
-// Renderer quality for the current device. Phase 2's quality-tier module is
-// expected to replace this function; ArenaScene only reads the returned shape.
-export function arenaRenderProfile() {
-  const coarse = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
-  if (coarse) {
-    const memory = globalThis.navigator?.deviceMemory;
-    const maxPixelRatio = memory && memory <= 4 ? 1 : 1.5;
-    return {
-      antialias: false,
-      powerPreference: 'default',
-      maxPixelRatio,
-      largeCanvasPixelRatio: maxPixelRatio,
-      activeFps: 60,
-      ambientFps: 30,
-    };
-  }
-  return {
-    antialias: true,
-    powerPreference: 'high-performance',
-    maxPixelRatio: 2,
-    largeCanvasPixelRatio: 1.5,
-    activeFps: 60,
-    ambientFps: 30,
-  };
-}
-
 // Soft round dot shared by every additive FX sprite (drawn once, no network).
 function softDotTexture() {
   const size = 64,
@@ -133,36 +107,37 @@ export class ArenaScene {
   constructor(
     canvas,
     theme = 'crystal',
-    { reducedMotion = false, testAnimationScale = 1, renderProfile = arenaRenderProfile() } = {}
+    { reducedMotion = false, testAnimationScale = 1, quality, governor = null } = {}
   ) {
     this.canvas = canvas;
     this.reducedMotion = reducedMotion;
     this.testAnimationScale = testAnimationScale;
     this.theme = THEMES[theme] ? theme : 'crystal';
-    this.profile = renderProfile;
+    // Tier budget (src/app/quality.js): DPR caps, MSAA, frame caps and dust.
+    this.applyProfile(quality.arena);
     this.disposed = false;
     this.paused = false;
     this.animations = [];
     this.tension = 0;
     this.targetTension = 0;
-    this.arenaCharge = 0;
     this.showdown = 0;
     this.targetShowdown = 0;
     this.flashExposure = 0;
     this.anchorResolver = null;
     // Frame governor: renders at activeFps while something is moving fast,
-    // ambientFps otherwise. Reduced motion has no ambient motion to show, so
-    // the loop stops entirely between effects.
-    this.fps = { active: renderProfile.activeFps, ambient: reducedMotion ? 0 : renderProfile.ambientFps };
+    // ambientFps otherwise (see applyProfile). The quality governor samples
+    // this loop's own animation frames.
+    this.governor = governor;
+    this.lastFrameAt = 0;
     this.nextRender = 0;
     this.frame = undefined;
     this.viewport = { w: 0, h: 0, ratio: 0 };
     try {
       this.renderer = new THREE.WebGLRenderer({
         canvas,
-        antialias: renderProfile.antialias,
+        antialias: this.profile.antialias,
         alpha: false,
-        powerPreference: renderProfile.powerPreference,
+        powerPreference: this.profile.powerPreference,
       });
     } catch (error) {
       throw new Error('WEBGL_UNAVAILABLE', { cause: error });
@@ -199,6 +174,7 @@ export class ArenaScene {
       canvas.dispatchEvent(new CustomEvent('arena-context-lost', { bubbles: true }));
     };
     canvas.addEventListener('webglcontextlost', this.contextLost);
+    this.governor?.attach(this);
     this.wake();
   }
   add(object, parent = this.scene) {
@@ -472,7 +448,7 @@ export class ArenaScene {
     }
   }
   buildParticles(t) {
-    const count = this.reducedMotion ? 70 : 170,
+    const count = this.dustCount(),
       positions = new Float32Array(count * 3),
       colors = new Float32Array(count * 3),
       base = new THREE.Color(t.glow),
@@ -571,6 +547,23 @@ export class ArenaScene {
     points.renderOrder = 1;
     return { points, velocity: new Float32Array(count * 3), live: 0, life: 0, gravity: 0, drag: 1, fade: 2 };
   }
+  // Reduced motion keeps a thinner field; the tier caps both.
+  dustCount() {
+    return this.reducedMotion ? Math.min(70, this.profile.dust) : this.profile.dust;
+  }
+  applyProfile(profile) {
+    this.profile = profile;
+    // Reduced motion has no ambient motion to show, so the loop stops entirely between effects.
+    this.fps = { active: profile.activeFps, ambient: this.reducedMotion ? 0 : profile.ambientFps };
+  }
+  // A tier change at a safe boundary: frame caps, DPR and dust apply now without touching the
+  // context; antialiasing is fixed for the context's lifetime and follows with the next arena.
+  setQuality(quality) {
+    if (this.disposed) return;
+    this.applyProfile(quality.arena);
+    this.dust?.geometry.setDrawRange(0, this.dustCount());
+    this.resize();
+  }
   resize() {
     if (this.disposed) return;
     const rect = this.canvas.getBoundingClientRect(),
@@ -591,18 +584,11 @@ export class ArenaScene {
     // arena never shows an empty canvas.
     if (!document.hidden) this.renderer.render(this.scene, this.camera);
   }
-  setBattleState({ tension = 0, imminent = false, showdown = false } = {}) {
+  setBattleState({ tension = 0, showdown = false } = {}) {
     const targetTension = Math.max(0, Math.min(1, tension)),
-      arenaCharge = imminent ? 1 : 0,
       targetShowdown = showdown ? 1 : 0;
-    if (
-      targetTension === this.targetTension &&
-      arenaCharge === this.arenaCharge &&
-      targetShowdown === this.targetShowdown
-    )
-      return;
+    if (targetTension === this.targetTension && targetShowdown === this.targetShowdown) return;
     this.targetTension = targetTension;
-    this.arenaCharge = arenaCharge;
     this.targetShowdown = targetShowdown;
     this.wake();
   }
@@ -757,11 +743,32 @@ export class ArenaScene {
     this.stopLoop();
     if (!document.hidden) this.renderer.render(this.scene, this.camera);
   }
+  // Battle-intro shader warm-up: compiles every material in the scene,
+  // including the hidden FX pools, so the first hit never stalls on a shader
+  // link. Same as renderer.compileAsync(), but the readiness poll stops once
+  // the arena is disposed (compileAsync's poll would throw on freed programs).
+  // Resolves true when every program is ready, false if disposed first.
+  warmUp() {
+    if (this.disposed) return Promise.resolve(false);
+    const pending = this.renderer.compile(this.scene, this.camera);
+    return new Promise((resolve) => {
+      const poll = () => {
+        if (this.disposed) return resolve(false);
+        for (const material of pending)
+          if (this.renderer.properties.get(material).currentProgram?.isReady() !== false)
+            pending.delete(material);
+        if (pending.size) setTimeout(poll, 10);
+        else resolve(true);
+      };
+      poll();
+    });
+  }
   // Schedule the next frame immediately (something changed). Restarting a
   // stopped loop flushes the clock so the stop never becomes one big step.
   wake() {
     this.nextRender = 0;
     if (this.frame !== undefined || this.disposed || this.paused || document.hidden) return;
+    this.lastFrameAt = 0;
     this.clock.getDelta();
     this.frame = requestAnimationFrame(this.animateBound);
   }
@@ -784,7 +791,10 @@ export class ArenaScene {
   animate(now) {
     this.frame = undefined;
     if (this.disposed || this.paused || document.hidden) return;
-    const rate = this.isActive() ? this.fps.active : this.fps.ambient;
+    const active = this.isActive();
+    if (this.lastFrameAt) this.governor?.sample(now - this.lastFrameAt, now, active);
+    this.lastFrameAt = now;
+    const rate = active ? this.fps.active : this.fps.ambient;
     if (rate <= 0) return;
     if (now < this.nextRender - 1) {
       this.frame = requestAnimationFrame(this.animateBound);
@@ -805,12 +815,10 @@ export class ArenaScene {
     // (brighter light, slightly closer camera, brighter exposure).
     this.showdown = approach(this.showdown, this.targetShowdown, dt * 1.6);
     this.flashExposure = this.flashExposure > 0.002 ? this.flashExposure * Math.pow(0.87, frames) : 0;
-    const chargePulse = this.arenaCharge * (0.5 + Math.sin(t * 5) * 0.5);
-    this.renderer.toneMappingExposure =
-      1.15 + this.tension * 0.2 + chargePulse * 0.07 + this.showdown * 0.12 + this.flashExposure;
+    this.renderer.toneMappingExposure = 1.15 + this.tension * 0.2 + this.showdown * 0.12 + this.flashExposure;
     this.moon.intensity = 3.4 + this.tension * 1.4;
     this.hemi.intensity = 1.8 + this.tension * 0.45;
-    this.rimPool.material.opacity = 0.26 + this.tension * 0.2 + chargePulse * 0.12 + this.showdown * 0.16;
+    this.rimPool.material.opacity = 0.26 + this.tension * 0.2 + this.showdown * 0.16;
     if (this.dust) {
       this.dust.rotation.y =
         t * (this.dust.userData.particle === 'ember' ? 0.06 : 0.022) * (1 + this.tension * 0.9);
@@ -848,8 +856,7 @@ export class ArenaScene {
         if (item.type === 'sway') o.rotation.z = Math.sin(phase * 0.65) * 0.07;
         if (item.type === 'breathe') o.scale.y = 1 + Math.sin(phase * 0.8) * (0.035 + this.tension * 0.012);
         if (item.type === 'pulse' && o.material)
-          o.material.emissiveIntensity =
-            0.5 + this.tension * 0.3 + Math.sin(phase * (item.speed || 1)) * (0.3 + chargePulse * 0.18);
+          o.material.emissiveIntensity = 0.5 + this.tension * 0.3 + Math.sin(phase * (item.speed || 1)) * 0.3;
       }
     }
     this.stepGlow(dt);
@@ -889,6 +896,7 @@ export class ArenaScene {
     if (this.disposed) return;
     this.disposed = true;
     this.stopLoop();
+    this.governor?.detach(this);
     this.anchorResolver = null;
     globalThis.removeEventListener('resize', this.onResize);
     this.resizeObserver?.disconnect();

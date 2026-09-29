@@ -15,7 +15,6 @@ const {
   chooseAiAction,
   effectiveSpeed,
   STATUS_DEFINITIONS,
-  comboSetupStatus,
   sortStatusIds,
   statusBadgeHtml,
   statusIcon,
@@ -36,12 +35,10 @@ function polarityLabel(meta) {
 }
 
 function moveStatusBadgesHtml(move) {
-  const comboStatus = comboSetupStatus(move),
-    ids = sortStatusIds([
-      ...(move.selfStatuses || []).map(({ id }) => id),
-      ...(move.targetStatuses || []).map(({ id }) => id),
-      ...(comboStatus ? [comboStatus] : []),
-    ]);
+  const ids = sortStatusIds([
+    ...(move.selfStatuses || []).map(({ id }) => id),
+    ...(move.targetStatuses || []).map(({ id }) => id),
+  ]);
   return ids.length
     ? `<span class="move-status-badges">${[...new Set(ids)]
         .map((id) => statusBadgeHtml(id, { label: escapeHtml(t(`status.${id}`)), compact: true }))
@@ -291,14 +288,17 @@ function moveButton(
       ...(cd || move.cooldown ? [`<span class="move-badge">⌛ ${cd || move.cooldown}</span>`] : []),
       ...(move.signature ? [`<span class="move-badge signature-cost">✦ ${cost}</span>`] : []),
     ].slice(0, 2);
-  const comboBadge = preview?.combo
-    ? `<span class="combo-ready move-combo-badge">COMBO +40%${ctx.save.expertMode && preview.helperId ? ` · ${creatureName(preview.helperId)}` : ''}</span>`
-    : '';
+  const comboLabel = preview?.combo
+      ? t('battle.comboReady', { percent: Math.round((preview.combo.multiplier - 1) * 100) })
+      : '',
+    comboBadge = comboLabel
+      ? `<span class="combo-ready move-combo-badge">${comboLabel}${ctx.save.expertMode && preview.helperId ? ` · ${creatureName(preview.helperId)}` : ''}</span>`
+      : '';
   const advancedClasses = ctx.save.expertMode
       ? `${move.hits > 1 ? 'multi-hit' : ''} ${move.drain ? 'drain-move' : ''} ${move.priority > 0 ? 'priority-move' : ''}`
       : '',
     description = `<span class="move-description">${t(`move.effect.${moveId}`)}</span>`,
-    context = `<span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}${moveStatusBadgesHtml(move)}</span><span class="move-tags">${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${preview.combo ? `<span class="tag combo-ready">COMBO +40%</span>` : ''}${preview.helperId ? `<span class="tag combo-helper-detail">${t('battle.preparedBy', { helper: creatureName(preview.helperId) })}</span>` : ''}` : ''}<span class="tag">${affinityIcon(move.affinity)} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span>`;
+    context = `<span class="move-context-source" hidden><span class="move-effect">${t(`move.effect.${moveId}`)}${moveStatusBadgesHtml(move)}</span><span class="move-tags">${preview ? `<span class="tag damage-preview ${preview.lethal ? 'lethal' : ''} ${preview.miss ? 'miss' : ''}">${preview.miss ? '≋' : preview.lethal ? '☠' : '⚔'} ${preview.miss ? t('battle.previewMiss') : t('battle.preview', { damage: preview.damage })}${preview.absorbed ? ` · ⬡${preview.absorbed}` : ''}</span>${comboLabel ? `<span class="tag combo-ready">${comboLabel}</span>` : ''}${preview.helperId ? `<span class="tag combo-helper-detail">${t('battle.preparedBy', { helper: creatureName(preview.helperId) })}</span>` : ''}` : ''}<span class="tag">${affinityIcon(move.affinity)} ${affinityName(move.affinity)}</span><span class="tag ${order ? `order-${order}` : ''}">${speedLabel}</span><span class="tag">${cooldownLabel}</span>${move.signature ? `<span class="tag signature-cost">${signatureLabel}</span>` : ''}${move.power ? `<span class="tag effect-label ${cls}">${label}</span>` : ''}</span></span>`;
   if (ctx.save.expertMode)
     return `<button type="button" class="move-btn kind-${move.kind} ${advancedClasses} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-archetype" aria-hidden="true">${archetype}</span><span class="move-name">${move.signature ? '<i class="move-signature-mark">✦</i> ' : ''}<i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span>${description}<span class="move-figure">${dominant}${comboBadge}<span class="move-badges">${badges.join('')}</span></span>${context}</button>`;
   const effectiveness =
@@ -311,7 +311,7 @@ function moveButton(
       ? `<span class="simple-signature-state ${owner.surge >= cost ? 'ready' : ''}">${owner.surge >= cost ? t('battle.sigReady') : `✦ ${owner.surge}/${cost}`}</span>`
       : '',
     cooldownState = cd ? `<span class="move-badge simple-cooldown">⌛ ${cd}</span>` : '',
-    comboState = preview?.combo ? `<span class="combo-ready move-combo-badge">COMBO +40%</span>` : '';
+    comboState = comboLabel ? `<span class="combo-ready move-combo-badge">${comboLabel}</span>` : '';
   return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${shortPreview}${signatureState}${cooldownState}${comboState}</span>${context}</button>`;
 }
 
@@ -325,7 +325,7 @@ function exchangeForecastHtml(moveId, enemyAction) {
     const sum = (owner) => owner.team.reduce((total, c) => total + c.hp, 0),
       beforePlayer = sum(state.sides.player),
       beforeEnemy = sum(state.sides.enemy),
-      outcome = resolveTurn(state, { type: 'move', moveId }, enemyAction).state,
+      outcome = resolveTurn(state, { type: 'move', moveId }, enemyAction, { forecast: true }).state,
       playerChange = sum(outcome.sides.player) - beforePlayer,
       enemyChange = sum(outcome.sides.enemy) - beforeEnemy,
       format = (change) => (change > 0 ? `+${change}` : String(change).replace('-', '−')),

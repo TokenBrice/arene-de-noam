@@ -9,6 +9,8 @@ import {
   resolveTurn,
 } from '../src/battle/engine.js';
 import { normalizeSeed, randomIndex } from '../src/battle/rng.js';
+import { difficultyModifiers } from '../src/data/battle-rules.js';
+import { ARENAS } from '../src/data/trainers.js';
 import { PROFILE_AXES, teamProfile } from '../src/data/team-profile.js';
 import { CLASS_ORDER } from '../src/data/classes.js';
 import { AFFINITY_ORDER } from '../src/data/affinities.js';
@@ -34,8 +36,8 @@ function drawTeam(seed) {
   return { team, state };
 }
 
-function simulate(playerTeam, enemyTeam, seed) {
-  let state = createBattle({ playerTeam, enemyTeam, seed });
+function simulate(playerTeam, enemyTeam, seed, arena) {
+  let state = createBattle({ playerTeam, enemyTeam, seed, arena });
   for (let guard = 0; guard < 140 && state.phase !== 'ended'; guard++) {
     if (state.sides.player.pendingReplacement)
       state = applyReplacement(
@@ -71,8 +73,14 @@ function chooseNaiveAction(state) {
   return choice;
 }
 
-function simulateNaive(playerTeam, enemyTeam, seed, difficulty) {
-  let state = createBattle({ playerTeam, enemyTeam, seed });
+function simulateNaive(playerTeam, enemyTeam, seed, difficulty, arena) {
+  let state = createBattle({
+    playerTeam,
+    enemyTeam,
+    seed,
+    arena,
+    modifiers: difficultyModifiers(difficulty),
+  });
   for (let guard = 0; guard < 140 && state.phase !== 'ended'; guard++) {
     if (state.sides.player.pendingReplacement)
       state = applyReplacement(state, 'player', chooseNaiveAction(state)).state;
@@ -89,10 +97,12 @@ function simulateNaive(playerTeam, enemyTeam, seed, difficulty) {
   return state;
 }
 
+// 900 battles per tier keep the band check above seeded noise (±1.7 points
+// standard error; 300 battles swung the Champion tier by ±3 points).
 function checkNaiveRamp() {
   const sampleCount = Math.max(
       100,
-      Math.min(10000, Math.round(Number(process.env.ARENA_NAIVE_SAMPLES) || 300))
+      Math.min(10000, Math.round(Number(process.env.ARENA_NAIVE_SAMPLES) || 900))
     ),
     seed = normalizeSeed(Number(process.env.ARENA_NAIVE_SEED) || 0x51a1ced),
     targets = {
@@ -109,7 +119,11 @@ function checkNaiveRamp() {
       rngState = player.state;
       const enemy = drawTeam(rngState);
       rngState = enemy.state;
-      if (simulateNaive(player.team, enemy.team, rngState, difficulty).winner === 'player') wins++;
+      if (
+        simulateNaive(player.team, enemy.team, rngState, difficulty, ARENAS[game % ARENAS.length]).winner ===
+        'player'
+      )
+        wins++;
       rngState = (rngState + 0x9e3779b9) >>> 0 || 1;
     }
     results[difficulty] = wins / sampleCount;
@@ -128,6 +142,63 @@ function checkNaiveRamp() {
     throw new Error(
       `Naive-player ramp outside target bands: ${outside
         .map(([difficulty, winRate]) => `${difficulty} ${percent(winRate, 1)}`)
+        .join(', ')}`
+    );
+}
+
+// Paired weather check: the same seeded matchups are played in every arena, so
+// each type's win-rate shift against the neutral Crystal Dome isolates the
+// weather. Every arena must keep every type within ±8 points of neutral.
+function checkArenaWeather() {
+  const matchups = Math.max(60, Math.min(2000, Math.round(Number(process.env.ARENA_WEATHER_SAMPLES) || 400))),
+    seed = normalizeSeed(Number(process.env.ARENA_WEATHER_SEED) || 0xa7e4a),
+    draws = [];
+  let rngState = seed;
+  for (let game = 0; game < matchups; game++) {
+    const player = drawTeam(rngState);
+    rngState = player.state;
+    const enemy = drawTeam(rngState);
+    rngState = enemy.state;
+    draws.push({ player: player.team, enemy: enemy.team, seed: rngState });
+    rngState = (rngState + 0x9e3779b9) >>> 0 || 1;
+  }
+  const rates = Object.fromEntries(
+    ARENAS.map((arena) => {
+      const record = emptyRecord(AFFINITY_ORDER);
+      for (const draw of draws) {
+        const winner = simulate(draw.player, draw.enemy, draw.seed, arena).winner;
+        recordSide(
+          record,
+          draw.player.map((id) => CREATURES[id].affinity),
+          winner === 'player'
+        );
+        recordSide(
+          record,
+          draw.enemy.map((id) => CREATURES[id].affinity),
+          winner === 'enemy'
+        );
+      }
+      return [arena, Object.fromEntries(AFFINITY_ORDER.map((id) => [id, rate(record.get(id))]))];
+    })
+  );
+  const shifts = ARENAS.flatMap((arena) =>
+    AFFINITY_ORDER.map((id) => ({ arena, id, shift: rates[arena][id] - rates.crystal[id] }))
+  );
+  console.log(
+    `Arena weather (${matchups} paired matchups per arena, seed ${seed}; type win rate and shift vs neutral crystal):`
+  );
+  for (const arena of ARENAS)
+    console.log(
+      `  ${arena}: ${AFFINITY_ORDER.map((id) => {
+        const shift = rates[arena][id] - rates.crystal[id];
+        return `${id} ${percent(rates[arena][id], 1)}${arena === 'crystal' ? '' : ` (${shift >= 0 ? '+' : ''}${(shift * 100).toFixed(1)})`}`;
+      }).join(' · ')}`
+    );
+  const outside = shifts.filter((item) => Math.abs(item.shift) > 0.08);
+  if (outside.length)
+    throw new Error(
+      `Arena weather shifts a type more than 8 points: ${outside
+        .map((item) => `${item.arena}/${item.id} ${(item.shift * 100).toFixed(1)}`)
         .join(', ')}`
     );
 }
@@ -221,8 +292,10 @@ if (process.argv.includes('--naive')) {
   process.exit(0);
 }
 
+// Default matrix re-picked when seeds became fmix32-mixed (G2). Aubéastre sits near the 30% floor
+// (≈30–32% over 10k samples with either RNG), so some 2400-sample matrices dip below it.
 const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.ARENA_BALANCE_SAMPLES) || 2400))),
-  balanceSeed = normalizeSeed(Number(process.env.ARENA_BALANCE_SEED) || 0xc0ffee),
+  balanceSeed = normalizeSeed(Number(process.env.ARENA_BALANCE_SEED) || 0x5eed),
   stats = emptyRecord(CREATURE_IDS),
   archetypes = emptyRecord(PROFILE_AXES),
   classes = emptyRecord(CLASS_ORDER),
@@ -267,14 +340,18 @@ let rng = balanceSeed,
   turnSamples = [],
   caps = 0,
   signatureUses = 0,
-  firstSignatureActions = [];
+  firstSignatureActions = [],
+  landedActions = 0,
+  criticalActions = 0,
+  comboActions = 0;
 
 for (let game = 0; game < samples; game++) {
   const player = drawTeam(rng);
   rng = player.state;
   const enemy = drawTeam(rng);
   rng = enemy.state;
-  const result = simulate(player.team, enemy.team, rng),
+  const arena = ARENAS[game % ARENAS.length],
+    result = simulate(player.team, enemy.team, rng, arena),
     playerWon = result.winner === 'player',
     enemyWon = result.winner === 'enemy';
   rng = (rng + 0x9e3779b9) >>> 0 || 1;
@@ -350,6 +427,11 @@ for (let game = 0; game < samples; game++) {
     if (event.type === 'passive' && event.passive in definingEvents) definingEvents[event.passive]++;
     if (event.type === 'barrier-break') definingEvents.purgeBarrier += event.amount || 0;
     if (event.type === 'switch' && event.source === 'signature') definingEvents.protectedRelay++;
+    if (event.type === 'damage' && event.hit === 1) {
+      landedActions++;
+      if (event.critical) criticalActions++;
+      if (event.combo) comboActions++;
+    }
   }
   for (const [team, won] of [
     [player.team, playerWon],
@@ -403,6 +485,9 @@ console.log(
 );
 console.log(
   `Signature cadence: ${(signatureUses / (samples * 2)).toFixed(2)} uses per side-battle; median first use on that side's action ${median(firstSignatureActions)}; ${percent(firstSignatureActions.length / (samples * 2), 1)} of sides used one.`
+);
+console.log(
+  `Rules: critical hits on ${percent(criticalActions / landedActions, 2)} of ${landedActions} landed damaging actions; ${(comboActions / samples).toFixed(2)} Marqué combos per battle.`
 );
 console.log(`Creature win-rate range: ${percent(ranked.at(-1).rate, 1)}–${percent(ranked[0].rate, 1)}.`);
 console.log(
@@ -468,6 +553,7 @@ for (const row of NEW_ENTRANTS)
 
 checkNaiveRamp();
 checkTtkProfile();
+checkArenaWeather();
 
 const averageTurns = totalTurns / samples,
   capShare = caps / samples,
@@ -477,6 +563,10 @@ if (averageTurns < 12 || averageTurns > 17 || capShare >= 0.05)
   throw new Error(
     `Pacing outside targets: average turns ${averageTurns.toFixed(1)}, turn-cap share ${percent(capShare, 1)}`
   );
+
+// Seeded critical hits roll 1/16 on every landed damaging action.
+if (Math.abs(criticalActions / landedActions - 1 / 16) > 0.01)
+  throw new Error(`Critical-hit rate outside 6.25% ± 1: ${percent(criticalActions / landedActions, 2)}`);
 
 // Stage 3's pre-change reference was one to two Signatures per side and a first
 // selectable Signature around the fourth action. The expanded bounds are ±30%.

@@ -143,7 +143,8 @@
 }
 .league-dossier h2 {
   margin: 3px 0 5px;
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: clamp(25px, 4vw, 40px);
   line-height: 1;
 }
@@ -288,9 +289,9 @@
   align-self: stretch;
 }
 .league-dossier h2 {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-display);
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: var(--weight-display);
   line-height: 1.08;
   letter-spacing: 0.015em;
 }
@@ -409,7 +410,8 @@
   text-transform: uppercase;
 }
 .relay-rush-call b {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: clamp(32px, 5vw, 58px);
   line-height: 1;
 }

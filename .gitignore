@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 node_modules/
+dist/
 test-results/
 playwright-report/
 .DS_Store
@@ -10,3 +11,6 @@ playwright-report/
 
 # Agent scratch area (plans, test outputs, artifacts)
 /agents/
+
+# Perf harness output (tools/perf)
+tools/perf/results/

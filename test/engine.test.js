@@ -12,6 +12,7 @@ import {
   previewMoveOrder,
   resolveTurn,
   signatureCostFor,
+  ROOKIE_STAT_RATIO,
   TURN_CAP,
 } from '../src/battle/engine.js';
 import { CREATURES } from '../src/data/creatures.js';
@@ -103,7 +104,7 @@ test('switch forecasts include entry talents and exactly match the incoming hit'
   const state = createBattle({
       playerTeam: ['orakyn', 'monolith', 'virelia'],
       enemyTeam: ['kordane', 'calderoc', 'farfombre'],
-      seed: 33,
+      seed: 1024,
     }),
     before = structuredClone(state),
     forecast = previewIncomingAfterSwitch(state, 'player', 1, 'crystal_strike');
@@ -143,7 +144,8 @@ test('forecasts and live damage follow the rewired Combat triangle and cross-tri
   const state = createBattle({
       playerTeam: ['orakyn', 'nocturnyx', 'abyssar'],
       enemyTeam: ['kordane', 'calderoc', 'virelia'],
-      seed: 35,
+      // Neither live hit crits on this seed, so both match their forecasts.
+      seed: 1,
     }),
     strongForecast = previewIncomingAfterSwitch(state, 'player', 1, 'crystal_strike'),
     neutralForecast = previewIncomingAfterSwitch(state, 'player', 2, 'crystal_strike');
@@ -194,7 +196,7 @@ test('cooldowns last exact future selection phases and statuses refresh/consume'
   assert.equal(state.sides.player.team[0].cooldowns.fault_charge, undefined);
   state.sides.player.surge = 100;
   assert.ok(getLegalActions(state, 'player').some((a) => a.moveId === 'fault_charge'));
-  assert.ok(state.sides.player.team[0].statuses.marked, 'an untagged attack preserves Marked');
+  assert.equal(state.sides.player.team[0].statuses.marked, undefined, 'any landed attack consumes Marked');
   state.sides.player.team[0].statuses.stunned = { remaining: 2, appliedTurn: state.turn };
   state.sides.player.team[0].attack = 1;
   result = resolveTurn(
@@ -310,56 +312,78 @@ test('mastery ranks never change combat stats, openings, or Signature cost', () 
   assert.equal(signatureCostFor(state.sides.player.team[1]), 80);
 });
 
-test('arena powers awaken every fourth turn and remain deterministic', () => {
+test('arena weather scales attacks by type in previews and live hits, with no pulse events', () => {
+  const base = {
+    playerTeam: ['calderoc', 'orakyn', 'virelia'],
+    enemyTeam: ['thornox', 'kordane', 'farfombre'],
+    seed: 23,
+  };
+  const neutral = createBattle({ ...base, arena: 'crystal' }),
+    volcano = createBattle({ ...base, arena: 'volcano' }),
+    fierce = createBattle({ ...base, arena: 'volcano', modifiers: ['fierce_weather'] });
+  assert.deepEqual(neutral.weather, {});
+  assert.deepEqual(volcano.weather, { flame: 1.2, grove: 0.8 });
+  assert.deepEqual(fierce.weather, { flame: 1.4, grove: 0.6 });
+  const move = CREATURES.calderoc.moves.find((id) => MOVES[id].kind === 'damage' && !MOVES[id].signature),
+    attacker = activeOf(volcano, 'player'),
+    defender = activeOf(volcano, 'enemy'),
+    plain = previewMove(neutral, 'player', move),
+    boosted = previewMove(volcano, 'player', move);
+  assert.equal(boosted.weather, 1.2);
+  assert.equal(
+    boosted.raw,
+    calculateDamage(MOVES[move], attacker, defender, { focused: false, weather: 1.2 }).damage
+  );
+  assert.ok(boosted.raw > plain.raw);
+  assert.ok(previewMove(fierce, 'player', move).raw > boosted.raw);
+  assert.equal(previewMove(volcano, 'enemy', 'bramble_trap').weather, 0.8);
+  assert.ok(
+    previewMove(volcano, 'enemy', 'bramble_trap').raw < previewMove(neutral, 'enemy', 'bramble_trap').raw
+  );
   for (const arena of ['crystal', 'grove', 'tidal', 'volcano', 'astral', 'eclipse']) {
-    const state = createBattle({
-      playerTeam: ['orakyn', 'virelia', 'abyssar'],
-      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
-      seed: 23,
-      arena,
-    });
-    state.turn = 4;
-    state.sides.player.surge = 100;
-    state.sides.player.team[0].hp -= 20;
-    state.sides.enemy.team[0].hp -= 20;
-    const result = resolveTurn(
-      state,
-      { type: 'move', moveId: 'oracle_veil' },
-      { type: 'move', moveId: 'resonant_focus' }
-    );
-    assert.ok(
-      result.events.some((e) => e.type === 'arena-pulse' && e.arena === arena),
-      `${arena} pulse is emitted`
-    );
-    assert.equal(
-      result.events.some((event) => event.type === 'resonance'),
-      false
-    );
+    const state = createBattle({ ...base, arena, seed: 31 });
+    for (let turn = 0; turn < 4 && state.phase === 'choice'; turn++) {
+      const result = resolveTurn(
+        state,
+        getLegalActions(state, 'player')[0],
+        getLegalActions(state, 'enemy')[0]
+      );
+      assert.equal(
+        result.events.some((event) => event.type.startsWith('arena')),
+        false
+      );
+      for (const hit of result.events.filter((event) => event.type === 'damage'))
+        assert.equal(hit.weather, state.weather[hit.moveAffinity] ?? 1);
+      Object.assign(state, result.state);
+    }
   }
+  assert.throws(() => createBattle({ ...base, arena: 'moon' }), /Unknown arena/);
 });
 
-test('matching arena affinity grants no hidden Surge at a pulse', () => {
-  const state = createBattle({
-    playerTeam: ['kordane', 'orakyn', 'virelia'],
-    enemyTeam: ['monolith', 'calderoc', 'farfombre'],
-    seed: 24,
-    arena: 'crystal',
-  });
-  state.turn = 4;
-  state.sides.player.surge = 40;
-  state.sides.enemy.surge = 40;
-  const result = resolveTurn(
-    state,
-    { type: 'move', moveId: 'crystal_strike' },
-    { type: 'move', moveId: 'gravity_fist' }
-  );
+test('Type Clash turns super-effective hits into ×2.5 for both sides only', () => {
+  const base = {
+      playerTeam: ['orakyn', 'abyssar', 'virelia'],
+      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+      seed: 24,
+    },
+    plain = createBattle(base),
+    clash = createBattle({ ...base, modifiers: ['type_clash'] }),
+    superEffective = previewMove(clash, 'player', 'lucid_arc'),
+    reference = previewMove(plain, 'player', 'lucid_arc');
+  assert.equal(superEffective.affinity, 2);
   assert.equal(
-    result.events.some((event) => event.type === 'resonance'),
-    false
+    superEffective.raw,
+    calculateDamage(
+      { ...MOVES.lucid_arc, power: MOVES.lucid_arc.power * 1.25 },
+      activeOf(clash, 'player'),
+      activeOf(clash, 'enemy'),
+      { focused: Boolean(activeOf(clash, 'player').statuses.focused) }
+    ).damage
   );
+  assert.ok(superEffective.raw > reference.raw);
   assert.equal(
-    result.events.some((event) => event.type === 'surge' && event.source === 'resonance'),
-    false
+    previewMove(clash, 'enemy', 'crystal_strike').raw,
+    previewMove(plain, 'enemy', 'crystal_strike').raw
   );
 });
 
@@ -641,7 +665,7 @@ test('preview resolves Last Bastion barriers between Echo Chorus hits', () => {
   const state = createBattle({
     playerTeam: ['lumivox', 'orakyn', 'virelia'],
     enemyTeam: ['brontusk', 'kordane', 'calderoc'],
-    seed: 801,
+    seed: 1026,
   });
   state.sides.enemy.team[0].hp = 60;
   state.sides.enemy.team[0].barrier = 0;
@@ -734,33 +758,31 @@ test('a drain move cannot resurrect its user after reflected damage knocks it ou
   assert.ok(passiveResult.events.some((event) => event.type === 'recoil' && event.source === 'bramblehide'));
 });
 
-test('Burning powers Venom Harvest through the single Combo rule', () => {
+test('Venom Harvest scales with Burning stacks without consuming them', () => {
   const state = createBattle({
     playerTeam: ['thornox', 'mossaur', 'florafae'],
     enemyTeam: ['monolith', 'kordane', 'brontusk'],
     seed: 67,
   });
   state.sides.player.surge = 100;
+  state.sides.enemy.team[0].maxHp = 999;
+  state.sides.enemy.team[0].hp = 999;
+  const plain = previewMove(state, 'player', 'venom_harvest');
   state.sides.enemy.team[0].statuses.burning = { remaining: 3, appliedTurn: 0, stacks: 2 };
   const preview = previewMove(state, 'player', 'venom_harvest');
-  assert.deepEqual(preview.combo, {
-    status: 'burning',
-    multiplier: COMBO_DAMAGE_MULTIPLIER,
-    helperId: null,
-  });
+  assert.equal(preview.combo, null);
+  assert.ok(preview.raw > plain.raw);
   const result = resolveTurn(
     state,
     { type: 'move', moveId: 'venom_harvest' },
-    { type: 'move', moveId: 'gravity_fist' }
+    { type: 'move', moveId: 'gravity_fist' },
+    { forecast: true }
   );
-  assert.ok(
-    result.events.some(
-      (event) =>
-        event.type === 'status' && event.status === 'burning' && event.consumed && event.source === 'combo'
-    )
+  assert.equal(
+    result.events.some((event) => event.type === 'status' && event.status === 'burning' && event.consumed),
+    false
   );
-  assert.equal(result.events.filter((event) => event.type === 'damage' && event.combo).length, 1);
-  assert.equal(result.state.sides.enemy.team[0].statuses.burning, undefined);
+  assert.ok(result.state.sides.enemy.team[0].statuses.burning);
 });
 
 test('a teammate Combo credits its helper once and grants no assist Surge', () => {
@@ -781,7 +803,6 @@ test('a teammate Combo credits its helper once and grants no assist Surge', () =
   };
   const preview = previewMove(state, 'player', 'ninefold_inferno');
   assert.deepEqual(preview.combo, {
-    status: 'marked',
     multiplier: COMBO_DAMAGE_MULTIPLIER,
     helperId: 'orakyn',
   });
@@ -812,7 +833,7 @@ test('a teammate Combo credits its helper once and grants no assist Surge', () =
   );
 });
 
-test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consume it', () => {
+test('any damaging move consumes Marqué at ×1.3; misses preserve it and barriers still consume it', () => {
   const state = createBattle({
     playerTeam: ['orakyn', 'abyssar'],
     enemyTeam: ['kordane', 'farfombre'],
@@ -833,7 +854,7 @@ test('Combo uses exactly ×1.4, misses preserve setup, and barriers still consum
     ).damage,
     preview = previewMove(state, 'player', 'slowing_riddle');
   assert.equal(preview.raw, expected);
-  assert.equal(preview.combo.multiplier, 1.4);
+  assert.equal(preview.combo.multiplier, 1.3);
   const barrierState = structuredClone(state);
   barrierState.sides.enemy.team[0].barrier = 999;
   const barrierPreview = previewMove(barrierState, 'player', 'slowing_riddle');
@@ -869,7 +890,7 @@ test('damage previews are exact, barrier-aware, immutable, and honest about guar
   const state = createBattle({
     playerTeam: ['kordane', 'orakyn', 'virelia'],
     enemyTeam: ['monolith', 'pyrolynx', 'farfombre'],
-    seed: 71,
+    seed: 1030,
   });
   state.sides.enemy.team[0].barrier = 11;
   const before = structuredClone(state),
@@ -1232,7 +1253,7 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
   const state = createBattle({
     playerTeam: ['aubeastre', 'deuilastre', 'pactigon'],
     enemyTeam: ['orakyn', 'kordane', 'virelia'],
-    seed: 9,
+    seed: 1031,
   });
   state.sides.player.surge = 100;
   state.sides.player.team[1].statuses = {
@@ -1349,4 +1370,100 @@ test('the four new roster talents trigger at their deterministic engine hooks', 
   );
   assert.equal(result.state.sides.player.team[1].barrier, 4);
   assert.ok(result.events.some((event) => event.type === 'passive' && event.passive === 'shared_breath'));
+});
+
+test('seeded critical hits hit ×1.5 on every hit of one action, never in previews or forecasts', () => {
+  let criticalState = null;
+  for (let seed = 1; seed < 400 && !criticalState; seed++) {
+    const state = createBattle({
+      playerTeam: ['pyrolynx', 'orakyn', 'virelia'],
+      enemyTeam: ['monolith', 'kordane', 'brontusk'],
+      seed,
+    });
+    state.sides.player.surge = 100;
+    state.sides.enemy.team[0].maxHp = 999;
+    state.sides.enemy.team[0].hp = 999;
+    const live = resolveTurn(
+      state,
+      { type: 'move', moveId: 'ninefold_inferno' },
+      { type: 'move', moveId: 'gravity_fist' }
+    );
+    if (
+      live.events.some((event) => event.type === 'damage' && event.sourceSide === 'player' && event.critical)
+    )
+      criticalState = { state, live };
+  }
+  assert.ok(criticalState, 'a seeded critical hit occurs');
+  const { state, live } = criticalState,
+    hits = live.events.filter((event) => event.type === 'damage' && event.sourceSide === 'player'),
+    preview = previewMove(state, 'player', 'ninefold_inferno'),
+    forecast = resolveTurn(
+      state,
+      { type: 'move', moveId: 'ninefold_inferno' },
+      { type: 'move', moveId: 'gravity_fist' },
+      { forecast: true }
+    ).events.filter((event) => event.type === 'damage' && event.sourceSide === 'player');
+  assert.equal(hits.length, 5);
+  assert.ok(hits.every((hit) => hit.critical === true));
+  assert.equal(preview.critical, false);
+  assert.ok(forecast.every((hit) => hit.critical === false));
+  assert.equal(
+    hits[0].rawAmount,
+    calculateDamage(MOVES.ninefold_inferno, activeOf(state, 'player'), activeOf(state, 'enemy'), {
+      critical: true,
+    }).damage
+  );
+  assert.equal(forecast[0].rawAmount * 5, preview.raw);
+});
+
+test('small battle seeds open with a fair critical roll', () => {
+  const firstPlayerHit = (seed) =>
+    resolveTurn(
+      createBattle({
+        playerTeam: ['pyrolynx', 'abyssar', 'virelia'],
+        enemyTeam: ['calderoc', 'kordane', 'thornox'],
+        seed,
+      }),
+      { type: 'move', moveId: 'flash_pounce' },
+      { type: 'move', moveId: 'cinder_burst' }
+    ).events.find((event) => event.type === 'damage' && event.sourceSide === 'player');
+  let crits = 0;
+  for (let seed = 1; seed <= 3000; seed++) if (firstPlayerHit(seed).critical) crits++;
+  // 1/16 of 3000 is 187.5; unmixed xorshift seeds 1–1023 all crit on this first roll.
+  assert.ok(crits >= 140 && crits <= 235, `${crits} first-attack crits over 3000 seeds`);
+  assert.deepEqual(firstPlayerHit(7), firstPlayerHit(7));
+});
+
+test('rookie rivals are a lower level and never land a critical hit', () => {
+  const base = {
+      playerTeam: ['orakyn', 'abyssar', 'virelia'],
+      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+    },
+    rookie = createBattle({ ...base, modifiers: ['rookie'] });
+  rookie.sides.enemy.team.forEach((creature) => {
+    assert.equal(creature.maxHp, Math.round(CREATURES[creature.id].maxHp * ROOKIE_STAT_RATIO));
+    assert.equal(creature.hp, creature.maxHp);
+    assert.equal(creature.attack, Math.round(CREATURES[creature.id].attack * ROOKIE_STAT_RATIO));
+    assert.equal(creature.guard, CREATURES[creature.id].guard);
+  });
+  assert.deepEqual(
+    rookie.sides.player.team.map((creature) => creature.maxHp),
+    base.playerTeam.map((id) => CREATURES[id].maxHp)
+  );
+  let playerCrits = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const state = createBattle({ ...base, seed, modifiers: ['rookie'] });
+    state.sides.player.team[0].maxHp = 999;
+    state.sides.player.team[0].hp = 999;
+    state.sides.enemy.team[0].maxHp = 999;
+    state.sides.enemy.team[0].hp = 999;
+    const events = resolveTurn(
+      state,
+      { type: 'move', moveId: 'lucid_arc' },
+      { type: 'move', moveId: 'crystal_strike' }
+    ).events.filter((event) => event.type === 'damage');
+    assert.ok(events.every((event) => event.sourceSide === 'player' || event.critical === false));
+    playerCrits += events.filter((event) => event.sourceSide === 'player' && event.critical).length;
+  }
+  assert.ok(playerCrits > 0, 'the player can still land critical hits against a rookie');
 });

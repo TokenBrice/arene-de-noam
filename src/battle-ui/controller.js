@@ -8,6 +8,7 @@ const {
   PASSIVES,
   masteryRank,
   quickRule,
+  difficultyModifiers,
   TRAINERS,
   TRIALS,
   GAUNTLET_STAGES,
@@ -27,7 +28,6 @@ const {
   sortStatusIds,
   statusBadgeHtml,
   statusIcon,
-  ArenaScene,
   params,
   testAnimationScale,
   t,
@@ -47,7 +47,6 @@ const {
   disposeArena,
   ensureBattleStyles,
   statusVisuals,
-  comboRoutesHtml,
 } = ctx;
 const {
   bindCommon,
@@ -129,7 +128,7 @@ function startBattle(config) {
     seed,
     mode: config.mode,
     arena: config.arena,
-    modifiers: config.modifiers,
+    modifiers: [...(config.modifiers || []), ...difficultyModifiers(config.difficulty)],
     enemyAce: ['ladder', 'gauntlet', 'circuit'].includes(config.mode)
       ? TRAINERS[config.trainerIndex]?.ace
       : null,
@@ -180,13 +179,20 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     battleStartPending = false;
     return;
   }
-  // Style promotion is normally instantaneous after the document preload, but
-  // replace the still-interactive selection DOM while it settles. This avoids
-  // duplicate starts and stale headings/live regions leaking into the battle.
+  // Style promotion and the arena chunk are normally ready after the prefetch,
+  // but replace the still-interactive selection DOM while they settle. This
+  // avoids duplicate starts and stale headings/live regions leaking into the
+  // battle. A failed arena load takes the friendly WebGL error path.
   screen.dataset.page = 'battle-loading';
   screen.className = 'screen boot-screen';
   screen.innerHTML = '<div class="brand-glyph" aria-hidden="true">✦</div>';
-  await ensureBattleStyles();
+  const [, arena] = await Promise.all([
+    ensureBattleStyles(),
+    ctx.loadArena().catch((error) => {
+      console.error(error);
+      return null;
+    }),
+  ]);
   if (ctx.battleSession !== session || session.cancelled || screen.dataset.page !== 'battle-loading') {
     if (ctx.battleSession === session) {
       cancelBattleSession(session);
@@ -244,16 +250,22 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
       `<button class="icon-btn trainer-command-btn command-coach" data-action="trainer-command" aria-label="${t('battle.command')}"><span>⚑</span><small>${t('command.coach')}</small></button>`
     );
   try {
+    if (!arena) throw new Error('ARENA_LOAD_FAILED');
     if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
-    ctx.arenaScene = new ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
+    ctx.arenaScene = new arena.ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
       reducedMotion: ctx.save.reducedMotion,
       testAnimationScale,
+      quality: ctx.quality,
+      governor: ctx.qualityGovernor,
     });
     ctx.arenaScene.setAnchorResolver(fighterSpriteRect);
+    void ctx.arenaScene.warmUp();
   } catch (error) {
     cancelBattleSession(session);
     ctx.battleSession = null;
-    screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t('error.webgl')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
+    // Browsers keep a failed module load for the page's lifetime, so a failed
+    // arena chunk asks for a reload rather than blaming the graphics.
+    screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t(arena ? 'error.webgl' : 'error.arenaLoad')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
     bindCommon();
     return;
   }
@@ -313,16 +325,12 @@ function openBattleCodex() {
         })
         .join('')
     : `<p>${t('battle.codexNoStatus')}</p>`;
-  const routes = comboRoutesHtml(
-    state.sides.player.team.map((creature) => creature.id),
-    true
-  );
-  root.innerHTML = `<div class="replacement codex-overlay"><section class="glass-panel battle-codex" role="dialog" aria-modal="true" aria-labelledby="codex-title"><button class="codex-close icon-btn" data-action="close-codex" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.fieldState')}</span><h2 id="codex-title">${t('battle.codex')}</h2><div class="codex-grid"><article><h3>⚡ ${t('arena.ruleTitle')}</h3><b>${t(`arena.${state.arena}`)}</b><p>${t(`arena.rule.${state.arena}`)}</p></article><article><h3>✦ ${t('battle.surge')}</h3><p>${t('academy.surge')}</p></article><article class="codex-wide"><h3>↺ ${t('battle.switchRead')}</h3><p>${t('battle.perfectRelayHint')}</p></article>${routes ? `<article class="codex-wide"><h3>↗ ${t('combo.title')}</h3>${routes}</article>` : ''}${boons.length ? `<article class="codex-wide"><h3>↟ ${t('gauntlet.boons')}</h3><ul>${boons.map((id) => `<li><b>${t(`boon.${id}`)}</b> — ${t(`boon.effect.${id}`)}</li>`).join('')}</ul></article>` : ''}<article class="codex-wide"><h3>☿ ${t('battle.activeStatuses')}</h3><div class="codex-statuses">${activeStatuses}</div></article><article class="codex-wide affinity-reminder"><h3>△ ${t('battle.affinityCycle')}</h3><p>${t('settings.affinities')}</p></article></div></section></div>`;
+  root.innerHTML = `<div class="replacement codex-overlay"><section class="glass-panel battle-codex" role="dialog" aria-modal="true" aria-labelledby="codex-title"><button class="codex-close icon-btn" data-action="close-codex" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.fieldState')}</span><h2 id="codex-title">${t('battle.codex')}</h2><div class="codex-grid"><article><h3>⚡ ${t('arena.ruleTitle')}</h3><b>${t(`arena.${state.arena}`)}</b><p>${t(`arena.rule.${state.arena}`)}</p></article><article><h3>✦ ${t('battle.surge')}</h3><p>${t('academy.surge')}</p></article><article class="codex-wide"><h3>↺ ${t('battle.switchRead')}</h3><p>${t('battle.perfectRelayHint')}</p></article>${boons.length ? `<article class="codex-wide"><h3>↟ ${t('gauntlet.boons')}</h3><ul>${boons.map((id) => `<li><b>${t(`boon.${id}`)}</b> — ${t(`boon.effect.${id}`)}</li>`).join('')}</ul></article>` : ''}<article class="codex-wide"><h3>☿ ${t('battle.activeStatuses')}</h3><div class="codex-statuses">${activeStatuses}</div></article><article class="codex-wide affinity-reminder"><h3>△ ${t('battle.affinityCycle')}</h3><p>${t('settings.affinities')}</p></article></div></section></div>`;
   root
     .querySelector('.codex-grid')
     ?.insertAdjacentHTML(
       'afterbegin',
-      `<article class="codex-wide trainer-command-codex command-coach ${state.sides.player.commandUsed ? 'used' : ''}"><h3>⚑ ${t('battle.command')} · ${t('command.coach')}</h3><p>${t('command.effect.coach')}</p><strong>${state.sides.player.commandUsed ? '✓ ' + t('battle.commandUsed') : t('battle.command')}</strong></article>`
+      `<article class="codex-wide trainer-command-codex command-coach ${state.sides.player.commandUsed ? 'used' : ''}"><h3>⚑ ${t('command.coach')}</h3><p>${t('command.effect.coach')}</p><strong>${state.sides.player.commandUsed ? '✓ ' + t('battle.commandUsed') : t('battle.command')}</strong></article>`
     );
   if (activeRule && activeRule.id !== 'standard')
     root
@@ -598,9 +606,7 @@ function refreshBattle() {
     p = activeOf(view, 'player'),
     e = activeOf(view, 'enemy'),
     expertMode = Boolean(ctx.save.expertMode);
-  const cadence = view.modifiers?.includes('rapid_arena') ? 2 : 4,
-    until = cadence - ((view.turn - 1) % cadence),
-    sideRatio = (side) =>
+  const sideRatio = (side) =>
       view.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
       view.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
     lastStand = ['player', 'enemy'].some(
@@ -653,7 +659,6 @@ function refreshBattle() {
       battleRenderCache.key === moveRenderKey;
   screen.classList.toggle('locked', ctx.locked);
   screen.classList.toggle('expert-mode', expertMode);
-  screen.classList.toggle('arena-imminent', until === 1);
   screen.classList.toggle('player-last-stand', view.sides.player.team.filter((c) => c.hp > 0).length === 1);
   screen.classList.toggle('enemy-last-stand', view.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
   // Final showdown (plan §5): both sides down to their last creature.
@@ -664,9 +669,8 @@ function refreshBattle() {
   screen.classList.toggle('tension-rising', tension >= 0.38);
   screen.classList.toggle('tension-high', tension >= 0.68);
   screen.style.setProperty('--battle-tension', tension.toFixed(2));
-  ctx.arenaScene?.setBattleState({ tension, imminent: until === 1, showdown });
-  screen.querySelector('#turn-chip').innerHTML =
-    `<b>${t('battle.turn', { turn: view.turn })}</b><small>⚡ ${t('battle.arenaIn', { turns: until })}</small>`;
+  ctx.arenaScene?.setBattleState({ tension, showdown });
+  screen.querySelector('#turn-chip').innerHTML = `<b>${t('battle.turn', { turn: view.turn })}</b>`;
   screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
   for (const side of ['player', 'enemy']) {
     const owner = view.sides[side],

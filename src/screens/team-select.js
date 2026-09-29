@@ -42,7 +42,6 @@ const {
   disposeArena,
   ensureBattleStyles,
   emblemHtml,
-  comboRoutesHtml,
   topbar,
 } = ctx;
 const { bindCommon, randomDistinct, startGauntlet, startBattle, rerenderPreservingFocus } = route;
@@ -277,7 +276,7 @@ function renderTeamSelect(mode = 'ladder') {
   const difficultyControl = !['gauntlet', 'circuit', 'trial'].includes(mode)
       ? `<div class="field"><label for="difficulty">${t('select.difficulty')}</label><select id="difficulty" data-focus-key="difficulty">${['apprentice', 'standard', 'champion'].map((id) => `<option value="${id}" ${ctx.selection.difficulty === id ? 'selected' : ''}>${t(`difficulty.${id}`)}</option>`).join('')}</select></div>`
       : '',
-    planControls = `<details class="battle-plan"><summary><span><b>${t('select.combatPlan')}</b><small>${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div>${teamProfileHtml(ctx.selection.team)}<h3>${t('combo.title')}</h3>${comboRoutesHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
+    planControls = `<details class="battle-plan"><summary><span><b>${t('select.plan')}</b><small>${t(`arena.${ctx.selection.arena}`)}</small></span><i aria-hidden="true">⌄</i></summary><div class="battle-plan-body">${difficultyControl}${arenaControl}<div class="arena-rule"><b>${t('arena.ruleTitle')}</b><span>${t(`arena.rule.${ctx.selection.arena}`)}</span></div>${teamProfileHtml(ctx.selection.team)}<h3>${t('select.matchup')}</h3><div class="matchup-line"><span class="match-pill good">↑ ${t('select.good')} ${matchup.good}</span><span class="match-pill risky">↓ ${t('select.risky')} ${matchup.risky}</span></div></div></details>`,
     ready = actionButton(
       readyLabel,
       'start-battle',

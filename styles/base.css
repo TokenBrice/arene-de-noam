@@ -12,9 +12,20 @@ body {
   overscroll-behavior: none;
 }
 body {
-  background: var(--surface);
+  background: var(--bg-0);
   color: var(--ink);
+  /* Every figure (HP, damage, XP, counters) keeps a fixed width while it
+     changes; Baloo 2 needs the feature, Nunito's digits are already tabular. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  line-height: var(--leading-tight);
 }
 /* Long-presses on the stage, cards and sprites must not select text or raise
    the browser's image menu; form fields keep their normal behaviour. */
@@ -39,8 +50,44 @@ button {
 button:focus-visible,
 select:focus-visible,
 input:focus-visible {
-  outline: 3px solid var(--cyan);
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
+}
+/* Display numerals for HP, damage and XP readouts. */
+.num {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+}
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+/* Chrome icons (src/app/icons.js): one inline sprite, 24-unit grid, 2.2
+   round stroke in currentColor, sized by the surrounding text (24 px at the
+   16 px body size). */
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.ico {
+  flex: 0 0 auto;
+  width: 1.5em;
+  height: 1.5em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
 }
 /* Press feedback: every enabled button drops onto its ledge for as long as the
    finger is down (`.is-pressed` is set on pointerdown by index.html, because
@@ -86,8 +133,8 @@ button:not(:disabled):is(:active, .is-pressed),
   inset: 0;
   z-index: var(--z-veil);
   pointer-events: none;
-  background: #080b25;
-  animation: screenVeil 0.2s ease-in forwards;
+  background: var(--bg-0);
+  animation: screenVeil var(--dur-med) var(--ease-in) forwards;
 }
 @keyframes screenVeil {
   to {
@@ -95,7 +142,7 @@ button:not(:disabled):is(:active, .is-pressed),
   }
 }
 .screen.screen-entering {
-  animation: screenEnter 0.26s ease-out;
+  animation: screenEnter var(--dur-med) var(--ease-out);
 }
 @keyframes screenEnter {
   from {
@@ -121,14 +168,13 @@ body.reduced-motion .screen.screen-entering {
   display: grid;
   place-items: center;
 }
+/* Panels are opaque surfaces on a solid ledge: no glass, no blur. */
 .boot-card,
 .glass-panel {
   position: relative;
   border: 1px solid var(--line);
-  background: linear-gradient(145deg, rgba(30, 33, 82, 0.94), rgba(10, 13, 40, 0.93));
-  box-shadow:
-    0 30px 90px #0008,
-    inset 0 1px #fff1;
+  background: var(--bg-1);
+  box-shadow: var(--elev-2);
   border-radius: var(--radius-l);
   padding: clamp(22px, 4vw, 44px);
 }
@@ -168,73 +214,108 @@ body.reduced-motion .screen.screen-entering {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 54px;
+  gap: var(--space-2);
+  min-height: 56px;
+}
+.topbar > .subtle-btn {
+  padding-inline: 10px 16px;
 }
 .brand-small {
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-display);
+  white-space: nowrap;
+}
+.brand-small .ico {
+  color: var(--gold);
 }
 .icon-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
+/* Buttons: opaque raised controls on a solid ledge. The gold primary is the
+   one call to action per screen; hit targets are at least 48 px. */
 .icon-btn,
 .subtle-btn,
 .primary-btn,
 .danger-btn {
-  min-height: 44px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--hit);
   padding: 10px 16px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-tight);
   cursor: pointer;
-  background: #ffffff0d;
-  /* Solid "ledge" under the button; it collapses while pressed. */
-  box-shadow:
-    0 2px 0 #03041499,
-    inset 0 1px #fff1;
 }
 .icon-btn {
-  min-width: 44px;
-  padding: 8px;
-}
-@media (hover: hover) {
-  .icon-btn:hover,
-  .subtle-btn:hover {
-    background: #ffffff18;
-  }
-  .primary-btn:hover {
-    filter: brightness(1.13);
-  }
+  min-width: var(--hit);
+  padding: 0;
 }
 .primary-btn {
-  font-weight: 850;
-  border-color: #75efff77;
-  background: linear-gradient(135deg, #554cd4, #168fb0);
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
   box-shadow:
-    0 3px 0 #1f2378,
-    0 8px 28px #2a59cf55,
-    inset 0 1px #fff4;
+    inset 0 1px 0 #fff8,
+    0 4px 0 var(--gold-ledge);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-display);
 }
+.danger-btn {
+  color: #ffe3e6;
+  background: #4a1426;
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 2px 0 #22040d;
+}
+/* Selected toggle (language, speed, quality). */
+.subtle-btn.active {
+  background: var(--bg-3);
+  box-shadow:
+    inset 0 0 0 2px var(--cyan),
+    var(--elev-1);
+}
+@media (hover: hover) {
+  :is(.icon-btn, .subtle-btn):not(:disabled):hover {
+    background: var(--bg-3);
+  }
+  .primary-btn:not(:disabled):hover {
+    background: linear-gradient(180deg, #ffd966, var(--gold));
+  }
+  .danger-btn:not(:disabled):hover {
+    background: #5c1a30;
+  }
+}
+/* Pressed: the global `translate: 0 2px` above plus the ledge collapsing. */
 :is(.icon-btn, .subtle-btn, .danger-btn):not(:disabled):is(:active, .is-pressed) {
-  box-shadow: inset 0 1px #fff1;
+  box-shadow: var(--elev-0);
+}
+.subtle-btn.active:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 0 0 2px var(--cyan),
+    var(--elev-0);
 }
 .primary-btn:not(:disabled):is(:active, .is-pressed) {
   box-shadow:
-    0 1px 0 #1f2378,
-    0 4px 16px #2a59cf44,
-    inset 0 1px #fff4;
+    inset 0 1px 0 #fff8,
+    0 2px 0 var(--gold-ledge);
 }
-.primary-btn:disabled,
-.subtle-btn:disabled {
+:is(.icon-btn, .subtle-btn, .primary-btn, .danger-btn):disabled {
   cursor: not-allowed;
-  filter: grayscale(0.7);
-  opacity: 0.45;
-}
-.danger-btn {
-  background: #ff526322;
-  border-color: #ff718077;
-  color: #ffd9dd;
+  color: var(--ink-3);
+  background: var(--bg-1);
+  box-shadow: none;
 }
 .hero {
   display: grid;
@@ -459,7 +540,7 @@ body.reduced-motion .title-ambience i {
   margin: 30px 0 24px;
 }
 .page-head h1 {
-  font-size: clamp(34px, 5vw, 58px);
+  font-size: clamp(var(--text-2xl), 4vw, var(--text-hero));
   margin: 4px 0;
 }
 .page-head p {
@@ -481,14 +562,15 @@ body.reduced-motion .title-ambience i {
   min-height: 245px;
   text-align: left;
   border: 1px solid var(--line);
-  border-radius: 21px;
-  background: linear-gradient(145deg, #ffffff12, #ffffff06);
+  border-radius: var(--radius-m);
+  background: var(--bg-1);
+  box-shadow: var(--elev-1);
   padding: 14px;
   cursor: pointer;
   overflow: hidden;
   transition:
-    transform 0.16s,
-    border-color 0.16s;
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast);
 }
 @media (hover: hover) {
   .creature-card:hover {
@@ -499,8 +581,8 @@ body.reduced-motion .title-ambience i {
 .creature-card.selected {
   border-color: var(--cyan);
   box-shadow:
-    0 0 0 2px #65e9ff33,
-    0 14px 35px #0005;
+    inset 0 0 0 1px var(--cyan),
+    var(--elev-1);
 }
 .creature-card.lead::after {
   content: attr(data-lead);
@@ -597,7 +679,6 @@ body.high-contrast [data-bestiary-class] {
   margin-top: 10px;
   color: var(--muted);
   font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
 }
 .select-aside {
   align-self: start;

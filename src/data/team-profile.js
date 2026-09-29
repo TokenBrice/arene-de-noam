@@ -22,7 +22,6 @@ export function teamProfile(ids = []) {
     raw.control +=
       targetStatuses.filter((id) => id === 'stunned' || id === 'rooted').length * 15 +
       (targetStatuses.includes('marked') ? 8 : 0) +
-      (move.combo ? 5 : 0) +
       (move.purge ? 9 : 0) +
       (move.purgeTeam ? 18 : 0) +
       (move.purgeBarrier ? 12 : 0) +

@@ -54,7 +54,8 @@
 }
 .record-creature h2 {
   margin: 2px 0;
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: clamp(30px, 5vw, 50px);
 }
 .record-creature p {
@@ -282,9 +283,9 @@
 .bestiary-identity h2 {
   overflow: hidden;
   margin: 0;
-  font:
-    700 var(--text-xl) Georgia,
-    serif;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-display);
   text-overflow: ellipsis;
 }
 .bestiary-key-stats {

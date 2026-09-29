@@ -5,7 +5,7 @@ export const CIRCUIT_CONDITIONS = Object.freeze([
   { id: 'starstorm', icon: '✦', modifiers: ['overdrive'] },
   { id: 'razorline', icon: 'ϟ', modifiers: ['high_voltage'] },
   { id: 'citadel', icon: '⬢', modifiers: ['enemy_aegis'] },
-  { id: 'awakening', icon: '◎', modifiers: ['rapid_arena'] },
+  { id: 'type_clash', icon: '△', modifiers: ['type_clash'] },
   { id: 'lastlight', icon: '☾', modifiers: ['player_wounded'] },
   { id: 'ascension', icon: '♛', modifiers: ['ascendant'] },
 ]);

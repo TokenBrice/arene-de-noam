@@ -27,7 +27,6 @@ const {
   surgeFlashFx,
   aceFx,
   statusTickFx,
-  arenaPulseFx,
   missWhiffFx,
   barrierShatterFx,
   landMoveFx,
@@ -52,7 +51,6 @@ const BEAT_OPENERS = new Set([
   'replace',
   'trainer-command',
   'perfect-relay',
-  'arena-pulse',
   'ace',
   'status-tick',
   'battle-end',
@@ -147,7 +145,6 @@ function eventPresentationDelay(event) {
       (event.hp <= 0 ? 900 : event.affinity !== 1 ? 700 : ctx.currentFxMove?.strong ? 620 : 300) /
       ctx.save.battleSpeed
     );
-  if (event.type === 'arena-pulse') return 760 / ctx.save.battleSpeed;
   if (event.type === 'surge')
     return (
       (event.source === 'switch' && event.amount >= 24 ? 650 : event.ready ? 760 : 60) / ctx.save.battleSpeed
@@ -249,8 +246,12 @@ async function playEvents(events) {
             ? `↑ ${t('battle.effective')} · `
             : event.affinity < 1
               ? `↓ ${t('battle.resisted')} · `
-              : '';
-      session.lastLine = `${affinityNote}${event.combo ? `${t('battle.combo')} · ` : ''}${blocked ? t('battle.action.blocked', { target: creatureName(event.creatureId) }) : t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
+              : '',
+        criticalNote = event.critical && !blocked ? `${t('battle.critical')} · ` : '',
+        comboNote = event.combo
+          ? `${t('battle.combo', { percent: Math.round((event.combo.multiplier - 1) * 100) })} · `
+          : '';
+      session.lastLine = `${criticalNote}${affinityNote}${comboNote}${blocked ? t('battle.action.blocked', { target: creatureName(event.creatureId) }) : t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
       fighter?.classList.add('hit');
       impactMoveFx(event);
       // A lethal hit shows its K.O. stamp alone; a blocked one its shield stamp.
@@ -347,10 +348,6 @@ async function playEvents(events) {
       session.lastLine = t('battle.surgeReady');
       surgeFlashFx(event.side);
       signatureReadyFx(event);
-    }
-    if (event.type === 'arena-pulse') {
-      session.lastLine = t('battle.arenaPulse', { arena: t(`arena.${event.arena}`) });
-      arenaPulseFx(event);
     }
     if (event.type === 'ace') {
       session.lastLine = t('battle.ace', {

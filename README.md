@@ -1,8 +1,8 @@
 # Arène de Noam
 
-**Arène de Noam** (*Noam's Arena* in English) is a local, deterministic 3v3 creature-battle game for the browser. It includes 30 creatures, 90 authored moves, six readable classes, six animated arenas, French and English, progression, and mouse, touch, and keyboard controls.
+**Arène de Noam** (_Noam's Arena_ in English) is a local, deterministic 3v3 creature-battle game for the browser. It includes 30 creatures, 90 authored moves, six readable classes, six animated arenas, French and English, progression, and mouse, touch, and keyboard controls.
 
-There is no account, backend, analytics, build step, runtime generation, or network API dependency. Three.js is vendored locally; Playwright is development-only.
+There is no account, backend, analytics, runtime generation, or network API dependency, and development needs no build step. Three.js is vendored locally; Playwright and esbuild are development-only.
 
 ## Play locally
 
@@ -23,15 +23,17 @@ The first launch offers a short tutorial. The game starts in French; change the 
 - Priority decides turn order first, then Speed.
 - Actions fill the shared Surge gauge. At the required cost, choose a creature's Signature.
 - Eight effects shape battle: Focused, Haste, Elusive, Counter, Marked, Rooted, Dazed, and Burning.
-- Every creature has one innate talent. Every arena has one visible rule and a pulse every four turns unless a mode says otherwise.
+- Every creature has one innate talent. Every arena has a continuous weather: one type's attacks deal `+20%` and another's `−20%` for both teams (the Crystal Dome is neutral). Previews include it.
+- Each landed attack has a seeded `1/16` chance to be a **critical hit** (`×1.5`). Previews always show the non-critical value.
+- Apprentice rivals are a lower level (`×0.85` HP and Attack), only ever pick moves, and never land a critical hit on you.
 
 The universal **Coach Boost** can be used once per battle when the active creature has a penalty. It removes all its penalties and grants 15 Surge without spending the move or switch action.
 
 ## Combo
 
-A setup move applies **Marked**. A move labeled **Combo** consumes Marked and deals **40% more damage** to every hit in that action. `Venom Harvest` follows the same rule using Burning as its setup.
+Any attack that lands on a **Marked** creature consumes Marked and deals **30% more damage** to every hit in that action. Venom Harvest also grows `+20%` per Burning stack on the target, without consuming it.
 
-If another ally applied the setup, a short cut-in credits that helper. The credit adds no damage and no Surge beyond the Combo's single 40% rule.
+If another ally applied Marked, a short cut-in credits that helper. The credit adds no damage and no Surge beyond the Combo's single 30% rule.
 
 ## Modes
 
@@ -44,7 +46,7 @@ If another ally applied the setup, a short cut-in credits that helper. The credi
 - **Bestiary & Move Theater** — records, talents, lore, mastery progress, class filters, and all 90 move previews.
 - **Arena Academy** — the eight essentials, both type triangles, and the eight-effect reference.
 
-Team selection and Draft show type coverage, team roles, and cross-creature Combo routes. Mastery ranks are collection progress only and never change combat stats.
+Team selection and Draft show type coverage and team roles. Mastery ranks are collection progress only and never change combat stats.
 
 ## Controls and accessibility
 
@@ -85,10 +87,17 @@ npm run test:e2e
 
 The automated suites cover data invariants, engine and preview parity, Combo transactions, Surge accounting, AI legality and immutability, save migration, FR/EN parity, authored animation IDs, complete modes, progression, input methods, responsive layouts, focus handling, and recovery paths.
 
-The balance simulation checks average fight length, turn-cap rate, and the whole-roster `30–70%` win-rate band. Run `node tools/simulate-balance.mjs --naive` for Apprentice, Standard, and Champion against the deterministic naive policy. Set `ARENA_BALANCE_SEED` to reproduce another matrix.
+The balance simulation rotates every arena and checks average fight length, turn-cap rate, the `6.25% ± 1` critical-hit rate, the whole-roster `30–70%` win-rate band, and a paired weather check (the same matchups in every arena; no type may shift more than 8 points from the neutral Crystal Dome). Run `node tools/simulate-balance.mjs --naive` for Apprentice, Standard, and Champion against the deterministic naive policy. Set `ARENA_BALANCE_SEED` to reproduce another matrix.
 
 Test-only URL hooks include `seed`, `animations=0`, `player`, `enemy`, `enemyMove` (one move or a comma-separated sequence), `playerHp`, `enemyHp`, `teamHp`, and `failWebgl=1`.
 
 ## Static deployment
 
-Publish the repository root as static files. No compilation, server logic, or secret is required. `.nojekyll` is included for GitHub Pages. Never deploy `.dev.vars`; it is ignored and no browser module imports it.
+GitHub Pages serves a production build made in CI. On every push to `main`, `.github/workflows/pages.yml` runs `npm ci`, `npm test` and `npm run build`, then deploys `dist/`. No server logic or secret is required.
+
+```sh
+npm run build     # writes dist/: minified, content-hashed bundles + offline service worker
+npm run preview   # builds, then serves dist/ on http://127.0.0.1:8177/
+```
+
+The title never waits for Three.js: the arena chunk loads in the background once the title is idle. The service worker makes repeat visits instant and the game playable offline; development never registers it. Never deploy `.dev.vars`; it is ignored and no browser module imports it.

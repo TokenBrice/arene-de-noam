@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { SAVE_VERSION } from '../src/save.js';
 import { installCompletedTutorial } from './helpers.js';
 
 test('simple mode shows the matchup essentials and the settings toggle restores expert depth', async ({
@@ -6,7 +7,7 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
 }) => {
   await installCompletedTutorial(page, { expertMode: false });
   await page.goto(
-    '/?seed=14&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
+    '/?seed=1024&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
   );
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
@@ -41,7 +42,7 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(page.locator('#turn-chip b')).toHaveText('Tour 2');
   await expect(page.locator('[data-move="slowing_riddle"]')).toBeEnabled();
-  await expect(page.locator('[data-move="slowing_riddle"] .move-combo-badge')).toContainText('COMBO +40%');
+  await expect(page.locator('[data-move="slowing_riddle"] .move-combo-badge')).toContainText('COMBO +30 %');
   await page.locator('[data-plate-side="enemy"]').click();
   await expect(page.locator('.plate-detail-status')).toContainText('Marqué');
   await expect(page.locator('.plate-detail-status small')).toHaveCount(0);
@@ -81,5 +82,5 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await expect(page.locator('.arena-resonance, #contract-chip, .flow-chip')).toHaveCount(0);
   await expect
     .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')).version))
-    .toBe(16);
+    .toBe(SAVE_VERSION);
 });

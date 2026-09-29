@@ -13,9 +13,8 @@ import {
   performanceGrade,
 } from '../data/progression.js';
 import { SQUAD_PRESETS } from '../data/squads.js';
-import { QUICK_RULES, quickRule } from '../data/battle-rules.js';
+import { QUICK_RULES, difficultyModifiers, quickRule } from '../data/battle-rules.js';
 import { battleAdviceKeys } from '../data/advice.js';
-import { comboSetupStatus, teamComboRoutes } from '../data/combos.js';
 import { TRAINERS, ARENAS } from '../data/trainers.js';
 import { TRIALS } from '../data/trials.js';
 import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../data/gauntlet.js';
@@ -49,8 +48,8 @@ import {
 } from '../battle/statuses.js';
 import { createI18n, validateDictionaries } from '../i18n.js';
 import { DEFAULT_SAVE, SAVE_KEY, freshDefaultSave, loadSave, persistSave } from '../save.js';
-import { ArenaScene } from '../presentation/arena.js';
 import { SoundSystem } from '../sound.js';
+import { BATTLE_STYLESHEETS } from './battle-stylesheets.js';
 
 if (!validateDictionaries()) throw new Error('Localization dictionaries are incomplete');
 
@@ -79,7 +78,6 @@ const LOG_EVENT_TYPES = new Set([
   'miss',
   'recoil',
   'status-tick',
-  'arena-pulse',
   'ace',
   'passive',
   'switch',
@@ -101,7 +99,6 @@ const LOG_TYPE_GROUPS = {
   'barrier-hit': 'defense',
   'barrier-break': 'defense',
   miss: 'dodge',
-  'arena-pulse': 'arena',
   ace: 'ace',
   passive: 'talent',
   switch: 'switch',
@@ -188,29 +185,30 @@ function affinityIcon(id, { title = '', className = '' } = {}) {
   return `<svg class="affinity-icon${className ? ` ${escapeHtml(className)}` : ''}" viewBox="0 0 24 24" focusable="false" ${accessible ? `role="img" aria-label="${escapeHtml(title)}"` : 'aria-hidden="true"'}>${titleMarkup}<path d="${meta.iconPath}" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"/>${strokeMarkup}</svg>`;
 }
 
+/* Source path → deployed file. tools/build.mjs defines __ASSET_MAP__ (a JSON
+   string, which esbuild inlines instead of splitting it into a shared chunk)
+   for the bundled dist/ build; in development the sources are served as-is,
+   so the map is the identity. */
+const ASSET_MAP = typeof __ASSET_MAP__ === 'string' ? JSON.parse(__ASSET_MAP__) : {};
+const assetUrl = (path) => ASSET_MAP[path] ?? path;
+
 /* Battle-only stylesheets are promoted to real stylesheets before the first
-   battle or move theater is shown. Each sheet is inserted before the first
-   always-loaded sheet that originally followed it, so the cascade order stays
-   byte-identical to eager loading. */
-const BATTLE_STYLESHEETS = [
-  ['./styles/screens/battle-fx.css', 'screens/progression'],
-  ['./styles/screens/battle-presentation.css', 'screens/draft'],
-  ['./styles/screens/battle-combos.css', 'screens/accessibility'],
-  ['./styles/screens/battle-ace-log.css', 'screens/accessibility'],
-  ['./styles/overrides/battle-moves.css', 'screens/results'],
-  ['./styles/overrides/battle-command.css', 'screens/results'],
-  ['./styles/overrides/battle-preview.css', 'screens/results'],
-  ['./styles/screens/battle-layout.css', null],
-];
+   battle or move theater is shown, each inserted before its anchor so the
+   cascade order matches eager loading. In dist several sheets share one file;
+   it is inserted once. */
 function ensureBattleStyles() {
   if (!ctx.battleStylesReady) {
+    const inserted = new Set();
     ctx.battleStylesReady = Promise.all(
-      BATTLE_STYLESHEETS.map(([href, anchor]) => {
+      BATTLE_STYLESHEETS.map(([sheet, anchor]) => {
+        const href = assetUrl(sheet);
+        if (inserted.has(href)) return null;
+        inserted.add(href);
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = `${href}?build=epic7`;
+        link.href = href;
         const before = anchor
-          ? document.head.querySelector(`link[rel="stylesheet"][href*="${anchor}"]`)
+          ? document.head.querySelector(`link[rel="stylesheet"][href="${assetUrl(anchor)}"]`)
           : null;
         document.head.insertBefore(link, before);
         return new Promise((resolve) => {
@@ -221,6 +219,16 @@ function ensureBattleStyles() {
     );
   }
   return ctx.battleStylesReady;
+}
+
+/* Three.js and the arena form a lazy chunk: the title never waits on them.
+   main.js prefetches it once the title is idle; renderBattle awaits it. A
+   failed load stays failed for this page (browsers keep failed module loads),
+   so renderBattle asks for a reload. */
+let arenaModule = null;
+function loadArena() {
+  arenaModule ??= import('../presentation/arena.js');
+  return arenaModule;
 }
 
 function disposeArena() {
@@ -247,38 +255,23 @@ function statusVisuals(creature) {
   return entries.join('');
 }
 
-function comboRoutesHtml(ids, compact = false) {
-  const routes = teamComboRoutes(ids).slice(0, compact ? 2 : 4);
-  if (!routes.length) return compact ? '' : `<div class="combo-routes empty">${t('combo.none')}</div>`;
-  const markedBadge = statusBadgeHtml('marked', {
-    label: escapeHtml(t('status.marked')),
-    compact: true,
-    className: 'combo-status-badge',
-  });
-  return `<div class="combo-routes ${compact ? 'compact' : ''}">${routes.map((route) => `<div class="combo-route"><span><img src="${sprite(route.setterId)}" alt=""><small>${creatureName(route.setterId)}</small><b>${t(`move.${route.setupMoveId}`)}</b></span><i>${markedBadge}<span>→ COMBO<br><small>+40%</small></span></i><span><img src="${sprite(route.finisherId)}" alt=""><small>${creatureName(route.finisherId)}</small><b>${route.signature ? '✦ ' : ''}${t(`move.${route.finishMoveId}`)}</b></span></div>`).join('')}</div>`;
-}
-
 function draftInsightHtml(candidateId) {
   const before = [...(ctx.draftRun?.team || [])],
-    after = [...before, candidateId],
-    routeKey = (routeItem) =>
-      `${routeItem.setterId}:${routeItem.setupMoveId}:${routeItem.finisherId}:${routeItem.finishMoveId}`,
-    oldRoutes = new Set(teamComboRoutes(before).map(routeKey)),
-    newRoutes = teamComboRoutes(after).filter((routeItem) => !oldRoutes.has(routeKey(routeItem))),
     newAffinity = !before.some((id) => CREATURES[id].affinity === CREATURES[candidateId].affinity);
-  const tags = [
-    ...(newRoutes.length ? [`↗ ${t('draft.newRoutes', { count: newRoutes.length })}`] : []),
-    ...(newAffinity && before.length
+  const tags =
+    newAffinity && before.length
       ? [
           `${affinityIcon(CREATURES[candidateId].affinity)} ${t('draft.newAffinity', { affinity: affinityName(CREATURES[candidateId].affinity) })}`,
         ]
-      : []),
-  ];
+      : [];
   return `<div class="draft-insight"><b>${t('draft.insight')}</b>${tags.length ? tags.map((tag) => `<span>${tag}</span>`).join('') : `<small>${t('draft.flexPick')}</small>`}</div>`;
 }
 
+// Shared sub-page header. Icons come from the sprite helper that shell.js
+// registers (src/app/icons.js); the text labels stay the accessible names.
 function topbar(backAction = 'title') {
-  return `<header class="topbar"><button type="button" class="subtle-btn" data-action="${backAction}">← ${t('app.back')}</button><div class="brand-small">✦ ${t('app.title')}</div><div class="icon-actions"><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}" aria-pressed="${ctx.save.muted}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="settings" aria-label="${t('app.settings')}">⚙</button></div></header>`;
+  const { icon } = route;
+  return `<header class="topbar"><button type="button" class="subtle-btn" data-action="${backAction}">${icon('back')}<span>${t('app.back')}</span></button><div class="brand-small">${icon('sparkle')}<span>${t('app.title')}</span></div><div class="icon-actions"><button type="button" class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}" aria-pressed="${ctx.save.muted}">${icon(ctx.save.muted ? 'sound-off' : 'sound-on')}</button><button type="button" class="icon-btn" data-action="settings" aria-label="${t('app.settings')}">${icon('settings')}</button></div></header>`;
 }
 
 Object.assign(ctx, {
@@ -305,9 +298,8 @@ Object.assign(ctx, {
   SQUAD_PRESETS,
   QUICK_RULES,
   quickRule,
+  difficultyModifiers,
   battleAdviceKeys,
-  teamComboRoutes,
-  comboSetupStatus,
   TRAINERS,
   ARENAS,
   TRIALS,
@@ -346,7 +338,7 @@ Object.assign(ctx, {
   freshDefaultSave,
   SAVE_KEY,
   persistSave,
-  ArenaScene,
+  loadArena,
   params,
   testAnimationScale,
   loaded,
@@ -372,7 +364,6 @@ Object.assign(ctx, {
   ensureBattleStyles,
   emblemHtml,
   statusVisuals,
-  comboRoutesHtml,
   draftInsightHtml,
   topbar,
 });

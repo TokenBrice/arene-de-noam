@@ -1,4 +1,5 @@
 import { ctx, registerRoutes, route } from './context.js';
+import { icon, installIconSprite } from './icons.js';
 
 const {
   AFFINITIES,
@@ -21,6 +22,7 @@ const {
   classIcon,
   className,
   persist,
+  escapeHtml,
   testAnimationScale,
 } = ctx;
 const {
@@ -40,6 +42,8 @@ const {
   closeSwitch,
   closeBattleOverlay,
 } = route;
+
+installIconSprite();
 
 function currentMusicScreen() {
   if (ctx.battleSession && screen.classList.contains('battle-screen'))
@@ -157,7 +161,7 @@ function installBestiaryFilters() {
     .querySelector('.bestiary-grid')
     ?.insertAdjacentHTML(
       'beforebegin',
-      `<section class="bestiary-tools"><div class="bestiary-search-row"><label><span>⌕</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><button type="button" class="bestiary-filter-toggle" data-bestiary-toggle aria-expanded="false" aria-controls="bestiary-filter-chips" aria-label="${t('filter.types')} / ${t('filter.classes')}">☷</button><b data-bestiary-count>${CREATURE_IDS.length} / ${CREATURE_IDS.length}</b></div><div id="bestiary-filter-chips" class="bestiary-filter-chips"><div class="bestiary-filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><div class="bestiary-filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><button type="button" class="active" data-bestiary-class="all" aria-pressed="true">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button type="button" data-bestiary-class="${id}" aria-pressed="false" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`
+      `<section class="bestiary-tools"><div class="bestiary-search-row"><label><span>${icon('search')}</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><button type="button" class="bestiary-filter-toggle" data-bestiary-toggle aria-expanded="false" aria-controls="bestiary-filter-chips" aria-label="${t('filter.types')} / ${t('filter.classes')}">${icon('filter')}</button><b data-bestiary-count>${CREATURE_IDS.length} / ${CREATURE_IDS.length}</b></div><div id="bestiary-filter-chips" class="bestiary-filter-chips"><div class="bestiary-filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><div class="bestiary-filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><button type="button" class="active" data-bestiary-class="all" aria-pressed="true">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button type="button" data-bestiary-class="${id}" aria-pressed="false" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`
     );
   const input = screen.querySelector('[data-bestiary-search]'),
     count = screen.querySelector('[data-bestiary-count]'),
@@ -309,7 +313,98 @@ export function installScreenTransitions() {
   }
 }
 
+/* Bottom sheet: the one overlay primitive for switch, replacement, move info,
+   pause, team picks and recaps. It mounts inside `root` (the screen by
+   default, so a screen re-render removes it; battle overlays pass
+   #replacement-root and call the controller's arena-pause sync after opening
+   and in onClose), traps Tab via trapModalTab, closes on Escape, a tap on the
+   opaque scrim or its close button, and gives focus back to whatever opened
+   it.
+
+   title       plain text heading (or pass labelledBy for a heading in body)
+   body        HTML string or a DOM node the caller has already wired
+   actions     [{ label, variant: 'primary' | 'subtle' | 'danger', icon,
+                 action, onSelect(close), keepOpen }]; a pick closes the sheet
+                 unless keepOpen; `action` becomes data-action for selectors
+   onClose     called once, after the sheet has left `root`, with
+               'escape' | 'scrim' | 'close' | 'action' | 'api'
+   Returns close(). */
+const openSheets = [];
+const SHEET_ACTION_CLASSES = { primary: 'primary-btn', subtle: 'subtle-btn', danger: 'danger-btn' };
+const reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let sheetCount = 0;
+
+function topSheet() {
+  while (openSheets.length && !openSheets.at(-1).layer.isConnected) openSheets.pop();
+  return openSheets.at(-1) ?? null;
+}
+function openSheet({ title = '', body = '', actions = [], onClose, labelledBy = '', root = screen } = {}) {
+  if (!title && !labelledBy) throw new Error('openSheet needs a title or labelledBy');
+  const id = `sheet-${++sheetCount}`,
+    opener = document.activeElement !== document.body ? document.activeElement : null,
+    instant = testAnimationScale === 0 || ctx.save.reducedMotion || reducedMotionQuery.matches,
+    layer = document.createElement('div');
+  layer.className = `sheet-layer${instant ? ' sheet-instant' : ''}`;
+  layer.innerHTML = `<div class="sheet-scrim" aria-hidden="true"></div><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="${escapeHtml(labelledBy || `${id}-title`)}" tabindex="-1"><div class="sheet-grab" aria-hidden="true"></div><header class="sheet-head">${title ? `<h2 class="sheet-title" id="${id}-title">${escapeHtml(title)}</h2>` : ''}<button type="button" class="icon-btn sheet-close" aria-label="${escapeHtml(t('app.close'))}">${icon('close')}</button></header><div class="sheet-body"></div>${actions.length ? '<div class="sheet-actions"></div>' : ''}</section>`;
+  const sheet = layer.querySelector('.sheet'),
+    content = layer.querySelector('.sheet-body');
+  if (typeof body === 'string') content.innerHTML = body;
+  else if (body) content.append(body);
+  let closed = false;
+  const dismiss = (reason) => {
+    if (closed) return;
+    closed = true;
+    const index = openSheets.indexOf(entry);
+    if (index >= 0) openSheets.splice(index, 1);
+    // Out of the modal set and out of `root` at once, so focus trap, battle
+    // shortcuts and the caller's onClose (e.g. the arena pause, computed from
+    // #replacement-root) already see it gone; the exit plays from <body>.
+    layer.inert = true;
+    sheet.removeAttribute('aria-modal');
+    if (instant || !layer.isConnected) layer.remove();
+    else {
+      const finish = () => {
+        clearTimeout(fallback);
+        layer.remove();
+      };
+      const fallback = setTimeout(finish, 600);
+      sheet.addEventListener('animationend', (event) => event.target === sheet && finish());
+      layer.classList.add('is-closing');
+      document.body.append(layer);
+    }
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    onClose?.(reason);
+  };
+  const entry = { layer, dismiss };
+  const actionRow = layer.querySelector('.sheet-actions');
+  for (const { label, variant = 'subtle', icon: iconName, action, onSelect, keepOpen = false } of actions) {
+    const className = SHEET_ACTION_CLASSES[variant];
+    if (!className) throw new Error(`Unknown sheet action variant: ${variant}`);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    if (action) button.dataset.action = action;
+    button.innerHTML = `${iconName ? icon(iconName) : ''}<span>${escapeHtml(label)}</span>`;
+    button.addEventListener('click', () => {
+      onSelect?.(() => dismiss('action'));
+      if (!keepOpen) dismiss('action');
+    });
+    actionRow.append(button);
+  }
+  layer.querySelector('.sheet-scrim').addEventListener('click', () => dismiss('scrim'));
+  layer.querySelector('.sheet-close').addEventListener('click', () => dismiss('close'));
+  openSheets.push(entry);
+  root.append(layer);
+  sheet.focus({ preventScroll: true });
+  return () => dismiss('api');
+}
+
 function handleEscape() {
+  const sheet = topSheet();
+  if (sheet) {
+    sheet.dismiss('escape');
+    return;
+  }
   const resetDialog = screen.querySelector('.settings-dialog');
   if (resetDialog) {
     resetDialog.querySelector('[data-action="reset-cancel"]')?.click();
@@ -332,7 +427,8 @@ function handleEscape() {
   if (screen.dataset.page !== 'title' && screen.dataset.page !== 'battle') renderTitle();
 }
 function trapModalTab(event) {
-  const dialog = screen.querySelector('[role="dialog"][aria-modal="true"]');
+  const dialog =
+    topSheet()?.layer.querySelector('.sheet') ?? screen.querySelector('[role="dialog"][aria-modal="true"]');
   if (!dialog || event.key !== 'Tab') return false;
   const items = [
     ...dialog.querySelectorAll(
@@ -345,11 +441,12 @@ function trapModalTab(event) {
     return true;
   }
   const first = items[0],
-    last = items.at(-1);
-  if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+    last = items.at(-1),
+    active = document.activeElement;
+  if (event.shiftKey && (active === first || active === dialog || !dialog.contains(active))) {
     event.preventDefault();
     last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
+  } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
     event.preventDefault();
     first.focus();
   }
@@ -362,4 +459,6 @@ registerRoutes({
   handleEscape,
   trapModalTab,
   rerenderPreservingFocus,
+  openSheet,
+  icon,
 });

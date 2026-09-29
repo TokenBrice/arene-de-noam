@@ -10,7 +10,6 @@ const {
   FEATS,
   CURRENT_FEAT_IDS,
   masteryProgress,
-  comboSetupStatus,
   sortStatusIds,
   statusBadgeHtml,
   t,
@@ -31,13 +30,11 @@ const {
 const { bindCommon, beginMoveFx, impactMoveFx, tacticalFx, clearBattleFx } = route;
 
 function displayedStatusIds(move) {
-  const comboStatus = comboSetupStatus(move);
   return [
     ...new Set(
       sortStatusIds([
         ...(move.selfStatuses || []).map(({ id }) => id),
         ...(move.targetStatuses || []).map(({ id }) => id),
-        ...(comboStatus ? [comboStatus] : []),
       ])
     ),
   ];

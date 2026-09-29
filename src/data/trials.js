@@ -40,7 +40,7 @@ export const TRIALS = Object.freeze([
     arena: 'volcano',
     difficulty: 'champion',
     enemyTeam: ['calderoc', 'magmoth', 'thornox'],
-    modifiers: ['rapid_arena'],
+    modifiers: ['fierce_weather'],
     colors: ['#ffe16b', '#ff4c31'],
   },
   {

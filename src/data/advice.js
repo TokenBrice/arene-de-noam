@@ -1,3 +1,6 @@
+import { COMBO_SETUP_STATUS } from './combos.js';
+import { MOVES } from './moves.js';
+
 // Result-screen coaching is derived only from semantic battle history. Keeping
 // it deterministic makes the advice testable and prevents vague canned tips.
 export function battleAdviceKeys(state, win = false) {
@@ -24,7 +27,12 @@ export function battleAdviceKeys(state, win = false) {
       .reduce((sum, event) => sum + event.amount, 0) >= 24
   )
     add('barrier');
-  if (damage.length >= 4 && !damage.some((event) => event.combo)) add('combo');
+  const canMark = state.sides?.player?.team?.some((creature) =>
+    creature.moves.some((moveId) =>
+      MOVES[moveId].targetStatuses?.some((status) => status.id === COMBO_SETUP_STATUS)
+    )
+  );
+  if (canMark && damage.length >= 4 && !damage.some((event) => event.combo)) add('combo');
   if (
     state.turn >= 8 &&
     !playerMoves.some((event) => event.moveId && event.moveId.includes('signature')) &&

@@ -498,7 +498,7 @@ test('a predicted resisted attack exposes and celebrates a Perfect Relay', async
   await expect(page.locator('#action-line')).toContainText('RELAIS PARFAIT');
 });
 
-test('Burning enables Venom Harvest as one visible Combo', async ({ page }) => {
+test('Burning powers Venom Harvest without consuming a Combo setup', async ({ page }) => {
   await installCompletedTutorial(page, {
     lastTeam: ['thornox', 'nymbloom', 'riptalon'],
     reducedMotion: false,
@@ -511,12 +511,12 @@ test('Burning enables Venom Harvest as one visible Combo', async ({ page }) => {
   await expect(page.locator('[data-move="toxic_spines"]')).toBeEnabled();
   await page.locator('[data-move="toxic_spines"]').click();
   await expect(page.locator('[data-move="venom_harvest"]')).toBeEnabled();
-  await expect(page.locator('[data-move="venom_harvest"] .move-combo-badge')).toContainText('COMBO +40%');
+  await expect(page.locator('[data-move="venom_harvest"] .move-combo-badge')).toHaveCount(0);
   await page.locator('[data-move="venom_harvest"]').click();
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Journal du combat' }).click();
   const log = page.getByRole('dialog', { name: 'Journal du combat' });
-  await expect(log.locator('li').filter({ hasText: /Combo/i })).toHaveCount(1);
+  await expect(log.locator('li.log-enemy').filter({ hasText: /Combo/i })).toHaveCount(0);
 });
 
 test('battle codex explains live rules and closes with Escape', async ({ page }) => {
@@ -526,7 +526,7 @@ test('battle codex explains live rules and closes with Escape', async ({ page })
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await page.getByRole('button', { name: 'Codex du combat' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByText('Pouvoir de l’arène')).toBeVisible();
+  await expect(page.getByText('Météo de l’arène')).toBeVisible();
   await expect(page.getByText('Triangles de types')).toBeVisible();
   await expect(page.getByText(/Eau → Feu → Plante → Eau/)).toBeVisible();
   await expect(page.getByText(/entre triangles : ×1/)).toBeVisible();
@@ -548,7 +548,7 @@ test('versus intro stays focused on the teams and arena', async ({ page }) => {
 
 test('battle chronicle records semantic events and opens from the keyboard', async ({ page }) => {
   await installCompletedTutorial(page);
-  await page.goto('/?seed=72&animations=0');
+  await page.goto('/?seed=1025&animations=0');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await page.getByRole('button', { name: /Entrer dans/ }).click();
   await page.locator('[data-move="lucid_arc"]').click();
@@ -561,8 +561,8 @@ test('battle chronicle records semantic events and opens from the keyboard', asy
   await expect(page.locator('.battle-log li.turn-start[data-turn="Tour 1"]')).toHaveCount(1);
   await expect(page.locator('.battle-log')).toContainText(/lance|perd|entre dans l’arène/);
   await expect(page.locator('.battle-log')).toContainText('Ton Orakyn');
-  await expect(page.locator('.battle-log')).toContainText('Kordane rival');
-  await expect(page.locator('.battle-log li').filter({ hasText: 'Combo' })).toHaveCount(1);
+  await expect(page.locator('.battle-log')).toContainText('Orakyn rival');
+  await expect(page.locator('.battle-log li').filter({ hasText: 'Combo' })).not.toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.locator('.battle-log')).toHaveCount(0);
 });

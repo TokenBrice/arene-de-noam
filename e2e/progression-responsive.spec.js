@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { SAVE_VERSION } from '../src/save.js';
 import {
   expectNoRuntimeLeaks,
   installCompletedTutorial,
@@ -112,7 +113,7 @@ test('three personal squad slots save, reload, and clear a team with its lead', 
   await page.locator('[data-custom-load="0"]').click();
   await expect(page.locator('[data-creature="voltide"]')).toHaveClass(/selected/);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
-  expect(stored.version).toBe(16);
+  expect(stored.version).toBe(SAVE_VERSION);
   expect(stored.customSquads[0]).toEqual({ team: ['voltide', 'nymbloom', 'riptalon'], lead: 0 });
   await page.reload();
   await page.getByRole('button', { name: /Combat rapide/ }).click();
@@ -183,8 +184,7 @@ test('the tactical academy leads with eight essentials and every current effect'
   await expect(page.locator('.academy-status.penalty')).toHaveCount(4);
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toHaveCount(1);
   await expect(page.locator('.academy-status').filter({ hasText: '×2' })).toContainText('Brûlure');
-  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('Combo');
-  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('×1,4');
+  await expect(page.locator('.academy-status').filter({ hasText: 'Marqué' })).toContainText('+30 %');
   await expect(page.locator('.academy-status-group.positive > h3')).toHaveText('▲ AVANTAGE');
   await expect(page.locator('.academy-status-group.negative > h3')).toHaveText('▼ MALUS');
   await expect(page.locator('.academy-status .status-icon')).toHaveCount(8);
@@ -280,7 +280,9 @@ test('removed loadout systems stay absent and battle opens at neutral Surge', as
 
 test('the gauntlet carries a chosen boon into its second escalating battle', async ({ page }) => {
   await installCompletedTutorial(page);
-  await page.goto('/?seed=9&animations=0&player=mossaur,magmoth,monolith');
+  // Seed 38: the first-move autoplay wins battle 1 with Mossaur and Magmoth K.O. (the camp revives
+  // them at 40%) and Monolith at 35%, the same camp state the pre-mixing seed 9 produced.
+  await page.goto('/?seed=38&animations=0&player=mossaur,magmoth,monolith');
   await page.getByRole('button', { name: 'Traversée' }).click();
   await page.getByRole('button', { name: /Commencer la Traversée/ }).click();
   await playVisibleBattle(page);
@@ -289,7 +291,7 @@ test('the gauntlet carries a chosen boon into its second escalating battle', asy
   await expect(page.locator('[data-gauntlet-lead]')).toHaveCount(3);
   await expect(page.locator('[data-gauntlet-lead].recommended')).toHaveCount(1);
   await expect(page.locator('.gauntlet-condition')).toContainText('Mossaur');
-  await expect(page.locator('.gauntlet-condition')).toContainText('40%');
+  await expect(page.locator('.gauntlet-condition')).toContainText(/40\s%/);
   await page.locator('[data-gauntlet-lead="1"]').click();
   await expect(page.locator('[data-gauntlet-lead="1"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('[data-gauntlet-lead="0"]').click();
@@ -348,7 +350,10 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   await expect(page.getByRole('button', { name: /Entrer dans/ })).toHaveCount(1);
   await expect(page.locator('.mobile-selection-dock')).toBeVisible();
   await expect(page.locator('.mobile-selection-dock img')).toHaveCount(3);
-  await page.getByRole('button', { name: /Plan de bataille/ }).click();
+  await page
+    .locator('.mobile-selection-dock')
+    .getByRole('button', { name: /Options du combat/ })
+    .click();
   const planSummary = page.locator('.battle-plan > summary');
   await expect(planSummary).toBeFocused();
   await expect.poll(async () => (await planSummary.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);

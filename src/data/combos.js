@@ -1,39 +1,35 @@
 import { CREATURES } from './creatures.js';
 import { MOVES } from './moves.js';
 
-export const COMBO_DAMAGE_MULTIPLIER = 1.4;
+// Marqué is the single Combo setup: the next damaging action that lands on a
+// Marqué target consumes it and multiplies every hit of that action.
+export const COMBO_SETUP_STATUS = 'marked';
+export const COMBO_DAMAGE_MULTIPLIER = 1.3;
 
 export function moveCanCombo(move) {
-  return move?.kind === 'damage' && move.combo === true;
+  return move?.kind === 'damage';
 }
 
-export function comboSetupStatus(move) {
-  if (!moveCanCombo(move)) return null;
-  return move.id === 'venom_harvest' ? 'burning' : 'marked';
-}
-
+// Cross-creature routes scored by the team remix: a teammate applies Marqué,
+// another teammate's damaging move cashes it in. Self-routes are excluded
+// because they grant no assist credit.
 export function teamComboRoutes(team = []) {
   const routes = new Map();
   for (const setterId of team) {
     for (const setupMoveId of CREATURES[setterId]?.moves || []) {
-      const setup = MOVES[setupMoveId],
-        statuses = [...new Set((setup.targetStatuses || []).map((status) => status.id))];
-      if (!statuses.length) continue;
+      if (!MOVES[setupMoveId].targetStatuses?.some((status) => status.id === COMBO_SETUP_STATUS)) continue;
       for (const finisherId of team) {
         if (finisherId === setterId) continue;
         for (const finishMoveId of CREATURES[finisherId]?.moves || []) {
-          const finish = MOVES[finishMoveId],
-            requiredStatus = comboSetupStatus(finish);
-          if (!requiredStatus || !statuses.includes(requiredStatus)) continue;
-          const route = {
-              setterId,
-              setupMoveId,
-              finisherId,
-              finishMoveId,
-              signature: Boolean(finish.signature),
-            },
-            key = `${setterId}:${setupMoveId}:${finisherId}:${finishMoveId}`;
-          routes.set(key, route);
+          const finish = MOVES[finishMoveId];
+          if (!moveCanCombo(finish)) continue;
+          routes.set(`${setterId}:${setupMoveId}:${finisherId}:${finishMoveId}`, {
+            setterId,
+            setupMoveId,
+            finisherId,
+            finishMoveId,
+            signature: Boolean(finish.signature),
+          });
         }
       }
     }

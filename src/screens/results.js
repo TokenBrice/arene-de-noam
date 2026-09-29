@@ -144,7 +144,12 @@ function awardBattleProgress(state, win, grade = gradeBattle(state, win)) {
   if (win && signals.guardian) candidates.push('survivor');
   if (signals.tactician) candidates.push('tactician');
   if (win && new Set(state.sides.player.team.map((c) => c.affinity)).size === 3) candidates.push('harmony');
-  if (win && state.history.filter((e) => e.type === 'arena-pulse').length >= 2)
+  if (
+    win &&
+    state.history.filter(
+      (e) => e.type === 'damage' && e.sourceSide === 'player' && e.hit === 1 && e.weather > 1
+    ).length >= 3
+  )
     candidates.push('arena_master');
   if (win && state.sides.player.team.filter((c) => c.hp <= 0).length === 2) candidates.push('comeback');
   if (state.history.some((e) => e.type === 'perfect-relay' && e.side === 'player'))

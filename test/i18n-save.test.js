@@ -39,7 +39,6 @@ test('French and English localization keys are complete and interpolation works'
 });
 test('live dictionary values are not shadowed by duplicate definitions', () => {
   for (const [key, fr, en] of [
-    ['status.effect.marked', 'Combo : Marqué consommé, dégâts ×1,4.', 'Combo consumes Marked: +40% damage.'],
     [
       'move.effect.petal_ray',
       'Inflige des dégâts et rend 3 % des PV à l’équipe.',
@@ -177,12 +176,62 @@ test('save round-trips with validated ranges', () => {
     lastTeam: ['kordane', 'farfombre', 'calderoc'],
     volume: 0.4,
     expertMode: true,
+    quality: 'low',
   };
   assert.equal(persistSave(changed, memory), true);
   assert.deepEqual(loadSave(memory).save, validateSave(changed));
-  assert.equal(loadSave(memory).save.version, 16);
+  assert.equal(loadSave(memory).save.version, 17);
+  assert.equal(loadSave(memory).save.quality, 'low');
   assert.equal('volume' in loadSave(memory).save, false);
   assert.equal('affinity' in loadSave(memory).save, false);
+});
+test('every graphics choice round-trips and unknown choices fall back to automatic', () => {
+  for (const quality of ['auto', 'low', 'mid', 'high']) {
+    const memory = storage();
+    assert.equal(persistSave({ ...DEFAULT_SAVE, quality }, memory), true);
+    assert.equal(loadSave(memory).save.quality, quality);
+  }
+  for (const quality of ['ultra', 'LOW', '', null, 2, { tier: 'low' }])
+    assert.equal(validateSave({ ...DEFAULT_SAVE, quality }).quality, 'auto');
+  assert.equal(validateSave({ ...DEFAULT_SAVE, quality: undefined }).quality, 'auto');
+  assert.equal(freshDefaultSave().quality, 'auto');
+});
+test('v16 saves load as v17 with automatic graphics and every other field intact', () => {
+  const v16 = {
+    version: 16,
+    tutorialComplete: true,
+    ladderVictories: 3,
+    mastery: { orakyn: 40 },
+    records: { orakyn: { battles: 4, wins: 3, damage: 900, kos: 2, signatures: 1, assists: 0, combos: 1 } },
+    customSquads: [{ team: ['orakyn', 'abyssar', 'virelia'], lead: 1 }, null, null],
+    feats: ['blitz'],
+    trials: [],
+    gauntletWins: 1,
+    draftWins: 2,
+    circuitWins: 0,
+    bestGrade: 'A',
+    battlesPlayed: 6,
+    wins: 4,
+    winStreak: 2,
+    bestStreak: 3,
+    lastTeam: ['kordane', 'farfombre', 'calderoc'],
+    difficulty: 'standard',
+    language: 'en',
+    muted: true,
+    musicVolume: 0.3,
+    sfxVolume: 0.6,
+    reducedMotion: true,
+    highContrast: false,
+    expertMode: true,
+    battleSpeed: 2,
+  };
+  const { save, notice } = loadSave(storage(JSON.stringify(v16)));
+  assert.equal(notice, null);
+  assert.equal(save.version, 17);
+  assert.equal(save.quality, 'auto');
+  assert.deepEqual(save, { ...v16, version: 17, quality: 'auto' });
+  // A stray value written by a pre-v17 build never survives the migration.
+  assert.equal(validateSave({ ...v16, quality: 'high' }).quality, 'auto');
 });
 test('fresh save resets rebuild every nested collection', () => {
   const firstReset = freshDefaultSave();
@@ -202,7 +251,7 @@ test('fresh save resets rebuild every nested collection', () => {
   assert.deepEqual(secondReset.records, {});
   assert.deepEqual(secondReset.customSquads, [null, null, null]);
 });
-test('v15 saves migrate to v16 without dead fields and with consistent counters', () => {
+test('v15 saves migrate forward without dead fields and with consistent counters', () => {
   const migrated = validateSave({
     ...DEFAULT_SAVE,
     version: 15,
@@ -215,7 +264,7 @@ test('v15 saves migrate to v16 without dead fields and with consistent counters'
     bestStreak: 40,
     records: { orakyn: { battles: 2, wins: 8 } },
   });
-  assert.equal(migrated.version, 16);
+  assert.equal(migrated.version, 17);
   assert.equal('emblems' in migrated, false);
   assert.equal('cosmetics' in migrated, false);
   assert.equal('volume' in migrated, false);
@@ -233,7 +282,7 @@ test('historical v15 saves stay valid and accept all six new creature ids', () =
     mastery: { orakyn: 12, unknown: 90 },
     records: { orakyn: { battles: 4, wins: 3 }, unknown: { battles: 99 } },
   });
-  assert.equal(historical.version, 16);
+  assert.equal(historical.version, 17);
   assert.equal(historical.mastery.orakyn, 12);
   assert.equal(historical.mastery.unknown, undefined);
   assert.equal(historical.records.unknown, undefined);
@@ -276,6 +325,12 @@ test('v14 personal squad slots migrate to legal teams and leads only', () => {
 test('corrupt and future saves fall back safely', () => {
   assert.equal(loadSave(storage('{oops')).notice, 'corrupt');
   assert.equal(loadSave(storage(JSON.stringify({ version: 99 }))).notice, 'future');
+  const future = loadSave(storage(JSON.stringify({ ...DEFAULT_SAVE, version: 18, quality: 'low' })));
+  assert.equal(future.notice, 'future');
+  assert.equal(future.save.quality, 'auto');
+  const corrupt = loadSave(storage(JSON.stringify({ version: 'seventeen', quality: 'low' })));
+  assert.equal(corrupt.notice, 'corrupt');
+  assert.equal(corrupt.save.quality, 'auto');
 });
 test('older saves migrate and progression fields are bounded', () => {
   const migrated = validateSave({
@@ -301,7 +356,7 @@ test('older saves migrate and progression fields are bounded', () => {
     winStreak: 7,
     bestStreak: 3,
   });
-  assert.equal(migrated.version, 16);
+  assert.equal(migrated.version, 17);
   assert.equal(migrated.ladderVictories, 12);
   assert.deepEqual(migrated.lastTeam, DEFAULT_SAVE.lastTeam);
   assert.equal(migrated.language, 'fr');

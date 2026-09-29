@@ -34,8 +34,7 @@ export function battleAchievementSignals(history = []) {
       .filter((event) => event.type === 'damage' && event.sourceSide === 'player')
       .reduce((total, event) => total + event.amount, 0),
     enemyStatuses = history.filter(
-      (event) =>
-        event.type === 'status' && event.side === 'enemy' && event.applied && event.source !== 'arena'
+      (event) => event.type === 'status' && event.side === 'enemy' && event.applied
     ).length,
     guardianValue = history
       .filter((event) => ['barrier', 'heal'].includes(event.type) && event.side === 'player')

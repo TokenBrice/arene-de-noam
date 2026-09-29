@@ -84,7 +84,8 @@
 }
 .ace-reveal b {
   color: #fff3b0;
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
   font-size: clamp(32px, 5vw, 62px);
   line-height: 0.95;
   text-shadow: 0 0 20px var(--fx-color);
@@ -111,12 +112,10 @@
   0% {
     opacity: 0;
     transform: translateX(18vw) scale(0.85);
-    filter: blur(12px);
   }
   45% {
     opacity: 1;
     transform: translateX(-2vw) scale(1.04);
-    filter: blur(0);
   }
   100% {
     transform: none;

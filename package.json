@@ -9,10 +9,15 @@
     "test:balance": "node tools/simulate-balance.mjs",
     "test:e2e": "playwright test",
     "serve": "python3 -m http.server 8178",
-    "format": "prettier --write \"src/**/*.js\" \"test/*.js\" \"e2e/*.js\" \"tools/*.mjs\" \"styles/*.css\" index.html"
+    "build": "node tools/build.mjs",
+    "preview": "node tools/build.mjs && python3 -m http.server 8177 --directory dist",
+    "perf": "bash tools/perf/run-all.sh",
+    "perf:gpu": "node tools/perf/gpu-budget.mjs",
+    "format": "prettier --write \"src/**/*.js\" \"test/*.js\" \"e2e/*.js\" \"tools/*.mjs\" \"styles/*.css\" index.html sw.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
+    "esbuild": "^0.28.2",
     "prettier": "^3.9.6"
   }
 }

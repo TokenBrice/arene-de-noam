@@ -395,149 +395,6 @@
   box-shadow: 0 0 25px #ffdb574c;
   animation: comboLabel 0.35s ease;
 }
-.arena-pulse-fx {
-  z-index: 6;
-}
-.arena-pulse-fx .fx-curtain {
-  opacity: 0.72;
-  background: radial-gradient(
-    circle at 50% 48%,
-    color-mix(in srgb, var(--fx-color) 35%, transparent),
-    #02030dcc 66%
-  );
-}
-.arena-pulse-rune {
-  position: absolute;
-  left: 50%;
-  top: 45%;
-  width: min(58vmin, 520px);
-  height: min(58vmin, 520px);
-  transform: translate(-50%, -50%);
-  display: grid;
-  place-items: center;
-  border: 3px double var(--fx-color);
-  border-radius: 50%;
-  color: #fff;
-  opacity: 0;
-  animation: arenaRune 0.78s cubic-bezier(0.15, 0.8, 0.2, 1) both;
-}
-/* The pulse reaches each side from its own origin (plan §4.3): a smaller rune
-   blooms over each fighter, the enemy side slightly staggered. */
-.arena-pulse-rune.pulse-player,
-.arena-pulse-rune.pulse-enemy {
-  width: min(38vmin, 330px);
-  height: min(38vmin, 330px);
-}
-.arena-pulse-rune.pulse-player {
-  left: 26%;
-  top: 58%;
-}
-.arena-pulse-rune.pulse-enemy {
-  left: 74%;
-  top: 30%;
-  animation-delay: 130ms;
-}
-.arena-pulse-rune.pulse-player b,
-.arena-pulse-rune.pulse-enemy b {
-  font-size: clamp(52px, 10vw, 110px);
-}
-/* Damaging pulses (volcano, eclipse) read hostile: jagged and hot. */
-.pulse-hostile .arena-pulse-rune {
-  border-style: solid;
-  border-radius: 16%;
-}
-.pulse-hostile .arena-pulse-rune::before {
-  border: 0;
-  clip-path: polygon(
-    50% 0,
-    58% 12%,
-    72% 4%,
-    76% 18%,
-    92% 14%,
-    90% 30%,
-    100% 38%,
-    94% 50%,
-    100% 62%,
-    90% 70%,
-    92% 86%,
-    76% 82%,
-    72% 96%,
-    58% 88%,
-    50% 100%,
-    42% 88%,
-    28% 96%,
-    24% 82%,
-    8% 86%,
-    10% 70%,
-    0 62%,
-    6% 50%,
-    0 38%,
-    10% 30%,
-    8% 14%,
-    24% 18%,
-    28% 4%,
-    42% 12%
-  );
-  background: color-mix(in srgb, var(--fx-color) 55%, transparent);
-}
-.pulse-hostile .arena-pulse-rune i {
-  border-style: dashed;
-  border-color: #fff;
-  animation-duration: 2.6s;
-}
-.pulse-hostile .fx-curtain {
-  background: radial-gradient(
-    circle at 50% 48%,
-    color-mix(in srgb, var(--fx-color) 48%, transparent),
-    #1a0508dd 66%
-  );
-}
-.arena-pulse-rune::before,
-.arena-pulse-rune::after {
-  content: '';
-  position: absolute;
-  inset: 10%;
-  border: 1px dashed #fff8;
-  transform: rotate(45deg);
-}
-.arena-pulse-rune::after {
-  inset: 22%;
-  border-style: solid;
-  transform: rotate(-25deg);
-}
-.arena-pulse-rune b {
-  font-size: clamp(90px, 18vw, 190px);
-  text-shadow: 0 0 35px var(--fx-color);
-}
-.arena-pulse-rune i {
-  position: absolute;
-  inset: -7%;
-  border: 8px dotted var(--fx-color);
-  border-radius: 50%;
-  animation: fxSpin 5s linear infinite;
-}
-/* The arena name sits just under the player's rune, below the readout slots
-   (numbers and stamps ride the fighter's body and head), so a recoil or tick
-   number never lands on it. */
-.arena-pulse-rune span {
-  position: absolute;
-  top: 100%;
-  margin-top: 4px;
-  font-size: clamp(13px, 2vw, 20px);
-  font-weight: 1000;
-  letter-spacing: 0.2em;
-  text-align: center;
-  text-transform: uppercase;
-  text-shadow:
-    0 2px 0 #02030d,
-    1px 1px 0 #02030d,
-    -1px -1px 0 #02030d;
-}
-.arena-pulse-fx .fx-aftershock {
-  display: block;
-  left: 50%;
-  top: 48%;
-}
 .fx-sky-symbol {
   display: none;
   position: absolute;
@@ -862,19 +719,6 @@
 @keyframes surgeFlashGlow {
   40% {
     opacity: 1;
-  }
-}
-@keyframes arenaRune {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.15) rotate(-40deg);
-  }
-  55% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.2) rotate(12deg);
   }
 }
 @keyframes clashCurtain {
@@ -1257,7 +1101,6 @@
   .finisher-impact::after,
   .mini-finisher-impact::after,
   .ko-shock::after,
-  .arena-imminent::after,
   .victory-burst {
     display: none !important;
   }
@@ -1275,7 +1118,6 @@
 body.reduced-motion .finisher-impact::after,
 body.reduced-motion .mini-finisher-impact::after,
 body.reduced-motion .ko-shock::after,
-body.reduced-motion .arena-imminent::after,
 body.reduced-motion .victory-burst {
   display: none !important;
 }

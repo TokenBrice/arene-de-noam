@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**Arène de Noam** — a local, deterministic 3v3 creature-battle browser game for a ~10-year-old child, French-first with full English localization. 30 creatures, 90 moves, 6 classes, 6 arenas. No build step, no backend, no runtime AI/API calls; Three.js is vendored in `vendor/`. `AUTONOMOUS_GAME_BUILD_BRIEF.md` is the binding product brief (pillars, scope, acceptance criteria); `README.md` describes the shipped game rules. Past implementation plans live in `docs/superpowers/plans/`.
+**Arène de Noam** — a local, deterministic 3v3 creature-battle browser game for a ~10-year-old child, French-first with full English localization. 30 creatures, 90 moves, 6 classes, 6 arenas. Development needs no build step (the deployed site is a CI-only esbuild build of the same sources), no backend, no runtime AI/API calls; Three.js is vendored in `vendor/`. `AUTONOMOUS_GAME_BUILD_BRIEF.md` is the binding product brief (pillars, scope, acceptance criteria); `README.md` describes the shipped game rules. Past implementation plans live in `docs/superpowers/plans/`.
 
 Agent implementation documentation starts at `docs/README.md`, with focused runtime architecture and battle/content contracts linked from there.
 
@@ -22,10 +22,14 @@ node --test --test-name-pattern="<pattern>" test/*.test.js   # single test by na
 npm run test:e2e       # Playwright (chromium/swiftshader); starts its own server on port 8179
 npx playwright test e2e/smoke.spec.js                # single e2e spec
 npm run test:balance   # deterministic balance simulation (tools/simulate-balance.mjs)
-npm run format         # prettier over src, test, e2e, tools, styles, index.html
+npm run format         # prettier over src, test, e2e, tools, styles, index.html, sw.js
+npm run build          # production dist/ (tools/build.mjs: esbuild bundle, hashed CSS/JS, service worker)
+npm run preview        # build, then serve dist/ on http://127.0.0.1:8177
+npm run perf           # perf harness (tools/perf/run-all.sh)
+npm run perf:gpu       # static GPU-budget probe (tools/perf/gpu-budget.mjs)
 ```
 
-There is no build, lint, or type-check step. Verification = unit tests + e2e + (for combat/data changes) balance sim.
+There is no lint or type-check step, and development runs the sources unbundled. Verification = unit tests + e2e + (for combat/data changes) balance sim. The GitHub Pages workflow runs `npm test` then `npm run build` and deploys `dist/`; the build fails on a broken import or a battle-stylesheet list that disagrees with `index.html`.
 
 ## Architecture
 
@@ -35,7 +39,7 @@ Everything loads from `index.html` as browser-native ES modules; `src/main.js` i
 - **`src/battle/`** — the pure, deterministic battle engine: `engine.js` (createBattle / getLegalActions / previewMove / resolveTurn), `rng.js` (seeded RNG — never `Math.random` in combat), `damage.js`, `statuses.js`, `ai.js`. No DOM access. `resolveTurn` returns an event list.
 - **`src/battle-ui/`** — consumes engine events: `controller.js` (command flow), `playback.js` (event → animation sequencing), `hud.js`, `fx.js`.
 - **`src/data/`** — all authored content (creatures, moves, affinities, classes, passives, trainers, modes). Balance and content changes happen here, not in the engine.
-- **`src/presentation/arena.js`** — Three.js arena rendering.
+- **`src/presentation/arena.js`** — Three.js arena rendering. Loaded lazily via `ctx.loadArena()` (awaited in `renderBattle`); never import it statically, or Three.js lands on the title's critical path.
 - **`src/i18n.js`** — every string keyed in both `fr` and `en`, key-parallel. Any user-facing text change touches both languages. Test with `?lang=en`.
 - **`src/save.js`** — versioned localStorage save (`SAVE_VERSION`) with a chain of `migrateVN` functions. Any change to persisted shape must bump the version and add a migration; never break existing saves.
 - **`styles/`** — layered CSS: `tokens.css` (design tokens) → `base.css`/`components.css` → `screens/` → `overrides/`.

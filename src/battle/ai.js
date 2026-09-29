@@ -1,5 +1,5 @@
 import { MOVES } from '../data/moves.js';
-import { comboSetupStatus, moveCanCombo } from '../data/combos.js';
+import { COMBO_SETUP_STATUS, moveCanCombo } from '../data/combos.js';
 import { affinityMultiplier } from '../data/affinities.js';
 import {
   activeOf,
@@ -14,47 +14,20 @@ import {
 import { STATUS_DEFINITIONS } from './statuses.js';
 import { randomIndex, randomFromState } from './rng.js';
 
-function availableComboMove(creature, defender) {
-  return creature.moves
-    .map((id) => MOVES[id])
-    .find(
-      (move) =>
-        moveCanCombo(move) &&
-        defender.statuses[comboSetupStatus(move)] &&
-        !creature.cooldowns[move.id]?.remaining
-    );
-}
-
+// Applying Marqué is worth a setup score while a conscious teammate can cash it
+// in with a ready damaging move; refreshing a longer-lasting mark is wasted.
 function setupScore(state, side, move) {
+  const descriptor = move.targetStatuses?.find((status) => status.id === COMBO_SETUP_STATUS);
+  if (!descriptor) return 0;
   const defender = activeOf(state, side === 'player' ? 'enemy' : 'player'),
-    setupStatuses = [...new Set((move.targetStatuses || []).map(({ id }) => id))].filter((id) =>
-      state.sides[side].team.some((creature) =>
-        creature.moves.some((moveId) => comboSetupStatus(MOVES[moveId]) === id)
-      )
-    );
-  let score = 0;
-  for (const id of setupStatuses) {
-    const descriptor = move.targetStatuses.find((status) => status.id === id),
-      current = defender.statuses[id];
-    if (current && (current.remaining ?? Infinity) >= (descriptor?.duration ?? Infinity)) score -= 6;
-    else {
-      score += 8;
-      if (
-        state.sides[side].team.some(
-          (creature) =>
-            creature.hp > 0 &&
-            creature.moves.some(
-              (moveId) =>
-                moveCanCombo(MOVES[moveId]) &&
-                comboSetupStatus(MOVES[moveId]) === id &&
-                !creature.cooldowns[moveId]?.remaining
-            )
-        )
-      )
-        score += 6;
-    }
-  }
-  return score;
+    current = defender.statuses[COMBO_SETUP_STATUS];
+  if (current && (current.remaining ?? Infinity) >= (descriptor.duration ?? Infinity)) return -6;
+  const finisherReady = state.sides[side].team.some(
+    (creature) =>
+      creature.hp > 0 &&
+      creature.moves.some((moveId) => moveCanCombo(MOVES[moveId]) && !creature.cooldowns[moveId]?.remaining)
+  );
+  return 8 + (finisherReady ? 6 : 0);
 }
 
 function scoreMove(state, side, action, difficulty, style) {
@@ -223,8 +196,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
         : affinityMultiplier(signatureThreat.affinity, candidate.affinity) === 2
           ? -20
           : 0
-      : 0,
-    comboReady = availableComboMove(candidate, defender);
+      : 0;
   return (
     (outgoing - 1) * 28 -
     (incoming - 1) * 22 +
@@ -235,7 +207,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (relayReadiesSignature ? 25 : 0) +
     (style === 'deception' ? 8 : 0) +
     (lastOwnDecision?.type === 'switch' ? -30 : 0) +
-    (difficulty === 'champion' ? signatureRead + (comboReady ? 20 : 0) : comboReady ? 12 : 0) +
+    (difficulty === 'champion' ? signatureRead : 0) +
     // Without a response forecast, Standard overvalues a visibly favorable
     // matchup and pivots a little too eagerly—a readable, human mistake.
     (difficulty === 'standard' ? 5 : 0)
@@ -259,7 +231,11 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
     }));
     return finish(pickBest(state, scored).action);
   }
-  const scored = legal.map((action) => ({
+  // Like a rookie trainer, the Apprentice only ever uses one of its moves; it
+  // switches only when no move is available.
+  const moves = legal.filter((action) => action.type === 'move'),
+    options = difficulty === 'apprentice' && moves.length ? moves : legal;
+  const scored = options.map((action) => ({
     action,
     score:
       action.type === 'move'
@@ -270,9 +246,9 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
     const roll = randomFromState(state.rngState);
     state.rngState = roll.state;
     if (roll.value < 0.6) {
-      const choice = randomIndex(state.rngState, legal.length);
+      const choice = randomIndex(state.rngState, options.length);
       state.rngState = choice.state;
-      return finish(legal[choice.index]);
+      return finish(options[choice.index]);
     }
   }
   if (difficulty === 'standard' || difficulty === 'champion') {

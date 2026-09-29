@@ -72,3 +72,15 @@ export function affinityMultiplier(attack, defense) {
   if (AFFINITY_ADVANTAGE[defense] === attack) return 0.5;
   return 1;
 }
+
+// Arena weather: a continuous, symmetric type rule for both teams. Each typed
+// arena makes one type's attacks stronger and another type's weaker; the
+// Crystal Dome stays neutral. Keys are attacking-move affinities.
+export const ARENA_WEATHER = Object.freeze({
+  crystal: Object.freeze({}),
+  grove: Object.freeze({ grove: 1.2, tide: 0.8 }),
+  tidal: Object.freeze({ tide: 1.2, flame: 0.8 }),
+  volcano: Object.freeze({ flame: 1.2, grove: 0.8 }),
+  astral: Object.freeze({ mind: 1.2, shadow: 0.8 }),
+  eclipse: Object.freeze({ shadow: 1.2, mind: 0.8 }),
+});

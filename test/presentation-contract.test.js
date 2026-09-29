@@ -85,7 +85,7 @@ test('battle controls expose dialog, speed, plate, overflow, and mobile rule sem
 });
 test('high-contrast and compact presentation details keep their semantic cues', async () => {
   const root = new URL('../', import.meta.url);
-  const [accessibility, progression, components, base, selection, title, trials, draft, controller, i18n] =
+  const [accessibility, progression, components, base, selection, title, trials, controller, i18n] =
     await Promise.all(
       [
         'styles/screens/accessibility.css',
@@ -95,7 +95,6 @@ test('high-contrast and compact presentation details keep their semantic cues', 
         'styles/screens/selection.css',
         'src/screens/title.js',
         'src/screens/trials.js',
-        'src/screens/draft.js',
         'src/battle-ui/controller.js',
         'src/i18n.js',
       ].map((file) => readFile(new URL(file, root), 'utf8'))
@@ -120,7 +119,6 @@ test('high-contrast and compact presentation details keep their semantic cues', 
   assert.match(progression, /\.trial-squad img[\s\S]*width:\s*44px[\s\S]*height:\s*44px/);
   assert.match(title, /t\('app\.trials'\)/);
   assert.match(title, /t\('gauntlet\.title'\)/);
-  assert.equal(draft.includes("<h3>${t('combo.title')}</h3>${comboRoutesHtml"), false);
   assert.match(controller, /data-last-label="\$\{escapeHtml\(t\('battle\.lastBadge'\)\)\}"/);
   assert.match(progression, /content: attr\(data-last-label\)/);
   assert.match(i18n, /'battle\.lastBadge': 'DERNIÈRE'/);

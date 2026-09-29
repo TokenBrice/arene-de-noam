@@ -10,10 +10,10 @@ The main API in [`engine.js`](../src/battle/engine.js) is:
 | --- | --- |
 | `createBattle(config)` | Validates distinct 2- or 3-creature teams and returns initial state. Shipped modes use 3v3. |
 | `getLegalActions(state, side)` | Returns complete action objects for the current phase. It is the authority for UI and AI. |
-| `resolveTurn(state, playerAction, enemyAction)` | Validates both actions, clones input, resolves one turn, and returns `{ state, events }`. |
+| `resolveTurn(state, playerAction, enemyAction, { forecast })` | Validates both actions, clones input, resolves one turn, and returns `{ state, events }`. `forecast: true` resolves the same rules without critical-hit rolls (UI exchange previews). |
 | `applyReplacement(state, side, action)` | Applies one free required replacement without normal switch rewards. |
 | `canUseTrainerCommand` / `applyTrainerCommand` | Checks/applies the once-per-battle Coach command without consuming the turn action. |
-| `previewMove(...)` | Runs the real damage transaction against a clone; returns exact damage/barrier/combo/lethality data. |
+| `previewMove(...)` | Runs the real damage transaction against a clone; returns exact non-critical damage/barrier/combo/weather/lethality data. |
 | `previewIncomingAfterSwitch(...)` | Applies the switch and entry talent to a clone before previewing the incoming move. |
 | `previewAllySwitch(...)` | Describes the target/value of an ally-switch move. |
 | `previewMoveOrder(...)` | Compares priority, then effective Speed; reports a tie without consuming RNG. |
@@ -27,8 +27,8 @@ Stable state shape, omitting authored creature fields copied into each combatant
 
 ```js
 {
-  version: 7,
-  mode, arena, modifiers, enemyAce, aceTriggered,
+  version: 8,
+  mode, arena, weather, modifiers, enemyAce, aceTriggered,
   turn: 1,
   phase: 'choice' | 'replacement' | 'ended',
   winner: null | 'player' | 'enemy',
@@ -59,6 +59,8 @@ Combatant = {
 }
 ```
 
+`weather` is `{ [moveAffinity]: multiplier }`, derived once from the arena (and `fierce_weather`) in `createBattle`; it is `{}` for Crystal or no arena.
+
 `history` is the canonical audit log used for playback, results, records, and feat signals. Each emitted event is stamped with the turn that produced it before being appended.
 
 ## Action shapes and legality
@@ -87,7 +89,7 @@ Always pass the full action returned by `getLegalActions`; ally-targeted moves a
 5. If a damage move targets a creature that just switched in and the final matchup is resisted (`0.5x`), emit Perfect Relay and grant that defender `+6` Surge.
 6. Execute moves in order. A user that was K.O.'d before acting emits `move-skip`; it does not act.
 7. After both actions, resolve queued ally-switch moves. These protected relays occur after actions and do not grant normal switch rewards.
-8. Tick end-of-turn effects, timed statuses, and cooldowns; then apply the arena pulse when due.
+8. Tick end-of-turn effects, timed statuses, and cooldowns.
 9. End on total K.O.; otherwise end at turn 40 using conscious count, then summed HP ratios, then seeded RNG.
 10. If continuing, increment the turn and enter `replacement` when either active creature is K.O.'d, otherwise `choice`.
 
@@ -101,10 +103,14 @@ Base damage in [`damage.js`](../src/battle/damage.js) is:
 round((move power * attacker Attack / defender Guard)
       * 0.89
       * affinity
-      * status/bonus multipliers)
+      * arena weather
+      * status/bonus multipliers
+      * 1.5 on a critical hit)
 ```
 
-The result is at least `1`. Focused multiplies damage by `1.3`; Stunned multiplies outgoing damage by `0.75`. Move-specific scaling and passives are applied to power in `engine.js` before this formula. Multi-hit moves repeat the same transaction while allowing between-hit barriers/survival passives to trigger.
+The result is at least `1`. Focused multiplies damage by `1.3`; Stunned multiplies outgoing damage by `0.75`. Move-specific scaling (including Venom Harvest's `+20 %` per Burning stack), passives, Combo, `high_voltage` and `type_clash` are applied to power in `engine.js` before this formula. Multi-hit moves repeat the same transaction while allowing between-hit barriers/survival passives to trigger.
+
+**Critical hits.** Each landed damaging action rolls the seeded RNG once (`1/16`, after an Evasive miss check); a critical multiplies every hit of that action by `1.5` and flags each `damage` event `critical: true`. Previews, AI forecasts and `resolveTurn(..., { forecast: true })` never roll, so they show the non-critical value. Rivals under the `rookie` modifier never roll against the player.
 
 Types are two independent directed triangles:
 
@@ -140,7 +146,7 @@ The only statuses are defined in [`statuses.js`](../src/battle/statuses.js):
 | `haste` | Positive | Effective Speed is `1.2x` |
 | `evasive` | Positive | Consumed to make one incoming damage action miss |
 | `countering` | Positive | Consumed after direct HP damage to reflect `25%` of that damage |
-| `marked` | Negative | Setup consumed by a normal Combo damage action |
+| `marked` | Negative | Consumed by the next landed damaging action, which deals `1.3x` (Combo) |
 | `stunned` | Negative | Effective Speed is `0.7x`; outgoing damage is `0.75x` |
 | `rooted` | Negative | Blocks voluntary and ally-move switching unless `ancient_roots` |
 | `burning` | Negative | Active creature loses `5%` max HP per stack at turn end; max 2 stacks |
@@ -151,28 +157,29 @@ Applying a non-stackable status refreshes to the longer remaining duration. Time
 
 [`data/combos.js`](../src/data/combos.js) is the shared definition:
 
-- Only a damage move with `combo: true` can finish a Combo.
-- The setup is `marked`, except `venom_harvest`, which consumes `burning`.
-- A valid setup is consumed once at transaction start and multiplies every hit in that action by exactly `1.4`.
+- The only setup is `marked` (`COMBO_SETUP_STATUS`); every damaging move can finish a Combo (`moveCanCombo`).
+- A present Marqué is consumed once at transaction start and multiplies every hit in that action by exactly `COMBO_DAMAGE_MULTIPLIER` (`1.3`). UI copy derives the percentage from the preview/event `combo.multiplier`; static copy (`status.effect.marked`, `tutorial.2`, `advice.combo`) interpolates it from the same constant in `i18n.js`.
 - Evasive misses preserve the setup because miss resolution occurs before consumption.
 - Barriers do not preserve the setup.
 - If another ally applied the setup, an `assist` event credits that helper. It adds no damage or Surge; saved legacy assist counts are not newly awarded.
-- `teamComboRoutes(team)` reports cross-creature setup/finisher routes for selection and Draft UI; it intentionally excludes self-routes.
+- `teamComboRoutes(team)` reports cross-creature Marqué setter/finisher routes; only the team remix scoring uses it (no route UI), and it intentionally excludes self-routes.
 
-## Arenas, modifiers, and Ace phases
+## Arenas, weather, modifiers, and Ace phases
 
-An authored arena pulses every 4 turns; `rapid_arena` changes cadence to 2:
+Every arena has a continuous, symmetric type weather (`ARENA_WEATHER` in [`affinities.js`](../src/data/affinities.js)) applied to attacks of both teams by move affinity:
 
-| Arena | Symmetric pulse |
+| Arena | Weather |
 | --- | --- |
-| `crystal` | Active creatures gain 5 barrier |
-| `grove` | Heal active creatures for 5% max HP |
-| `tidal` | Remove one penalty and add 3 barrier |
-| `volcano` | Deal 5% max HP but never reduce below 1 |
-| `astral` | Grant Focused, or `+15` Surge if already Focused |
-| `eclipse` | Apply Marked for 3 turns if absent |
+| `crystal` | Neutral |
+| `grove` | Grass `1.2x`, Water `0.8x` |
+| `tidal` | Water `1.2x`, Fire `0.8x` |
+| `volcano` | Fire `1.2x`, Grass `0.8x` |
+| `astral` | Psychic `1.2x`, Dark `0.8x` |
+| `eclipse` | Dark `1.2x`, Psychic `0.8x` |
 
-Modes pass explicit ids from `BATTLE_MODIFIERS` into `createBattle`. Modifiers change initial state, damage, arena cadence, or voluntary-switch reward; avoid mode-name conditionals inside generic mechanics.
+`fierce_weather` doubles each effect (`1.4x` / `0.6x`). Damage events and previews carry the applied `weather` multiplier. There are no timed arena events.
+
+Modes pass explicit ids from `BATTLE_MODIFIERS` into `createBattle`. Modifiers change initial state, damage, weather, or voluntary-switch reward; avoid mode-name conditionals inside generic mechanics. `type_clash` turns super-effective `2x` into `2.5x`. `rookie` (every Apprentice battle, via `difficultyModifiers` in [`battle-rules.js`](../src/data/battle-rules.js)) sets enemy max HP and Attack to `0.85x` and stops enemy critical hits.
 
 League, Gauntlet, and Circuit battles may pass `enemyAce`. It triggers exactly once when the enemy is reduced to one conscious creature, normally as the final replacement enters. Ace effects are authored engine branches and emit an `ace` event before their semantic effect events.
 
@@ -180,7 +187,7 @@ League, Gauntlet, and Circuit battles may pass `enemyAce`. It triggers exactly o
 
 [`ai.js`](../src/battle/ai.js) starts from `getLegalActions` and scores a safe clone. It supports `apprentice`, `standard`, and `champion`; legacy `challenger` maps to `standard`.
 
-- Apprentice often selects a seeded random legal action and exposes intent.
+- Apprentice only chooses among legal moves (a seeded random move 60 % of the time, otherwise its best-scored move); it switches only when no move is legal, and exposes intent.
 - Standard uses tactical scoring with intentional imperfection and no hypothetical opponent-response forecast.
 - Champion evaluates reply damage and stronger switch/signature counterplay.
 - Trainer `style` adjusts scoring, not legality or engine rules.
@@ -196,10 +203,10 @@ The engine emits semantic events such as:
 ```text
 move-start, damage, heal, status, barrier, barrier-hit, barrier-break,
 miss, recoil, status-tick, surge, assist, passive, trainer-command,
-perfect-relay, switch, replace, move-skip, ko, arena-pulse, ace, battle-end
+perfect-relay, switch, replace, move-skip, ko, ace, battle-end
 ```
 
-Payloads carry causal ids/sides and the resulting values needed by consumers: for example damage contains source/target, HP, raw and absorbed damage, hit count, affinity, and Combo metadata. Playback, the 40-entry visible chronicle, result records, advice, and feat signals all depend on these events.
+Payloads carry causal ids/sides and the resulting values needed by consumers: for example damage contains source/target, HP, raw and absorbed damage, hit count, affinity, `weather`, `critical`, and Combo metadata. Playback, the 40-entry visible chronicle, result records, advice, and feat signals all depend on these events.
 
 When adding a mechanic:
 

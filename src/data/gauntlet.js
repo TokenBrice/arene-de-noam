@@ -15,7 +15,7 @@ export const GAUNTLET_STAGES = Object.freeze([
     enemyTeam: ['voltide', 'riptalon', 'solflare'],
     arena: 'tidal',
     difficulty: 'standard',
-    modifiers: ['rapid_arena'],
+    modifiers: ['fierce_weather'],
   },
   {
     id: 'crown',

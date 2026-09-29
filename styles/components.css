@@ -258,16 +258,18 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
 .hp-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3fc97a, #8bf5a6);
+  background: var(--hp-high);
+  box-shadow:
+    inset 0 -3px 0 #0002,
+    inset 0 2px 0 #fff5;
   transition: width 0.45s ease;
 }
 .hp-fill.low {
-  background: linear-gradient(90deg, #ff575f, #ff9a69);
+  background: var(--hp-low);
 }
 .hp-value {
   font-size: var(--text-xs);
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 .status-row {
   display: flex;
@@ -307,7 +309,7 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   min-height: 132px;
   text-align: left;
   border: 1px solid var(--line);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-m);
   background: linear-gradient(145deg, #202451eb, #0f1233f0);
   padding: 13px 14px;
   cursor: pointer;
@@ -405,7 +407,7 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   place-items: center;
   /* Opaque scrim, no backdrop-filter: blurring the live canvas is a full-screen
      GPU pass on every frame (PERF-04). */
-  background: #040617e6;
+  background: var(--scrim);
 }
 .replacement-card {
   width: min(620px, calc(100% - 28px));
@@ -432,12 +434,12 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   top: 80px;
   transform: translateX(-50%);
   width: min(520px, calc(100% - 24px));
-  border: 1px solid #ffd66b88;
-  border-radius: 18px;
-  background: #15112aee;
+  border: 2px solid #ffcb3d88;
+  border-radius: var(--radius-m);
+  background: var(--bg-1);
   padding: 14px 18px;
   text-align: center;
-  box-shadow: 0 10px 35px #0008;
+  box-shadow: var(--elev-2);
 }
 .tutorial-tip strong {
   color: var(--gold);
@@ -449,8 +451,9 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
 }
 .bestiary-card {
   border: 1px solid var(--line);
-  border-radius: 22px;
-  background: #ffffff09;
+  border-radius: var(--radius-m);
+  background: var(--bg-1);
+  box-shadow: var(--elev-1);
   padding: 16px;
   overflow: hidden;
 }
@@ -495,8 +498,9 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
 }
 .settings-card {
   border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--panel);
+  border-radius: var(--radius-l);
+  background: var(--bg-1);
+  box-shadow: var(--elev-2);
   padding: 20px;
 }
 .toggle-row {
@@ -553,19 +557,13 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
 .range-control output {
   min-inline-size: 3ch;
   color: var(--gold);
-  font-variant-numeric: tabular-nums;
   font-weight: 800;
   text-align: end;
 }
 .language-buttons,
 .speed-buttons {
   display: flex;
-  gap: 8px;
-}
-.language-buttons button.active,
-.speed-buttons button.active {
-  background: #5f62d4;
-  border-color: #a7e8ff;
+  gap: var(--space-2);
 }
 .cycle {
   font-weight: 800;
@@ -588,10 +586,10 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   text-align: center;
 }
 .result-card.won {
-  border-color: #ffe17b4d;
+  border-color: #ffcb3d66;
   box-shadow:
-    0 0 80px #ffca4220,
-    0 25px 70px #0008;
+    inset 0 0 0 1px #ffcb3d33,
+    var(--elev-2);
 }
 .result-icon {
   font-size: 64px;
@@ -687,7 +685,8 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   background: #ffffff08;
 }
 .recap-stats b {
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
 }
 .recap-stats small {
   color: var(--muted);
@@ -718,7 +717,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   height: 20px;
   border-radius: 2px;
   background: hsl(calc(var(--piece) * 37) 90% 65%);
-  box-shadow: 0 0 9px currentColor;
   /* Base style = final keyframe state; `backwards` covers the stagger delay and
      lets each piece drop its composited layer once its flight ends. */
   opacity: 0;
@@ -733,10 +731,13 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   opacity: 0;
   pointer-events: none;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #0b0e2cf2;
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+  box-shadow: var(--elev-2);
   padding: 11px 16px;
-  transition: 0.2s;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .toast.show {
   opacity: 1;
@@ -895,7 +896,7 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
     padding-right: 12px;
   }
   .topbar .brand-small {
-    font-size: 13px;
+    font-size: var(--text-md);
   }
   .hero {
     padding-top: 8px;
@@ -924,7 +925,7 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
     margin: 18px 0;
   }
   .page-head h1 {
-    font-size: 35px;
+    font-size: var(--text-2xl);
   }
   .creature-grid,
   .bestiary-grid {
@@ -1022,6 +1023,13 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
     height: 115px;
   }
 }
+/* Narrow phones: the sub-page header keeps Retour and its two 48 px icon
+   buttons; the brand would not fit between them without clipping. */
+@media (max-width: 400px) {
+  .topbar > button + .brand-small {
+    display: none;
+  }
+}
 @media (orientation: portrait) and (min-width: 601px) {
   .battlefield {
     inset: 70px 0 260px;
@@ -1069,14 +1077,15 @@ body.reduced-motion * {
 }
 @media (max-width: 600px) {
   .enemy-picker .icon-btn {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--hit);
   }
 }
 .enemy-picker .icon-btn.active {
   opacity: 1;
-  border-color: var(--cyan);
-  background: #65e9ff22;
+  background: var(--bg-3);
+  box-shadow:
+    inset 0 0 0 2px var(--cyan),
+    var(--elev-1);
 }
 .enemy-picker img {
   display: block;
@@ -1087,4 +1096,116 @@ body.reduced-motion * {
 }
 .locked-lore {
   color: #a8a9c0;
+}
+/* Bottom sheet (shell.js openSheet): anchored to the thumb zone over an
+   opaque scrim; it rises with a transform and fades its scrim, nothing else
+   animates. The layer swallows pans so the page behind never scrolls; only
+   the sheet body scrolls. */
+.sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  touch-action: none;
+}
+.sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  animation: sheetScrimIn var(--dur-fast) var(--ease-out);
+}
+.sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: 85vh;
+  max-height: 85dvh;
+  padding: 8px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  background: var(--bg-1);
+  box-shadow:
+    inset 0 1px 0 #ffffff1f,
+    0 -2px 0 var(--ledge);
+  color: var(--ink);
+  outline: none;
+  animation: sheetIn var(--dur-med) var(--ease-out);
+}
+.sheet-grab {
+  flex: none;
+  width: 44px;
+  height: 5px;
+  margin: 0 auto 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.sheet-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--hit);
+}
+.sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.sheet-close {
+  flex: none;
+  margin-left: auto;
+}
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-block: var(--space-2);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+.sheet-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+}
+.sheet-actions > button {
+  flex: 1 1 140px;
+}
+.sheet-layer.is-closing .sheet {
+  animation: sheetOut var(--dur-fast) var(--ease-in) forwards;
+}
+.sheet-layer.is-closing .sheet-scrim {
+  animation: sheetScrimOut var(--dur-fast) var(--ease-in) forwards;
+}
+.sheet-layer.sheet-instant :is(.sheet, .sheet-scrim) {
+  animation: none;
+}
+@keyframes sheetIn {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheetOut {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheetScrimIn {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheetScrimOut {
+  to {
+    opacity: 0;
+  }
 }

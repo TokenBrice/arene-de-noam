@@ -1,9 +1,9 @@
 import { CREATURES } from '../data/creatures.js';
 import { MOVES } from '../data/moves.js';
-import { affinityMultiplier } from '../data/affinities.js';
-import { COMBO_DAMAGE_MULTIPLIER, comboSetupStatus } from '../data/combos.js';
-import { calculateDamage } from './damage.js';
-import { randomFromState } from './rng.js';
+import { ARENA_WEATHER, affinityMultiplier } from '../data/affinities.js';
+import { COMBO_DAMAGE_MULTIPLIER, COMBO_SETUP_STATUS } from '../data/combos.js';
+import { CRITICAL_CHANCE, calculateDamage } from './damage.js';
+import { normalizeSeed, randomFromState } from './rng.js';
 import {
   NEGATIVE_STATUSES,
   applyStatus,
@@ -24,7 +24,8 @@ export const BATTLE_MODIFIERS = Object.freeze([
   'high_voltage',
   'enemy_aegis',
   'dual_aegis',
-  'rapid_arena',
+  'fierce_weather',
+  'type_clash',
   'relay_fever',
   'player_wounded',
   'ascendant',
@@ -32,7 +33,23 @@ export const BATTLE_MODIFIERS = Object.freeze([
   'player_aegis',
   'player_vitality',
   'player_focus',
+  'rookie',
 ]);
+// Apprentice-tier rivals are a visibly lower level: enemy PV and ATQ ×0.85.
+export const ROOKIE_STAT_RATIO = 0.85;
+// `type_clash` turns super-effective ×2 into ×2.5.
+const TYPE_CLASH_BONUS = 1.25;
+
+// Arena weather as `{ [moveAffinity]: multiplier }`, applied to every attack of
+// both teams. `fierce_weather` doubles each effect (+20 % → +40 %).
+function arenaWeather(arena, fierce) {
+  return Object.fromEntries(
+    Object.entries(ARENA_WEATHER[arena]).map(([affinity, multiplier]) => [
+      affinity,
+      fierce ? Math.round((1 + 2 * (multiplier - 1)) * 100) / 100 : multiplier,
+    ])
+  );
+}
 export function signatureCostFor(creature) {
   return creature?.passive === 'sunborn' ? 80 : SIGNATURE_COST;
 }
@@ -70,11 +87,13 @@ export function createBattle({
   assertTeam(playerTeam);
   assertTeam(enemyTeam);
   if (!playerTeam[playerLead] || !enemyTeam[enemyLead]) throw new Error('Invalid lead');
+  if (arena !== null && !Object.hasOwn(ARENA_WEATHER, arena)) throw new Error(`Unknown arena: ${arena}`);
   const activeModifiers = [...new Set(modifiers.filter((id) => BATTLE_MODIFIERS.includes(id)))];
   const state = {
-    version: 7,
+    version: 8,
     mode,
     arena,
+    weather: arena ? arenaWeather(arena, activeModifiers.includes('fierce_weather')) : {},
     modifiers: activeModifiers,
     enemyAce,
     aceTriggered: false,
@@ -82,7 +101,7 @@ export function createBattle({
     phase: 'choice',
     winner: null,
     reason: null,
-    rngState: Number(seed) >>> 0 || 1,
+    rngState: normalizeSeed(seed),
     sides: {
       player: {
         team: playerTeam.map((id) => makeCombatant(id)),
@@ -116,6 +135,12 @@ export function createBattle({
       c.hp = c.maxHp;
       c.attack = Math.round(c.attack * 1.08);
       c.guard = Math.round(c.guard * 1.08);
+    });
+  if (activeModifiers.includes('rookie'))
+    state.sides.enemy.team.forEach((c) => {
+      c.maxHp = Math.round(c.maxHp * ROOKIE_STAT_RATIO);
+      c.hp = c.maxHp;
+      c.attack = Math.round(c.attack * ROOKIE_STAT_RATIO);
     });
   if (activeModifiers.includes('player_vitality'))
     state.sides.player.team.forEach((c) => {
@@ -498,6 +523,7 @@ function scaledPower(move, attacker, defender) {
   if (move.scaling === 'healthy') power *= 1 + move.scaleAmount * (attacker.hp / attacker.maxHp);
   if (move.scaling === 'targetStatuses')
     power *= 1 + move.scaleAmount * Object.keys(defender.statuses).length;
+  if (move.scaling === 'burning') power *= 1 + move.scaleAmount * statusStacks(defender, 'burning');
   if (move.executeThreshold && defender.hp / defender.maxHp <= move.executeThreshold)
     power *= move.executeMultiplier;
   if (
@@ -523,7 +549,16 @@ function applyTargetStatus(state, side, descriptors, attacker, events) {
   return applyStatuses(target, statuses, state, targetSide, events, attacker.id);
 }
 
-function resolveDamageTransaction(state, side, move, events) {
+// Apprentice-tier (rookie) rivals never land a critical hit on the player.
+function rollCritical(state, side) {
+  if (side === 'enemy' && state.modifiers?.includes('rookie')) return false;
+  const roll = randomFromState(state.rngState);
+  state.rngState = roll.state;
+  return roll.value < CRITICAL_CHANCE;
+}
+
+// Previews and forecasts never roll: they show the exact non-critical result.
+function resolveDamageTransaction(state, side, move, events, { canCritical = false } = {}) {
   const targetSide = otherSide(side),
     attacker = activeOf(state, side),
     defender = activeOf(state, targetSide),
@@ -546,35 +581,40 @@ function resolveDamageTransaction(state, side, move, events) {
       lethal: false,
       miss: true,
       appliedStatuses: 0,
+      critical: false,
+      weather: 1,
     };
   }
   const focused = consume(attacker.statuses, 'focused'),
     stunned = hasStatus(attacker, 'stunned'),
-    comboStatus = comboSetupStatus(move),
-    setupRecord = comboStatus ? defender.statuses[comboStatus] || null : null,
+    setupRecord = defender.statuses[COMBO_SETUP_STATUS] || null,
     combo = setupRecord
       ? {
-          status: comboStatus,
           multiplier: COMBO_DAMAGE_MULTIPLIER,
           helperId:
             setupRecord.sourceCreatureId && setupRecord.sourceCreatureId !== attacker.id
               ? setupRecord.sourceCreatureId
               : null,
         }
-      : null;
+      : null,
+    critical = canCritical && rollCritical(state, side);
   if (focused) emitStatus(events, side, attacker, 'focused', false, { consumed: true });
   if (combo) {
-    delete defender.statuses[combo.status];
-    emitStatus(events, targetSide, defender, combo.status, false, {
+    delete defender.statuses[COMBO_SETUP_STATUS];
+    emitStatus(events, targetSide, defender, COMBO_SETUP_STATUS, false, {
       consumed: true,
       source: 'combo',
     });
   }
   const helperId = combo?.helperId || null,
+    weather = state.weather[move.affinity] ?? 1,
     power =
       scaledPower(move, attacker, defender) *
       (combo ? COMBO_DAMAGE_MULTIPLIER : 1) *
-      (state.modifiers?.includes('high_voltage') ? 1.18 : 1);
+      (state.modifiers.includes('high_voltage') ? 1.18 : 1) *
+      (state.modifiers.includes('type_clash') && affinityMultiplier(move.affinity, defender.affinity) === 2
+        ? TYPE_CLASH_BONUS
+        : 1);
   if (helperId) {
     push(events, 'assist', {
       side,
@@ -591,6 +631,8 @@ function resolveDamageTransaction(state, side, move, events) {
     const result = calculateDamage({ ...move, power }, attacker, defender, {
       focused,
       stunned,
+      weather,
+      critical,
     });
     let incoming = result.damage,
       absorbed = 0;
@@ -632,6 +674,8 @@ function resolveDamageTransaction(state, side, move, events) {
       affinity: result.affinity,
       moveAffinity: move.affinity,
       combo: hit === 1 ? combo : null,
+      critical,
+      weather,
     });
     if (
       defender.passive === 'last_bastion' &&
@@ -673,6 +717,8 @@ function resolveDamageTransaction(state, side, move, events) {
     lethal: defender.hp <= 0,
     miss: false,
     appliedStatuses,
+    critical,
+    weather,
   };
 }
 
@@ -720,7 +766,7 @@ export function previewMoveOrder(state, side, moveId, otherMoveId) {
   return speed === otherSpeed ? 'tie' : speed > otherSpeed ? 'first' : 'second';
 }
 
-function executeMove(state, side, action, events) {
+function executeMove(state, side, action, events, forecast) {
   const targetSide = otherSide(side),
     attacker = activeOf(state, side),
     defender = activeOf(state, targetSide),
@@ -747,7 +793,7 @@ function executeMove(state, side, action, events) {
   let totalHpDamage = 0,
     appliedPenalties = 0;
   if (move.kind === 'damage') {
-    const transaction = resolveDamageTransaction(state, side, move, events);
+    const transaction = resolveDamageTransaction(state, side, move, events, { canCritical: !forecast });
     totalHpDamage = transaction.damage;
     appliedPenalties = transaction.appliedStatuses;
     if (!transaction.miss) {
@@ -953,45 +999,6 @@ function capWinner(state) {
   state.rngState = next.state;
   return next.value < 0.5 ? 'player' : 'enemy';
 }
-function arenaPulse(state, events) {
-  const cadence = state.modifiers?.includes('rapid_arena') ? 2 : 4;
-  if (!state.arena || state.turn % cadence !== 0) return;
-  push(events, 'arena-pulse', { arena: state.arena, turn: state.turn });
-  for (const side of ['player', 'enemy']) {
-    const creature = activeOf(state, side);
-    if (creature.hp <= 0) continue;
-    if (state.arena === 'crystal') addBarrier(creature, 5, side, events);
-    if (state.arena === 'grove') healCreature(creature, creature.maxHp * 0.05, side, events, 'arena');
-    if (state.arena === 'tidal') {
-      removeAndEmit(creature, 'negative', 1, side, events);
-      addBarrier(creature, 3, side, events);
-    }
-    if (state.arena === 'volcano') {
-      const amount = Math.max(1, Math.round(creature.maxHp * 0.05));
-      creature.hp = Math.max(1, creature.hp - amount);
-      push(events, 'status-tick', {
-        side,
-        creatureId: creature.id,
-        status: 'burning',
-        amount,
-        hp: creature.hp,
-        maxHp: creature.maxHp,
-        source: 'arena',
-      });
-    }
-    if (state.arena === 'astral') {
-      if (hasStatus(creature, 'focused')) adjustSurge(state, side, 15, events, 'arena');
-      else {
-        applyStatus(creature, 'focused', state.turn);
-        emitStatus(events, side, creature, 'focused', true, { source: 'arena' });
-      }
-    }
-    if (state.arena === 'eclipse' && !hasStatus(creature, 'marked')) {
-      applyStatus(creature, 'marked', state.turn, 3);
-      emitStatus(events, side, creature, 'marked', true, { remaining: 3, source: 'arena' });
-    }
-  }
-}
 function tickEnd(state, events) {
   for (const side of ['player', 'enemy'])
     for (const [index, creature] of state.sides[side].team.entries()) {
@@ -1026,10 +1033,11 @@ function tickEnd(state, events) {
       tickTimed(creature.statuses, state.turn);
       tickTimed(creature.cooldowns, state.turn);
     }
-  arenaPulse(state, events);
 }
 
-export function resolveTurn(inputState, playerAction, enemyAction) {
+// `forecast` resolves the turn for a UI exchange preview: identical rules, but
+// no critical-hit rolls, so it matches the non-critical move previews.
+export function resolveTurn(inputState, playerAction, enemyAction, { forecast = false } = {}) {
   if (inputState.phase !== 'choice') throw new Error('Battle is not accepting actions');
   if (!isLegalAction(inputState, 'player', playerAction) || !isLegalAction(inputState, 'enemy', enemyAction))
     throw new Error('Illegal action');
@@ -1069,7 +1077,7 @@ export function resolveTurn(inputState, playerAction, enemyAction) {
     }
   }
   for (const side of moveSides) {
-    executeMove(state, side, actions[side], events);
+    executeMove(state, side, actions[side], events, forecast);
     if (endBattleIfNeeded(state, events)) break;
   }
   if (state.phase !== 'ended') resolveQueuedRelays(state, events);
