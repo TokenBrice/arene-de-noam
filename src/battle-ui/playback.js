@@ -24,18 +24,39 @@ const {
   immaculateRelayFx,
   trainerCommandFx,
   signatureReadyFx,
+  surgeFlashFx,
   aceFx,
   statusTickFx,
   arenaPulseFx,
   missWhiffFx,
   barrierShatterFx,
+  landMoveFx,
   signatureClashIntro,
   faintFx,
   switchOutFx,
   switchInFx,
+  moveStartBeatMs,
+  isBlockedHit,
+  settleReadouts,
   syncBattleAnimationSpeed,
   clearBattleFx,
 } = route;
+
+// Events that open a new action beat. The FX stage is cleared only right
+// before one of these (or after a turn's last event), never between a move
+// and its own follow-up statuses, passives, barriers, heals or K.O.
+const BEAT_OPENERS = new Set([
+  'move-start',
+  'move-skip',
+  'switch',
+  'replace',
+  'trainer-command',
+  'perfect-relay',
+  'arena-pulse',
+  'ace',
+  'status-tick',
+  'battle-end',
+]);
 
 function sessionIsActive(session) {
   return Boolean(
@@ -119,11 +140,7 @@ function eventPresentationDelay(event) {
   if (ctx.save.reducedMotion) return 190 / ctx.save.battleSpeed;
   if (event.type === 'status' && event.consumed && event.source === 'combo') return 60 / ctx.save.battleSpeed;
   if (event.type === 'move-skip') return 120 / ctx.save.battleSpeed;
-  if (event.type === 'move-start')
-    return (
-      (MOVES[event.moveId]?.signature ? 780 : (MOVES[event.moveId]?.power || 0) >= 46 ? 420 : 300) /
-      ctx.save.battleSpeed
-    );
+  if (event.type === 'move-start') return moveStartBeatMs(MOVES[event.moveId]) / ctx.save.battleSpeed;
   if (event.type === 'trainer-command') return 760 / ctx.save.battleSpeed;
   if (event.type === 'damage')
     return (
@@ -149,6 +166,18 @@ function eventPresentationDelay(event) {
   return 180 / ctx.save.battleSpeed;
 }
 
+// Time (ms at the current speed) until this playback hands control back: the
+// rest of the current beat plus every later beat.
+function turnTimeLeft(events, eventIndex, beatMs) {
+  let left = beatMs;
+  for (let index = eventIndex + 1; index < events.length; index++) {
+    const event = events[index];
+    if (event.type === 'move-skip' && event.reason === 'ko') continue;
+    left += eventPresentationDelay(event);
+  }
+  return left;
+}
+
 async function playEvents(events) {
   const session = ctx.battleSession,
     clearPresentation = () => {
@@ -172,6 +201,9 @@ async function playEvents(events) {
           : 0,
       deferRefresh = event.type === 'status' && !event.applied,
       deferProjection = Boolean(switchLeadIn || deferRefresh);
+    // A creature that fainted earlier this turn simply does not act: its K.O.
+    // beat already told the story, so the skip gets no line and no wait.
+    if (event.type === 'move-skip' && event.reason === 'ko') continue;
     while (document.hidden) {
       await wait(150);
       if (!sessionIsActive(session)) {
@@ -197,7 +229,8 @@ async function playEvents(events) {
       });
       beginMoveFx(event);
       fighter?.classList.add('attacking');
-      sound.call(event.creatureId);
+      // Cries mark entrances, Signatures and faints, never ordinary attacks.
+      if (MOVES[event.moveId]?.signature) sound.call(event.creatureId);
       sound.move(MOVES[event.moveId]);
     }
     if (event.type === 'assist' && event.combo === true) {
@@ -209,16 +242,19 @@ async function playEvents(events) {
       perfectRelayFx(event);
     }
     if (event.type === 'damage') {
-      const affinityNote =
-        event.affinity > 1
-          ? `↑ ${t('battle.effective')} · `
-          : event.affinity < 1
-            ? `↓ ${t('battle.resisted')} · `
-            : '';
-      session.lastLine = `${affinityNote}${event.combo ? `${t('battle.combo')} · ` : ''}${t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
+      const blocked = isBlockedHit(event),
+        affinityNote = blocked
+          ? ''
+          : event.affinity > 1
+            ? `↑ ${t('battle.effective')} · `
+            : event.affinity < 1
+              ? `↓ ${t('battle.resisted')} · `
+              : '';
+      session.lastLine = `${affinityNote}${event.combo ? `${t('battle.combo')} · ` : ''}${blocked ? t('battle.action.blocked', { target: creatureName(event.creatureId) }) : t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
       fighter?.classList.add('hit');
       impactMoveFx(event);
-      effectivenessCalloutFx(event);
+      // A lethal hit shows its K.O. stamp alone; a blocked one its shield stamp.
+      if (!blocked && event.hp > 0) effectivenessCalloutFx(event);
       sound.impact(MOVES[ctx.currentFxMove?.moveId], event);
     }
     if (event.type === 'heal') {
@@ -258,6 +294,7 @@ async function playEvents(events) {
     if (event.type === 'barrier-hit') {
       session.lastLine = t('battle.action.absorb', { amount: event.amount });
       fighter?.classList.add('barrier-hit');
+      landMoveFx();
       ctx.arenaScene?.flash('hit', '#73eaff', event.side);
       if (event.total <= 0) {
         // The dome just broke: glass shatter instead of the usual guard hum.
@@ -271,9 +308,9 @@ async function playEvents(events) {
         amount: event.amount,
       });
       fighter?.classList.add('barrier-hit');
-      tacticalFx({ ...event, type: 'barrier' });
+      tacticalFx(event);
       if (event.total <= 0) barrierShatterFx(event);
-      sound.guard();
+      sound.shatter();
     }
     if (event.type === 'miss') {
       session.lastLine = t('battle.action.miss', { actor: creatureName(event.creatureId) });
@@ -304,11 +341,11 @@ async function playEvents(events) {
       const incoming = activeOf(session.state, event.side);
       session.lastLine = t('battle.relayRushLine', { actor: creatureName(incoming.id) });
       relayRushFx(event);
-      screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
+      surgeFlashFx(event.side);
     }
     if (event.type === 'surge' && event.ready) {
       session.lastLine = t('battle.surgeReady');
-      screen.querySelector(`#hud-${event.side}`)?.classList.add('surge-flash');
+      surgeFlashFx(event.side);
       signatureReadyFx(event);
     }
     if (event.type === 'arena-pulse') {
@@ -374,7 +411,6 @@ async function playEvents(events) {
     if (switchLeadIn) {
       // Let the outgoing recall read before revealing the already-resolved
       // incoming fighter. The overlap begins near the end of the light beam.
-      syncBattleAnimationSpeed();
       await wait(switchLeadIn);
       if (!sessionIsActive(session)) {
         clearPresentation();
@@ -387,8 +423,9 @@ async function playEvents(events) {
       refreshBattle();
     }
     if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
-    syncBattleAnimationSpeed();
-    await wait(Math.max(1, eventPresentationDelay(event) - switchLeadIn));
+    const beatMs = Math.max(1, eventPresentationDelay(event) - switchLeadIn);
+    settleReadouts(turnTimeLeft(events, eventIndex, beatMs) * ctx.save.battleSpeed);
+    await wait(beatMs);
     if (!sessionIsActive(session)) {
       clearPresentation();
       return;
@@ -399,16 +436,9 @@ async function playEvents(events) {
     }
     fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
     const next = events[eventIndex + 1];
-    if (
-      (event.type === 'damage' &&
-        !['damage', 'status', 'barrier-hit', 'passive', 'ko'].includes(next?.type)) ||
-      ['heal', 'barrier', 'miss', 'recoil', 'status-tick', 'arena-pulse', 'ace'].includes(event.type) ||
-      (event.type === 'status' && !['status', 'damage'].includes(next?.type)) ||
-      (event.type === 'passive' && !['barrier', 'heal', 'status'].includes(next?.type)) ||
-      event.type === 'move-skip' ||
-      event.type === 'ko'
-    )
-      clearBattleFx({ preservePresentation: true });
+    if (!next || BEAT_OPENERS.has(next.type))
+      clearBattleFx({ preservePresentation: true, keepReadouts: true });
+    else syncBattleAnimationSpeed();
   }
   clearPresentation();
 }

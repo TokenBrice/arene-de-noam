@@ -102,13 +102,12 @@ test('high-contrast and compact presentation details keep their semantic cues', 
     );
   assert.match(
     accessibility,
-    /body\.high-contrast\s+:is\(\.feat-hall, \.record-hero, \.league-rival, \.draft-card, \.boon-card, \.academy-section, \.academy-core, \.academy-type-triangle\)/
+    /body\.high-contrast\s+:is\(\s*\.feat-hall,\s*\.record-hero,\s*\.league-rival,\s*\.draft-card,\s*\.boon-card,\s*\.academy-section,\s*\.academy-core,\s*\.academy-type-triangle\s*\)/
   );
   assert.match(
     accessibility,
     /body\.high-contrast \.league-rival\.locked[\s\S]*opacity:\s*1[\s\S]*border:\s*2px dashed/
   );
-  assert.match(accessibility, /body\.high-contrast \.screen::before\s*\{[\s\S]*display:\s*none/);
   assert.match(accessibility, /body\.high-contrast \.move-btn:disabled[\s\S]*border:\s*2px dashed/);
   assert.match(accessibility, /body\.high-contrast \.move-btn:disabled::after[\s\S]*content:\s*['"]▦['"]/);
   assert.match(progression, /\.feat-card\.locked\s*\{[\s\S]*opacity:\s*1/);

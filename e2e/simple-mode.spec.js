@@ -19,14 +19,27 @@ test('simple mode shows the matchup essentials and the settings toggle restores 
   await expect(page.locator('[data-move="lucid_arc"] .move-description')).toBeVisible();
   await expect(page.locator('[data-move="lucid_arc"] .move-description')).toContainText('Marque la cible');
   await expect(page.locator('[data-move] .move-archetype')).toHaveCount(0);
-  await expect(page.locator('[data-move] .damage-preview')).toHaveCount(0);
-  await expect(page.locator('[data-move] .move-context-source')).toHaveCount(0);
+  await expect(page.locator('[data-move] .damage-preview:visible')).toHaveCount(0);
+  // Full move details stay in hidden per-move sources; a touch long-press surfaces them.
+  const contextSources = page.locator('[data-move] .move-context-source');
+  await expect(contextSources).toHaveCount(3);
+  for (const source of await contextSources.all()) await expect(source).toBeHidden();
+  const lucidArc = page.locator('[data-move="lucid_arc"]');
+  await lucidArc.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true });
+  await expect(page.locator('#action-line')).toHaveClass(/contextual/);
+  await expect(page.locator('#action-line')).toContainText('Marque la cible');
+  await expect(page.locator('#action-line .damage-preview')).toBeVisible();
+  await lucidArc.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true });
+  // The click that ends a long-press only reveals info; it does not play the move.
+  await lucidArc.click();
+  await expect(page.locator('#turn-chip b')).toHaveText('Tour 1');
   await expect(page.locator('.exchange-preview')).toHaveCount(0);
   await expect(page.locator('[data-move] .move-combo-badge:visible')).toHaveCount(0);
   await expect(page.locator('.intent-read')).not.toContainText('Frappe cristal');
   await expect(page.locator('.arena-resonance, #contract-chip, .flow-chip')).toHaveCount(0);
 
   await page.locator('[data-move="lucid_arc"]').click();
+  await expect(page.locator('#turn-chip b')).toHaveText('Tour 2');
   await expect(page.locator('[data-move="slowing_riddle"]')).toBeEnabled();
   await expect(page.locator('[data-move="slowing_riddle"] .move-combo-badge')).toContainText('COMBO +40%');
   await page.locator('[data-plate-side="enemy"]').click();

@@ -1,5 +1,7 @@
 /* Battle spectacle: one semantic engine event drives a layered, affinity-specific
-   visual. These elements never decide damage and are discarded after each event. */
+   visual. These elements never decide damage and are discarded after each beat.
+   Everything that moves here animates transform/opacity only: flights translate
+   by the --fx-dx/--fx-dy vector that beginMoveFx computes once per move. */
 .fx-stage {
   position: absolute;
   z-index: 3;
@@ -12,6 +14,12 @@
   --from-y: 68%;
   --to-x: 77%;
   --to-y: 30%;
+  --fx-dx: 0px;
+  --fx-dy: 0px;
+  --fx-whiff-dx: 0px;
+  --fx-whiff-dy: 0px;
+  --trail-angle: 0rad;
+  --trail-len: 0px;
 }
 .fx-stage.active {
   opacity: 1;
@@ -55,9 +63,12 @@
   margin: -35px;
   border: 3px solid var(--fx-color);
   border-radius: 50%;
-  box-shadow:
-    0 0 18px var(--fx-color),
-    inset 0 0 16px color-mix(in srgb, var(--fx-color) 60%, transparent);
+  background: radial-gradient(
+    circle,
+    transparent 50%,
+    color-mix(in srgb, var(--fx-color) 42%, transparent) 64%,
+    transparent 71%
+  );
   opacity: 0;
   animation: fxRing 0.58s cubic-bezier(0.1, 0.7, 0.2, 1) var(--delay) forwards;
 }
@@ -77,21 +88,24 @@
   height: 70px;
   margin: -35px;
   color: #fff;
-  filter: drop-shadow(0 0 8px var(--fx-color)) drop-shadow(0 0 24px var(--fx-color));
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--fx-color) 55%, transparent) 0 20%,
+    color-mix(in srgb, var(--fx-color) 20%, transparent) 46%,
+    transparent 70%
+  );
   animation: fxFlight 0.42s cubic-bezier(0.5, 0, 0.7, 1) forwards;
 }
 .signature .fx-projectile {
   width: 104px;
   height: 104px;
   margin: -52px;
-  animation-duration: 0.55s;
 }
 .fx-projectile b {
   position: relative;
   z-index: 2;
   width: 30px;
   height: 30px;
-  filter: drop-shadow(0 0 12px #fff);
 }
 .signature .fx-projectile b {
   width: 46px;
@@ -109,22 +123,13 @@
   position: absolute;
   left: var(--from-x);
   top: var(--from-y);
-  width: 58%;
+  width: var(--trail-len);
   height: 7px;
   transform-origin: left center;
-  transform: rotate(-35deg) scaleX(0);
+  transform: rotate(var(--trail-angle)) translateY(-50%) scaleX(0);
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, var(--fx-color), #fff);
-  box-shadow:
-    0 0 12px var(--fx-color),
-    0 0 30px var(--fx-color);
   animation: fxTrail 0.45s ease forwards;
-}
-.from-enemy .fx-trail {
-  transform-origin: right center;
-  left: auto;
-  right: 23%;
-  transform: rotate(-35deg) scaleX(0);
 }
 .fx-impact {
   position: absolute;
@@ -138,9 +143,21 @@
 .tactical-fx .fx-impact {
   opacity: 1;
 }
+/* At the hit (or on a barrier) the projectile and trail are gone at once:
+   !important beats the forwards fill of their flight animations. */
 .fx-stage.impact .fx-projectile,
-.fx-stage.impact .fx-trail {
-  opacity: 0;
+.fx-stage.impact .fx-trail,
+.fx-stage.landed .fx-projectile,
+.fx-stage.landed .fx-trail {
+  opacity: 0 !important;
+}
+/* The impact burst waits for the hit: its animations start with .impact, not
+   at move-start, so strong moves and Signatures land with a full burst. */
+.move-fx:not(.impact) .fx-impact,
+.move-fx:not(.impact) .fx-impact *,
+.move-fx:not(.impact) .fx-impact::before,
+.move-fx:not(.impact) .fx-impact::after {
+  animation-play-state: paused;
 }
 .fx-impact::before,
 .fx-impact::after {
@@ -150,23 +167,32 @@
   height: 120px;
   margin: -60px;
   border-radius: 50%;
-  background: conic-gradient(
-    from 20deg,
-    transparent 0 8%,
-    var(--fx-color) 9% 12%,
-    transparent 13% 23%,
-    #fff 24% 27%,
-    transparent 28% 42%,
-    var(--fx-color) 43% 47%,
-    transparent 48%
-  );
-  filter: drop-shadow(0 0 14px var(--fx-color));
+  background:
+    conic-gradient(
+      from 20deg,
+      transparent 0 8%,
+      var(--fx-color) 9% 12%,
+      transparent 13% 23%,
+      #fff 24% 27%,
+      transparent 28% 42%,
+      var(--fx-color) 43% 47%,
+      transparent 48%
+    ),
+    radial-gradient(circle, color-mix(in srgb, var(--fx-color) 30%, transparent), transparent 66%);
   animation: fxImpact 0.5s ease-out forwards;
 }
 .fx-impact::after {
   animation-delay: 0.05s;
   transform: rotate(35deg);
   opacity: 0.7;
+}
+/* A Signature's impact rings end at 1.8× their box (fxImpact). The whole
+   impact is clamped so those rings stay inside the part of the stage the
+   camera push keeps on screen (8–92 %) instead of spilling off an edge. */
+.signature .fx-impact {
+  --impact-r: 171px;
+  left: clamp(calc(8% + var(--impact-r)), var(--to-x), calc(92% - var(--impact-r)));
+  top: clamp(calc(8% + var(--impact-r)), var(--to-y), calc(92% - var(--impact-r)));
 }
 .signature .fx-impact::before,
 .signature .fx-impact::after {
@@ -178,18 +204,23 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 9px;
-  height: 9px;
-  margin: -4px;
-  background: #fff;
-  border: 2px solid var(--fx-color);
-  box-shadow: 0 0 10px var(--fx-color);
+  width: 11px;
+  height: 11px;
+  margin: -5px;
+  background: radial-gradient(
+    circle,
+    #fff 0 30%,
+    var(--fx-color) 44%,
+    color-mix(in srgb, var(--fx-color) 35%, transparent) 60%,
+    transparent 72%
+  );
   transform: rotate(45deg);
   animation: fxParticle 0.55s cubic-bezier(0.1, 0.65, 0.2, 1) var(--delay) forwards;
 }
 .signature .fx-particle {
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
+  margin: -8px;
 }
 .fx-core {
   position: absolute;
@@ -212,7 +243,6 @@
     color-mix(in srgb, var(--fx-color) 35%, transparent) 48%,
     transparent 72%
   );
-  filter: drop-shadow(0 0 24px var(--fx-color));
   animation: fxCore 0.48s ease-out forwards;
 }
 .fx-core > .affinity-icon,
@@ -221,133 +251,329 @@
   width: 100%;
   height: 100%;
 }
-.damage-number {
-  width: 120px;
-  margin-left: -60px;
-  background: none !important;
-  text-shadow:
-    0 3px 0 #1a1025,
-    0 0 8px #fff,
-    0 0 24px var(--fx-color);
-  font-size: 34px;
-  letter-spacing: -0.06em;
-}
-.signature .damage-number {
-  font-size: 48px;
-}
-.affinity-callout {
+
+/* --- Impact readouts. Numbers, stamps and callouts live on .fx-readouts,
+   outside the stage camera and never rebuilt. Each node starts its own
+   animation at the hit, stays readable (≥ 0.9 opacity for ≥ 450 ms at ×1) and
+   removes itself when that animation ends. Every box has a fixed width and is
+   clamped 8 px inside the stage, so nothing is clipped at 360 px. Text is
+   white with a hard 0-blur outline: no glow blur. --- */
+.fx-readouts {
+  --ink: #160c26;
+  --ink-ring:
+    0 3px 0 var(--ink), 2px 2px 0 var(--ink), -2px 2px 0 var(--ink), 2px -2px 0 var(--ink),
+    -2px -2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink);
   position: absolute;
-  z-index: 5;
-  left: 50%;
-  top: 46px;
-  min-width: 120px;
-  transform: translateX(-50%);
-  color: #fff4ad;
-  font-size: 13px;
-  font-weight: 1000;
-  letter-spacing: 0.16em;
-  text-align: center;
-  text-shadow:
-    0 2px #271c15,
-    0 0 15px var(--gold-bright);
-  white-space: nowrap;
-  animation: affinityCallout 0.9s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
+  z-index: 4;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
-.affinity-callout.weak,
-.affinity-callout.resisted {
-  color: #b8e6ff;
-  text-shadow:
-    0 2px #10182a,
-    0 0 13px #69bfff;
-}
-.affinity-effective .damage-number {
-  color: #fff7b2;
-  transform: scale(1.12);
-}
-.affinity-weak .damage-number,
-.affinity-resisted .damage-number {
-  color: #c4dcf0;
-  filter: saturate(0.55);
-}
-@keyframes affinityCallout {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, 12px) scale(0.6);
-  }
-  30% {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1.08);
-  }
-  72% {
-    opacity: 1;
-    transform: translate(-50%, -4px) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -18px) scale(0.96);
-  }
-}
-body.reduced-motion .affinity-callout {
-  animation: affinityCalloutReduced 0.46s ease-out forwards;
-}
-@keyframes affinityCalloutReduced {
-  0%,
-  75% {
-    opacity: 1;
-    transform: translateX(-50%);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(-50%);
-  }
-}
-.hit-chain {
+.fx-readout {
+  --ax: 50%;
+  --ay: 50%;
+  --half: 60px;
+  --h: 44px;
+  --ox: 0px;
+  --oy: 0px;
+  --box: min(var(--half), 50% - 8px);
   position: absolute;
-  z-index: 6;
-  left: 52px;
-  top: -63px;
+  left: clamp(calc(8px + var(--box)), calc(var(--ax) + var(--ox)), calc(100% - 8px - var(--box)));
+  top: clamp(20px, calc(var(--ay) + var(--oy)), calc(100% - 10px - var(--h)));
   display: flex;
-  align-items: baseline;
-  transform: rotate(7deg);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(2 * var(--box));
+  height: var(--h);
+  margin-left: calc(-1 * var(--box));
   color: #fff;
+  font-weight: 1000;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: var(--ink-ring);
+}
+/* Each side reserves one slot per readout kind, so two readouts never share a
+   box: the stamp band (K.O., "Bloqué !", effectiveness and dodge callouts)
+   sits above the head, numbers sit on the body and cascade down (--stack
+   0–2), and the multi-hit counter sits level with the first number on the
+   stage-centre side (--toward), clear of the number column. fx.js retires the
+   previous hit's stamp band when a newer hit lands. */
+.fx-readout.side-player {
+  --ax: 23%;
+  --ay: 68%;
+  --toward: 1;
+  --stamp-y: -122px;
+  --number-y: -54px;
+}
+.fx-readout.side-enemy {
+  --ax: 77%;
+  --ay: 30%;
+  --toward: -1;
+  --stamp-y: -86px;
+  --number-y: -20px;
+}
+.fx-number {
+  --half: 64px;
+  --h: 46px;
+  --oy: calc(var(--number-y) + var(--stack, 0) * 32px);
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  animation: readoutPop 0.82s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.fx-number.strong {
+  font-size: 40px;
+}
+.fx-number small {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12px;
+  color: #ffe47a;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+/* Heals and barriers read clearly but never out-shout a hit. */
+.fx-number.heal,
+.fx-number.barrier {
+  --oy: calc(var(--number-y) + 6px + var(--stack, 0) * 28px);
+  font-size: 26px;
+}
+.fx-number.heal {
+  color: #b9ffcf;
+}
+.fx-number.barrier {
+  color: #c4f4ff;
+}
+.fx-number.barrier.loss {
+  color: #9ccde0;
+}
+.fx-number.barrier::after {
+  content: '';
+  width: 0.6em;
+  height: 0.68em;
+  padding: 2px;
+  background:
+    linear-gradient(currentColor 0 0) content-box,
+    var(--ink);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+/* Stamps: K.O. and a fully absorbed hit, in the stamp band. */
+.fx-stamp.ko {
+  --half: 100px;
+  --h: 72px;
+  --oy: var(--stamp-y);
+  color: #fff3a1;
+  font-size: clamp(42px, 12vw, 72px);
+  font-style: italic;
+  letter-spacing: -0.02em;
+  text-shadow:
+    var(--ink-ring),
+    5px 5px 0 #d92d67,
+    -4px -4px 0 #5439c6;
+  animation: stampKo 1.05s cubic-bezier(0.15, 0.8, 0.2, 1) both;
+}
+.fx-stamp.blocked {
+  --half: 100px;
+  --h: 42px;
+  --oy: var(--stamp-y);
+  animation: readoutPop 0.82s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.fx-stamp.blocked span,
+.fx-callout span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  background: #150d27;
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  text-shadow: none;
+}
+.fx-stamp.blocked span {
+  padding-left: 10px;
+  color: #bdf2ff;
+  background: #0b1a2e;
+  font-size: 22px;
+}
+.fx-stamp.blocked span::before {
+  content: '';
+  width: 18px;
+  height: 21px;
+  background: linear-gradient(160deg, #fff, #8fe9ff 55%, #3d7fa8);
+  clip-path: polygon(50% 0, 100% 16%, 94% 62%, 50% 100%, 6% 62%, 0 16%);
+}
+/* Callouts: effectiveness and dodge, ~20 px on a solid dark pill, in the
+   stamp band (a lethal or fully blocked hit shows its stamp instead). */
+.fx-callout {
+  --half: 128px;
+  --h: 38px;
+  --oy: calc(var(--stamp-y) + 2px);
+  animation: calloutPop 0.9s cubic-bezier(0.15, 0.8, 0.2, 1) both;
+}
+.affinity-callout.effective {
+  color: #ffe066;
+}
+.affinity-callout.weak {
+  color: #a9dcff;
+}
+.whiff-callout.fx-callout {
+  color: #b8ecff;
+}
+/* Multi-hit counter: level with the first number, one number-width toward
+   the stage centre. */
+.hit-chain {
+  --half: 40px;
+  --h: 38px;
+  --ox: calc(108px * var(--toward));
+  --oy: calc(var(--number-y) + 4px);
+  align-items: baseline;
+  gap: 1px;
   font-style: italic;
   text-shadow:
-    3px 3px #432464,
-    0 0 14px var(--fx-color);
-  animation: hitChainPop 0.4s cubic-bezier(0.12, 0.85, 0.2, 1) forwards;
+    var(--ink-ring),
+    4px 4px 0 #432464;
+  animation: hitChainPop 0.7s cubic-bezier(0.12, 0.85, 0.2, 1) both;
 }
 .hit-chain b {
-  font-size: 34px;
-  line-height: 1;
+  font-size: 30px;
 }
 .hit-chain small {
   font-size: 13px;
-  font-weight: 1000;
 }
 .hit-chain.final {
   color: #fff49a;
-  filter: drop-shadow(0 0 10px #ffe464);
-  transform: rotate(-5deg) scale(1.2);
+}
+@media (max-width: 600px) {
+  .fx-number {
+    font-size: 30px;
+  }
+  .fx-number.strong {
+    font-size: 34px;
+  }
+  .fx-number.heal,
+  .fx-number.barrier {
+    font-size: 22px;
+  }
+  .fx-callout span {
+    padding: 5px 12px;
+    font-size: 19px;
+  }
+  .fx-stamp.blocked span {
+    font-size: 20px;
+  }
 }
 .multi-hit-impact .fx-impact::after {
   animation-duration: 0.28s;
 }
-.multi-hit-impact .damage-number {
-  animation-duration: 0.35s;
+@keyframes readoutPop {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.5);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0) scale(1.2);
+  }
+  20% {
+    transform: translateY(0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+}
+@keyframes stampKo {
+  0% {
+    opacity: 0;
+    transform: scale(0.25) rotate(-14deg);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1.22) rotate(4deg);
+  }
+  26% {
+    transform: scale(1) rotate(-3deg);
+  }
+  84% {
+    opacity: 1;
+    transform: scale(1) rotate(-3deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06) rotate(-3deg);
+  }
+}
+@keyframes calloutPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.7);
+  }
+  16% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+  28% {
+    transform: translateY(0) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1);
+  }
 }
 @keyframes hitChainPop {
   0% {
     opacity: 0;
     transform: translateY(13px) rotate(13deg) scale(0.45);
   }
-  55% {
+  20% {
     opacity: 1;
     transform: translateY(0) rotate(4deg) scale(1.16);
   }
+  32% {
+    transform: translateY(0) rotate(7deg) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(0) rotate(7deg) scale(1);
+  }
   100% {
     opacity: 0;
-    transform: translateY(-15px) rotate(-4deg) scale(1);
+    transform: translateY(-12px) rotate(7deg) scale(1);
   }
+}
+/* Reduced motion: readouts fade in place, same lifetime. */
+@keyframes readoutFade {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-readout {
+    animation: readoutFade 0.82s linear both !important;
+  }
+}
+body.reduced-motion .fx-readout {
+  animation: readoutFade 0.82s linear both !important;
 }
 
 /* Each affinity has its own visual grammar. */
@@ -406,7 +632,6 @@ body.reduced-motion .affinity-callout {
     color-mix(in srgb, var(--fx-color) 50%, transparent),
     #d9ffff
   );
-  filter: blur(2px);
 }
 .fx-tide .fx-particle {
   border-radius: 50%;
@@ -454,7 +679,6 @@ body.reduced-motion .affinity-callout {
   border-radius: 100% 0;
   background: var(--fx-color);
   transform: rotate(30deg);
-  filter: drop-shadow(0 0 8px var(--fx-color));
 }
 .fx-grove .fx-projectile::after {
   transform: rotate(120deg);
@@ -473,7 +697,6 @@ body.reduced-motion .affinity-callout {
     var(--fx-color) 29% 38%,
     transparent 40% 55%
   );
-  filter: drop-shadow(0 0 15px var(--fx-color));
   transform: skewX(-20deg);
 }
 .fx-shadow .fx-projectile span {
@@ -483,12 +706,10 @@ body.reduced-motion .affinity-callout {
   height: 3px;
   box-shadow:
     0 -16px 0 var(--fx-color),
-    0 16px 0 #fff,
-    0 0 28px var(--fx-color);
+    0 16px 0 #fff;
 }
 .fx-shadow .fx-particle {
   border-radius: 50% 0;
-  filter: blur(1px);
   background: var(--fx-color);
 }
 .fx-neutral .fx-projectile {
@@ -531,7 +752,6 @@ body.reduced-motion .affinity-callout {
   width: 48px;
   height: 48px;
   color: #07091d;
-  filter: drop-shadow(0 0 6px #fff8);
 }
 .tactical-fx .fx-core.light-ink .status-icon {
   color: #fff;
@@ -570,7 +790,7 @@ body.reduced-motion .affinity-callout {
   color: #07091d;
   background: color-mix(in srgb, var(--fx-color) 80%, transparent);
   opacity: 0.6;
-  filter: drop-shadow(0 0 18px var(--fx-color));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fx-color) 35%, transparent);
 }
 .status-tick-icon.light-ink {
   color: #fff;
@@ -579,8 +799,10 @@ body.reduced-motion .affinity-callout {
   width: 42px;
   height: 42px;
 }
-.status-tick-fx .damage-number {
-  z-index: 3;
+.status-tick-fx .fx-impact {
+  left: var(--from-x);
+  top: var(--from-y);
+  opacity: 1;
 }
 .tactical-guarded .fx-impact::before {
   border: 5px solid var(--fx-color);
@@ -598,48 +820,28 @@ body.reduced-motion .affinity-callout {
   color: #efffdc;
   font-size: 42px;
 }
-.tactical-number {
-  width: 150px;
-  margin-left: -75px;
-  border-radius: 0;
-  background: none !important;
-  color: #c9ffdc !important;
-  font-size: 34px !important;
-  font-style: normal;
-  text-shadow:
-    0 3px #133224,
-    0 0 10px #fff,
-    0 0 25px var(--fx-color);
-  letter-spacing: -0.03em;
-}
-.tactical-guarded .tactical-number {
-  color: #c9f4ff !important;
-  text-shadow:
-    0 3px #102c36,
-    0 0 10px #fff,
-    0 0 25px #71e6ff;
-}
-.tactical-numeric .fx-impact {
-  filter: drop-shadow(0 0 16px var(--fx-color));
-}
 
+/* Cinematic dim: no filter on the WebGL canvas. The vignette overlay gains a
+   flat dark layer instead (same dim as the old brightness(0.78)/(0.58)). */
 .battle-screen.cinematic .arena-canvas {
-  filter: saturate(1.35) contrast(1.08) brightness(0.78);
   transform: scale(1.018);
 }
 .battle-screen.cinematic-signature .arena-canvas {
-  filter: saturate(1.65) contrast(1.18) brightness(0.58);
   transform: scale(1.045);
 }
 .battle-screen.cinematic .battle-vignette {
   background:
     linear-gradient(#0009, transparent 28%, transparent 65%, #000),
-    radial-gradient(circle at center, transparent 35%, #000c);
+    radial-gradient(circle at center, transparent 35%, #000c), linear-gradient(#02041038, #02041038);
+}
+.battle-screen.cinematic-signature .battle-vignette {
+  background:
+    linear-gradient(#0009, transparent 28%, transparent 65%, #000),
+    radial-gradient(circle at center, transparent 35%, #000c), linear-gradient(#0204106b, #0204106b);
 }
 .fighter.windup img {
   animation: fxCreatureWindup 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-  filter: brightness(1.3) drop-shadow(0 0 18px var(--attack-affinity-color, #fff))
-    drop-shadow(0 24px 14px #0009);
+  filter: brightness(1.25);
 }
 .fighter.hit img {
   animation: fxCreatureHit 0.45s cubic-bezier(0.1, 0.8, 0.2, 1) !important;
@@ -652,12 +854,11 @@ body.reduced-motion .affinity-callout {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.hit-stop .fighter,
-.hit-stop .fx-stage {
-  animation-play-state: paused !important;
-}
-.hit-stop .fighter img,
-.hit-stop .fx-stage * {
+/* Hit-stop freezes only the FX stage and the two fighters. */
+.fx-stage.hit-stop,
+.fx-stage.hit-stop *,
+.fighter.hit-stop,
+.fighter.hit-stop img {
   animation-play-state: paused !important;
 }
 
@@ -682,10 +883,11 @@ body.reduced-motion .affinity-callout {
     transform: scale(2.4) rotate(100deg);
   }
 }
+/* Flights move with the individual `translate` property (compositor-only) so
+   their path keeps its own 0% → 100% easing while `transform` spins/scales. */
 @keyframes fxFlight {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     transform: scale(0.2) rotate(-20deg);
     opacity: 0;
   }
@@ -694,8 +896,7 @@ body.reduced-motion .affinity-callout {
     opacity: 1;
   }
   100% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     transform: scale(0.82) rotate(18deg);
     opacity: 1;
   }
@@ -703,14 +904,14 @@ body.reduced-motion .affinity-callout {
 @keyframes fxTrail {
   0% {
     opacity: 0;
-    transform: rotate(-35deg) scaleX(0);
+    transform: rotate(var(--trail-angle)) translateY(-50%) scaleX(0);
   }
   35% {
     opacity: 1;
   }
   100% {
     opacity: 0.75;
-    transform: rotate(-35deg) scaleX(1);
+    transform: rotate(var(--trail-angle)) translateY(-50%) scaleX(1);
   }
 }
 @keyframes fxImpact {
@@ -808,27 +1009,17 @@ body.reduced-motion .affinity-callout {
 }
 
 @media (max-width: 600px) {
-  .fx-stage {
-    --from-x: 27%;
-    --to-x: 73%;
+  .signature .fx-impact {
+    --impact-r: 99px;
   }
   .signature .fx-impact::before,
   .signature .fx-impact::after {
-    width: 145px;
-    height: 145px;
-    margin: -72px;
-  }
-  .damage-number {
-    font-size: 29px;
-  }
-  .signature .damage-number {
-    font-size: 39px;
+    width: 110px;
+    height: 110px;
+    margin: -55px;
   }
   .action-line.epic {
     font-size: 13px;
-  }
-  .fx-projectile {
-    transform: scale(0.8);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -909,7 +1100,6 @@ body.reduced-motion .fighter.hit img {
 @keyframes statusFxBurningPulse {
   45% {
     transform: translateY(-7px) scale(1.12);
-    filter: drop-shadow(0 0 32px var(--fx-color)) brightness(1.35);
   }
 }
 @keyframes fxReduced {
@@ -948,8 +1138,7 @@ body.reduced-motion .fighter.hit img {
 }
 @keyframes fxBeamFlight {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     transform: scale(0.4, 0.3) rotate(-20deg);
     opacity: 0;
   }
@@ -957,8 +1146,7 @@ body.reduced-motion .fighter.hit img {
     opacity: 1;
   }
   100% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     transform: scale(2.1, 0.5) rotate(0deg);
     opacity: 1;
   }
@@ -966,18 +1154,18 @@ body.reduced-motion .fighter.hit img {
 @keyframes fxBeamTrail {
   0% {
     opacity: 0;
-    transform: rotate(-35deg) scaleX(0);
+    transform: rotate(var(--trail-angle)) translateY(-50%) scaleX(0);
   }
   25% {
     opacity: 1;
-    transform: rotate(-35deg) scaleX(1);
+    transform: rotate(var(--trail-angle)) translateY(-50%) scaleX(1);
   }
   70% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: rotate(-35deg) scaleX(1);
+    transform: rotate(var(--trail-angle)) translateY(-50%) scaleX(1);
   }
 }
 /* lob: a parabolic arc, faint trail, debris scattering downward. */
@@ -987,15 +1175,13 @@ body.reduced-motion .fighter.hit img {
 .visual-lob .fx-trail {
   height: 4px;
   opacity: 0.35;
-  filter: blur(1px);
 }
 .visual-lob .fx-particle {
   animation-name: fxLobScatter;
 }
 @keyframes fxLobFlight {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     transform: translateY(0) scale(0.45) rotate(-30deg);
     opacity: 0;
   }
@@ -1006,8 +1192,7 @@ body.reduced-motion .fighter.hit img {
     transform: translateY(-110px) scale(0.9) rotate(8deg);
   }
   100% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     transform: translateY(0) scale(0.95) rotate(30deg);
     opacity: 1;
   }
@@ -1035,7 +1220,6 @@ body.reduced-motion .fighter.hit img {
   margin: -4px -75px;
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, #fff 35%, var(--fx-color) 70%, transparent);
-  filter: drop-shadow(0 0 10px var(--fx-color));
 }
 .fx-stage.impact .fx-slashes i {
   animation: slashSwipe 0.3s cubic-bezier(0.2, 0.7, 0.3, 1) calc(var(--i) * 75ms) forwards;
@@ -1067,7 +1251,6 @@ body.reduced-motion .fighter.hit img {
   transform-origin: bottom;
   border-radius: 50% 50% 0 0;
   background: linear-gradient(to top, #fff, var(--fx-color) 45%, transparent 92%);
-  filter: blur(1px) drop-shadow(0 0 12px var(--fx-color));
 }
 .fx-stage.impact .fx-pillars i {
   animation: eruptPillar 0.5s cubic-bezier(0.15, 0.8, 0.25, 1) calc(var(--i) * 55ms) forwards;
@@ -1102,8 +1285,7 @@ body.reduced-motion .fighter.hit img {
 }
 @keyframes fxVortexFlight {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     transform: scale(0.3) rotate(0deg);
     opacity: 0;
   }
@@ -1114,8 +1296,7 @@ body.reduced-motion .fighter.hit img {
     transform: scale(0.65) rotate(420deg);
   }
   100% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     transform: scale(1.05) rotate(760deg);
     opacity: 1;
   }
@@ -1149,8 +1330,6 @@ body.reduced-motion .fighter.hit img {
 }
 .visual-charge .fx-trail {
   height: 4px;
-  filter: blur(1px);
-  animation-duration: 0.3s;
 }
 .fx-dash-ghost {
   position: absolute;
@@ -1160,7 +1339,7 @@ body.reduced-motion .fighter.hit img {
   margin-left: calc(min(15vw, 150px) / -2);
   transform: translateY(-50%);
   opacity: 0;
-  filter: brightness(2.6) saturate(0.35) drop-shadow(0 0 18px var(--fx-color));
+  filter: brightness(2.6) saturate(0.35);
   pointer-events: none;
   animation: dashAcross 0.38s cubic-bezier(0.55, 0.06, 0.35, 1) 0.08s forwards;
 }
@@ -1169,8 +1348,7 @@ body.reduced-motion .fighter.hit img {
 }
 @keyframes dashAcross {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     opacity: 0;
   }
   18% {
@@ -1180,8 +1358,7 @@ body.reduced-motion .fighter.hit img {
     opacity: 0.92;
   }
   100% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     opacity: 0;
   }
 }
@@ -1199,7 +1376,6 @@ body.reduced-motion .fighter.hit img {
   margin-top: -34px;
   border-radius: 999px;
   background: linear-gradient(to bottom, transparent, #fff 55%, var(--fx-color));
-  filter: drop-shadow(0 0 7px var(--fx-color));
 }
 .self-fx .fx-drops i {
   left: var(--from-x);
@@ -1226,9 +1402,6 @@ body.reduced-motion .fighter.hit img {
   }
 }
 /* pulse: a small orb, then huge slow shockwaves and the radial aftershock. */
-.visual-pulse .fx-projectile {
-  animation-duration: 0.55s;
-}
 .visual-pulse .fx-impact::before,
 .visual-pulse .fx-impact::after {
   animation: fxPulseWave 0.8s cubic-bezier(0.1, 0.6, 0.2, 1) forwards;
@@ -1337,7 +1510,6 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
   margin: -9px;
   border: 2px solid var(--fx-color);
   opacity: 0;
-  filter: drop-shadow(0 0 8px var(--fx-color));
 }
 /* Orakyn: clean divination geometry, crescents, and measured timing. */
 .move-lucid_arc .fx-projectile {
@@ -1480,7 +1652,6 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
     var(--fx-color) 51% 65%,
     transparent 68%
   );
-  filter: drop-shadow(0 -10px 16px var(--fx-color));
   animation: tidalWall 0.62s ease forwards;
 }
 .move-abyssal_surge .fx-projectile {
@@ -1717,14 +1888,12 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
 }
 @keyframes whirlpoolFlight {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     opacity: 0;
     transform: rotate(0) scale(0.2);
   }
   100% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     opacity: 1;
     transform: rotate(620deg) scale(1.15);
   }
@@ -1757,8 +1926,7 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
 }
 @keyframes cinderSalvo {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     opacity: 0;
     transform: scale(0.3);
   }
@@ -1766,8 +1934,7 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
     opacity: 1;
   }
   100% {
-    left: var(--to-x);
-    top: calc(var(--to-y) + (var(--detail) - 3) * 9px);
+    translate: var(--fx-dx) calc(var(--fx-dy) + (var(--detail, 3) - 3) * 9px);
     opacity: 0;
     transform: scale(1.2);
   }
@@ -1801,19 +1968,17 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
 }
 @keyframes petalFan {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     opacity: 0;
-    transform: rotate(calc((var(--detail) - 3) * 8deg)) scale(0.2);
+    transform: rotate(calc((var(--detail, 3) - 3) * 8deg)) scale(0.2);
   }
   30% {
     opacity: 1;
   }
   100% {
-    left: var(--to-x);
-    top: calc(var(--to-y) + (var(--detail) - 3) * 18px);
+    translate: var(--fx-dx) calc(var(--fx-dy) + (var(--detail, 3) - 3) * 18px);
     opacity: 0;
-    transform: rotate(calc((var(--detail) - 3) * 22deg)) scale(1.25);
+    transform: rotate(calc((var(--detail, 3) - 3) * 22deg)) scale(1.25);
   }
 }
 @keyframes seedBloom {
@@ -1869,7 +2034,6 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
 }
 .move-eclipse_of_grace .fx-sky-symbol {
   transform: scale(1.8) rotate(180deg);
-  filter: drop-shadow(0 0 35px #d23cff);
 }
 .move-eclipse_of_grace .fx-detail > i {
   clip-path: polygon(50% 0, 66% 38%, 100% 100%, 50% 75%, 0 100%, 34% 38%);
@@ -1922,7 +2086,6 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
 }
 .move-last_spark_duel .fx-sky-symbol {
   transform: scale(1.45);
-  filter: drop-shadow(0 0 28px #ffcb7a);
 }
 .move-last_spark_duel .fx-detail > i {
   clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%);
@@ -2027,7 +2190,12 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
   translate: -50% -50%;
   border: 7px double #fff6bd;
   border-radius: 60% 60% 14% 14%;
-  box-shadow: 0 0 50px var(--fx-color), inset 0 0 34px #fff8;
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    #fff5 0 18%,
+    color-mix(in srgb, var(--fx-color) 32%, transparent) 55%,
+    transparent 72%
+  );
   animation: veilRise 0.8s ease both;
 }
 .immaculate-feathers i {
@@ -2090,7 +2258,6 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   margin: -7px;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #fff, var(--fx-color) 55%, transparent 75%);
-  filter: drop-shadow(0 0 9px var(--fx-color));
   opacity: 0;
   animation: wispRise 1.05s ease-out calc(var(--wisp) * 95ms) forwards;
 }
@@ -2111,6 +2278,7 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   object-fit: contain;
   image-rendering: pixelated;
   pointer-events: none;
+  filter: brightness(1.8);
   animation: switchOut 0.42s ease-in forwards;
 }
 .battle-screen .fighter.switch-awaiting > img:not(.switch-ghost) {
@@ -2120,12 +2288,10 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   35% {
     opacity: 0.9;
     transform: translateY(4%) scaleY(0.92);
-    filter: brightness(1.8) drop-shadow(0 24px 14px #0009);
   }
   100% {
     opacity: 0;
     transform: translateY(30%) scaleY(0.55);
-    filter: brightness(2.4) blur(2px);
   }
 }
 .switch-beam {
@@ -2136,13 +2302,12 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   height: 88%;
   transform: translateX(-50%) scaleY(0);
   transform-origin: bottom;
-  background: linear-gradient(
-    to top,
+  background: radial-gradient(
+    ellipse 50% 100% at 50% 100%,
     color-mix(in srgb, var(--fx-color, #9fd8ff) 70%, transparent),
-    transparent 80%
+    transparent
   );
   border-radius: 50% 50% 0 0;
-  filter: blur(6px);
   pointer-events: none;
   animation: switchBeam 0.5s ease-out forwards;
 }
@@ -2182,7 +2347,6 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   animation:
     victoryPose 0.82s cubic-bezier(0.3, 0.9, 0.35, 1),
     idle 2.4s ease-in-out 0.82s infinite;
-  filter: drop-shadow(0 24px 14px #0009) drop-shadow(0 0 26px #ffe9a866);
 }
 @keyframes victoryPose {
   0% {
@@ -2205,7 +2369,6 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   animation:
     victoryPoseMuted 1.05s ease,
     idle 2.4s ease-in-out 1.05s infinite;
-  filter: drop-shadow(0 24px 14px #0009) drop-shadow(0 0 16px #b9c4ff44);
 }
 @keyframes victoryPoseMuted {
   0% {
@@ -2218,19 +2381,19 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
     transform: none;
   }
 }
-.battle-screen.battle-outro.outro-loss .battlefield {
-  filter: saturate(0.55) brightness(0.85);
-  transition: filter 0.8s ease;
+/* A lost battle dims the arena behind the winner: one static overlay layer. */
+.battle-screen.battle-outro.outro-loss .battle-vignette {
+  background:
+    radial-gradient(circle at center, transparent 35%, #000c), linear-gradient(#0206143d, #0206143d);
 }
+/* Hand-off to results: an opacity-only fade (no blur on full-screen layers). */
 .battle-screen.battle-exit .arena-canvas,
 .battle-screen.battle-exit .battle-vignette,
 .battle-screen.battle-exit .battlefield,
-.battle-screen.battle-exit .fx-stage {
+.battle-screen.battle-exit .fx-stage,
+.battle-screen.battle-exit .fx-readouts {
   opacity: 0;
-  filter: blur(16px);
-  transition:
-    opacity 0.42s ease,
-    filter 0.42s ease;
+  transition: opacity 0.42s ease;
 }
 .battle-screen.battle-exit .battle-layout {
   opacity: 0.25;
@@ -2257,8 +2420,8 @@ body.high-contrast .move-eclipse_of_grace .fx-detail > i {
   .battle-screen.battle-exit .arena-canvas,
   .battle-screen.battle-exit .battle-vignette,
   .battle-screen.battle-exit .battlefield,
-  .battle-screen.battle-exit .fx-stage {
-    filter: none;
+  .battle-screen.battle-exit .fx-stage,
+  .battle-screen.battle-exit .fx-readouts {
     transition: opacity 0.15s ease;
   }
 }
@@ -2272,7 +2435,7 @@ body.reduced-motion .battle-screen .fighter.ko img {
 @keyframes koReduced {
   to {
     opacity: 0.62;
-    filter: grayscale(1) brightness(0.72) drop-shadow(0 8px 7px #0009);
+    filter: grayscale(1) brightness(0.72);
   }
 }
 body.reduced-motion .switch-ghost {
@@ -2293,23 +2456,28 @@ body.reduced-motion .battle-screen.outro-loss .fighter.victory-pose img {
 body.reduced-motion .battle-screen.battle-exit .arena-canvas,
 body.reduced-motion .battle-screen.battle-exit .battle-vignette,
 body.reduced-motion .battle-screen.battle-exit .battlefield,
-body.reduced-motion .battle-screen.battle-exit .fx-stage {
-  filter: none;
+body.reduced-motion .battle-screen.battle-exit .fx-stage,
+body.reduced-motion .battle-screen.battle-exit .fx-readouts {
   transition: opacity 0.15s ease;
 }
 
 /* --- Stakes and reactions (plan §4.2–4.3): cornered-attacker escalation,
    miss whiff, and barrier shatter. --- */
-.battle-screen.stakes-high .battle-vignette {
-  animation: stakesVignette 0.85s ease-out;
+/* A cornered attacker's move opens with a hot edge pulse: a static radial glow
+   inside the stage whose opacity animates (no animated box-shadow). */
+.fx-stakes {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 48%, #ff4d3d33 72%, #ff4d3d80 100%);
+  opacity: 0;
+  animation: stakesPulse 0.85s ease-out forwards;
 }
-@keyframes stakesVignette {
-  0%,
-  100% {
-    box-shadow: inset 0 0 0 0 #ff4d3d00;
-  }
+@keyframes stakesPulse {
   30% {
-    box-shadow: inset 0 0 110px 30px #ff4d3d66;
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 /* Miss: the projectile overshoots the dodger and dissolves; the trail dies. */
@@ -2319,41 +2487,15 @@ body.reduced-motion .battle-screen.battle-exit .fx-stage {
 .whiff .fx-trail {
   animation: whiffTrail 0.3s ease forwards !important;
 }
-.whiff-callout {
-  position: absolute;
-  z-index: 6;
-  transform: translate(-50%, -150%);
-  color: #b8ecff;
-  font-size: 17px;
-  font-weight: 1000;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  text-shadow:
-    0 2px #0e1c2e,
-    0 0 16px #69d6ff;
-  animation: whiffPop 0.85s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
-}
-.whiff-callout.side-player {
-  left: 23%;
-  top: 58%;
-}
-.whiff-callout.side-enemy {
-  left: 77%;
-  top: 22%;
-}
 @keyframes whiffPast {
   0% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     opacity: 1;
   }
   100% {
-    left: calc(var(--to-x) + 14%);
-    top: calc(var(--to-y) - 10%);
+    translate: var(--fx-whiff-dx) var(--fx-whiff-dy);
     transform: scale(0.6) rotate(55deg);
     opacity: 0;
-    filter: blur(3px) drop-shadow(0 0 8px var(--fx-color));
   }
 }
 .from-enemy.whiff .fx-projectile {
@@ -2361,39 +2503,18 @@ body.reduced-motion .battle-screen.battle-exit .fx-stage {
 }
 @keyframes whiffPastEnemy {
   0% {
-    left: var(--to-x);
-    top: var(--to-y);
+    translate: var(--fx-dx) var(--fx-dy);
     opacity: 1;
   }
   100% {
-    left: calc(var(--to-x) - 14%);
-    top: calc(var(--to-y) + 10%);
+    translate: var(--fx-whiff-dx) var(--fx-whiff-dy);
     transform: scale(0.6) rotate(-55deg);
     opacity: 0;
-    filter: blur(3px) drop-shadow(0 0 8px var(--fx-color));
   }
 }
 @keyframes whiffTrail {
   to {
     opacity: 0;
-  }
-}
-@keyframes whiffPop {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -110%) scale(0.55);
-  }
-  25% {
-    opacity: 1;
-    transform: translate(-50%, -165%) scale(1.1);
-  }
-  70% {
-    opacity: 1;
-    transform: translate(-50%, -185%) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -215%) scale(0.95);
   }
 }
 /* Barrier break: hex shards and a cracking ring burst from the defender. */
@@ -2421,7 +2542,6 @@ body.reduced-motion .battle-screen.battle-exit .fx-stage {
   margin: -15px -13px;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   background: linear-gradient(155deg, #fff, #a5ecff 45%, #3d7fa8);
-  filter: drop-shadow(0 0 9px #8fe9ff);
   opacity: 0;
   animation: shatterFly 0.62s cubic-bezier(0.2, 0.7, 0.3, 1) calc(var(--i) * 22ms) forwards;
 }
@@ -2434,7 +2554,7 @@ body.reduced-motion .battle-screen.battle-exit .fx-stage {
   margin: -60px;
   border: 4px dashed #bdefff;
   border-radius: 50%;
-  box-shadow: 0 0 22px #8fe9ff;
+  background: radial-gradient(circle, transparent 52%, #8fe9ff66 64%, transparent 72%);
   opacity: 0;
   animation: shatterRing 0.5s ease-out forwards;
 }
@@ -2459,15 +2579,12 @@ body.reduced-motion .battle-screen.battle-exit .fx-stage {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .battle-screen.stakes-high .battle-vignette {
+  .fx-stakes {
     animation: none;
   }
   .whiff .fx-projectile,
   .whiff .fx-trail {
     animation: whiffTrail 0.2s ease forwards !important;
-  }
-  .whiff-callout {
-    animation: fxReduced 0.4s ease forwards;
   }
   .shatter-hex {
     display: none;
@@ -2476,15 +2593,12 @@ body.reduced-motion .battle-screen.battle-exit .fx-stage {
     animation: fxReduced 0.25s ease forwards;
   }
 }
-body.reduced-motion .battle-screen.stakes-high .battle-vignette {
+body.reduced-motion .fx-stakes {
   animation: none;
 }
 body.reduced-motion .whiff .fx-projectile,
 body.reduced-motion .whiff .fx-trail {
   animation: whiffTrail 0.2s ease forwards !important;
-}
-body.reduced-motion .whiff-callout {
-  animation: fxReduced 0.4s ease forwards;
 }
 body.reduced-motion .shatter-hex {
   display: none;

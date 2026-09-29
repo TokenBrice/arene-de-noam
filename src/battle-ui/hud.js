@@ -259,7 +259,7 @@ function moveButton(
         ? t('battle.priority', { priority: move.priority })
         : `${t('battle.priority', { priority: 0 })} · ${effectiveSpeed(c) >= effectiveSpeed(enemy) ? t('battle.faster') : t('battle.slower')}`;
   const cooldownLabel = cd
-    ? t('battle.cooldownLeft', { turns: cd })
+    ? t('battle.cooldownLeft', { count: cd })
     : move.cooldown
       ? t('battle.cooldown', { turns: move.cooldown })
       : t('battle.noCooldown');
@@ -312,7 +312,7 @@ function moveButton(
       : '',
     cooldownState = cd ? `<span class="move-badge simple-cooldown">⌛ ${cd}</span>` : '',
     comboState = preview?.combo ? `<span class="combo-ready move-combo-badge">COMBO +40%</span>` : '';
-  return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${shortPreview}${signatureState}${cooldownState}${comboState}</span></button>`;
+  return `<button type="button" class="move-btn simple-move kind-${move.kind} ${move.signature ? 'signature-move' : ''} ${move.signature && !legal ? 'signature-locked' : ''}" data-move="${moveId}" style="--move-color:${a.color}" ${!legal || ctx.locked || !tutorialAllowed ? 'disabled' : ''}><span class="move-name"><i class="move-index">${index + 1}.</i> <span class="move-label">${t(`move.${moveId}`)}</span></span><span class="simple-affinity" aria-hidden="true">${affinityIcon(move.affinity)}</span>${description}<span class="move-figure">${effectiveness}${shortPreview}${signatureState}${cooldownState}${comboState}</span>${context}</button>`;
 }
 
 function exchangeForecastHtml(moveId, enemyAction) {

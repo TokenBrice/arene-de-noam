@@ -238,7 +238,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (difficulty === 'champion' ? signatureRead + (comboReady ? 20 : 0) : comboReady ? 12 : 0) +
     // Without a response forecast, Standard overvalues a visibly favorable
     // matchup and pivots a little too eagerly—a readable, human mistake.
-    (difficulty === 'standard' ? 17 : 0)
+    (difficulty === 'standard' ? 5 : 0)
   );
 }
 

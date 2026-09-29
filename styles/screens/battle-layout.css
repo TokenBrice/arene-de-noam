@@ -613,7 +613,7 @@
   border: 1px solid #aebeed2b;
   border-radius: 13px;
   background: linear-gradient(145deg, #151a3edb, #0a0e28e5);
-  box-shadow: none;
+  box-shadow: 0 3px 0 #03041499;
 }
 
 .battle-screen .move-btn {
@@ -633,6 +633,15 @@
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--move-color) 55%, #fff4);
   background: linear-gradient(145deg, #192047e8, #0b102ce8);
+}
+
+/* Pressed: the card drops onto its ledge (base.css adds the 2 px translate)
+   and lights up under a static overlay, so the press reads under a finger. */
+.battle-screen :is(.move-btn, .switch-btn):not(:disabled):is(:active, .is-pressed) {
+  border-color: color-mix(in srgb, var(--move-color, #aebeed) 60%, #fff6);
+  box-shadow:
+    0 1px 0 #03041499,
+    inset 0 0 0 100vmax #ffffff17;
 }
 
 .battle-screen .move-name {

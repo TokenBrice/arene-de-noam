@@ -6,10 +6,27 @@ body,
   margin: 0;
   overflow: hidden;
 }
+html,
+body {
+  /* No pull-to-refresh or scroll chaining out of the game shell. */
+  overscroll-behavior: none;
+}
 body {
   background: var(--surface);
   color: var(--ink);
   -webkit-tap-highlight-color: transparent;
+}
+/* Long-presses on the stage, cards and sprites must not select text or raise
+   the browser's image menu; form fields keep their normal behaviour. */
+.battle-screen,
+.creature-card,
+img {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+img {
+  -webkit-user-drag: none;
 }
 button,
 select,
@@ -25,26 +42,42 @@ input:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
 }
+/* Press feedback: every enabled button drops onto its ledge for as long as the
+   finger is down (`.is-pressed` is set on pointerdown by index.html, because
+   touch :active arrives late). `translate` composes with any `transform` a
+   button already uses (centred fixed CTAs, hover lifts), and the swap is
+   instant. */
+button:not(:disabled):is(:active, .is-pressed),
+[role='button']:not([aria-disabled='true']):is(:active, .is-pressed) {
+  translate: 0 2px;
+}
+/* Title mode tiles sit on a 3 px ledge; pressed, they drop onto it and light
+   up under a static overlay (inset shadow: their gradients are !important). */
+:is(.menu-mode-grid, .menu-library-grid) button {
+  box-shadow:
+    0 3px 0 #03041499,
+    inset 0 1px #fff1;
+}
+:is(.menu-mode-grid, .menu-library-grid) button:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    0 1px 0 #03041499,
+    inset 0 0 0 2px #ffffff4d,
+    inset 0 0 0 100vmax #ffffff21;
+}
 .screen {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: auto;
+  /* The crosshatch lives in the scroller's own background: it stays put while
+     the content scrolls and is painted once, with no fixed overlay layer that
+     would force the whole scrolled page into its own composited layer. */
   background:
+    linear-gradient(30deg, transparent 48%, #7d86ff24 49%, transparent 51%) 0 0 / 80px 80px,
+    linear-gradient(-30deg, transparent 48%, #58e8ff24 49%, transparent 51%) 0 0 / 80px 80px,
     radial-gradient(circle at 70% 15%, #283075 0, transparent 32%),
     radial-gradient(circle at 20% 85%, #173b55 0, transparent 28%),
     linear-gradient(145deg, #080b25, #11102c 55%, var(--surface));
-}
-.screen::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.14;
-  background-image:
-    linear-gradient(30deg, transparent 48%, #7d86ff 49%, transparent 51%),
-    linear-gradient(-30deg, transparent 48%, #58e8ff 49%, transparent 51%);
-  background-size: 80px 80px;
 }
 /* Shared route transition: a decorative veil clears as the new screen enters.
    The veil has no semantic content, so only one accessible screen exists. */
@@ -156,26 +189,41 @@ body.reduced-motion .screen.screen-entering {
   padding: 10px 16px;
   cursor: pointer;
   background: #ffffff0d;
-  box-shadow: inset 0 1px #fff1;
+  /* Solid "ledge" under the button; it collapses while pressed. */
+  box-shadow:
+    0 2px 0 #03041499,
+    inset 0 1px #fff1;
 }
 .icon-btn {
   min-width: 44px;
   padding: 8px;
 }
-.icon-btn:hover,
-.subtle-btn:hover {
-  background: #ffffff18;
+@media (hover: hover) {
+  .icon-btn:hover,
+  .subtle-btn:hover {
+    background: #ffffff18;
+  }
+  .primary-btn:hover {
+    filter: brightness(1.13);
+  }
 }
 .primary-btn {
   font-weight: 850;
   border-color: #75efff77;
   background: linear-gradient(135deg, #554cd4, #168fb0);
   box-shadow:
+    0 3px 0 #1f2378,
     0 8px 28px #2a59cf55,
     inset 0 1px #fff4;
 }
-.primary-btn:hover {
-  filter: brightness(1.13);
+:is(.icon-btn, .subtle-btn, .danger-btn):not(:disabled):is(:active, .is-pressed) {
+  box-shadow: inset 0 1px #fff1;
+}
+.primary-btn:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    0 1px 0 #1f2378,
+    0 4px 16px #2a59cf44,
+    inset 0 1px #fff4;
 }
 .primary-btn:disabled,
 .subtle-btn:disabled {
@@ -196,7 +244,8 @@ body.reduced-motion .screen.screen-entering {
   min-height: calc(100vh - 100px);
 }
 /* Title ambience (plan §6.4): a slow drifting glow plus a few rising motes.
-   Pure CSS, eight static nodes, no per-frame allocation. */
+   Pure CSS, eight static nodes, no per-frame allocation. Touch devices get a
+   static glow and three motes (PERF-07). */
 .title-ambience {
   position: absolute;
   inset: 0;
@@ -273,6 +322,20 @@ body.reduced-motion .screen.screen-entering {
 @keyframes titleDrift {
   to {
     transform: rotate(7deg) scale(1.08);
+  }
+}
+@media (pointer: coarse) {
+  .title-ambience::before {
+    animation: none;
+  }
+  .title-ambience i:nth-child(n + 4) {
+    display: none;
+  }
+  .title-ambience i:nth-child(2) {
+    --mote: 4.2;
+  }
+  .title-ambience i:nth-child(3) {
+    --mote: 8.2;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -427,9 +490,11 @@ body.reduced-motion .title-ambience i {
     transform 0.16s,
     border-color 0.16s;
 }
-.creature-card:hover {
-  transform: translateY(-3px);
-  border-color: #a9e9ff77;
+@media (hover: hover) {
+  .creature-card:hover {
+    transform: translateY(-3px);
+    border-color: #a9e9ff77;
+  }
 }
 .creature-card.selected {
   border-color: var(--cyan);

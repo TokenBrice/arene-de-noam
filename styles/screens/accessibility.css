@@ -14,15 +14,33 @@ body.high-contrast .screen {
     radial-gradient(circle at 70% 15%, #202a68 0, transparent 32%),
     linear-gradient(145deg, #01030d, #0a0a20 58%, #020410);
 }
-body.high-contrast .screen::before {
-  display: none;
-}
-body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-section, .academy-core, .academy-type-triangle) {
+body.high-contrast
+  :is(
+    .feat-hall,
+    .record-hero,
+    .league-rival,
+    .draft-card,
+    .boon-card,
+    .academy-section,
+    .academy-core,
+    .academy-type-triangle
+  ) {
   border: 2px solid #d5dcff99;
   background: #080a1c;
   color: var(--ink);
 }
-body.high-contrast :is(.feat-hall, .record-hero, .league-rival, .draft-card, .boon-card, .academy-section, .academy-core, .academy-type-triangle) :is(b, h2, h3, p, small) {
+body.high-contrast
+  :is(
+    .feat-hall,
+    .record-hero,
+    .league-rival,
+    .draft-card,
+    .boon-card,
+    .academy-section,
+    .academy-core,
+    .academy-type-triangle
+  )
+  :is(b, h2, h3, p, small) {
   color: var(--ink);
 }
 body.high-contrast .league-rival.locked {
@@ -111,7 +129,34 @@ body.high-contrast .academy-status > i::after {
   outline: 1px solid #000;
 }
 body.high-contrast .status-icon {
-  filter: drop-shadow(0 0 2px #000);
+  stroke-width: 2.8;
+}
+/* Floor aura: each state keeps its own line style, so colour is never the only
+   cue. Same priority order as components.css (last rule wins). */
+body.high-contrast .fighter-shadow::after {
+  border-width: 4px;
+  background: none;
+}
+body.high-contrast .fighter.signature-ready .fighter-shadow::after {
+  border-style: solid;
+  border-width: 4px;
+  --aura-color: #fff27a;
+}
+body.high-contrast .fighter.has-barrier .fighter-shadow::after {
+  border-style: double;
+  border-width: 8px;
+  --aura-color: #a5f7ff;
+}
+body.high-contrast .fighter.low-health .fighter-shadow::after {
+  border-style: dashed;
+  border-width: 5px;
+  --aura-color: #ff8f98;
+  animation: none;
+}
+body.high-contrast .fighter.barrier-hit .fighter-shadow::after {
+  border-style: double;
+  border-width: 8px;
+  --aura-color: #a5f7ff;
 }
 body.high-contrast .move-btn:disabled {
   opacity: 1;
@@ -329,8 +374,7 @@ body.high-contrast .turn-chip {
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: #03040dcc;
-  backdrop-filter: blur(8px);
+  background: #040617e6;
 }
 .settings-dialog {
   width: min(440px, 100%);
@@ -524,7 +568,9 @@ body.high-contrast .turn-chip {
   border-block: 2px solid var(--fx-color);
   transform: translate(-50%, -50%);
   background: linear-gradient(90deg, transparent, #090b20e8 15% 85%, transparent);
-  filter: drop-shadow(0 0 24px var(--fx-color));
+  box-shadow:
+    0 -8px 18px -10px var(--fx-color),
+    0 8px 18px -10px var(--fx-color);
   animation: relayCut 0.55s cubic-bezier(0.15, 0.85, 0.2, 1) forwards;
 }
 .relay-cut img {
@@ -532,7 +578,6 @@ body.high-contrast .turn-chip {
   height: 170px;
   object-fit: contain;
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 18px var(--fx-color));
 }
 .relay-cut span {
   display: grid;
@@ -589,12 +634,10 @@ body.high-contrast .turn-chip {
   0% {
     opacity: 0;
     transform: translate(-42%, -50%) scale(0.8);
-    filter: blur(10px);
   }
   55% {
     opacity: 1;
     transform: translate(-52%, -50%) scale(1.03);
-    filter: blur(0) drop-shadow(0 0 24px var(--fx-color));
   }
   100% {
     transform: translate(-50%, -50%);

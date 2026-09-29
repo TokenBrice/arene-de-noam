@@ -20,11 +20,9 @@
   height: min(52vh, 470px);
   object-fit: contain;
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 28px #a6dcff88);
 }
 .intro-side.enemy img {
   transform: scaleX(-1);
-  filter: drop-shadow(0 0 28px #ff92da88);
 }
 .intro-side span {
   color: #c7d5ff;
@@ -69,7 +67,7 @@
   line-height: 1.4;
 }
 .intro-mode .battle-vignette {
-  background: #000c;
+  background: linear-gradient(#000c, #000c);
 }
 .replacement-card > p {
   margin: 5px auto 16px;
@@ -109,7 +107,6 @@
   height: 112px;
   object-fit: contain;
   image-rendering: pixelated;
-  filter: drop-shadow(0 10px 8px #0008);
 }
 .switch-portrait i {
   position: absolute;
@@ -360,7 +357,6 @@
   height: min(50vh, 430px);
   object-fit: contain;
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 25px #fff8);
   animation: clashFighter 0.65s cubic-bezier(0.15, 0.8, 0.2, 1);
 }
 .clash-half b {
@@ -388,16 +384,10 @@
     -6px -6px #785cff;
   animation: clashVs 0.35s steps(2) infinite;
 }
+/* Solid scrims are drawn as an image layer, not background-color, so the
+   vignette's background transition never runs a per-frame colour animation. */
 .clash-mode .battle-vignette {
-  background: #0008;
-}
-.combo-impact .fx-impact {
-  filter: drop-shadow(0 0 28px #fff177);
-}
-.combo-impact .damage-number {
-  min-width: 190px;
-  color: #fff3a8;
-  font-size: clamp(25px, 4vw, 48px);
+  background: linear-gradient(#0008, #0008);
 }
 .combo-hit .action-line {
   color: var(--gold-soft);
@@ -429,7 +419,6 @@
   border-radius: 50%;
   color: #fff;
   opacity: 0;
-  filter: drop-shadow(0 0 35px var(--fx-color));
   animation: arenaRune 0.78s cubic-bezier(0.15, 0.8, 0.2, 1) both;
 }
 /* The pulse reaches each side from its own origin (plan §4.3): a smaller rune
@@ -527,21 +516,27 @@
   border-radius: 50%;
   animation: fxSpin 5s linear infinite;
 }
+/* The arena name sits just under the player's rune, below the readout slots
+   (numbers and stamps ride the fighter's body and head), so a recoil or tick
+   number never lands on it. */
 .arena-pulse-rune span {
   position: absolute;
-  bottom: 12%;
+  top: 100%;
+  margin-top: 4px;
   font-size: clamp(13px, 2vw, 20px);
   font-weight: 1000;
   letter-spacing: 0.2em;
+  text-align: center;
   text-transform: uppercase;
+  text-shadow:
+    0 2px 0 #02030d,
+    1px 1px 0 #02030d,
+    -1px -1px 0 #02030d;
 }
 .arena-pulse-fx .fx-aftershock {
   display: block;
   left: 50%;
   top: 48%;
-}
-.arena-awake .arena-canvas {
-  filter: saturate(1.5) brightness(1.2);
 }
 .fx-sky-symbol {
   display: none;
@@ -557,7 +552,7 @@
   border-radius: 50%;
   color: var(--fx-color);
   opacity: 0;
-  filter: drop-shadow(0 0 38px var(--fx-color));
+  background: radial-gradient(circle, color-mix(in srgb, var(--fx-color) 20%, transparent), transparent 70%);
   animation: skySigil 0.8s ease forwards;
 }
 .signature .fx-sky-symbol {
@@ -607,7 +602,7 @@
 .owner-lumivox .fx-detail > i {
   border: 4px double #fff;
   border-radius: 50%;
-  box-shadow: 0 0 18px var(--fx-color);
+  background: radial-gradient(circle, color-mix(in srgb, var(--fx-color) 45%, transparent), transparent 70%);
 }
 .owner-lumivox .fx-detail > i::after {
   content: '♪';
@@ -707,7 +702,6 @@
   border: 0;
   border-radius: 50%;
   background: radial-gradient(circle, #fff6ad, var(--fx-color) 24%, transparent 68%);
-  box-shadow: 0 0 20px var(--fx-color);
 }
 .owner-thornox .fx-detail > i {
   width: 18px;
@@ -838,21 +832,36 @@
   transform: scaleY(0.18) rotate(-20deg);
 }
 
-@keyframes badgeTurn {
-  to {
-    transform: rotate(360deg);
-  }
+/* Surge moment: the HUD plate pops once while a static inner glow on a
+   pseudo-element fades in and out (opacity only, no animated box-shadow).
+   fx.js clears the class when the glow ends so the next Surge flashes again.
+   `position: relative` only anchors the glow: plates carry no top/bottom
+   offsets, so the plate itself never moves. */
+.battle-screen .hud-card.surge-flash {
+  position: relative;
+  z-index: auto;
+  animation: surgeFlash 0.65s ease;
 }
-@keyframes surgeReady {
-  to {
-    filter: brightness(1.7);
-    box-shadow: 0 0 18px var(--gold-soft);
-  }
+.battle-screen .hud-card.surge-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 2px #ffe276,
+    inset 0 0 22px #ffe27699;
+  opacity: 0;
+  pointer-events: none;
+  animation: surgeFlashGlow 0.65s ease;
 }
 @keyframes surgeFlash {
   40% {
     transform: scale(1.04);
-    box-shadow: 0 0 35px #ffe276;
+  }
+}
+@keyframes surgeFlashGlow {
+  40% {
+    opacity: 1;
   }
 }
 @keyframes arenaRune {
@@ -868,37 +877,19 @@
     transform: translate(-50%, -50%) scale(1.2) rotate(12deg);
   }
 }
-@keyframes dangerIdle {
-  to {
-    transform: translateY(-3%) scale(1.025);
-    filter: drop-shadow(0 0 28px #ff2c48) brightness(1.16);
-  }
-}
-@keyframes dangerPulse {
-  50% {
-    transform: scale(1.18);
-    opacity: 0.35;
-  }
-}
-@keyframes signatureBeacon {
-  to {
-    transform: scale(1.14) rotate(20deg);
-    filter: brightness(1.5);
-  }
-}
 @keyframes clashCurtain {
   0% {
     opacity: 0;
-    clip-path: inset(48% 0);
+    transform: scaleY(0.04);
   }
   20%,
   78% {
     opacity: 1;
-    clip-path: inset(0);
+    transform: scaleY(1);
   }
   100% {
     opacity: 0;
-    clip-path: inset(0);
+    transform: scaleY(1);
   }
 }
 @keyframes clashFighter {
@@ -924,56 +915,14 @@
     transform: translateX(-50%) scale(1.14);
   }
 }
-@keyframes statusFloat {
-  50% {
-    transform: translateY(-8px) scale(1.08);
-    filter: brightness(1.35);
-  }
-}
-@keyframes statusBurningPulse {
-  from {
-    transform: translateY(0) scale(1);
-    filter: brightness(1);
-    box-shadow:
-      0 0 14px var(--status-color),
-      inset 0 0 7px var(--status-color);
-  }
-  50% {
-    transform: translateY(-3px) scale(1.12);
-    filter: brightness(1.3);
-    box-shadow:
-      0 0 25px var(--status-color),
-      inset 0 0 13px var(--status-color);
-  }
-}
-@keyframes barrierBreath {
-  50% {
-    transform: scale(1.035);
-    opacity: 0.55;
-  }
-}
-@keyframes statusPulse {
-  50% {
-    transform: scale(1.25);
-    opacity: 0.55;
-  }
-}
 @keyframes dodgeFx {
   35% {
     transform: translateX(-35%) skewX(-12deg);
     opacity: 0.18;
-    filter: blur(3px);
   }
   55% {
     transform: translateX(18%);
     opacity: 0.65;
-    filter: blur(1px);
-  }
-}
-@keyframes barrierHit {
-  40% {
-    transform: scale(0.9);
-    filter: brightness(3);
   }
 }
 @keyframes statusHurt {
@@ -1007,8 +956,7 @@
 }
 @keyframes identityFlight {
   0% {
-    left: var(--from-x);
-    top: var(--from-y);
+    translate: 0 0;
     opacity: 0;
     transform: scale(0.2) rotate(-40deg);
   }
@@ -1016,8 +964,7 @@
     opacity: 1;
   }
   100% {
-    left: var(--to-x);
-    top: calc(var(--to-y) + (var(--detail) - 5) * 10px);
+    translate: var(--fx-dx) calc(var(--fx-dy) + (var(--detail) - 5) * 10px);
     opacity: 0;
     transform: scale(1.35) rotate(180deg);
   }
@@ -1091,16 +1038,16 @@
 @keyframes introCurtain {
   0% {
     opacity: 0;
-    clip-path: inset(0 50%);
+    transform: scaleX(0.04);
   }
   15%,
   80% {
     opacity: 1;
-    clip-path: inset(0);
+    transform: scaleX(1);
   }
   100% {
     opacity: 0;
-    clip-path: inset(0);
+    transform: scaleX(1);
   }
 }
 @keyframes introPlayer {
@@ -1134,12 +1081,6 @@
     transform: scale(1.08) rotate(-3deg);
   }
 }
-@keyframes masteryAura {
-  to {
-    transform: scale(1.12) rotate(8deg);
-    opacity: 0.58;
-  }
-}
 @keyframes finisherSlash {
   0% {
     opacity: 0;
@@ -1153,20 +1094,6 @@
     transform: translateX(20%) scaleX(1.2);
   }
 }
-@keyframes finisherKo {
-  0% {
-    transform: scale(0.1) rotate(-18deg);
-    opacity: 0;
-  }
-  45% {
-    transform: scale(1.35) rotate(5deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) rotate(-3deg);
-    opacity: 0;
-  }
-}
 @keyframes koFlash {
   0% {
     opacity: 0.8;
@@ -1175,28 +1102,10 @@
     opacity: 0;
   }
 }
-@keyframes lastStand {
-  to {
-    transform: translateY(-7px) scale(1.08);
-    filter: brightness(1.4);
-  }
-}
-@keyframes arenaWarning {
-  to {
-    border-color: #fff098aa;
-    box-shadow: inset 0 0 85px #ffe45a30;
-  }
-}
 
 @media (max-width: 1100px) {
   .creature-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .bestiary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .trial-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 900px) {
@@ -1205,9 +1114,6 @@
   }
   .creature-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .bestiary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .trainer-badge .emblem {
     width: 90px;
@@ -1228,20 +1134,6 @@
   }
   .creature-card {
     min-height: 205px;
-  }
-  .bestiary-grid,
-  .trial-grid {
-    grid-template-columns: 1fr;
-  }
-  .trial-card {
-    min-height: 330px;
-  }
-  .trial-squad {
-    width: 100%;
-    margin-top: 10px;
-  }
-  .trial-squad b {
-    display: none;
   }
   .mastery-rewards {
     grid-template-columns: 1fr;
@@ -1373,8 +1265,8 @@
   .enemy-last-stand #fighter-enemy::before {
     animation: none;
   }
-  .finisher-impact .damage-number {
-    animation: fxReduced 0.2s ease forwards !important;
+  .battle-screen .hud-card.surge-flash {
+    animation: none;
   }
   .final-showdown .battle-vignette {
     animation: none;
@@ -1394,8 +1286,8 @@ body.reduced-motion .player-last-stand #fighter-player::before,
 body.reduced-motion .enemy-last-stand #fighter-enemy::before {
   animation: none;
 }
-body.reduced-motion .finisher-impact .damage-number {
-  animation: fxReduced 0.2s ease forwards !important;
+body.reduced-motion .battle-screen .hud-card.surge-flash {
+  animation: none;
 }
 
 /* Post-battle grade: three kid-clear reasons, with a restrained arcade flourish. */
@@ -1493,12 +1385,10 @@ body.reduced-motion .finisher-impact .damage-number {
   from {
     opacity: 0;
     transform: scale(2.1) rotate(-12deg);
-    filter: blur(5px);
   }
   to {
     opacity: 1;
     transform: scale(1) rotate(0);
-    filter: blur(0);
   }
 }
 @media (max-width: 600px) {

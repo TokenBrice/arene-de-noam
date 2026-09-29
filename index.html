@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <meta name="theme-color" content="#090b22" />
+    <meta name="theme-color" content="#0b0d24" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
     <script>
       const params = new URLSearchParams(location.search),
         urlLanguage = params.get('lang');
@@ -52,6 +55,33 @@
         body.classList.toggle('reduced-motion', root.classList.contains('reduced-motion'));
         body.classList.toggle('high-contrast', root.classList.contains('high-contrast'));
       } catch {}
+    </script>
+    <script>
+      // Press feedback follows the finger at once: Chrome for Android applies
+      // :active only after its tap timeout, so the pressed button also gets
+      // `.is-pressed` from pointerdown until release (or until a scroll takes over).
+      {
+        let pressed = null;
+        const release = () => {
+          pressed?.classList.remove('is-pressed');
+          pressed = null;
+        };
+        const options = { capture: true, passive: true };
+        addEventListener(
+          'pointerdown',
+          (event) => {
+            release();
+            if (!event.isPrimary || event.button !== 0) return;
+            pressed =
+              event.target.closest?.('button:not(:disabled), [role="button"]:not([aria-disabled="true"])') ??
+              null;
+            pressed?.classList.add('is-pressed');
+          },
+          options
+        );
+        for (const type of ['pointerup', 'pointercancel', 'dragstart'])
+          addEventListener(type, release, options);
+      }
     </script>
     <div id="game">
       <main id="screen" class="screen boot-screen">

@@ -97,8 +97,10 @@
   font-style: normal;
   line-height: 1.4;
 }
+/* Canvas dim uses opacity over the dark battle backdrop (no canvas filter);
+   the .ace-phase layer above supplies the affinity tint. */
 .ace-mode .arena-canvas {
-  filter: contrast(1.18) brightness(0.45) saturate(1.4);
+  opacity: 0.45;
 }
 .ace-mode .battle-top,
 .ace-mode .battle-controls,

@@ -88,6 +88,33 @@ function cancelBattleSession(session) {
   ctx.locked = false;
   clearBattleFx();
 }
+// Every covering battle overlay lives in #replacement-root; the arena stops
+// rendering while one is open and resumes when it closes.
+function syncArenaPause() {
+  ctx.arenaScene?.setPaused(screen.querySelector('#replacement-root')?.childElementCount > 0);
+}
+// On-screen box of the visible sprite inside a fighter's <img> (object-fit:
+// contain letterboxes it); the arena anchors bursts and flashes on it.
+function fighterSpriteRect(side) {
+  const img = screen.querySelector(`#fighter-${side} > img`);
+  if (!img) return null;
+  const box = img.getBoundingClientRect(),
+    style = getComputedStyle(img);
+  if (!img.naturalWidth || !img.naturalHeight || !box.width || !box.height || style.objectFit !== 'contain')
+    return box;
+  const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight),
+    width = img.naturalWidth * scale,
+    height = img.naturalHeight * scale,
+    [x = '50%', y = '50%'] = style.objectPosition.split(' '),
+    offset = (value, free) =>
+      value.endsWith('%') ? (free * parseFloat(value)) / 100 : parseFloat(value) || 0;
+  return new DOMRect(
+    box.left + offset(x, box.width - width),
+    box.top + offset(y, box.height - height),
+    width,
+    height
+  );
+}
 
 function startBattle(config) {
   if (battleStartPending) return;
@@ -222,6 +249,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
       reducedMotion: ctx.save.reducedMotion,
       testAnimationScale,
     });
+    ctx.arenaScene.setAnchorResolver(fighterSpriteRect);
   } catch (error) {
     cancelBattleSession(session);
     ctx.battleSession = null;
@@ -229,6 +257,9 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     bindCommon();
     return;
   }
+  // Arena battle theme (setScreen is a no-op when that theme already plays,
+  // so rematches and re-renders of the same arena keep the music going).
+  sound.setScreen(`battle:${ctx.battleSession.arena}`);
   screen.querySelector('#arena').addEventListener('arena-context-lost', () => {
     if (!sessionIsActive(session)) return;
     cancelBattleSession(session);
@@ -316,8 +347,10 @@ function openBattleCodex() {
       );
   const close = () => {
     root.innerHTML = '';
+    syncArenaPause();
     screen.querySelector('[data-action="battle-help"]')?.focus();
   };
+  syncArenaPause();
   root.querySelector('[data-action="close-codex"]').addEventListener('click', close);
   root.querySelector('.codex-overlay').addEventListener('click', (e) => {
     if (e.target.classList.contains('codex-overlay')) close();
@@ -350,8 +383,10 @@ function openBattleLog() {
   }</ol></section></div>`;
   const close = () => {
     root.innerHTML = '';
+    syncArenaPause();
     screen.querySelector('[data-action="battle-log"],[data-action="result-log"]')?.focus();
   };
+  syncArenaPause();
   root.querySelector('[data-action="close-log"]').addEventListener('click', close);
   root.querySelector('.battle-log-overlay').addEventListener('click', (event) => {
     if (event.target.classList.contains('battle-log-overlay')) close();
@@ -372,9 +407,11 @@ function openPlateDetails(side) {
   const close = () => {
     if (!sessionIsActive(session)) return;
     root.innerHTML = '';
+    syncArenaPause();
     trigger.setAttribute('aria-expanded', 'false');
     trigger.focus();
   };
+  syncArenaPause();
   root.querySelector('[data-action="close-plate"]')?.addEventListener('click', close);
   root.querySelector('.plate-detail-overlay')?.addEventListener('click', (event) => {
     if (event.target.classList.contains('plate-detail-overlay')) close();
@@ -781,6 +818,7 @@ function closeSwitch({ restoreFocus = true, focusAfterUnlock = false } = {}) {
   const root = screen.querySelector('#replacement-root');
   if (!root?.querySelector('.replacement-card')) return false;
   root.innerHTML = '';
+  syncArenaPause();
   const opener = switchOpener;
   switchOpener = null;
   if (focusAfterUnlock && opener?.dataset) {
@@ -906,6 +944,7 @@ function openSwitch(relayMoveId = null) {
     })
   );
   screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => closeSwitch());
+  syncArenaPause();
   screen.querySelector('[data-switch-index]')?.focus();
 }
 

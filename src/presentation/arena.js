@@ -72,30 +72,101 @@ function material(
   });
 }
 
+// Frame-rate-independent exponential approach that settles exactly on target.
+function approach(value, target, rate) {
+  const delta = target - value;
+  return Math.abs(delta) < 1e-3 ? target : value + delta * (1 - Math.exp(-rate));
+}
+
+// Burst and flash particles live on this world plane (slightly in front of
+// the dais centre line); fighter anchors are unprojected onto it.
+const FX_PLANE_Z = 0.4;
+const BURST_POOL_SIZE = 3;
+const BURST_POINTS = 180;
+const SPARK_POINTS = 48;
+
+// Renderer quality for the current device. Phase 2's quality-tier module is
+// expected to replace this function; ArenaScene only reads the returned shape.
+export function arenaRenderProfile() {
+  const coarse = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
+  if (coarse) {
+    const memory = globalThis.navigator?.deviceMemory;
+    const maxPixelRatio = memory && memory <= 4 ? 1 : 1.5;
+    return {
+      antialias: false,
+      powerPreference: 'default',
+      maxPixelRatio,
+      largeCanvasPixelRatio: maxPixelRatio,
+      activeFps: 60,
+      ambientFps: 30,
+    };
+  }
+  return {
+    antialias: true,
+    powerPreference: 'high-performance',
+    maxPixelRatio: 2,
+    largeCanvasPixelRatio: 1.5,
+    activeFps: 60,
+    ambientFps: 30,
+  };
+}
+
+// Soft round dot shared by every additive FX sprite (drawn once, no network).
+function softDotTexture() {
+  const size = 64,
+    canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d'),
+    gradient = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)');
+  gradient.addColorStop(0.65, 'rgba(255,255,255,0.3)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export class ArenaScene {
-  constructor(canvas, theme = 'crystal', { reducedMotion = false, testAnimationScale = 1 } = {}) {
+  constructor(
+    canvas,
+    theme = 'crystal',
+    { reducedMotion = false, testAnimationScale = 1, renderProfile = arenaRenderProfile() } = {}
+  ) {
     this.canvas = canvas;
     this.reducedMotion = reducedMotion;
     this.testAnimationScale = testAnimationScale;
     this.theme = THEMES[theme] ? theme : 'crystal';
+    this.profile = renderProfile;
     this.disposed = false;
+    this.paused = false;
     this.animations = [];
     this.tension = 0;
     this.targetTension = 0;
     this.arenaCharge = 0;
     this.showdown = 0;
     this.targetShowdown = 0;
+    this.flashExposure = 0;
+    this.anchorResolver = null;
+    // Frame governor: renders at activeFps while something is moving fast,
+    // ambientFps otherwise. Reduced motion has no ambient motion to show, so
+    // the loop stops entirely between effects.
+    this.fps = { active: renderProfile.activeFps, ambient: reducedMotion ? 0 : renderProfile.ambientFps };
+    this.nextRender = 0;
+    this.frame = undefined;
+    this.viewport = { w: 0, h: 0, ratio: 0 };
     try {
       this.renderer = new THREE.WebGLRenderer({
         canvas,
-        antialias: true,
+        antialias: renderProfile.antialias,
         alpha: false,
-        powerPreference: 'high-performance',
+        powerPreference: renderProfile.powerPreference,
       });
     } catch (error) {
       throw new Error('WEBGL_UNAVAILABLE', { cause: error });
     }
-    this.pixelRatioCap = null;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -111,14 +182,10 @@ export class ArenaScene {
     this.onVisibilityChange = () => {
       if (this.disposed) return;
       if (document.hidden) {
-        cancelAnimationFrame(this.frame);
-        this.frame = undefined;
+        this.stopLoop();
         return;
       }
-      // Flush the time spent hidden so the first resumed frame starts from a
-      // fresh delta rather than advancing the simulation by the whole pause.
-      this.clock.getDelta();
-      if (this.frame === undefined) this.frame = requestAnimationFrame(this.animateBound);
+      this.wake();
     };
     this.build(this.theme);
     this.resize();
@@ -132,7 +199,7 @@ export class ArenaScene {
       canvas.dispatchEvent(new CustomEvent('arena-context-lost', { bubbles: true }));
     };
     canvas.addEventListener('webglcontextlost', this.contextLost);
-    if (!document.hidden) this.frame = requestAnimationFrame(this.animateBound);
+    this.wake();
   }
   add(object, parent = this.scene) {
     parent.add(object);
@@ -146,12 +213,12 @@ export class ArenaScene {
     this.hemi = this.add(new THREE.HemisphereLight(t.glow, 0x03030b, 1.8));
     this.moon = this.add(new THREE.DirectionalLight(t.secondary, 3.4));
     this.moon.position.set(-4, 8, 5);
-    this.rim = this.add(new THREE.PointLight(t.glow, 25, 16));
-    this.rim.position.set(4, 3, -1);
+    this.softDot = softDotTexture();
     this.buildDais(t);
+    this.buildRimPool(t);
     this.buildArchitecture(themeId, t);
     this.buildParticles(t);
-    this.createBurstPool(t.glow);
+    this.createFxPools();
   }
   buildDais(t) {
     const dais = this.add(new THREE.Group());
@@ -437,112 +504,313 @@ export class ArenaScene {
     );
     this.dust.userData.particle = t.particle;
   }
-  createBurstPool(color) {
-    const count = 180,
-      positions = new Float32Array(count * 3);
-    positions.fill(99);
-    this.burstVelocity = new Float32Array(count * 3);
+  // Baked stand-in for the old rim point light: a soft additive light pool on
+  // the right of the dais whose strength follows the battle tension.
+  buildRimPool(t) {
+    this.rimPool = this.add(
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          map: this.softDot,
+          color: t.glow,
+          transparent: true,
+          opacity: 0.26,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          fog: false,
+        })
+      )
+    );
+    this.rimPool.rotation.x = -Math.PI / 2;
+    this.rimPool.position.set(2.2, -0.05, -0.6);
+    this.rimPool.scale.set(6.4, 6.4, 1);
+  }
+  createFxPools() {
+    // Separate pools: a burst never overwrites a flash, and a second burst
+    // takes the emitter closest to finishing instead of the one still flying.
+    this.bursts = Array.from({ length: BURST_POOL_SIZE }, () => this.createEmitter(BURST_POINTS));
+    this.sparks = this.createEmitter(SPARK_POINTS);
+    // Hit flash without per-pixel lights: an additive glow sprite at the
+    // target plus a short tone-mapping exposure bump.
+    this.glow = this.add(
+      new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: this.softDot,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          depthTest: false,
+          blending: THREE.AdditiveBlending,
+          fog: false,
+        })
+      )
+    );
+    this.glow.visible = false;
+    this.glow.renderOrder = 2;
+    this.glowState = { life: 0, duration: 1, size: 1, peak: 1 };
+  }
+  createEmitter(count) {
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const mat = new THREE.PointsMaterial({
-      color,
-      size: 0.13,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    this.burstPoints = this.add(new THREE.Points(geometry, mat));
-    this.burstPoints.frustumCulled = false;
-    this.fxLight = this.add(new THREE.PointLight(color, 0, 14));
-    this.burstLife = 0;
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    const points = this.add(
+      new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({
+          map: this.softDot,
+          size: 0.2,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          fog: false,
+        })
+      )
+    );
+    points.frustumCulled = false;
+    points.visible = false;
+    points.renderOrder = 1;
+    return { points, velocity: new Float32Array(count * 3), live: 0, life: 0, gravity: 0, drag: 1, fade: 2 };
   }
   resize() {
     if (this.disposed) return;
     const rect = this.canvas.getBoundingClientRect(),
-      w = Math.max(1, rect.width),
-      h = Math.max(1, rect.height),
-      cap = this.canvas.clientWidth * this.canvas.clientHeight > 500000 ? 1.5 : 2;
-    if (this.pixelRatioCap !== cap) {
-      this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, cap));
-      this.pixelRatioCap = cap;
-    }
+      w = Math.max(1, this.canvas.clientWidth || rect.width),
+      h = Math.max(1, this.canvas.clientHeight || rect.height),
+      cap = w * h > 500000 ? this.profile.largeCanvasPixelRatio : this.profile.maxPixelRatio,
+      ratio = Math.min(globalThis.devicePixelRatio || 1, cap),
+      viewport = this.viewport;
+    if (viewport.w === w && viewport.h === h && viewport.ratio === ratio) return;
+    viewport.w = w;
+    viewport.h = h;
+    viewport.ratio = ratio;
+    this.renderer.setPixelRatio(ratio);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    // setSize clears the drawing buffer: repaint now so a paused or idle
+    // arena never shows an empty canvas.
+    if (!document.hidden) this.renderer.render(this.scene, this.camera);
   }
   setBattleState({ tension = 0, imminent = false, showdown = false } = {}) {
-    this.targetTension = Math.max(0, Math.min(1, tension));
-    this.arenaCharge = imminent ? 1 : 0;
-    this.targetShowdown = showdown ? 1 : 0;
+    const targetTension = Math.max(0, Math.min(1, tension)),
+      arenaCharge = imminent ? 1 : 0,
+      targetShowdown = showdown ? 1 : 0;
+    if (
+      targetTension === this.targetTension &&
+      arenaCharge === this.arenaCharge &&
+      targetShowdown === this.targetShowdown
+    )
+      return;
+    this.targetTension = targetTension;
+    this.arenaCharge = arenaCharge;
+    this.targetShowdown = targetShowdown;
+    this.wake();
+  }
+  // `resolver(side)` returns the on-screen rect (DOMRect-like) of that side's
+  // fighter sprite, or null. Bursts and flashes are placed on it.
+  setAnchorResolver(resolver) {
+    this.anchorResolver = typeof resolver === 'function' ? resolver : null;
+  }
+  // World point on the FX plane under the centre of the side's sprite, the
+  // sprite height in world units, and an FX scale relative to a typical sprite.
+  anchorPoint(side) {
+    const rect = this.anchorResolver?.(side),
+      view = this.canvas.getBoundingClientRect(),
+      cam = this.camera;
+    if (rect?.width > 0 && rect.height > 0 && view.width > 0 && view.height > 0) {
+      cam.updateMatrixWorld();
+      const dir = new THREE.Vector3(
+        ((rect.left + rect.width / 2 - view.left) / view.width) * 2 - 1,
+        1 - ((rect.top + rect.height / 2 - view.top) / view.height) * 2,
+        0.5
+      )
+        .unproject(cam)
+        .sub(cam.position)
+        .normalize();
+      if (dir.z < -1e-4) {
+        const point = cam.position.clone().addScaledVector(dir, (FX_PLANE_Z - cam.position.z) / dir.z),
+          depth = -point.clone().applyMatrix4(cam.matrixWorldInverse).z,
+          worldPerPx = (2 * depth * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) / view.height,
+          size = rect.height * worldPerPx;
+        return { point, size, scale: Math.max(0.75, Math.min(1.5, size / 2.4)) };
+      }
+    }
+    return {
+      point: new THREE.Vector3(side === 'enemy' ? 2.35 : -2.35, 1.15, FX_PLANE_Z),
+      size: 2.4,
+      scale: 1,
+    };
+  }
+  pulseGlow(color, anchor, sizeFactor, duration, peak) {
+    this.glow.material.color.set(color);
+    this.glow.position.copy(anchor.point);
+    Object.assign(this.glowState, { life: duration, duration, size: anchor.size * sizeFactor, peak });
+    this.glow.visible = true;
   }
   burst(color = '#fff', targetSide = 'enemy', strength = 1) {
-    if (this.testAnimationScale === 0 || !this.burstPoints) return;
-    const positions = this.burstPoints.geometry.attributes.position.array,
-      origin = targetSide === 'enemy' ? 2.35 : -2.35;
-    this.burstPoints.material.color.set(color);
-    this.burstPoints.material.size = 0.1 + 0.06 * strength;
-    this.burstPoints.material.opacity = 0;
-    this.fxLight.color.set(color);
-    this.fxLight.position.set(origin, 1.7, 0.5);
-    this.fxLight.intensity = 30 * strength;
+    if (this.testAnimationScale === 0 || !this.bursts) return;
+    const anchor = this.anchorPoint(targetSide);
     if (this.reducedMotion) {
-      this.burstLife = 0;
-      positions.fill(99);
-      this.burstPoints.geometry.attributes.position.needsUpdate = true;
+      // No flying particles: a still glow that fades is the whole cue.
+      this.pulseGlow(color, anchor, 1.25, 0.34, Math.min(0.9, 0.5 * strength));
+      this.wake();
       return;
     }
-    const count = strength > 1 ? 180 : 112;
-    this.burstPoints.material.opacity = 1;
-    for (let i = 0; i < 180; i++) {
-      const p = i * 3;
-      if (i < count) {
-        const angle = i * 2.399963,
-          fan = 0.4 + (((i * 37) % 71) / 71) * 1.5;
-        positions[p] = origin + Math.cos(angle) * 0.12;
-        positions[p + 1] = 1.15 + Math.sin(angle) * 0.12;
-        positions[p + 2] = 0.4;
-        this.burstVelocity[p] = Math.cos(angle) * fan;
-        this.burstVelocity[p + 1] = Math.sin(angle) * fan + 1.25;
-        this.burstVelocity[p + 2] = (((i * 53) % 97) / 97 - 0.5) * 2;
-      } else positions[p] = positions[p + 1] = positions[p + 2] = 99;
+    let emitter = this.bursts[0];
+    for (const candidate of this.bursts) if (candidate.life < emitter.life) emitter = candidate;
+    const { point, scale } = anchor,
+      positions = emitter.points.geometry.attributes.position.array,
+      velocity = emitter.velocity,
+      count = strength > 1 ? BURST_POINTS : 112;
+    for (let i = 0; i < count; i++) {
+      const p = i * 3,
+        angle = i * 2.399963,
+        fan = (0.4 + (((i * 37) % 71) / 71) * 1.5) * scale;
+      positions[p] = point.x + Math.cos(angle) * 0.12 * scale;
+      positions[p + 1] = point.y + Math.sin(angle) * 0.12 * scale;
+      positions[p + 2] = point.z;
+      velocity[p] = Math.cos(angle) * fan;
+      velocity[p + 1] = Math.sin(angle) * fan + 1.25 * scale;
+      velocity[p + 2] = (((i * 53) % 97) / 97 - 0.5) * 2;
     }
-    this.burstPoints.geometry.attributes.position.needsUpdate = true;
-    this.burstLife = 0.82;
+    emitter.live = count;
+    emitter.life = 0.82;
+    emitter.gravity = 2.9 * scale;
+    emitter.drag = 1;
+    emitter.fade = 2;
+    emitter.points.geometry.setDrawRange(0, count);
+    emitter.points.geometry.attributes.position.needsUpdate = true;
+    emitter.points.material.color.set(color);
+    emitter.points.material.size = (0.1 + 0.06 * strength) * 1.7 * scale;
+    emitter.points.material.opacity = 1;
+    emitter.points.visible = true;
+    this.wake();
   }
   flash(kind = 'hit', color = '#fff', targetSide = 'enemy') {
-    if (this.testAnimationScale === 0) return;
-    this.burst(color, targetSide, kind === 'power' ? 1.65 : 1);
-    if (this.reducedMotion) return;
-    const animationClass = kind === 'power' ? 'arena-power' : 'arena-hit';
+    if (this.testAnimationScale === 0 || !this.sparks) return;
+    const power = kind === 'power',
+      anchor = this.anchorPoint(targetSide);
+    this.flashExposure = Math.max(this.flashExposure, (power ? 0.5 : 0.32) * (this.reducedMotion ? 0.4 : 1));
+    this.pulseGlow(color, anchor, power ? 2.1 : 1.7, power ? 0.45 : 0.32, 1);
+    if (this.reducedMotion) {
+      this.wake();
+      return;
+    }
+    // Impact star: sparks start at the sprite's edge (the DOM creature covers
+    // its centre) and shoot outwards, braking as they fade.
+    const emitter = this.sparks,
+      { point, size, scale } = anchor,
+      positions = emitter.points.geometry.attributes.position.array,
+      velocity = emitter.velocity,
+      count = power ? SPARK_POINTS : 32,
+      rim = size * 0.3;
+    for (let i = 0; i < count; i++) {
+      const p = i * 3,
+        angle = (i / count) * Math.PI * 2 + ((i * 29) % 7) * 0.05,
+        speed = (power ? 7 : 5.5) * scale * (0.7 + (((i * 37) % 11) / 11) * 0.6),
+        dx = Math.cos(angle),
+        dy = Math.sin(angle);
+      positions[p] = point.x + dx * rim;
+      positions[p + 1] = point.y + dy * rim;
+      positions[p + 2] = point.z + 0.05;
+      velocity[p] = dx * speed;
+      velocity[p + 1] = dy * speed;
+      velocity[p + 2] = 0;
+    }
+    emitter.live = count;
+    emitter.life = power ? 0.4 : 0.3;
+    emitter.gravity = 0;
+    emitter.drag = 0.88;
+    emitter.fade = 4;
+    emitter.points.geometry.setDrawRange(0, count);
+    emitter.points.geometry.attributes.position.needsUpdate = true;
+    emitter.points.material.color.set(color);
+    emitter.points.material.size = (power ? 0.34 : 0.26) * scale;
+    emitter.points.material.opacity = 1;
+    emitter.points.visible = true;
+    const animationClass = power ? 'arena-power' : 'arena-hit';
     this.canvas.classList.remove('arena-hit', 'arena-power');
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         if (!this.disposed) this.canvas.classList.add(animationClass);
       })
     );
+    this.wake();
   }
   punch(targetSide = 'enemy', strength = 1) {
     if (this.testAnimationScale === 0 || this.reducedMotion) return;
     this.cameraKick.x = (targetSide === 'enemy' ? -0.22 : 0.22) * strength;
     this.cameraKick.y = 0.09 * strength;
     this.cameraKick.z = -0.42 * strength;
+    this.wake();
   }
-  animate() {
+  // Paused: one final frame, then no frames until resumed. Used while a
+  // covering overlay hides the arena and during the results hand-off.
+  setPaused(paused) {
+    const next = Boolean(paused);
+    if (this.disposed || next === this.paused) return;
+    this.paused = next;
+    if (!next) {
+      this.wake();
+      return;
+    }
+    this.stopLoop();
+    if (!document.hidden) this.renderer.render(this.scene, this.camera);
+  }
+  // Schedule the next frame immediately (something changed). Restarting a
+  // stopped loop flushes the clock so the stop never becomes one big step.
+  wake() {
+    this.nextRender = 0;
+    if (this.frame !== undefined || this.disposed || this.paused || document.hidden) return;
+    this.clock.getDelta();
+    this.frame = requestAnimationFrame(this.animateBound);
+  }
+  stopLoop() {
+    cancelAnimationFrame(this.frame);
     this.frame = undefined;
-    if (this.disposed || document.hidden) return;
-    const dt = Math.min(0.04, this.clock.getDelta());
+  }
+  isActive() {
+    if (this.glowState.life > 0 || this.sparks.life > 0 || this.flashExposure > 0) return true;
+    for (const emitter of this.bursts) if (emitter.life > 0) return true;
+    const kick = this.cameraKick;
+    return (
+      kick.x !== 0 ||
+      kick.y !== 0 ||
+      kick.z !== 0 ||
+      this.tension !== this.targetTension ||
+      this.showdown !== this.targetShowdown
+    );
+  }
+  animate(now) {
+    this.frame = undefined;
+    if (this.disposed || this.paused || document.hidden) return;
+    const rate = this.isActive() ? this.fps.active : this.fps.ambient;
+    if (rate <= 0) return;
+    if (now < this.nextRender - 1) {
+      this.frame = requestAnimationFrame(this.animateBound);
+      return;
+    }
+    const interval = 1000 / rate;
+    this.nextRender = now - this.nextRender >= interval ? now + interval : this.nextRender + interval;
+    this.step(Math.min(0.04, this.clock.getDelta()));
+    this.renderer.render(this.scene, this.camera);
+    this.frame = requestAnimationFrame(this.animateBound);
+  }
+  step(dt) {
     this.elapsed += dt;
-    const t = this.elapsed;
-    this.tension += (this.targetTension - this.tension) * Math.min(1, dt * 2.4);
+    const t = this.elapsed,
+      frames = dt * 60;
+    this.tension = approach(this.tension, this.targetTension, dt * 2.4);
     // Final showdown: both sides on their last creature — the arena leans in
-    // (warmer rim light, slightly closer camera, brighter exposure).
-    this.showdown += (this.targetShowdown - this.showdown) * Math.min(1, dt * 1.6);
+    // (brighter light, slightly closer camera, brighter exposure).
+    this.showdown = approach(this.showdown, this.targetShowdown, dt * 1.6);
+    this.flashExposure = this.flashExposure > 0.002 ? this.flashExposure * Math.pow(0.87, frames) : 0;
     const chargePulse = this.arenaCharge * (0.5 + Math.sin(t * 5) * 0.5);
-    this.renderer.toneMappingExposure = 1.15 + this.tension * 0.2 + chargePulse * 0.07 + this.showdown * 0.12;
-    if (this.rim) this.rim.intensity = 25 + this.tension * 19 + chargePulse * 12 + this.showdown * 16;
-    if (this.moon) this.moon.intensity = 3.4 + this.tension * 1.4;
-    if (this.hemi) this.hemi.intensity = 1.8 + this.tension * 0.45;
+    this.renderer.toneMappingExposure =
+      1.15 + this.tension * 0.2 + chargePulse * 0.07 + this.showdown * 0.12 + this.flashExposure;
+    this.moon.intensity = 3.4 + this.tension * 1.4;
+    this.hemi.intensity = 1.8 + this.tension * 0.45;
+    this.rimPool.material.opacity = 0.26 + this.tension * 0.2 + chargePulse * 0.12 + this.showdown * 0.16;
     if (this.dust) {
       this.dust.rotation.y =
         t * (this.dust.userData.particle === 'ember' ? 0.06 : 0.022) * (1 + this.tension * 0.9);
@@ -551,21 +819,27 @@ export class ArenaScene {
       this.dust.material.opacity = 0.7 + this.tension * 0.22;
     }
     if (!this.reducedMotion) {
-      this.cameraKick.x *= 0.84;
-      this.cameraKick.y *= 0.84;
-      this.cameraKick.z *= 0.84;
+      const kick = this.cameraKick,
+        decay = Math.pow(0.84, frames);
+      kick.x *= decay;
+      kick.y *= decay;
+      kick.z *= decay;
+      if (Math.abs(kick.x) + Math.abs(kick.y) + Math.abs(kick.z) < 1e-3) kick.x = kick.y = kick.z = 0;
       this.cameraBase.z = 9.4 - this.tension * 0.5 - this.showdown * 0.55;
       this.cameraBase.y = 5.2 - this.tension * 0.12 - this.showdown * 0.2;
       this.camera.position.set(
-        this.cameraBase.x + this.cameraKick.x,
-        this.cameraBase.y + this.cameraKick.y,
-        this.cameraBase.z + this.cameraKick.z
+        this.cameraBase.x + kick.x,
+        this.cameraBase.y + kick.y,
+        this.cameraBase.z + kick.z
       );
-      this.camera.lookAt(this.cameraKick.x * -0.45, 0.55 + this.cameraKick.y * 0.2, 0);
+      this.camera.lookAt(kick.x * -0.45, 0.55 + kick.y * 0.2, 0);
       for (const item of this.animations) {
         const o = item.object,
           phase = t * (item.speed || 1) * (1 + this.tension * 0.35) + (item.offset || 0);
-        if (item.type === 'spin') o.rotation.y += dt * (item.speed || 0.1) * (1 + this.tension);
+        // Tori are laid flat or tilted with rotation.x; with Three's XYZ Euler
+        // order rotation.z spins them in their own plane (around world Y for
+        // the floor rings) instead of tumbling them around a diameter.
+        if (item.type === 'spin') o.rotation.z += dt * (item.speed || 0.1) * (1 + this.tension);
         if (item.type === 'orbit') {
           o.rotation.x += dt * item.speed * (1 + this.tension);
           o.rotation.y -= dt * item.speed * 0.7 * (1 + this.tension);
@@ -578,29 +852,44 @@ export class ArenaScene {
             0.5 + this.tension * 0.3 + Math.sin(phase * (item.speed || 1)) * (0.3 + chargePulse * 0.18);
       }
     }
-    if (!this.reducedMotion && this.burstLife > 0) {
-      const positions = this.burstPoints.geometry.attributes.position.array;
-      for (let i = 0; i < 180; i++) {
-        const p = i * 3;
-        if (positions[p] > 50) continue;
-        positions[p] += this.burstVelocity[p] * dt;
-        positions[p + 1] += this.burstVelocity[p + 1] * dt;
-        positions[p + 2] += this.burstVelocity[p + 2] * dt;
-        this.burstVelocity[p + 1] -= 2.9 * dt;
-      }
-      this.burstLife = Math.max(0, this.burstLife - dt);
-      this.burstPoints.material.opacity = Math.min(1, this.burstLife * 2);
-      this.fxLight.intensity *= 0.87;
-      this.burstPoints.geometry.attributes.position.needsUpdate = true;
-    } else if (this.reducedMotion && this.fxLight.intensity > 0.01) {
-      this.fxLight.intensity *= 0.87;
+    this.stepGlow(dt);
+    for (const emitter of this.bursts) this.stepEmitter(emitter, dt, frames);
+    this.stepEmitter(this.sparks, dt, frames);
+  }
+  stepGlow(dt) {
+    const state = this.glowState;
+    if (state.life <= 0) return;
+    state.life = Math.max(0, state.life - dt);
+    const remaining = state.life / state.duration,
+      size = state.size * (this.reducedMotion ? 1 : 0.8 + 0.35 * (1 - remaining * remaining));
+    this.glow.scale.set(size, size, 1);
+    this.glow.material.opacity = state.peak * remaining;
+    if (state.life === 0) this.glow.visible = false;
+  }
+  stepEmitter(emitter, dt, frames) {
+    if (emitter.life <= 0) return;
+    const positions = emitter.points.geometry.attributes.position.array,
+      velocity = emitter.velocity,
+      drag = emitter.drag === 1 ? 1 : Math.pow(emitter.drag, frames),
+      end = emitter.live * 3;
+    for (let p = 0; p < end; p += 3) {
+      positions[p] += velocity[p] * dt;
+      positions[p + 1] += velocity[p + 1] * dt;
+      positions[p + 2] += velocity[p + 2] * dt;
+      velocity[p] *= drag;
+      velocity[p + 1] = velocity[p + 1] * drag - emitter.gravity * dt;
+      velocity[p + 2] *= drag;
     }
-    this.renderer.render(this.scene, this.camera);
-    this.frame = requestAnimationFrame(this.animateBound);
+    emitter.points.geometry.attributes.position.needsUpdate = true;
+    emitter.life = Math.max(0, emitter.life - dt);
+    emitter.points.material.opacity = Math.min(1, emitter.life * emitter.fade);
+    if (emitter.life === 0) emitter.points.visible = false;
   }
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
-    cancelAnimationFrame(this.frame);
+    this.stopLoop();
+    this.anchorResolver = null;
     globalThis.removeEventListener('resize', this.onResize);
     this.resizeObserver?.disconnect();
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
@@ -610,6 +899,9 @@ export class ArenaScene {
       if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
       else o.material?.dispose();
     });
+    this.softDot.dispose();
     this.renderer.dispose();
+    // Free the drawing buffer (and its MSAA storage) now instead of at GC.
+    this.renderer.forceContextLoss();
   }
 }

@@ -21,7 +21,7 @@
   border: 1px solid color-mix(in srgb, var(--combo-credit-color) 70%, #fff);
   border-radius: 0 18px 18px 0;
   background: linear-gradient(100deg, color-mix(in srgb, var(--combo-credit-color) 35%, #120b2a), #080a1deb);
-  box-shadow: 0 0 35px color-mix(in srgb, var(--combo-credit-color) 35%, transparent);
+  transform-origin: left center;
   animation: comboCreditCutin 0.52s cubic-bezier(0.15, 0.8, 0.2, 1) forwards;
 }
 .combo-credit-call.player {
@@ -30,14 +30,13 @@
 .combo-credit-call.enemy {
   right: 0;
   border-radius: 18px 0 0 18px;
-  transform: scaleX(-1);
+  scale: -1 1;
 }
 .combo-credit-call img {
   width: 88px;
   height: 88px;
   object-fit: contain;
   image-rendering: pixelated;
-  filter: drop-shadow(0 8px 7px #0008);
 }
 .combo-credit-call span {
   display: grid;
@@ -67,18 +66,16 @@
 @keyframes comboCreditCutin {
   0% {
     opacity: 0;
-    clip-path: inset(0 100% 0 0);
-    transform: translateX(-50px) skewX(-10deg);
+    transform: translateX(-50px) skewX(-10deg) scaleX(0.3);
   }
   45%,
   78% {
     opacity: 1;
-    clip-path: inset(0);
-    transform: translateX(0);
+    transform: translateX(0) skewX(0deg) scaleX(1);
   }
   100% {
     opacity: 0;
-    transform: translateX(18px);
+    transform: translateX(18px) skewX(0deg) scaleX(1);
   }
 }
 @media (max-width: 600px) {
@@ -181,11 +178,10 @@ body.reduced-motion .combo-credit-call {
 }
 
 /* Camera direction follows the move grammar. The Three.js arena gets a damped
-   punch while this layer composes both fighters as one dramatic shot. */
+   punch while this layer composes both fighters as one dramatic shot:
+   transforms only, never a filter over the fighters and FX. */
 .battle-stage-camera {
-  transition:
-    transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
-    filter 0.25s;
+  transition: transform 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .camera-player.camera-strike .battle-stage-camera {
   transform: translate(1.4vw, -0.5vh) scale(1.025);
@@ -201,24 +197,18 @@ body.reduced-motion .combo-credit-call {
 }
 .camera-wide .battle-stage-camera {
   transform: scale(0.94);
-  filter: saturate(1.2);
 }
 .camera-heavy .battle-stage-camera {
   transform: scale(1.075);
-  filter: contrast(1.08);
 }
 .camera-ultimate .battle-stage-camera {
   transform: scale(1.12);
-  filter: contrast(1.15) saturate(1.35);
 }
 .camera-heavy.camera-impact .battle-stage-camera {
   animation: cameraCrash 0.36s cubic-bezier(0.1, 0.8, 0.2, 1);
 }
 .camera-ultimate.camera-impact .battle-stage-camera {
   animation: cameraUltimate 0.55s cubic-bezier(0.1, 0.8, 0.2, 1);
-}
-.camera-rush.camera-impact .fighter.hit {
-  filter: drop-shadow(0 0 30px var(--fx-color, #fff));
 }
 @keyframes cameraCrash {
   0% {
@@ -251,7 +241,6 @@ body.reduced-motion .combo-credit-call {
 @media (prefers-reduced-motion: reduce) {
   .battle-stage-camera {
     transform: none !important;
-    filter: none !important;
   }
   .camera-heavy.camera-impact .battle-stage-camera,
   .camera-ultimate.camera-impact .battle-stage-camera {
@@ -260,7 +249,6 @@ body.reduced-motion .combo-credit-call {
 }
 body.reduced-motion .battle-stage-camera {
   transform: none !important;
-  filter: none !important;
 }
 body.reduced-motion .camera-heavy.camera-impact .battle-stage-camera,
 body.reduced-motion .camera-ultimate.camera-impact .battle-stage-camera {

@@ -4,12 +4,13 @@ import {
   MUSIC_THEMES,
   SCREEN_THEME_MAP,
   SCHEDULER_HORIZON_SECONDS,
-  SCHEDULER_INTERVAL_MS,
+  SCHEDULER_STALE_SECONDS,
   SoundSystem,
   calculateTension,
   computeMixerLevels,
   resolveThemeId,
 } from '../src/sound.js';
+import { MOVES } from '../src/data/moves.js';
 import {
   DEFAULT_SAVE,
   SAVE_MIGRATIONS,
@@ -51,8 +52,6 @@ test('music themes cover every screen family and authored arena', () => {
   assert.equal(resolveThemeId('battle:eclipse'), 'eclipse');
   assert.equal(resolveThemeId('battle:not-an-arena'), 'crystal');
   assert.equal(resolveThemeId('gauntlet-boon'), 'selection');
-  assert.equal(SCHEDULER_INTERVAL_MS, 25);
-  assert.equal(SCHEDULER_HORIZON_SECONDS, 0.12);
   const sound = new SoundSystem(DEFAULT_SAVE);
   assert.equal(sound.setScreen('title'), true);
   assert.equal(sound.setScreen('settings'), false);
@@ -181,80 +180,126 @@ test('shared SFX nodes disconnect only after the final source ends', () => {
   assert.deepEqual(disconnected, ['shared']);
 });
 
-test('patch starts every SFX source before stopping and cleans each chain on ended', () => {
-  const makeParam = () => ({
+// Minimal Web Audio stand-in: records the connection graph, source start/stop times and
+// automation targets so routing and lifecycle behaviour can be checked without a browser.
+function makeParam() {
+  return {
     value: 1,
-    setValueAtTime() {},
+    targets: [],
+    setValueAtTime(value) {
+      this.value = value;
+    },
+    setTargetAtTime(value) {
+      this.targets.push(value);
+    },
     exponentialRampToValueAtTime() {},
-    setTargetAtTime() {},
+    linearRampToValueAtTime() {},
     cancelScheduledValues() {},
-  });
-  class FakeNode {
-    constructor(kind) {
-      this.kind = kind;
-      this.gain = makeParam();
-      this.frequency = makeParam();
-      this.Q = makeParam();
-      this.listeners = {};
-      this.started = [];
-      this.stopped = [];
-      this.disconnects = 0;
-    }
-    connect(node) {
-      return node;
-    }
-    disconnect() {
-      this.disconnects += 1;
-    }
-    addEventListener(type, listener) {
-      this.listeners[type] = listener;
-    }
-    start(time) {
-      this.started.push(time);
-    }
-    stop(time) {
-      assert.ok(this.started.length, `${this.kind} stopped before start`);
-      this.stopped.push(time);
-    }
-    emitEnded() {
-      this.listeners.ended?.();
-    }
-  }
-  class FakeAudioContext {
-    constructor() {
-      this.currentTime = 1;
-      this.sampleRate = 100;
-      this.state = 'running';
-      this.destination = new FakeNode('destination');
-      this.nodes = [];
-    }
-    node(kind) {
-      const node = new FakeNode(kind);
-      this.nodes.push(node);
-      return node;
-    }
-    createGain() {
-      return this.node('gain');
-    }
-    createOscillator() {
-      return this.node('oscillator');
-    }
-    createBufferSource() {
-      return this.node('buffer-source');
-    }
-    createBiquadFilter() {
-      return this.node('filter');
-    }
-    createBuffer(channels, length) {
-      return { numberOfChannels: channels, getChannelData: () => new Float32Array(length) };
-    }
-  }
+  };
+}
 
-  const sound = new SoundSystem(DEFAULT_SAVE);
-  const ctx = new FakeAudioContext();
-  sound.ctx = ctx;
-  sound.graph = { sfxBus: ctx.createGain(), reverbIn: ctx.createGain() };
+class FakeNode {
+  constructor(kind) {
+    this.kind = kind;
+    for (const name of ['gain', 'frequency', 'Q', 'threshold', 'knee', 'ratio', 'attack', 'release'])
+      this[name] = makeParam();
+    this.outputs = new Set();
+    this.listeners = {};
+    this.started = [];
+    this.stopped = [];
+    this.disconnects = 0;
+  }
+  connect(node) {
+    this.outputs.add(node);
+    return node;
+  }
+  disconnect() {
+    this.outputs.clear();
+    this.disconnects += 1;
+  }
+  addEventListener(type, listener) {
+    this.listeners[type] = listener;
+  }
+  start(time) {
+    this.started.push(time);
+  }
+  stop(time) {
+    assert.ok(this.started.length, `${this.kind} stopped before start`);
+    this.stopped.push(time);
+  }
+  emitEnded() {
+    this.listeners.ended?.();
+  }
+}
+
+class FakeAudioContext {
+  constructor() {
+    this.currentTime = 1;
+    this.sampleRate = 100;
+    this.state = 'running';
+    this.destination = new FakeNode('destination');
+    this.nodes = [];
+    this.suspended = 0;
+  }
+  node(kind) {
+    const node = new FakeNode(kind);
+    this.nodes.push(node);
+    return node;
+  }
+  createGain() {
+    return this.node('gain');
+  }
+  createOscillator() {
+    return this.node('oscillator');
+  }
+  createBufferSource() {
+    return this.node('buffer-source');
+  }
+  createBiquadFilter() {
+    return this.node('filter');
+  }
+  createConvolver() {
+    return this.node('convolver');
+  }
+  createDynamicsCompressor() {
+    return this.node('compressor');
+  }
+  createBuffer(channels, length) {
+    return { numberOfChannels: channels, getChannelData: () => new Float32Array(length) };
+  }
+  suspend() {
+    this.suspended += 1;
+    return Promise.resolve();
+  }
+}
+
+// Music volume 0 keeps the real setInterval scheduler from starting inside unit tests.
+function soundWithGraph(settings = { ...DEFAULT_SAVE, musicVolume: 0 }) {
+  const sound = new SoundSystem(settings);
+  sound.ctx = new FakeAudioContext();
+  sound.buildGraph();
+  return sound;
+}
+
+function pathsToOutput(node, destination, trail = []) {
+  if (node === destination) return [trail];
+  return [...node.outputs].flatMap((next) => pathsToOutput(next, destination, [...trail, next]));
+}
+
+const sourcesCreatedBy = (sound, action) => {
+  const before = sound.ctx.nodes.length;
+  action();
+  return sound.ctx.nodes
+    .slice(before)
+    .filter((node) => node.kind === 'oscillator' || node.kind === 'buffer-source');
+};
+
+test('patch starts every SFX source before stopping and cleans each chain on ended', () => {
+  const sound = soundWithGraph();
+  const before = sound.ctx.nodes.length;
   sound.patch({ duration: 0.16, noiseGain: 0.02 });
+  const session = [sound.sfxSession.dry, sound.sfxSession.wet];
+  const patchNodes = sound.ctx.nodes.slice(before).filter((node) => !session.includes(node));
 
   assert.equal(sound.sfxSources.size, 3);
   for (const source of sound.sfxSources) {
@@ -263,5 +308,176 @@ test('patch starts every SFX source before stopping and cleans each chain on end
     source.emitEnded();
   }
   assert.equal(sound.sfxSources.size, 0);
-  assert.ok(ctx.nodes.slice(2).every((node) => node.disconnects === 1));
+  assert.ok(patchNodes.every((node) => node.disconnects === 1));
+  assert.ok(
+    session.every((node) => node.disconnects === 0),
+    'the session outlives one cue'
+  );
+});
+
+test('every dry and wet path of each category passes through that category controls only', () => {
+  const sound = soundWithGraph({ ...DEFAULT_SAVE });
+  const { graph, ctx } = sound;
+  const [note] = sourcesCreatedBy(sound, () =>
+    sound.musicNote(440, 1, 0.5, { gain: 0.02, wave: 'sine', filter: 1500, attack: 0.01, reverb: 0.4 })
+  );
+  const [noise] = sourcesCreatedBy(sound, () => sound.musicNoise(1, 1, 600));
+  const [tension] = sourcesCreatedBy(sound, () =>
+    sound.musicNote(880, 1, 0.2, {
+      gain: 0.02,
+      wave: 'triangle',
+      filter: 1150,
+      attack: 0.01,
+      reverb: 0.12,
+      tension: true,
+    })
+  );
+  const sfx = sourcesCreatedBy(sound, () => sound.patch({ duration: 0.2, reverb: 0.4 }));
+  const viaConvolver = (paths) => paths.some((path) => path.some((node) => node.kind === 'convolver'));
+
+  for (const source of [note, noise]) {
+    const paths = pathsToOutput(source, ctx.destination);
+    assert.ok(viaConvolver(paths) && paths.some((path) => !path.some((node) => node.kind === 'convolver')));
+    for (const path of paths) {
+      assert.ok(path.includes(sound.themeBus) || path.includes(sound.themeWetBus), 'theme fade');
+      for (const control of [graph.musicLevel, graph.musicDuck, graph.master])
+        assert.ok(path.includes(control));
+      assert.ok(!path.includes(graph.sfxLevel));
+    }
+  }
+  const tensionPaths = pathsToOutput(tension, ctx.destination);
+  assert.ok(viaConvolver(tensionPaths));
+  for (const path of tensionPaths)
+    for (const control of [sound.tensionThemeBus, graph.tensionLevel, graph.musicLevel, graph.musicDuck])
+      assert.ok(path.includes(control));
+  for (const source of sfx) {
+    const paths = pathsToOutput(source, ctx.destination);
+    assert.ok(viaConvolver(paths));
+    for (const path of paths) {
+      assert.ok(path.includes(graph.sfxLevel) && path.includes(graph.master));
+      assert.ok(path.includes(sound.sfxSession.dry) || path.includes(sound.sfxSession.wet));
+      assert.ok(!path.includes(graph.musicLevel) && !path.includes(graph.musicDuck));
+    }
+  }
+
+  sound.update({ ...DEFAULT_SAVE, musicVolume: 0, sfxVolume: 0 });
+  assert.equal(graph.musicLevel.gain.targets.at(-1), 0);
+  assert.equal(graph.sfxLevel.gain.targets.at(-1), 0);
+  assert.equal(graph.tensionLevel.gain.targets.at(-1), 0, 'no tension, no tension layer');
+});
+
+test('leaving a screen stops its queued cues while the results sting plays once per arrival', () => {
+  const sound = soundWithGraph();
+  const { ctx } = sound;
+  const signature = Object.values(MOVES).find((move) => move.signature);
+  const lastStop = (source) => source.stopped.at(-1);
+  sound.setScreen('selection');
+  sound.setScreen('battle:crystal');
+  const battleCues = sourcesCreatedBy(sound, () => sound.move(signature));
+  assert.ok(
+    battleCues.some((source) => source.started[0] > ctx.currentTime),
+    'layers are queued ahead'
+  );
+  assert.deepEqual(
+    sourcesCreatedBy(sound, () => sound.victory()),
+    [],
+    'no sting on the battle screen'
+  );
+
+  ctx.currentTime = 1.05;
+  sound.setScreen('victory');
+  for (const source of battleCues) assert.ok(lastStop(source) <= ctx.currentTime + 0.05);
+
+  const sting = sourcesCreatedBy(sound, () => sound.victory());
+  assert.ok(sting.length >= 4);
+  const naturalStops = sting.map(lastStop);
+  assert.equal(sound.setScreen('victory'), false, 're-rendered results keep the sting');
+  assert.deepEqual(sting.map(lastStop), naturalStops);
+  assert.ok(
+    sting.every((source) => lastStop(source) > source.started[0] + 0.05),
+    'sting plays out'
+  );
+
+  sound.setScreen('settings');
+  assert.ok(
+    sting.every((source) => lastStop(source) <= ctx.currentTime + 0.05),
+    'leaving stops the sting'
+  );
+  sound.setScreen('victory');
+  assert.deepEqual(
+    sourcesCreatedBy(sound, () => sound.victory()),
+    [],
+    'settings return does not replay'
+  );
+
+  sound.setScreen('title');
+  sound.setScreen('battle:volcano');
+  sound.setScreen('defeat');
+  assert.ok(sourcesCreatedBy(sound, () => sound.defeat()).length >= 4, 'the next battle re-arms');
+
+  const muted = soundWithGraph({ ...DEFAULT_SAVE, musicVolume: 0, muted: true });
+  muted.setScreen('battle:crystal');
+  muted.setScreen('victory');
+  muted.victory();
+  muted.update({ ...DEFAULT_SAVE, musicVolume: 0 });
+  assert.deepEqual(
+    sourcesCreatedBy(muted, () => muted.victory()),
+    [],
+    'unmuting later does not celebrate'
+  );
+});
+
+test('hiding the page stops SFX and music so nothing resumes mid-attack', () => {
+  const sound = soundWithGraph();
+  const cues = sourcesCreatedBy(sound, () => {
+    sound.patch({ duration: 0.4, delay: 0.2 });
+    sound.musicNote(440, 1, 1, { gain: 0.02, wave: 'sine', filter: 1500, attack: 0.01, reverb: 0.4 });
+  });
+  sound.handleVisibility(true);
+  assert.equal(sound.sfxSources.size, 0);
+  assert.equal(sound.musicSources.size, 0);
+  assert.ok(cues.every((source) => source.stopped.at(-1) <= sound.ctx.currentTime));
+  assert.equal(sound.ctx.suspended, 1);
+  assert.deepEqual(
+    sourcesCreatedBy(sound, () => sound.hit('flame')),
+    [],
+    'hidden pages stay silent'
+  );
+});
+
+test('the music scheduler skips steps a stall made stale and never schedules in the past', () => {
+  const sound = new SoundSystem(DEFAULT_SAVE);
+  sound.ctx = new FakeAudioContext();
+  sound.ctx.currentTime = 10;
+  sound.themeId = 'crystal';
+  const stepDuration = 60 / MUSIC_THEMES.crystal.tempo / 4;
+  const scheduled = [];
+  sound.scheduleMusicStep = (config, step, time) =>
+    scheduled.push({ step, time, now: sound.ctx.currentTime });
+  const origin = 10.05;
+  sound.nextStepTime = origin;
+  sound.stepIndex = 0;
+
+  sound.scheduleAhead();
+  assert.ok(scheduled.length > 0);
+  assert.ok(scheduled.every(({ time }) => time >= 10 && time < 10 + SCHEDULER_HORIZON_SECONDS));
+
+  const beforeStall = scheduled.length;
+  sound.ctx.currentTime += 0.6;
+  sound.scheduleAhead();
+  const afterStall = scheduled.slice(beforeStall);
+  assert.ok(afterStall.length > 0 && afterStall.length < 0.6 / stepDuration, 'no catch-up burst');
+  assert.ok(afterStall[0].step > scheduled[beforeStall - 1].step + 1, 'stale steps were skipped');
+  for (const { step, time, now } of afterStall) {
+    assert.ok(time >= now);
+    assert.ok(Math.abs(time - (origin + step * stepDuration)) < 1e-9, 'the rhythmic grid is kept');
+  }
+
+  const slightlyLate = sound.nextStepTime + SCHEDULER_STALE_SECONDS / 2;
+  const nextStep = sound.stepIndex;
+  sound.ctx.currentTime = slightlyLate;
+  const beforeLate = scheduled.length;
+  sound.scheduleAhead();
+  assert.equal(scheduled[beforeLate].step, nextStep, 'a barely late step still plays');
+  assert.equal(scheduled[beforeLate].time, slightlyLate, 'starting now with its full envelope');
 });

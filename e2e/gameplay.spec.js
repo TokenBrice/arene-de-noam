@@ -77,7 +77,8 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   const resultHeading = page.getByRole('heading', { name: /Victoire|Belle bataille/ });
   await expect(resultHeading).toBeVisible();
   const victory = (await resultHeading.textContent()).includes('Victoire');
-  await expect(page.locator('.performance-grade')).toBeVisible();
+  // Defeat stays friendly: the grade card only appears on a victory.
+  await expect(page.locator('.performance-grade')).toHaveCount(victory ? 1 : 0);
   await expect(page.locator('.mastery-reward')).toHaveCount(3);
   await expect(page.locator('.result-team img')).toHaveCount(3);
   expect(
@@ -86,12 +87,34 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
       .evaluateAll((images) => images.map((image) => getComputedStyle(image).opacity))
   ).toEqual(['1', '1', '1']);
   await expect(page.locator('.battle-recap')).toBeVisible();
-  await expect(page.locator('.battle-recap')).toContainText('Combos');
   await expect(page.getByText('CRÉATURE DU MATCH')).toBeVisible();
-  await expect(page.locator('.performance-grade .grade-detail > span')).toHaveCount(victory ? 3 : 2);
-  if (victory) await expect(page.locator('.performance-grade')).toContainText('Victoire');
-  await expect(page.locator('.performance-grade')).toContainText('Tours');
-  await expect(page.locator('.performance-grade')).toContainText('Survivants');
+  // The recap lists only non-zero totals, and those totals agree with the trio report.
+  const recapStats = await page
+    .locator('.battle-recap .recap-stats > span')
+    .evaluateAll((spans) =>
+      spans.map((span) => [
+        span.querySelector('small').textContent,
+        Number(span.querySelector('b').textContent),
+      ])
+    );
+  for (const [, value] of recapStats) expect(value).toBeGreaterThan(0);
+  const trio = await page
+    .locator('.squad-report article dl')
+    .evaluateAll((lists) =>
+      lists.map((dl) => [...dl.querySelectorAll('dd')].map((dd) => Number(dd.textContent)))
+    );
+  const dealt = trio.reduce((sum, [damage]) => sum + damage, 0),
+    combos = trio.reduce((sum, [, , comboCount]) => sum + comboCount, 0);
+  expect(dealt).toBeGreaterThan(0);
+  const recap = Object.fromEntries(recapStats);
+  expect(recap['infligés']).toBe(dealt);
+  expect(recap.Combos).toBe(combos > 0 ? combos : undefined);
+  if (victory) {
+    await expect(page.locator('.performance-grade .grade-detail > span')).toHaveCount(3);
+    await expect(page.locator('.performance-grade')).toContainText('Victoire');
+    await expect(page.locator('.performance-grade')).toContainText('Tours');
+    await expect(page.locator('.performance-grade')).toContainText('Survivants');
+  }
   await expect(page.locator('.squad-report article')).toHaveCount(3);
   await expect(page.locator('.squad-report')).toContainText('RAPPORT DU TRIO');
   await expect(page.locator('.squad-report')).toContainText('actions');
@@ -298,9 +321,43 @@ test('restorative techniques display their recovered HP at the creature', async 
   await expect(page.getByRole('heading', { name: 'La Dernière Lueur' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
   await page.locator('[data-move="bubble_burst"]').click();
-  await expect(page.locator('[data-move="healing_rain"]')).toBeEnabled({ timeout: 5000 });
+  await expect(page.locator('[data-move="healing_rain"]')).toBeEnabled({ timeout: 15000 });
+  // Readouts remove themselves when their animation ends, so record each heal
+  // number as it lands: it rides the readout layer, anchored on the healed side.
+  await page.evaluate(() => {
+    window.__healReadouts = [];
+    new MutationObserver((records) => {
+      for (const node of records.flatMap((record) => [...record.addedNodes])) {
+        if (!(node instanceof Element) || !node.matches('.fx-readouts > .fx-number.heal')) continue;
+        const box = node.getBoundingClientRect(),
+          sprite = document.querySelector('#fighter-player > img').getBoundingClientRect();
+        window.__healReadouts.push({
+          text: node.textContent,
+          player: node.classList.contains('side-player'),
+          visible: getComputedStyle(node).visibility === 'visible' && box.width > 0,
+          tactical: Boolean(document.querySelector('.fx-tactical.tactical-heal.from-player')),
+          x: box.x + box.width / 2,
+          y: box.y + box.height / 2,
+          sprite: { left: sprite.left, right: sprite.right, top: sprite.top, bottom: sprite.bottom },
+        });
+      }
+    }).observe(document.querySelector('.battle-screen'), { childList: true, subtree: true });
+  });
   await page.locator('[data-move="healing_rain"]').click();
-  await expect(page.locator('.tactical-heal .tactical-number')).toContainText(/^\+\d+$/);
+  await expect
+    .poll(() => page.evaluate(() => window.__healReadouts.length), { timeout: 15000 })
+    .toBeGreaterThan(0);
+  const [heal] = await page.evaluate(() => window.__healReadouts);
+  expect(heal).toMatchObject({
+    text: expect.stringMatching(/^\+\d+$/),
+    player: true,
+    visible: true,
+    tactical: true,
+  });
+  expect(heal.x).toBeGreaterThan(heal.sprite.left);
+  expect(heal.x).toBeLessThan(heal.sprite.right);
+  expect(heal.y).toBeGreaterThan(heal.sprite.top);
+  expect(heal.y).toBeLessThan(heal.sprite.bottom);
 });
 
 test('reaching full Surge triggers a creature-specific Signature-ready cut-in', async ({ page }) => {
@@ -336,8 +393,9 @@ test('roster cards scout favorable targets and threats in the revealed rival tri
   await page.goto('/?enemy=kordane,calderoc,virelia');
   await page.getByRole('button', { name: /Combat rapide/ }).click();
   await expect(page.locator('.scout-read')).toHaveCount(30);
-  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 cibles favorables');
-  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 menaces');
+  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 cible favorable');
+  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 menace');
+  await expect(page.locator('.scout-read').filter({ hasText: /\b1 (cibles|menaces)\b/ })).toHaveCount(0);
   await expect(page.locator('.creature-card.scout-strong')).not.toHaveCount(0);
 });
 

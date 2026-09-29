@@ -83,9 +83,7 @@
 }
 .kit-move.signature {
   border-color: #ffe17155;
-  background:
-    linear-gradient(120deg, #ffd85818, transparent),
-    var(--panel);
+  background: linear-gradient(120deg, #ffd85818, transparent), var(--panel);
 }
 .kit-move.signature i {
   color: #382500;
@@ -332,8 +330,10 @@
   background: linear-gradient(120deg, #3cd7e51d, #9670ff16) !important;
   font-size: var(--text-xs) !important;
 }
-.remix-team-btn:hover {
-  box-shadow: 0 0 18px #51d6e52c;
+@media (hover: hover) {
+  .remix-team-btn:hover {
+    box-shadow: 0 0 18px #51d6e52c;
+  }
 }
 .selected-row.recommended-lead {
   border-color: #7de9f056;
@@ -365,9 +365,8 @@
   padding: 3px 11px;
   border: 1px solid #ffffff1a;
   border-radius: 16px;
-  background: #0b0e2bea;
+  background: #0b0e2b;
   box-shadow: 0 12px 30px #0005;
-  backdrop-filter: blur(14px);
 }
 .bestiary-tools label {
   display: grid;
@@ -514,8 +513,10 @@
   text-align: left;
   cursor: pointer;
 }
-.draft-slot[data-draft-lead]:hover {
-  border-color: #8cebf266;
+@media (hover: hover) {
+  .draft-slot[data-draft-lead]:hover {
+    border-color: #8cebf266;
+  }
 }
 .draft-slot.lead {
   border-color: #ffe172;
@@ -551,8 +552,10 @@
   text-align: left;
   cursor: pointer;
 }
-.gauntlet-condition > button:hover {
-  border-color: #7ae8bd55;
+@media (hover: hover) {
+  .gauntlet-condition > button:hover {
+    border-color: #7ae8bd55;
+  }
 }
 .gauntlet-condition > button.lead {
   border-color: #ffe27880;
@@ -587,11 +590,10 @@
     border: 1px solid #83e9f064;
     border-radius: 15px;
     transform: translateX(-50%);
-    background: #090c28ed;
+    background: #0c0f2e;
     box-shadow:
       0 10px 35px #0009,
       0 0 20px #5ee0ed1c;
-    backdrop-filter: blur(14px);
   }
   .mobile-selection-dock > div {
     display: flex;
@@ -815,4 +817,21 @@ body.reduced-motion .battle-vignette {
   .battle-plan-body select {
     width: 100%;
   }
+}
+/* Team-select compositing (PERF-12). The horizontal rails are composited
+   scrollers; lifting them above the in-flow page keeps later positioned
+   content (cards, the kit sprite with its drop-shadow) out of an "overlap"
+   layer that otherwise spans the whole scrolled page. */
+[data-page='selection']
+  :is(.custom-squad-track, .squad-preset-track, .affinity-tabs, .class-tabs, .kit-showcase-moves) {
+  position: relative;
+  z-index: 1;
+}
+/* Off-screen roster cards skip layout and paint until scrolled near. Only the
+   block size is estimated (grid tracks give the width); 290px sits between
+   the rendered phone (281-305px) and desktop (301-329px) card heights, and
+   `auto` then remembers each card's real height. */
+.creature-grid > .creature-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 290px;
 }

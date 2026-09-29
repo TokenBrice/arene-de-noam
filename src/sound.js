@@ -2,7 +2,26 @@ const clamp01 = (value, fallback = 0) =>
   Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 
 export const SCHEDULER_INTERVAL_MS = 25;
-export const SCHEDULER_HORIZON_SECONDS = 0.12;
+// Music lookahead (not SFX latency): long enough to ride out a ~250 ms main-thread stall.
+export const SCHEDULER_HORIZON_SECONDS = 0.25;
+// A step later than this is dropped (the grid jumps to the next boundary) instead of firing a
+// burst of past notes; a step late by less starts at `currentTime` with its full envelope.
+export const SCHEDULER_STALE_SECONDS = 0.03;
+
+// Gain staging for phone speakers at factory sliders (music 0.45, SFX 0.8): the music bed sits
+// around −22 LUFS and important cues 6–10 dB above it. Trims multiply the slider value, so the
+// sliders keep their full range and zero is still silence. Reverb returns sit inside each
+// category chain, after the category level/duck, so every control owns its wet signal too.
+const MUSIC_TRIM = 4.2;
+const SFX_TRIM = 9.75;
+const MUSIC_REVERB_SECONDS = 1.7;
+const MUSIC_REVERB_RETURN = 0.5;
+const SFX_ROOM_SECONDS = 0.55;
+const SFX_ROOM_RETURN = 0.45;
+const TENSION_LEVEL = 0.34;
+const TENSION_REVERB_SEND = 0.12;
+const SFX_SESSION_FADE_SECONDS = 0.03;
+const RESULT_SCREENS = new Set(['victory', 'defeat', 'results']);
 
 export const SCREEN_THEME_MAP = Object.freeze({
   title: 'title',
@@ -19,8 +38,11 @@ export const SCREEN_THEME_MAP = Object.freeze({
   results: 'victory',
 });
 
+// `level` is an optional per-theme loudness trim (mastering): the darker, low-pass-heavy arenas
+// measure several LU quieter than the rest at the same voice gains.
 const theme = (config) =>
   Object.freeze({
+    level: 1,
     ...config,
     scale: Object.freeze(config.scale),
     chords: Object.freeze(config.chords.map((chord) => Object.freeze(chord))),
@@ -109,6 +131,7 @@ export const MUSIC_THEMES = Object.freeze({
     wave: 'triangle',
     colorWave: 'sine',
     filter: 980,
+    level: 1.1,
   }),
   tidal: theme({
     root: 47,
@@ -141,6 +164,7 @@ export const MUSIC_THEMES = Object.freeze({
     wave: 'sawtooth',
     colorWave: 'triangle',
     filter: 820,
+    level: 1.35,
   }),
   astral: theme({
     root: 52,
@@ -173,6 +197,7 @@ export const MUSIC_THEMES = Object.freeze({
     wave: 'triangle',
     colorWave: 'sawtooth',
     filter: 720,
+    level: 1.26,
   }),
   victory: theme({
     root: 55,
@@ -248,6 +273,7 @@ export class SoundSystem {
     this.themeId = null;
     this.screenId = null;
     this.themeBus = null;
+    this.themeWetBus = null;
     this.tensionThemeBus = null;
     this.scheduler = 0;
     this.nextStepTime = 0;
@@ -255,10 +281,15 @@ export class SoundSystem {
     this.tension = 0;
     this.hidden = Boolean(globalThis.document?.hidden);
     this.musicSources = new Set();
+    // SFX belong to the screen session that requested them (see openSfxSession); leaving the
+    // screen fades that session's buses and stops its sources, including audio-clock-scheduled
+    // future layers, while cues the new screen requests afterwards start a fresh session.
+    this.sfxSession = null;
     this.sfxSources = new Set();
+    // Arriving at results from gameplay arms exactly one sting; a settings detour does not.
+    this.stingArmed = false;
     this.noiseBuffers = new Map();
     this.failureNotified = false;
-    this.suppressSfxUntil = 0;
     this.audioDebug = new URLSearchParams(globalThis.location?.search || '').get('audiodebug') === '1';
     this._nodeCount = this.audioDebug ? 0 : undefined;
     this._createdNodeCount = this.audioDebug ? 0 : undefined;
@@ -336,6 +367,9 @@ export class SoundSystem {
     if (this.hidden) {
       this.stopScheduler();
       this.cancelSources(this.musicSources);
+      // Stale hits/cries must not resume mid-attack: drop the SFX session and the room's tail.
+      this.closeSfxSession(0);
+      this.resetSfxRoom();
       this.ctx.suspend?.().catch?.(() => {});
     } else {
       void this.unlock();
@@ -349,36 +383,50 @@ export class SoundSystem {
     );
   }
 
+  // Music: voices → theme bus (per-theme fade) → musicLevel → musicDuck → master, and voice
+  // sends → theme wet bus (same fade) → hall → return → musicLevel. The tension layer runs
+  // tension theme bus → tensionLevel → musicLevel, with one fixed send into the hall.
+  // SFX: patch → session dry bus → sfxLevel → master, and patch sends → session wet bus →
+  // high-passed short room → return → sfxLevel. Sliders, theme fades, tension and ducking
+  // therefore scale the wet signal exactly like the dry one.
   buildGraph() {
     const ctx = this.ctx;
+    const now = ctx.currentTime;
     const master = this.createNode('createGain');
     const compressor = this.createNode('createDynamicsCompressor');
     const musicLevel = this.createNode('createGain');
     const tensionLevel = this.createNode('createGain');
+    const tensionSend = this.createNode('createGain');
     const musicDuck = this.createNode('createGain');
-    const sfxBus = this.createNode('createGain');
-    const reverbIn = this.createNode('createGain');
-    const convolver = this.createNode('createConvolver');
-    const reverbReturn = this.createNode('createGain');
+    const musicReverb = this.createNode('createConvolver');
+    const musicReturn = this.createNode('createGain');
+    const sfxLevel = this.createNode('createGain');
+    const sfxRoomFilter = this.createNode('createBiquadFilter');
+    const sfxRoom = this.createNode('createConvolver');
+    const sfxReturn = this.createNode('createGain');
 
-    compressor.threshold.setValueAtTime(-18, ctx.currentTime);
-    compressor.knee.setValueAtTime(18, ctx.currentTime);
-    compressor.ratio.setValueAtTime(4, ctx.currentTime);
-    compressor.attack.setValueAtTime(0.008, ctx.currentTime);
-    compressor.release.setValueAtTime(0.18, ctx.currentTime);
-    convolver.buffer = this.createImpulse(1.7, 2.8);
-    reverbIn.gain.setValueAtTime(1, ctx.currentTime);
-    reverbReturn.gain.setValueAtTime(0.22, ctx.currentTime);
+    compressor.threshold.setValueAtTime(-14, now);
+    compressor.knee.setValueAtTime(10, now);
+    compressor.ratio.setValueAtTime(3.5, now);
+    compressor.attack.setValueAtTime(0.004, now);
+    compressor.release.setValueAtTime(0.2, now);
+    musicReverb.buffer = this.createImpulse(MUSIC_REVERB_SECONDS, 2.8);
+    musicReturn.gain.setValueAtTime(MUSIC_REVERB_RETURN, now);
+    tensionSend.gain.setValueAtTime(TENSION_REVERB_SEND, now);
+    sfxRoomFilter.type = 'highpass';
+    sfxRoomFilter.frequency.setValueAtTime(220, now);
+    sfxRoomFilter.Q.setValueAtTime(0.6, now);
+    sfxRoom.buffer = this.createImpulse(SFX_ROOM_SECONDS, 3.4);
+    sfxReturn.gain.setValueAtTime(SFX_ROOM_RETURN, now);
+    musicDuck.gain.setValueAtTime(1, now);
 
-    musicLevel.connect(musicDuck);
-    tensionLevel.connect(musicDuck);
-    musicDuck.connect(master);
-    sfxBus.connect(master);
-    reverbIn.connect(convolver);
-    convolver.connect(reverbReturn);
-    reverbReturn.connect(master);
-    master.connect(compressor);
-    compressor.connect(ctx.destination);
+    tensionLevel.connect(musicLevel);
+    tensionLevel.connect(tensionSend).connect(musicReverb);
+    musicReverb.connect(musicReturn).connect(musicLevel);
+    musicLevel.connect(musicDuck).connect(master);
+    sfxRoomFilter.connect(sfxRoom).connect(sfxReturn).connect(sfxLevel);
+    sfxLevel.connect(master);
+    master.connect(compressor).connect(ctx.destination);
 
     this.graph = {
       master,
@@ -386,14 +434,27 @@ export class SoundSystem {
       musicLevel,
       tensionLevel,
       musicDuck,
-      sfxBus,
-      reverbIn,
-      convolver,
-      reverbReturn,
+      musicReverb,
+      musicReturn,
+      sfxLevel,
+      sfxRoomFilter,
+      sfxRoom,
+      sfxReturn,
     };
-    musicDuck.gain.setValueAtTime(1, ctx.currentTime);
     this.createThemeBuses(false);
     this.applyMixerLevels(true);
+  }
+
+  // Swaps in a fresh room so a suspended context cannot resume the previous hits' reverb tail.
+  resetSfxRoom() {
+    if (!this.graph) return;
+    const { sfxRoomFilter, sfxRoom, sfxReturn } = this.graph;
+    const room = this.createNode('createConvolver');
+    room.buffer = sfxRoom.buffer;
+    sfxRoomFilter.disconnect();
+    this.disconnectNode(sfxRoom);
+    sfxRoomFilter.connect(room).connect(sfxReturn);
+    this.graph.sfxRoom = room;
   }
 
   createImpulse(seconds, decay) {
@@ -419,23 +480,24 @@ export class SoundSystem {
       else param.setTargetAtTime(value, now, 0.035);
     };
     set(this.graph.master.gain, levels.master);
-    set(this.graph.musicLevel.gain, levels.music);
-    set(this.graph.sfxBus.gain, levels.sfx);
-    set(this.graph.tensionLevel.gain, levels.music * this.tension * 0.34);
+    set(this.graph.musicLevel.gain, levels.music * MUSIC_TRIM);
+    set(this.graph.sfxLevel.gain, levels.sfx * SFX_TRIM);
+    set(this.graph.tensionLevel.gain, this.tension * TENSION_LEVEL);
   }
 
   setScreen(screenId) {
     const nextTheme = resolveThemeId(screenId);
-    const previousScreen = this.screenId;
     this.screenId = String(screenId || 'title');
+    const inBattle = this.screenId.startsWith('battle:');
+    if (!RESULT_SCREENS.has(this.screenId) && this.screenId !== 'settings') this.stingArmed = true;
     if (nextTheme === this.themeId) return false;
-    const leavingBattle = previousScreen?.startsWith('battle:') && !this.screenId.startsWith('battle:');
-    if (!this.screenId.startsWith('battle:')) this.tension = 0;
+    if (!inBattle) this.tension = 0;
     this.themeId = nextTheme;
     this.stopScheduler();
     this.fadeThemeBuses();
-    this.cancelSources(this.sfxSources);
-    if (leavingBattle) this.suppressSfxUntil = Date.now() + 500;
+    // Everything the previous screen scheduled, including battle cues queued ahead on the
+    // audio clock, ends here; the new screen's cues (a results sting) open a fresh session.
+    this.closeSfxSession();
     if (this.ctx && this.graph) this.createThemeBuses(true);
     this.applyMixerLevels();
     this.stepIndex = 0;
@@ -444,13 +506,24 @@ export class SoundSystem {
     return true;
   }
 
+  // A results sting belongs to the results screen: it only plays once setScreen has moved to
+  // that screen (so the transition cannot cancel it), once per arrival from gameplay, and never
+  // again when the same results are re-rendered (settings return, mute or language toggle).
+  // The arrival is consumed even when muted, so unmuting later does not celebrate late.
+  claimResultsSting() {
+    if (!RESULT_SCREENS.has(this.screenId) || !this.stingArmed) return false;
+    this.stingArmed = false;
+    return true;
+  }
+
   setBattleState(state) {
     this.tension = calculateTension(state);
     this.applyMixerLevels();
   }
 
+  // Only an audible cue may duck the music (a refused SFX must not leave a silent dip).
   duck(floor = 0.35, duration = 0.45) {
-    if (!this.ctx || !this.graph) return;
+    if (!this.graph || !this.enabled()) return;
     const now = this.ctx.currentTime;
     const gain = this.graph.musicDuck.gain;
     gain.cancelScheduledValues(now);
@@ -470,22 +543,23 @@ export class SoundSystem {
   createThemeBuses(fadeIn) {
     if (!this.ctx || !this.graph) return;
     const now = this.ctx.currentTime;
+    const level = MUSIC_THEMES[this.themeId]?.level ?? 1;
     this.themeBus = this.createNode('createGain');
+    this.themeWetBus = this.createNode('createGain');
     this.tensionThemeBus = this.createNode('createGain');
-    this.themeBus.gain.setValueAtTime(fadeIn ? 0.0001 : 1, now);
-    this.tensionThemeBus.gain.setValueAtTime(fadeIn ? 0.0001 : 1, now);
-    if (fadeIn) {
-      this.themeBus.gain.exponentialRampToValueAtTime(1, now + 0.42);
-      this.tensionThemeBus.gain.exponentialRampToValueAtTime(1, now + 0.42);
+    for (const bus of [this.themeBus, this.themeWetBus, this.tensionThemeBus]) {
+      bus.gain.setValueAtTime(fadeIn ? 0.0001 : level, now);
+      if (fadeIn) bus.gain.exponentialRampToValueAtTime(level, now + 0.42);
     }
     this.themeBus.connect(this.graph.musicLevel);
+    this.themeWetBus.connect(this.graph.musicReverb);
     this.tensionThemeBus.connect(this.graph.tensionLevel);
   }
 
   fadeThemeBuses() {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    const fadingBuses = [this.themeBus, this.tensionThemeBus].filter(Boolean);
+    const fadingBuses = [this.themeBus, this.themeWetBus, this.tensionThemeBus].filter(Boolean);
     for (const bus of fadingBuses) {
       bus.gain.cancelScheduledValues(now);
       bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), now);
@@ -526,8 +600,16 @@ export class SoundSystem {
     if (!this.ctx || this.ctx.state !== 'running' || !this.themeId || this.hidden) return;
     const config = MUSIC_THEMES[this.themeId];
     const stepDuration = 60 / config.tempo / 4;
-    while (this.nextStepTime < this.ctx.currentTime + SCHEDULER_HORIZON_SECONDS) {
-      this.scheduleMusicStep(config, this.stepIndex, this.nextStepTime, stepDuration);
+    const now = this.ctx.currentTime;
+    if (this.nextStepTime < now - SCHEDULER_STALE_SECONDS) {
+      // A main-thread stall outran the lookahead: keep the rhythmic grid but skip the steps
+      // that are already gone rather than starting them all at once.
+      const skipped = Math.ceil((now - this.nextStepTime) / stepDuration);
+      this.nextStepTime += skipped * stepDuration;
+      this.stepIndex += skipped;
+    }
+    while (this.nextStepTime < now + SCHEDULER_HORIZON_SECONDS) {
+      this.scheduleMusicStep(config, this.stepIndex, Math.max(now, this.nextStepTime), stepDuration);
       this.nextStepTime += stepDuration;
       this.stepIndex += 1;
     }
@@ -603,11 +685,16 @@ export class SoundSystem {
     gain.gain.setValueAtTime(options.gain, Math.max(time + attack, end - Math.min(0.7, duration * 0.45)));
     gain.gain.exponentialRampToValueAtTime(0.0001, end);
     oscillator.connect(filter).connect(gain);
-    gain.connect(options.tension ? this.tensionThemeBus : this.themeBus);
-    const send = this.createNode('createGain');
-    send.gain.setValueAtTime(options.reverb, time);
-    gain.connect(send).connect(this.graph.reverbIn);
-    this.trackSource(oscillator, this.musicSources, [oscillator, filter, gain, send]);
+    const chain = [oscillator, filter, gain];
+    if (options.tension) gain.connect(this.tensionThemeBus);
+    else {
+      gain.connect(this.themeBus);
+      const send = this.createNode('createGain');
+      send.gain.setValueAtTime(options.reverb, time);
+      gain.connect(send).connect(this.themeWetBus);
+      chain.push(send);
+    }
+    this.trackSource(oscillator, this.musicSources, chain);
     oscillator.start(time);
     oscillator.stop(end + 0.02);
   }
@@ -630,28 +717,60 @@ export class SoundSystem {
     gain.connect(this.themeBus);
     const send = this.createNode('createGain');
     send.gain.setValueAtTime(0.48, time);
-    gain.connect(send).connect(this.graph.reverbIn);
+    gain.connect(send).connect(this.themeWetBus);
     this.trackSource(source, this.musicSources, [source, filter, gain, send]);
     source.start(time);
     source.stop(time + duration + 0.02);
   }
 
-  canPlaySfx() {
-    return this.enabled() && Date.now() >= this.suppressSfxUntil;
+  openSfxSession() {
+    const dry = this.createNode('createGain');
+    const wet = this.createNode('createGain');
+    dry.connect(this.graph.sfxLevel);
+    wet.connect(this.graph.sfxRoomFilter);
+    this.sfxSession = { dry, wet };
+    return this.sfxSession;
+  }
+
+  // Ends the current screen's SFX: a short fade (no click) then every source it owns stops,
+  // future-scheduled layers included. The next patch opens a new session.
+  closeSfxSession(fade = SFX_SESSION_FADE_SECONDS) {
+    const session = this.sfxSession;
+    this.sfxSession = null;
+    if (!this.ctx) {
+      this.sfxSources.clear();
+      return;
+    }
+    this.cancelSources(this.sfxSources, fade);
+    if (!session) return;
+    const now = this.ctx.currentTime;
+    for (const bus of [session.dry, session.wet]) {
+      bus.gain.cancelScheduledValues(now);
+      bus.gain.setValueAtTime(bus.gain.value, now);
+      bus.gain.linearRampToValueAtTime(0, now + fade);
+    }
+    globalThis.setTimeout(
+      () => {
+        this.disconnectNode(session.dry);
+        this.disconnectNode(session.wet);
+      },
+      (fade + 0.05) * 1000
+    );
   }
 
   patch(options = {}) {
-    if (!this.canPlaySfx()) return;
+    if (!this.enabled()) return;
     const ctx = this.ctx;
+    const session = this.sfxSession || this.openSfxSession();
     const start = ctx.currentTime + Math.max(0, options.delay || 0);
     const duration = Math.max(0.025, options.duration || 0.16);
     const end = start + duration;
     const output = this.createNode('createGain');
     output.gain.setValueAtTime(1, start);
-    output.connect(this.graph.sfxBus);
+    output.connect(session.dry);
     const send = this.createNode('createGain');
     send.gain.setValueAtTime(clamp01(options.reverb, 0.18), start);
-    output.connect(send).connect(this.graph.reverbIn);
+    output.connect(send).connect(session.wet);
 
     const body = this.createNode('createOscillator');
     const bodyFilter = this.createNode('createBiquadFilter');
@@ -782,7 +901,7 @@ export class SoundSystem {
       endFreq: 690,
       duration: 0.075,
       wave: 'sine',
-      gain: 0.026,
+      gain: 0.04,
       noiseGain: 0.004,
       filterStart: 2100,
       reverb: 0.08,
@@ -799,9 +918,12 @@ export class SoundSystem {
       endFreq: Math.max(38, freq * 0.58),
       duration: 0.17,
       wave: affinity === 'mind' ? 'sine' : 'sawtooth',
-      gain: 0.055,
-      noiseGain: 0.026,
-      noiseFreq: affinity === 'force' ? 620 : 1450,
+      gain: 0.05,
+      transientWave: 'triangle',
+      transientFreq: Math.max(1100, freq * 2.4),
+      transientGain: 0.032,
+      noiseGain: 0.03,
+      noiseFreq: affinity === 'force' ? 1100 : 1700,
       reverb: 0.18,
     });
   }
@@ -887,11 +1009,14 @@ export class SoundSystem {
       endFreq: 48,
       duration: 0.52,
       wave: 'sawtooth',
-      gain: 0.068,
-      noiseGain: 0.042,
-      noiseFreq: 460,
+      gain: 0.064,
+      transientWave: 'triangle',
+      transientFreq: 1250,
+      transientGain: 0.04,
+      noiseGain: 0.05,
+      noiseFreq: 850,
       noiseDuration: 0.28,
-      filterStart: 900,
+      filterStart: 1500,
       filterEnd: 180,
       reverb: 0.3,
     });
@@ -901,7 +1026,7 @@ export class SoundSystem {
       endFreq: 42,
       duration: 0.58,
       wave: 'sine',
-      gain: 0.048,
+      gain: 0.03,
       delay: 0.08,
       noiseGain: 0,
       reverb: 0.22,
@@ -909,6 +1034,7 @@ export class SoundSystem {
   }
 
   victory() {
+    if (!this.claimResultsSting()) return;
     this.duck(0.25, 0.75);
     [392, 494, 587, 784].forEach((freq, index) =>
       this.patch({
@@ -927,6 +1053,7 @@ export class SoundSystem {
   }
 
   defeat() {
+    if (!this.claimResultsSting()) return;
     this.duck(0.18, 0.9);
     [392, 330, 262, 196].forEach((freq, index) =>
       this.patch({
@@ -935,7 +1062,7 @@ export class SoundSystem {
         endFreq: freq * 0.91,
         duration: 0.46,
         wave: 'sine',
-        gain: 0.034,
+        gain: 0.028,
         delay: index * 0.13,
         noiseGain: index === 3 ? 0.012 : 0.002,
         noiseFreq: 520,
@@ -1058,6 +1185,12 @@ export class SoundSystem {
     const base =
       { mind: 235, force: 92, tide: 160, flame: 112, grove: 145, shadow: 72, neutral: 126 }[move.affinity] ||
       126;
+    // The fundamental keeps headphone body; the contact knock and crack sit in the 1–3 kHz band
+    // a phone speaker actually reproduces.
+    const contact =
+      { mind: 2300, force: 1150, tide: 1700, flame: 1500, grove: 1900, shadow: 1000, neutral: 1400 }[
+        move.affinity
+      ] || 1400;
     const heavy = (move.power || 0) >= 42 || move.signature;
     const multiIndex = Math.max(0, (event.hit || 1) - 1);
     const multiplier = event.affinity > 1 ? 1.3 : event.affinity < 1 ? 0.72 : 1;
@@ -1065,13 +1198,16 @@ export class SoundSystem {
       seed: `${seed}:impact`,
       freq: (base + multiIndex * 38) * multiplier,
       endFreq: Math.max(38, base * (heavy ? 0.34 : 0.62)),
-      duration: heavy ? 0.29 : 0.14,
+      duration: heavy ? 0.29 : 0.2,
       wave: heavy ? 'sawtooth' : 'triangle',
-      gain: heavy ? 0.068 : 0.044,
-      noiseGain: heavy ? 0.046 : 0.028,
-      noiseFreq: heavy ? 650 : 1380 + multiIndex * 180,
-      noiseDuration: heavy ? 0.2 : 0.085,
-      filterStart: heavy ? 1300 : 2100,
+      gain: heavy ? 0.07 : 0.048,
+      transientWave: 'triangle',
+      transientFreq: contact * multiplier,
+      transientGain: heavy ? 0.08 : 0.07,
+      noiseGain: heavy ? 0.08 : 0.063,
+      noiseFreq: heavy ? 1600 : 2200 + multiIndex * 180,
+      noiseDuration: heavy ? 0.26 : 0.2,
+      filterStart: heavy ? 2600 : 3200,
       filterEnd: 280,
       reverb: heavy ? 0.3 : 0.14,
     });
@@ -1150,11 +1286,14 @@ export class SoundSystem {
       endFreq: base * 0.44,
       duration: 0.5,
       wave: 'sawtooth',
-      gain: 0.078,
-      noiseGain: 0.058,
-      noiseFreq: 610,
+      gain: 0.07,
+      transientWave: 'triangle',
+      transientFreq: 2000,
+      transientGain: 0.06,
+      noiseGain: 0.07,
+      noiseFreq: 1300,
       noiseDuration: 0.4,
-      filterStart: 1800,
+      filterStart: 2800,
       filterEnd: 180,
       reverb: 0.34,
     });
@@ -1164,7 +1303,7 @@ export class SoundSystem {
       endFreq: 38,
       duration: 0.56,
       wave: 'sine',
-      gain: 0.058,
+      gain: 0.032,
       delay: 0.04,
       noiseGain: 0,
       reverb: 0.24,
