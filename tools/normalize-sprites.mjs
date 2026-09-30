@@ -9,7 +9,8 @@
 //   - `assets/monsters/<id>/battle-shiny.png`: its Chromatique, a palette swap of `battle.png` (see
 //     CHROMATIQUES), recorded as a `chromatique` block in the manifest.
 // Family-A sprites (PixelLab pixel art that already matches the Orakyn anchor) only get the baseline,
-// plus the palette pass alone when their source has more than MAX_COLORS colours.
+// plus the palette pass alone when their source has more than MAX_COLORS colours. Any sprite with a
+// `scale` entry is also shrunk pixel-crisp before the baseline.
 //
 // Deterministic: the same originals and SPRITES/CHROMATIQUES tables always give byte-identical outputs.
 // Usage: node tools/normalize-sprites.mjs [--chromatiques]   (the flag re-bakes only the Chromatiques)
@@ -53,11 +54,15 @@ const FULL_PASS = {
 // Per-creature table. `family`: A = on-style PixelLab art (baseline only; a `colors` key also
 // quantises a source palette above MAX_COLORS, with no cleanup or outline); B = downscaled image-gen
 // with a soft fringe; C = image-gen that fills the canvas. `sizeClass` is the authored design size
-// used by `spriteMassScale` in src/data/sprite-metrics.js. Other keys override FULL_PASS.
+// used by `spriteMassScale` in src/data/sprite-metrics.js. `scale` (< 1) shrinks a sprite that
+// fills more of the canvas than its size class, pixel-crisp around its feet (see `downscale`).
+// Other keys override FULL_PASS.
 // Brontusk, magmoth, hexalune, monolith, umbrawl and nymbloom are PixelLab redraws (STAGE-10) of
 // family-C sprites. `art/monsters/originals/pre-redraw/` keeps each one's former source (`<id>.png`)
 // and its normalised sprite (`<id>-battle.png`, the redraw input); copying the latter to
 // `originals/<id>.png` with a plain `{ family: 'A' }` entry restores the pre-redraw sprite exactly.
+// The redraws fill the whole canvas, so their `scale` brings opaque area and bbox height back into
+// their size class's range across the roster (DOM screens show the full canvas).
 const SPRITES = {
   orakyn: { family: 'A', sizeClass: 'M' },
   lumivox: { family: 'B', sizeClass: 'M' },
@@ -65,16 +70,16 @@ const SPRITES = {
   prismage: { family: 'B', sizeClass: 'M' },
   // Amber fur against slate is its identity: keep hues apart and restore full chroma.
   kordane: { family: 'B', sizeClass: 'M', chromaWeight: 2.4, keepChroma: 1 },
-  brontusk: { family: 'A', sizeClass: 'L', colors: 96 },
+  brontusk: { family: 'A', sizeClass: 'L', colors: 96, scale: 0.84 },
   ferrax: { family: 'C', sizeClass: 'M' },
-  monolith: { family: 'A', sizeClass: 'L', colors: 96 },
+  monolith: { family: 'A', sizeClass: 'L', colors: 96, scale: 0.88 },
   abyssar: { family: 'C', sizeClass: 'L' },
   riptalon: { family: 'C', sizeClass: 'M' },
-  nymbloom: { family: 'A', sizeClass: 'M', colors: 96 },
+  nymbloom: { family: 'A', sizeClass: 'M', colors: 96, scale: 0.86 },
   voltide: { family: 'C', sizeClass: 'M' },
   calderoc: { family: 'B', sizeClass: 'L' },
   pyrolynx: { family: 'B', sizeClass: 'M' },
-  magmoth: { family: 'A', sizeClass: 'L', colors: 96 },
+  magmoth: { family: 'A', sizeClass: 'L', colors: 96, scale: 0.84 },
   solflare: { family: 'B', sizeClass: 'M', colors: 64, cleanup: 0.08 },
   virelia: { family: 'B', sizeClass: 'M' },
   mossaur: { family: 'B', sizeClass: 'L' },
@@ -82,8 +87,8 @@ const SPRITES = {
   thornox: { family: 'C', sizeClass: 'L' },
   farfombre: { family: 'A', sizeClass: 'S' },
   nocturnyx: { family: 'C', sizeClass: 'M' },
-  umbrawl: { family: 'A', sizeClass: 'M', colors: 96 },
-  hexalune: { family: 'A', sizeClass: 'M', colors: 96 },
+  umbrawl: { family: 'A', sizeClass: 'M', colors: 96, scale: 0.9 },
+  hexalune: { family: 'A', sizeClass: 'M', colors: 96, scale: 0.8 },
   deuilastre: { family: 'A', sizeClass: 'M' },
   aubeastre: { family: 'A', sizeClass: 'M' },
   flambelier: { family: 'A', sizeClass: 'M' },
@@ -662,6 +667,89 @@ function addOutline(rgba, { outline, outlineColors, outlineMinArea, chromaWeight
   rgba.set(out);
 }
 
+/**
+ * Pixel-crisp downscale by `scale` (< 1) around the feet (bbox bottom centre). Each output texel
+ * covers a (1 / scale)² footprint of source texels: it is opaque when opaque texels cover most of
+ * it, and takes the colour covering most of it, drawn from the source's silhouette-edge texels when
+ * it lies on the output's silhouette edge, so the 1 px outline stays unbroken. Colours are never
+ * blended (the palette is a subset of the source's); ties go to the texel under the centre.
+ */
+function downscale(rgba, scale) {
+  if (!(scale > 0 && scale < 1)) throw new Error(`scale ${scale} is not in (0, 1)`);
+  const inside = (x, y) => x >= 0 && y >= 0 && x < SIZE && y < SIZE;
+  const opaque = (x, y) => inside(x, y) && rgba[(y * SIZE + x) * 4 + 3] === 255;
+  const onEdge = (isOpaque, x, y) => NEIGHBOURS.some(([dx, dy]) => !isOpaque(x + dx, y + dy));
+  let [x0, x1, bottom] = [SIZE, -1, -1];
+  for (let i = 0; i < SIZE * SIZE; i += 1) {
+    if (rgba[i * 4 + 3] === 0) continue;
+    const x = i % SIZE;
+    [x0, x1, bottom] = [Math.min(x0, x), Math.max(x1, x), Math.floor(i / SIZE)];
+  }
+  const cx = (x0 + x1 + 1) / 2;
+  const cy = bottom + 1;
+  const toSource = (d, c) => c + (d - c) / scale;
+  const centre = (X, Y) => [Math.floor(toSource(X + 0.5, cx)), Math.floor(toSource(Y + 0.5, cy))];
+  // Calls visit(x, y, area) for every in-canvas source texel under output texel (X, Y).
+  const footprint = (X, Y, visit) => {
+    const [ax, bx, ay, by] = [toSource(X, cx), toSource(X + 1, cx), toSource(Y, cy), toSource(Y + 1, cy)];
+    for (let y = Math.floor(ay); y < by; y += 1) {
+      for (let x = Math.floor(ax); x < bx; x += 1) {
+        if (inside(x, y))
+          visit(x, y, (Math.min(bx, x + 1) - Math.max(ax, x)) * (Math.min(by, y + 1) - Math.max(ay, y)));
+      }
+    }
+  };
+  const EPSILON = 1e-9;
+  const mask = new Uint8Array(SIZE * SIZE);
+  for (let Y = 0; Y < SIZE; Y += 1) {
+    for (let X = 0; X < SIZE; X += 1) {
+      let balance = 0;
+      footprint(X, Y, (x, y, area) => {
+        balance += opaque(x, y) ? area : -area;
+      });
+      mask[Y * SIZE + X] =
+        Math.abs(balance) < EPSILON ? Number(opaque(...centre(X, Y))) : Number(balance > 0);
+    }
+  }
+  const kept = (X, Y) => inside(X, Y) && mask[Y * SIZE + X] === 1;
+  const key = (x, y) => {
+    const o = (y * SIZE + x) * 4;
+    return (rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2];
+  };
+  const out = new Uint8Array(SIZE * SIZE * 4);
+  for (let Y = 0; Y < SIZE; Y += 1) {
+    for (let X = 0; X < SIZE; X += 1) {
+      if (!kept(X, Y)) continue;
+      const edge = onEdge(kept, X, Y);
+      const weigh = (edgeOnly) => {
+        const weights = new Map();
+        footprint(X, Y, (x, y, area) => {
+          if (opaque(x, y) && (!edgeOnly || onEdge(opaque, x, y)))
+            weights.set(key(x, y), (weights.get(key(x, y)) ?? 0) + area);
+        });
+        return weights;
+      };
+      let weights = weigh(edge);
+      if (!weights.size) weights = weigh(false);
+      const [nx, ny] = centre(X, Y);
+      const under = opaque(nx, ny) ? key(nx, ny) : -1;
+      let best = -1;
+      let bestWeight = -1;
+      for (const [colour, weight] of weights) {
+        const tie = Math.abs(weight - bestWeight) < EPSILON;
+        if (
+          (!tie && weight > bestWeight) ||
+          (tie && (colour === under || (best !== under && colour < best)))
+        ) {
+          [best, bestWeight] = [colour, weight];
+        }
+      }
+      out.set([best >> 16, (best >> 8) & 255, best & 255, 255], (Y * SIZE + X) * 4);
+    }
+  }
+  rgba.set(out);
+}
+
 function opaqueRows(rgba) {
   let top = SIZE;
   let bottom = -1;
@@ -725,6 +813,7 @@ async function normalizeSprite(id) {
   } else if (config.colors) {
     recolour(rgba, (i) => rgba[i * 4 + 3] === 255, options);
   }
+  if (config.scale) downscale(rgba, config.scale);
   moveToBaseline(id, rgba);
   const metrics = measure(id, rgba);
   if (metrics.colors > MAX_COLORS) throw new Error(`${id}: ${metrics.colors} colours exceed ${MAX_COLORS}`);
@@ -734,7 +823,13 @@ async function normalizeSprite(id) {
     id,
     bytes: png.length,
     metrics,
-    normalized: { colors: metrics.colors, outline: fullPass, baseline: BASELINE_ROW, sourcePath },
+    normalized: {
+      colors: metrics.colors,
+      outline: fullPass,
+      ...(config.scale ? { scale: config.scale } : {}),
+      baseline: BASELINE_ROW,
+      sourcePath,
+    },
   };
 }
 

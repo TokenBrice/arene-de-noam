@@ -209,6 +209,32 @@
     width: var(--dock-w);
   }
 }
+/* The intro's weather pill hangs under the top row instead, over the stage's top where the rival's
+   plate slides in once the intro ends, so it never covers pause, the turn or speed. Portrait: the
+   stage's width under the top row; landscape: the rival plate's own box, left of the narration bar. */
+.fx-banner.fx-top-band[data-kind='weather'] {
+  top: calc(max(6px, env(safe-area-inset-top)) + var(--top-btn) + 6px);
+  padding-top: 4px;
+  overflow: hidden;
+}
+@media (orientation: landscape) {
+  .fx-banner.fx-top-band[data-kind='weather'] {
+    top: max(var(--battle-edge), env(safe-area-inset-top));
+    right: auto;
+    left: max(var(--battle-edge), env(safe-area-inset-left));
+    width: var(--plate-w);
+    padding: 0;
+  }
+  .fx-banner.fx-top-band[data-kind='weather'] .fx-weather-pill {
+    font-size: var(--text-md);
+  }
+}
+@media (orientation: landscape) and (min-height: 600px) {
+  .fx-banner.fx-top-band[data-kind='weather'] {
+    top: 16px;
+    left: max(var(--battle-edge), calc(54% - var(--plate-w)));
+  }
+}
 .fx-pill {
   display: flex;
   align-items: center;
@@ -293,6 +319,10 @@
   color: var(--arena-accent, var(--gold));
 }
 .fx-weather-effects {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 6px;
   white-space: nowrap;
 }
 .fx-weather-chip {

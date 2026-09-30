@@ -16,6 +16,8 @@ test('team select fits one 360×800 viewport with a single gold Combattre and 48
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/?animations=0');
   await page.locator('[data-action="quick"]').click();
+  // Routes render after the lazy screen chunk and the view transition: wait for the grid.
+  await expect(page.locator('.ts-cell')).toHaveCount(30);
   const layout = await page.evaluate(() => {
     const inView = (element) => {
       const box = element.getBoundingClientRect();
@@ -81,7 +83,7 @@ test('picks patch the trio: unpick, pick, the lead follows its creature, a fourt
   await installCompletedTutorial(page);
   await page.goto('/?animations=0');
   await page.locator('[data-action="quick"]').click();
-  expect(await picked(page)).toEqual(['abyssar', 'orakyn', 'virelia']);
+  await expect.poll(() => picked(page)).toEqual(['abyssar', 'orakyn', 'virelia']);
   const grid = await page.locator('.ts-grid').elementHandle();
   await page.locator('[data-lead-index="2"]').click();
   await expect(page.locator('[data-lead-index="2"]')).toHaveAttribute('aria-pressed', 'true');

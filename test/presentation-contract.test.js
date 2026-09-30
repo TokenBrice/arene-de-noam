@@ -112,7 +112,7 @@ const OPS = new Set([
   'end',
   'swap',
 ]);
-const SHOTS = new Set(['intro', 'attack', 'lean', 'impact', 'ko', 'victory', 'cut']);
+const SHOTS = new Set(['intro', 'attack', 'lean', 'impact', 'ko', 'victory', 'defeat', 'cut']);
 const WHO = new Set(['actor', 'target', 'both']);
 const POINTS = new Set(['feet', 'center', 'head']);
 const CUES = new Set(CUE_NAMES);

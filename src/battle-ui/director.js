@@ -1,7 +1,7 @@
 // Battle director (docs/battle-presentation.md §6). Engine events → beats (beats.js) → timed
 // choreography (choreo.js) on the session fx-clock. It drives the arena (shots, punch, grade,
 // cheer), the fighters (reactions), the GPU FX layer, the #fx-text readouts (numbers, stamps,
-// chain counter), 3C-2's banners, 3D's HUD routes (patchHud, drainHp, narrate) and the cue bus.
+// hit counts), 3C-2's banners, 3D's HUD routes (patchHud, drainHp, narrate) and the cue bus.
 // It never calls the engine, never mutates session.state and never reads the engine RNG: FX
 // randomness comes from fxSeed. One code path serves ×1, ×2, hurry, reduced motion and
 // ?animations=0; each sink knows what it does in each mode (§13).
@@ -159,9 +159,9 @@ function installFxDebug(session) {
 // so the stage never shows the previous action's text under the next action's line; a lethal
 // action's readouts hand over to the K.O. beat instead.
 // Pool (≤ 9 nodes): per side three readout blocks and a K.O. stamp, plus one bench-ally chip. A
-// block is one readout: the beat's single stamp pill over its number and chain counter ("−31 ×3"),
-// with the small tags (critical, combo, weather, absorbed, cause) underneath; a multi-hit bumps one running
-// total.
+// block is one readout: the beat's single stamp pill over its number, then a multi-hit's count in
+// words ("−31" over "3 coups": never "×3", which would read as a multiplier beside COMBO ×1,3), then
+// the small tags (critical, combo, weather, absorbed, cause); a multi-hit bumps one running total.
 
 const EDGE = 8;
 const GAP = 6;
@@ -247,7 +247,7 @@ class ReadoutLayer {
       return div;
     };
     const numberHtml =
-      '<span class="fx-stamp-pill" hidden></span><span class="fx-row"><b class="fx-value"></b><span class="fx-chain" hidden></span></span><span class="fx-tags"><small class="fx-tag crit" hidden></small><small class="fx-tag combo" hidden></small><small class="fx-tag assist" hidden></small><small class="fx-tag weather" hidden></small><small class="fx-tag absorbed" hidden></small><small class="fx-tag cause" hidden></small></span>';
+      '<span class="fx-stamp-pill" hidden></span><b class="fx-value"></b><small class="fx-hits" hidden></small><span class="fx-tags"><small class="fx-tag crit" hidden></small><small class="fx-tag combo" hidden></small><small class="fx-tag assist" hidden></small><small class="fx-tag weather" hidden></small><small class="fx-tag absorbed" hidden></small><small class="fx-tag cause" hidden></small></span>';
     this.sides = {};
     const fragment = document.createDocumentFragment();
     for (const side of SIDES) {
@@ -295,15 +295,18 @@ class ReadoutLayer {
     };
   }
 
-  // The plates and the top row sit above the stage and overlap its edges (§11.2): a readout under
-  // them would be hidden. Their layout boxes (stage coordinates, 4 px margin; transforms ignored,
-  // so a plate still gliding after the stage re-fit counts where it lands) are measured when a
-  // turn starts and when the stage re-fits. The rival's intent tab under its plate is hidden
-  // while a turn plays, so it keeps nothing out.
+  // The plates, the top row and the narration bar sit above the stage or overlap its edges
+  // (§11.2; landscape turns lay the top row and the bar over the stage's top strip): a readout
+  // under them would be hidden. Their layout boxes (stage coordinates, 4 px margin; transforms
+  // ignored, so a plate still gliding after the stage re-fit counts where it lands) are measured
+  // when a turn starts and when the stage re-fits. The rival's intent tab under its plate is
+  // hidden while a turn plays, so it keeps nothing out.
   measureKeepOut() {
     const stage = layoutBox(this.stage),
       screenRoot = this.stage.closest('.battle-screen');
-    this.keepOut = [...(screenRoot?.querySelectorAll('.battle-top, .battle-plate') ?? [])]
+    this.keepOut = [
+      ...(screenRoot?.querySelectorAll('.battle-top, .battle-plate, .battle-command-dock') ?? []),
+    ]
       .map(layoutBox)
       .filter((box) => box.right > box.left && box.bottom > box.top)
       .map((box) => ({
@@ -463,13 +466,14 @@ class ReadoutLayer {
   }
 
   // A readout block for `side`: a damage / heal / barrier / recoil / tick number (or none: a
-  // dodge shows only its stamp) with its optional stamp pill, chain counter and tags. `slot`
-  // bumps a block that is still showing, in place (a multi-hit's running total: one node for the
-  // whole chain, so hits never recycle a slot under hurry). Returns the slot used.
+  // dodge shows only its stamp) with its optional stamp pill, hit count (`hits` landed so far of a
+  // multi-hit) and tags. `slot` bumps a block that is still showing, in place (a multi-hit's
+  // running total: one node for the whole chain, so hits never recycle a slot under hurry).
+  // Returns the slot used.
   number(
     run,
     side,
-    { kind, text = '', critical = false, effect = 1, stamp = null, chain = null, tags = {}, slot = null }
+    { kind, text = '', critical = false, effect = 1, stamp = null, hits = 0, tags = {}, slot = null }
   ) {
     const pool = this.sides[side],
       held = slot != null ? this.live.get(pool.numbers[slot]) : null,
@@ -477,19 +481,17 @@ class ReadoutLayer {
       index = bump ? slot : this.freeSlot(pool),
       node = pool.numbers[index],
       value = node.querySelector('.fx-value'),
-      counter = node.querySelector('.fx-chain'),
+      count = node.querySelector('.fx-hits'),
       pill = node.querySelector('.fx-stamp-pill'),
-      fontSize = critical ? 38 : kind === 'damage' && effect > 1 ? 36 : kind === 'damage' ? 32 : 28,
-      chainLabel = chain ? `×${chain.hit}` : '';
+      fontSize = critical ? 38 : kind === 'damage' && effect > 1 ? 36 : kind === 'damage' ? 32 : 28;
     node.dataset.kind = kind;
     node.style.setProperty('--fx-number-size', `${fontSize}px`);
     node.dataset.effect = effect > 1 ? 'effective' : effect < 1 ? 'resisted' : 'neutral';
     node.classList.toggle('critical', critical);
     value.innerHTML = text;
     value.hidden = !text;
-    counter.hidden = !chain;
-    counter.classList.toggle('final', Boolean(chain?.final));
-    counter.textContent = chainLabel;
+    count.hidden = !hits;
+    if (hits) count.textContent = t('battle.hitCount', { count: hits });
     pill.hidden = !stamp;
     if (stamp) {
       pill.dataset.kind = stamp;
@@ -664,12 +666,11 @@ export function clearPresentation(session = ctx.battleSession) {
   session?.statusLoops?.clear();
 }
 
-const numberFormats = new Map();
-function numberFormat() {
-  const lang = ctx.i18n.lang === 'en' ? 'en' : 'fr';
-  if (!numberFormats.has(lang))
-    numberFormats.set(lang, new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }));
-  return numberFormats.get(lang);
+// A multiplier as the player reads it (≤ 2 decimals, "1,3" in French). Not Intl.NumberFormat: its
+// first construction loads the ICU number data, ≈ 30 ms at 6× CPU inside the first hit's frame.
+function decimal(value) {
+  const text = String(Math.round(value * 100) / 100);
+  return ctx.i18n.lang === 'en' ? text : text.replace('.', ',');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -819,7 +820,7 @@ function presentConsumed(run) {
   syncStatusLoops(run);
 }
 
-// Why a trailing number happened, as a tag on it: the talent that fired, Riposte, or the damage
+// Why a trailing number happened, as a tag on it: the talent that fired, Ricochet, or the damage
 // move whose side effect it is (drain, recoil, its barrier). A support move's heal or barrier is
 // its main effect and needs none: its line says it.
 function causeTags(run, event) {
@@ -1285,7 +1286,7 @@ function actionCueFields(run) {
 }
 
 // Contact routine for one landed hit (§6.2): cue, true hit-stop, target reactions, then the
-// readout — number (+ tags), HP drain, stamps, chain counter, readout cue.
+// readout — number (+ hit count, tags), HP drain, stamps, readout cue.
 function contact(run, hit, index, hitStop) {
   const beat = run.beat,
     target = beat.targetSide,
@@ -1328,7 +1329,7 @@ function contact(run, hit, index, hitStop) {
     presentConsumed(run);
   }
   // One readout block per action: later hits of a multi-hit bump a running total in the first
-  // hit's block (each hit re-pops it with its chain counter), so a fast chain never recycles a
+  // hit's block (each hit re-pops it with its hit count), so a fast chain never recycles a
   // showing number and the child reads what the whole chain did. Its stamp is the shield while
   // nothing got through, then the beat's landed stamps from its first landed hit on.
   const tally = (run.tally ??= { dealt: 0, absorbed: 0, critical: false, slot: null, tags: {} });
@@ -1344,9 +1345,8 @@ function contact(run, hit, index, hitStop) {
     ),
     layer = text(run);
   if (layer) {
-    const format = numberFormat();
     if (index === 0 && damage.combo) {
-      const label = t('battle.comboTag', { multiplier: format.format(damage.combo.multiplier) });
+      const label = t('battle.comboTag', { multiplier: decimal(damage.combo.multiplier) });
       tally.tags.combo = { html: escapeHtml(label), text: label };
       if (beat.assist) {
         const helper = t('battle.preparedBy', { helper: creatureName(beat.assist.creatureId) });
@@ -1387,7 +1387,7 @@ function contact(run, hit, index, hitStop) {
       critical,
       effect: blocked ? 1 : damage.affinity,
       stamp,
-      chain: damage.hits > 1 ? { hit: damage.hit, final: damage.hit === damage.hits || hit.lethal } : null,
+      hits: damage.hits > 1 ? damage.hit : 0,
       tags,
       slot: tally.slot,
     });
@@ -1624,6 +1624,14 @@ async function playSwitch(run) {
       }
     ),
     end = scheduleTimeline(queue, run, timeline, scope, { scale: fitScale(run, timelineEnd(timeline)) });
+  // The recall has its own line (§6.3), so the bar never sits empty while the outgoing creature
+  // leaves; the entry line takes over at the swap. A replacement enters an empty pad: no recall.
+  if (!beat.replacement && outgoing)
+    queue.add(0, () =>
+      route.narrate(
+        t(side === 'player' ? 'battle.recall' : 'battle.enemyRecall', { name: creatureName(outgoing.id) })
+      )
+    );
   queue.add(end, () => {
     presentSurges(run);
     presentReadouts(run);
@@ -1810,8 +1818,7 @@ function damageNotes(event) {
   if (event.critical) notes.push(t('battle.critical'));
   if (event.affinity > 1) notes.push(t('battle.hitEffective'));
   else if (event.affinity < 1) notes.push(t('battle.hitWeak'));
-  if (event.combo)
-    notes.push(t('battle.comboTag', { multiplier: numberFormat().format(event.combo.multiplier) }));
+  if (event.combo) notes.push(t('battle.comboTag', { multiplier: decimal(event.combo.multiplier) }));
   if (event.hits > 1) notes.push(t('battle.hit', { hit: event.hit, hits: event.hits }));
   return notes;
 }
@@ -2181,6 +2188,7 @@ async function outroTimeline(session, state) {
         cue: (name) => emitCue(run, name, { winner, reason: state.reason }),
       }
     );
+  clearStatusMarkers(run);
   scheduleTimeline(queue, run, timeline, scope);
   const reduced = run.reduced;
   if (!(await runSchedule(run, queue.items)) || !(await clock.waitUntil(run.start + end))) return;
@@ -2193,4 +2201,19 @@ async function outroTimeline(session, state) {
   screen.classList.add('battle-exit');
   ctx.arenaScene?.setPaused(true);
   await clock.wait(0, { floorMs: exitMs });
+}
+
+// The hero shot shows the winner clean: its status loops (the Marqué reticle, orbiting motes) and
+// status tint clear as the outro starts, fading while the camera turns, or at once with the
+// reduced-motion cut.
+function clearStatusMarkers(run) {
+  const session = run.session;
+  for (const handle of session.statusLoops.values()) handle?.stop(run.reduced ? { fadeMs: 0 } : undefined);
+  session.statusLoops.clear();
+  if (!run.fighters) return;
+  for (const side of SIDES) {
+    if (!session.tints[side]) continue;
+    session.tints[side] = null;
+    run.fighters.react(side, 'tint', { status: null });
+  }
 }

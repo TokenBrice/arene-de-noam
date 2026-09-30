@@ -22,6 +22,10 @@ const QUAD_MARGIN = 2;
 const BREATH_PERIOD_MS = { S: 1700, M: 2300, L: 3000 };
 // Personality by size class: small creatures hop higher and land lighter, large ones stomp.
 const WEIGHT = { S: 0.8, M: 1, L: 1.25 };
+// Victory hop: apex height in fighter heights (÷ weight) and the crouch / landing squash (× weight;
+// the width grows by 0.7 of it).
+const HOP_HEIGHT = 0.16;
+const HOP_SQUASH = 0.12;
 const BLOB_ALPHA = 0.55;
 const DUST_MS = 420;
 // Hit: a short white frame, then a light type tint fading out, so the sprite's detail stays
@@ -397,7 +401,7 @@ const REACTIONS = {
     reduced: 'skip',
     duration: (o) => o.ms,
     begin(layer, s, run) {
-      run.height = (0.16 / s.weight) * s.heightWorld;
+      run.height = (HOP_HEIGHT / s.weight) * s.heightWorld;
       run.landed = -1;
     },
     // Each hop: crouch (anticipation), stretch on take-off, parabola, squash on landing (+ dust).
@@ -409,7 +413,7 @@ const REACTIONS = {
         crouch = w < 0.18 ? Math.sin((Math.PI * w) / 0.18) : 0,
         land = w > 0.82 ? Math.sin((Math.PI * (w - 0.82)) / 0.18) : 0,
         stretch = w >= 0.18 && w <= 0.82 ? Math.max(0, 1 - Math.abs(air * 2 - 0.35) * 2) : 0,
-        squash = 0.12 * s.weight * (crouch + land) - 0.07 * stretch;
+        squash = HOP_SQUASH * s.weight * (crouch + land) - 0.07 * stretch;
       if (w > 0.82 && run.landed !== index) {
         run.landed = index;
         s.dust = 0;
@@ -470,7 +474,7 @@ export class FighterLayer {
     right: new THREE.Vector3(),
     v1: new THREE.Vector3(),
     v2: new THREE.Vector3(),
-    size: new THREE.Vector2(),
+    viewport: new THREE.Vector4(),
     pose: { ...REST_POSE },
   };
 
@@ -725,6 +729,21 @@ export class FighterLayer {
     return this.sides[side].texelWorld;
   }
 
+  /**
+   * The space a creature's victory takes around its rest feet, in world units along the rest
+   * camera's axes: the opaque bbox half-width at the widest landing squash, the feet-to-head height
+   * and the hop apex. The outro's hero framing (rig.js) fits it in the frame.
+   */
+  heroBox(side) {
+    const s = this.sides[side],
+      width = (s.creature?.layout ?? FULL_CANVAS).width * s.texelWorld;
+    return {
+      halfWidth: (width / 2) * (1 + 0.7 * HOP_SQUASH * s.weight),
+      height: s.heightWorld,
+      lift: (HOP_HEIGHT / s.weight) * s.heightWorld,
+    };
+  }
+
   worldAnchor(side, point = 'center', out = new THREE.Vector3()) {
     const s = this.sides[side],
       height = s.heightWorld * s.pose.sy * (point === 'head' ? 1 : point === 'center' ? 0.5 : 0);
@@ -874,9 +893,10 @@ export class FighterLayer {
   // Rest placement for the current creature: mass-normalised texel size, snapped to whole device
   // pixels when close enough, and the canvas corner aligned to the pixel grid. A drawing buffer the
   // browser rescales (DPR capped below the screen's) cannot be pixel-exact, so it keeps exact sizes.
+  // Device px are the viewport's: the stage may use only the buffer's top-left corner.
   snap(s) {
     if (!s.base.set) return;
-    const { v1, v2, size } = this.#scratch,
+    const { v1, v2, viewport } = this.#scratch,
       camera = this.camera,
       layout = s.creature?.layout ?? FULL_CANVAS,
       quat = this.#scratch.quat;
@@ -885,8 +905,8 @@ export class FighterLayer {
     const right = this.#scratch.right.set(1, 0, 0).applyQuaternion(quat);
     s.restUp.set(0, 1, 0).applyQuaternion(quat);
     const depth = Math.max(1e-3, -v1.copy(s.base.position).applyMatrix4(camera.matrixWorldInverse).z),
-      buffer = this.renderer.getDrawingBufferSize(size),
-      devicePxPerWorld = ((buffer.y / 2) * camera.projectionMatrix.elements[5]) / depth;
+      { z: viewWidth, w: viewHeight } = this.renderer.getCurrentViewport(viewport),
+      devicePxPerWorld = ((viewHeight / 2) * camera.projectionMatrix.elements[5]) / depth;
     s.cssPxPerWorld = devicePxPerWorld / this.renderer.getPixelRatio();
     let texel = s.creature ? massTexel(s.creature.id) * s.base.canvasHeight : s.base.canvasHeight / CANVAS;
     const idealPx = texel * devicePxPerWorld,
@@ -905,8 +925,8 @@ export class FighterLayer {
       .addScaledVector(right, -feetX * texel)
       .addScaledVector(s.restUp, -layout.feetY * texel)
       .project(camera);
-    const px = ((v2.x + 1) / 2) * buffer.x,
-      py = ((1 - v2.y) / 2) * buffer.y;
+    const px = ((v2.x + 1) / 2) * viewWidth,
+      py = ((1 - v2.y) / 2) * viewHeight;
     s.rest
       .addScaledVector(right, (Math.round(px) - px) / devicePxPerWorld)
       .addScaledVector(s.restUp, -(Math.round(py) - py) / devicePxPerWorld);

@@ -939,7 +939,11 @@ export const TIMELINES = freezeDeep({
 
   // Water gathers at the attacker's feet, a wave crest rolls along the floor and breaks behind the
   // target (`back`: it lands behind it, never over its hit reaction): a crest taller than it rears
-  // up behind it, framing its hit reaction, and a column of spray bursts.
+  // up behind it, framing its hit reaction, and a column of spray bursts. The rolling crest lands
+  // 30 ms (× tier stretch) before the contact, over one fx step, and fades behind the target into
+  // the contact's crest: its `back` bias only puts it behind the target on arrival, and the
+  // contact's hit-stop would freeze it in flight, still in front of a far target and as large as
+  // it, hiding its head and body.
   WAVE: {
     cues: [
       fighter(0, 'actor', 'windup', { ms: 100, squash: 0.1 }),
@@ -955,8 +959,8 @@ export const TIMELINES = freezeDeep({
         upright: true,
         size: 1.05,
         grow: 1.25,
-        travelMs: 150,
-        life: 35,
+        travelMs: 110,
+        life: 70,
         additive: 0,
         hot: 0.6,
         back: true,
@@ -968,7 +972,7 @@ export const TIMELINES = freezeDeep({
         max: 1,
         size: 0.6,
         length: 0.9,
-        travelMs: 150,
+        travelMs: 110,
         life: 60,
         hot: 0.3,
       }),
@@ -1666,12 +1670,14 @@ export const BEAT_TIMELINES = freezeDeep({
       op(1550, 'end'),
     ],
   },
-  // The winner's hero moment: the camera turns to it and pushes in, a warm spotlight rises behind
-  // it, it hops three times and the stands roar twice while confetti celebrates: a pop of paper
-  // squares and ribbons out of the winner, then a flutter of them falling over the whole upper
-  // stage (`band`), each piece flipping and swaying on its way down. The flutter spawns one piece
-  // every `staggerMs`, so its length and density follow the quality-scaled count (restrained on
-  // Low, generous on High). "VICTOIRE !" enters once the plates have faded (200 ms).
+  // The winner's hero moment: the camera turns to it and frames it as the hero (centred, filling
+  // the room under the banner, §7.4) and orbits gently while the rival's emptied pad lowers away.
+  // A warm spotlight rises behind it, it hops three times and the stands roar twice while confetti
+  // celebrates: a pop of paper squares and ribbons out of the winner, then a flutter of them
+  // falling over the whole upper stage (`band`), each piece flipping and swaying on its way down.
+  // The flutter spawns one piece every `staggerMs`, so its length and density follow the
+  // quality-scaled count (restrained on Low, generous on High). "VICTOIRE !" enters once the
+  // plates have faded (200 ms).
   victory: {
     cues: [
       cue(0, 'victory'),
@@ -1725,11 +1731,13 @@ export const BEAT_TIMELINES = freezeDeep({
       op(1600, 'end'),
     ],
   },
-  // Dignified: no confetti, no cheer, no shake. The rival gives one small hop and "Défaite… Bien
-  // joué !" enters over the fainted player's pad once the plates have faded.
+  // Dignified: no confetti, no cheer, no shake. The camera turns to the rival and slowly frames it
+  // as the hero (§7.4) while the player's emptied pad lowers away; the rival gives one small hop
+  // and "Défaite… Bien joué !" enters below it once the plates have faded.
   defeat: {
     cues: [
       cue(0, 'defeat'),
+      op(0, 'shot', { name: 'defeat', who: 'actor' }),
       fighter(200, 'actor', 'victory', { hops: 1, ms: 500 }),
       op(200, 'banner', { kind: 'defeat' }),
       op(1600, 'end'),

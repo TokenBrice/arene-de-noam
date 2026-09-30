@@ -45,7 +45,7 @@
 }
 
 /* Numbers: −N damage, +N heal (green), shield +N barrier (cyan), recoil and burn ticks. A block
-   stacks its stamp pill, the number row (value + chain counter) and the tags. */
+   stacks its stamp pill, the number, a multi-hit's count and the tags. */
 .fx-number {
   --outline: #140a24;
   display: flex;
@@ -77,34 +77,22 @@
   height: 0.7em;
   stroke-width: 3;
 }
-.fx-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.fx-number :is(.fx-stamp-pill, .fx-value, .fx-chain)[hidden] {
+.fx-number :is(.fx-stamp-pill, .fx-value, .fx-hits)[hidden] {
   display: none;
 }
-/* Multi-hit counter on the number row ("−31 ×3"); the chain's last hit turns gold. */
-.fx-chain {
-  display: grid;
-  place-items: center;
-  min-width: 38px;
-  height: 30px;
-  padding: 0 8px;
-  border: 2px solid #fff;
-  border-radius: 999px;
-  color: #fff;
-  background: var(--bg-2);
-  box-shadow: 0 3px 0 var(--ledge);
-  font: 800 20px/1 var(--font-display);
-  letter-spacing: 0;
-}
-.fx-chain.final {
-  border-color: var(--gold-soft);
-  color: var(--gold-ink);
-  background: linear-gradient(var(--gold-bright), var(--gold));
-  box-shadow: 0 3px 0 var(--gold-ledge);
+/* A multi-hit's count under its running total ("3 coups"): outlined words like the number, never a
+   pill, so it cannot read as a multiplier next to the COMBO ×1,3 tag. */
+.fx-number .fx-hits {
+  margin-top: -2px;
+  color: #d9f4ff;
+  font: 800 18px/1 var(--font-display);
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 3px 0 var(--outline),
+    2px 2px 0 var(--outline),
+    -2px 2px 0 var(--outline),
+    2px -2px 0 var(--outline),
+    -2px -2px 0 var(--outline);
 }
 .fx-number[data-effect='effective'] .fx-value {
   color: #fff1dc;
@@ -287,7 +275,7 @@
   font-size: 44px;
   letter-spacing: 0.02em;
 }
-body.high-contrast :is(.fx-stamp-pill, .fx-chain) {
+body.high-contrast .fx-stamp-pill {
   box-shadow:
     inset 0 0 0 3px #fff,
     0 3px 0 var(--ledge);

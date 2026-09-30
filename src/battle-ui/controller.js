@@ -692,13 +692,21 @@ function claimBattleLock() {
   return true;
 }
 
+// The tap's task only locks the dock and gives the stage the turn's room; the turn resolves and
+// its first beat starts in a later task, once that frame is painted (§1: no task > 50 ms at 6×).
+function afterPaint() {
+  return new Promise((resolve) =>
+    document.hidden ? setTimeout(resolve, 0) : requestAnimationFrame(() => setTimeout(resolve, 0))
+  );
+}
+
 async function handleTrainerCommand() {
   if (!canUseTrainerCommand(ctx.battleSession.state, 'player')) return;
   if (!claimBattleLock()) return;
   const session = ctx.battleSession;
   try {
     refreshBattle();
-    await sound.unlock();
+    await Promise.all([sound.unlock(), afterPaint()]);
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
       result = applyTrainerCommand(session.state, 'player');
@@ -715,13 +723,13 @@ async function handleTrainerCommand() {
 }
 
 // `sheetClosed`: the exit of the sheet the action was picked from; the lock is claimed at once, the
-// turn plays once the sheet has left the stage.
+// turn plays once the sheet has left the stage (and the tap's frame is painted).
 async function handlePlayerAction(action, sheetClosed = null) {
   if (!claimBattleLock()) return;
   const session = ctx.battleSession;
   try {
     refreshBattle();
-    await Promise.all([sound.unlock(), sheetClosed]);
+    await Promise.all([sound.unlock(), sheetClosed, afterPaint()]);
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
       enemyAction = plannedEnemyAction();
@@ -774,7 +782,7 @@ async function handleReplacement(index, sheetClosed = null) {
   const session = ctx.battleSession;
   try {
     refreshBattle();
-    await sheetClosed;
+    await Promise.all([sheetClosed, afterPaint()]);
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
       result = applyReplacement(session.state, 'player', { type: 'replace', index });

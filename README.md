@@ -22,7 +22,7 @@ The first launch offers a short tutorial. The game starts in French; change the 
 - Every creature has exactly three moves. One may be a Signature, and cooldowns make a move wait before returning.
 - Priority decides turn order first, then Speed.
 - Actions fill the shared **Signature ✦** gauge. At the required cost, choose a creature's Signature.
-- Eight effects shape battle: Focused, Haste, Dodge, Counter, Marked, Rooted, Dazed, and Burning.
+- Eight effects shape battle: Focused, Haste, Dodge, Ricochet, Marked, Rooted, Dazed, and Burning.
 - Every creature has one innate talent. Every arena has a continuous weather: one type's attacks deal `+20%` and another's `−20%` for both teams (the Crystal Dome is neutral). Previews include it.
 - Each landed attack has a seeded `1/16` chance to be a **critical hit** (`×1.5`). Previews always show the non-critical value.
 - Apprentice rivals are a lower level (`×0.85` HP and Attack), only ever pick moves, and never land a critical hit on you.
@@ -77,7 +77,7 @@ New battles count `records.combos`. Existing `records.assists` and the `team_ass
 - `src/screens/` — team selection, Draft, Academy, tutorial, results, and other modes.
 - `src/i18n/fr.js`, `src/i18n/en.js`, `src/i18n.js`, `src/save.js` — localization (one dictionary module per language, loaded on demand by the `src/i18n.js` core) and persistence.
 - `src/sound.js`, `src/sound-cries.js` — audio: synthesized UI/battle cues and the 30 authored creature cries, and playback of the baked music (a base stem per screen, plus a tension stem per arena that follows the battle).
-- `src/presentation/` — responsive Three.js arenas and reactive battle lighting.
+- `src/presentation/` — the Three.js stadium (painted plates, baked light, quality tiers), WebGL fighters, and the pixel-grid effects layer.
 - `assets/asset-manifest.json` — provenance and processing record for shipped sprites.
 - `assets/arenas/` — the six painted arena plates and courts (WebP, baked offline by `tools/generate-arena-plates.mjs`), with their provenance in `assets/arenas/manifest.json`.
 - `assets/music/` — the original score as looping Ogg Opus files, one per screen family and arena (plus the arenas' tension stems). Its source is `tools/music/score.js`, rendered, mastered (−16 LUFS, ≤ −1 dBTP) and checked by the dev-only `node tools/bake-music.mjs`; one five-note motif runs through the title, the arenas and the victory.

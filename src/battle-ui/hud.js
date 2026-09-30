@@ -153,7 +153,7 @@ function intentChipHtml(state, { portrait = false } = {}) {
     face = portrait
       ? `<img class="intent-portrait" ${spriteAttrs('enemy', rival)} alt="${escapeHtml(creatureName(rival))}">`
       : '';
-  return `<div class="intent-read intent-${tone}" role="note"><span class="visually-hidden">${escapeHtml(t('battle.intent'))} :</span>${face}${icon(iconName)}<b>${escapeHtml(text)}</b></div>`;
+  return `<div class="intent-read intent-${tone}" role="note"><span class="visually-hidden">${escapeHtml(t('battle.intentLabel'))}</span>${face}${icon(iconName)}<b>${escapeHtml(text)}</b></div>`;
 }
 
 /* ------------------------------------------------------------------- plates */
@@ -262,13 +262,18 @@ function fitStatuses(refs) {
     slot.innerHTML = html(--shown);
 }
 
+// Unchanged text and state are not rewritten: a same-value textContent write still replaces the
+// text node, so every patch (each beat, the lock and the unlock) would repaint and re-raster the
+// plate.
 function writeHp(refs, hp) {
   refs.hp = hp;
-  const ratio = ratioOf(hp, refs.maxHp);
+  const ratio = ratioOf(hp, refs.maxHp),
+    text = `${Math.max(0, Math.round(hp))}/${refs.maxHp}`,
+    state = hpState(hp, refs.maxHp);
   refs.fill.style.transform = scaleX(ratio);
   refs.ghost.style.transform = scaleX(ratio);
-  refs.number.textContent = `${Math.max(0, Math.round(hp))}/${refs.maxHp}`;
-  refs.bar.dataset.hpState = hpState(hp, refs.maxHp);
+  if (refs.number.textContent !== text) refs.number.textContent = text;
+  if (refs.bar.dataset.hpState !== state) refs.bar.dataset.hpState = state;
 }
 
 function patchPlate(refs, side, view) {
@@ -483,9 +488,10 @@ function drainHp(side, fromHp, toHp, ms) {
         if (refs.drain !== drain) return;
         const progress = Math.min(1, (now - began) / ms);
         drain.value = Math.round(start + (to - start) * easeOut(progress));
-        const text = `${drain.value}/${refs.maxHp}`;
+        const text = `${drain.value}/${refs.maxHp}`,
+          state = hpState(drain.value, refs.maxHp);
         if (refs.number.textContent !== text) refs.number.textContent = text;
-        refs.bar.dataset.hpState = hpState(drain.value, refs.maxHp);
+        if (refs.bar.dataset.hpState !== state) refs.bar.dataset.hpState = state;
         if (progress < 1) drain.frame = requestAnimationFrame(tick);
       };
     refs.number.textContent = `${start}/${refs.maxHp}`;
@@ -550,8 +556,7 @@ function emphasisTone(emphasis) {
   return 'neutral';
 }
 
-// A leading space keeps the inline emphasis of the slim bar apart from its sentence (a block
-// emphasis drops it).
+// A leading space keeps the inline emphasis apart from its sentence.
 function emphasisHtml(emphasis) {
   return `<span class="narration-emphasis" data-tone="${emphasisTone(emphasis)}"> ${escapeHtml(emphasis)}</span>`;
 }
@@ -635,10 +640,11 @@ function openNarration() {
 
 // The stage takes the room the rest of the screen leaves it (§11.2): the command dock while the
 // player chooses ('choice'), the slim narration bar while a turn plays or a K.O.'d creature's
-// replacement is picked ('turn'), the whole screen for the outro ('full'). A mode change lays the
-// screen out once and re-fits the arena once, synchronously (its ResizeObserver then finds the
-// rect unchanged). The canvas, the player's plate and the dock then glide from where they were
-// (compositor-only FLIP), so nothing re-lays out per frame.
+// replacement is picked ('turn'; landscape folds the dock column away), the whole screen for the
+// outro ('full'). A mode change lays the screen out once and re-fits the arena once,
+// synchronously (its ResizeObserver then finds the rect unchanged). The canvas, the plates, the
+// dock and the pause button then glide from where they were (compositor-only FLIP), so nothing
+// re-lays out per frame.
 const RESTAGE = { id: 'restage', ms: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
 let restageToken = 0;
 
@@ -668,11 +674,12 @@ function restage(mode, update = null) {
     if (animation.id === RESTAGE.id) animation.finish();
   const canvas = stage.querySelector('.arena-canvas'),
     dock = screen.querySelector('.battle-command-dock'),
-    plate = screen.querySelector('.battle-plate-slot.player'),
+    movers = [dock, ...screen.querySelectorAll('.battle-plate-slot, [data-action="battle-pause"]')]
+      .filter(Boolean)
+      .map((node) => [node, node.getBoundingClientRect()]),
     from = stage.getBoundingClientRect(),
     fromFrame = fighterFrame(arena.anchors(), from),
-    dockFrom = dock?.getBoundingClientRect(),
-    plateFrom = plate?.getBoundingClientRect();
+    dockFrom = dock?.getBoundingClientRect();
   screen.dataset.stage = mode;
   update?.();
   const to = stage.getBoundingClientRect();
@@ -682,12 +689,17 @@ function restage(mode, update = null) {
   if (testAnimationScale === 0 || ctx.save.reducedMotion || !canvas) return;
   // What the screen showed of the old stage above the dock stays covered from the first frame:
   // the canvas scales (never below 1) and moves so the re-fitted fighters stand where they stood,
-  // as far as covering that room allows, then relaxes to its new rest.
+  // as far as covering that room allows, then relaxes to its new rest. Only a dock under the stage
+  // (portrait) bounds that room; in landscape a curtain covers the folded column instead.
   const keep = {
       left: Math.max(from.left, to.left) - to.left,
       right: Math.min(from.right, to.right) - to.left,
       top: from.top - to.top,
-      bottom: Math.min(from.bottom, dockFrom?.top ?? from.bottom) - to.top,
+      bottom:
+        Math.min(
+          from.bottom,
+          dockFrom && dockFrom.top > from.top + from.height / 2 ? dockFrom.top : from.bottom
+        ) - to.top,
     },
     scale = Math.max(
       1,
@@ -718,14 +730,13 @@ function restage(mode, update = null) {
     () => token === restageToken && screen.classList.remove('restaging'),
     () => token === restageToken && screen.classList.remove('restaging')
   );
-  for (const [node, rect] of [
-    [dock, dockFrom],
-    [plate, plateFrom],
-  ]) {
-    if (!node || !rect) continue;
+  for (const [node, rect] of movers) {
     const now = node.getBoundingClientRect(),
       dx = node === dock ? 0 : rect.left - now.left,
       dy = rect.top - now.top;
+    // The dock glides as one panel (portrait); one that changes shape (landscape: the column and
+    // the bar) lands in its new place, the bar fading in there.
+    if (node === dock && Math.round(rect.width) !== Math.round(now.width)) continue;
     if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) glide(node, `translate(${dx}px, ${dy}px)`);
   }
 }

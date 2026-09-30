@@ -587,7 +587,7 @@ test('affinity advantage lands with its stamp, its number and the narration emph
   expect(stressed).toBeGreaterThan(plain);
 });
 
-test('multi-hit techniques count every hit on the chain counter', async ({ page }) => {
+test('multi-hit techniques count every hit in words under the running total', async ({ page }) => {
   await installCompletedTutorial(page, {
     lastTeam: ['lumivox', 'orakyn', 'virelia'],
     reducedMotion: false,
@@ -597,18 +597,20 @@ test('multi-hit techniques count every hit on the chain counter', async ({ page 
   await page.locator('[data-action="quick"]').click();
   await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="echo_chorus"]')).toBeVisible({ timeout: 8000 });
-  // The counter rides the target's number ("−31 ×3").
+  // The count rides under the target's number ("−31" over "3 coups"), never as a "×3" multiplier.
   await page.evaluate(() => {
     window.__chain = [];
     const layer = document.querySelector('#fx-text');
     new MutationObserver(() => {
-      const node = layer.querySelector('.fx-number[data-side="enemy"] .fx-chain:not([hidden])');
+      const node = layer.querySelector('.fx-number[data-side="enemy"] .fx-hits:not([hidden])');
       const text = node?.textContent.trim();
       if (text && window.__chain.at(-1) !== text) window.__chain.push(text);
     }).observe(layer, { childList: true, subtree: true, characterData: true, attributes: true });
   });
   await page.locator('[data-move="echo_chorus"]').click();
-  await expect.poll(() => page.evaluate(() => window.__chain), { timeout: 6000 }).toEqual(['×1', '×2', '×3']);
+  await expect
+    .poll(() => page.evaluate(() => window.__chain), { timeout: 6000 })
+    .toEqual(['1 coup', '2 coups', '3 coups']);
 });
 
 test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once per battle', async ({
@@ -780,7 +782,7 @@ test('ladder rivals telegraph and trigger their unique ace phase', async ({ page
   // The hub's team button opens the League team select, whose rival sheet telegraphs the ace.
   await page.locator('[data-action="team"]').click();
   await page.locator('[data-action="open-rival"]').click();
-  await expect(page.locator('.rival-ace')).toContainText('Second souffle');
+  await expect(page.locator('.rival-ace')).toContainText('Nouveau souffle');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /^Combattre/ }).click();
   await arenaReady(page);
@@ -792,7 +794,7 @@ test('ladder rivals telegraph and trigger their unique ace phase', async ({ page
   }
   await controlsBack(page);
   await openCodex(page);
-  await expect(page.locator('.ace-codex.triggered')).toContainText('Second souffle');
+  await expect(page.locator('.ace-codex.triggered')).toContainText('Nouveau souffle');
 });
 
 test('keyboard numbers choose moves and C opens switching', async ({ page }) => {

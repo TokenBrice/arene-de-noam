@@ -40,10 +40,19 @@ const PLURAL_RULES = { fr: new Intl.PluralRules('fr'), en: new Intl.PluralRules(
 // French elides "de" before a vowel-initial name: "Fiche d’Orakyn", "l’animation d’Énigme des marées".
 const ELIDABLE = /^[aeiouâàäéèêëîïôöûùüœæ]/iu;
 
+// The page follows the shown language: its lang attribute and its title (tab, task switcher,
+// bookmark). Node (the unit tests) has no document.
+function showLanguage(lang, dictionary) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = lang;
+  document.title = dictionary['app.title'];
+}
+
 export async function createI18n(initial = 'fr') {
   let lang = normalizeLanguage(initial),
     dictionary = await loadDictionary(lang),
     requested = lang;
+  showLanguage(lang, dictionary);
   return {
     get lang() {
       return lang;
@@ -56,7 +65,7 @@ export async function createI18n(initial = 'fr') {
       if (requested !== next) return false;
       lang = next;
       dictionary = loaded;
-      document.documentElement.lang = lang;
+      showLanguage(lang, dictionary);
       return true;
     },
     t(key, vars = {}) {

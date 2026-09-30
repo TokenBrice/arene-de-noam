@@ -10,6 +10,22 @@ This directory is the implementation map for coding agents. It is intentionally 
 4. [`battle-system.md`](battle-system.md) defines the battle state machine, data contracts, and core mechanics.
 5. Source and tests are the executable specification. If they disagree with product intent, investigate the discrepancy instead of silently choosing one.
 
+## Amendments to the brief
+
+The owner approved these amendments on 2026-09-29, in the "Stade Lumière" upgrade plan (`docs/superpowers/plans/2026-09-29-state-of-the-art-upgrade.md` §5). Where they conflict with [`AUTONOMOUS_GAME_BUILD_BRIEF.md`](../AUTONOMOUS_GAME_BUILD_BRIEF.md), the amendment wins. Every other part of the brief still binds.
+
+| Brief clause | Amendment | Where it lives |
+| --- | --- | --- |
+| §11 "No production build step" | Development still runs the unbundled ES modules. CI (`.github/workflows/pages.yml`) builds `dist/` with esbuild (`tools/build.mjs`): hashed bundles, lazy screens, one dictionary per language, and an offline service worker (`sw.js`). The phone only ever sees a static web app. | `tools/build.mjs`, `sw.js`, `src/app/screens.js`, [`architecture.md`](architecture.md) |
+| §10 "dynamic lighting … shadows" | Lighting is baked into the stadium, with no point lights and no PBR. Each arena ships a painted backdrop plate and court, baked offline, with the procedural painter as the fallback. A frame governor and quality tiers (Low/Mid/High plus the "Graphismes" setting) keep the Mali-class GPU budget. | `src/presentation/arena.js`, `stage/*`, `assets/arenas/`, `src/app/quality.js` |
+| §10 "sprites on planes" and procedural effects | Fighters, effects and readouts follow the presentation contract: WebGL fighters with DOM proxies for input and accessibility, a pixel-grid FX atlas painted by a tool, and beat-timed choreography. | [`battle-presentation.md`](battle-presentation.md), `src/data/choreo.js`, `tools/paint-fx-atlas.mjs` |
+| §10 "Music … generated in-browser" | The original score (`tools/music/score.js`) is rendered and mastered offline to looping Ogg Opus stems (`tools/bake-music.mjs`), then played from buffers as a base stem plus a tension stem. UI sounds, battle cues and the 30 authored creature cries stay synthesised at runtime. | `assets/music/`, `src/sound.js`, `src/sound-cries.js` |
+| §5 "no … critical hits, levels" | Each landed attack has a seeded 1/16 critical hit (×1.5); previews show the non-critical value. The "Niv. 43" shown for Apprentice rivals marks a visible handicap (×0.85 HP and Attack), not a levelling system. Mastery XP stays cosmetic. | `src/battle/damage.js`, `src/battle/engine.js`, `src/data/trainers.js` |
+| §7 "Difficulty changes decision quality, not … stats" | Apprentice is deliberately easier: it only picks moves, carries the visible level handicap, and never lands a critical hit on the player. Standard and Champion keep equal stats. | `src/battle/ai.js`, `src/battle/engine.js` |
+| §5 rules scope | Added rules: arena weather (one type +20 %, another −20 %, Crystal Dome neutral), a universal Marqué ×1.3 Combo, and coverage moves (off-type moves on some creatures). Each creature still owns exactly three moves. Paralysis and bring-6-pick-3 are out of scope. | `ARENA_WEATHER` in `src/data/affinities.js`, `src/data/combos.js`, `src/data/moves.js`, [`battle-system.md`](battle-system.md) |
+| §3 scope (optional features) | Added: Chromatiques (alternate palettes unlocked at mastery rank 5, shown only on the player's own creatures), League badges that unlock Expédition, Épreuves and Pioche du jour at 2, 4 and 6 badges, opt-in haptics, and directional View Transitions. | `src/data/progression.js`, `src/app/haptics.js`, `src/app/shell.js`, save v18 |
+| §8 copy | Vocabulary follows [`glossary.md`](glossary.md) (Signature ✦, Pioche du jour, Expédition, Défenseur/Rapide/Soutien/Stratège/Attaquant/Polyvalent), with names familiar to young monster-battler fans. No name, move, ability or item may reuse a franchise term. | `src/i18n/fr.js`, `src/i18n/en.js` |
+
 ## Sixty-second orientation
 
 - Static browser app: no backend, account, analytics, or runtime network calls; development runs the sources unbundled (the deployed `dist/` is a CI-only build).
@@ -36,7 +52,7 @@ This directory is the implementation map for coding agents. It is intentionally 
 | Persisted shape | `src/save.js` | Bump `SAVE_VERSION`, add one migration, validate old/corrupt/future saves |
 | User-facing copy | `src/i18n/fr.js`, `src/i18n/en.js` | Use the words in [`glossary.md`](glossary.md); add the same key to both files; test `?lang=en` |
 | CSS | `styles/` and sometimes `index.html` | Preserve cascade order and battle lazy-load anchor order |
-| Sprite/art | `art/monsters/originals/<id>.png` → `tools/normalize-sprites.mjs` → `assets/monsters/<id>/battle.png` + `battle-shiny.png`, `src/data/sprite-metrics.js`, `assets/asset-manifest.json` | Never hand-edit the generated files: change the source or the tool's `SPRITES`/`CHROMATIQUES` tables and re-run it. A redraw keeps the replaced source under `art/monsters/originals/pre-redraw/` and records it in the manifest entry's `previous` block; `node --test test/sprite-assets.test.js`. Generation material (`art/briefs/`, `art/concepts/`, `tools/generate-pixellab.mjs`) stays dev-only |
+| Sprite/art | `art/monsters/originals/<id>.png` → `tools/normalize-sprites.mjs` → `assets/monsters/<id>/battle.png` + `battle-shiny.png`, `src/data/sprite-metrics.js`, `assets/asset-manifest.json` | Never hand-edit the generated files: change the source or the tool's `SPRITES`/`CHROMATIQUES` tables and re-run it. A sprite that fills more of the canvas than its size class gets a `scale` entry (pixel-crisp, around the feet); anything that moves a face on the canvas also moves that creature's `PORTRAIT_FOCUS` texel in `src/battle-ui/banners.js` (the Signature cut-in crop). A redraw keeps the replaced source under `art/monsters/originals/pre-redraw/` and records it in the manifest entry's `previous` block; `node --test test/sprite-assets.test.js`. Generation material (`art/briefs/`, `art/concepts/`, `tools/generate-pixellab.mjs`) stays dev-only |
 
 ## Non-negotiable contracts
 

@@ -79,7 +79,7 @@ test('French punctuation stays attached with a narrow no-break space and never w
 });
 test('player-facing copy uses the settled glossary and none of the retired terms', () => {
   const retired =
-    /Éclat|ÉCLAT|Surge|SURGE|Insaisissable|\bGRD\b|mblème|mblem|Draft|DRAFT|Traversée|Gauntlet|Déchaîn|DÉCHAÎN|Unleash|Rempart|Assassin|Soigneur|Contrôleur|Briseur|Duelliste|Elusive|Evasive|Bulwark|Healer|Controller|Breaker|Duelist|\bTank\b|lance \{move\}/;
+    /Éclat|ÉCLAT|Surge|SURGE|Insaisissable|\bGRD\b|mblème|mblem|Draft|DRAFT|Traversée|Gauntlet|Déchaîn|DÉCHAÎN|Unleash|Rempart|Assassin|Soigneur|Contrôleur|Briseur|Duelliste|Elusive|Evasive|Bulwark|Healer|Controller|Breaker|Duelist|\bTank\b|lance \{move\}|Séisme|Riposte|\bCounter\b|Second souffle|Mur de Fer|Shadow Shed|Last Bastion/;
   for (const [language, dictionary] of Object.entries(DICTIONARIES))
     for (const [key, value] of Object.entries(dictionary))
       assert.doesNotMatch(value, retired, `${language} ${key}`);

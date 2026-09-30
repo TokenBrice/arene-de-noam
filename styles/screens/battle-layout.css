@@ -669,36 +669,45 @@
 .battle-screen .dock-head:has(> .coach-chip) .prompt-hint {
   display: none;
 }
-/* During a turn #action-line becomes the narration box and covers the dock
-   (same box, so the stage never re-fits); the head row keeps its height. It
-   is a raised indigo panel like the plates: 20 px ink, names in bold, moves
-   in cyan, the stamp's emphasis in its tone. */
+/* During a turn (the intro and a replacement pick included) the dock shrinks
+   to the slim narration bar (§11.2, §11.4): #action-line becomes a raised
+   indigo panel like the plates, two lines of 18 px (16 px for a longer line:
+   data-fit, hud.js), names bold, moves cyan, the stamp's emphasis inline in
+   its tone. The bar never grows, so a long line never re-fits the stage.
+   Portrait: the dock's row under the stage; landscape: the strip above the
+   fighters (below). */
+.battle-screen[data-stage='turn'] :is(.battle-controls, .dock-head > :not(.action-line)) {
+  display: none;
+}
+.battle-screen[data-stage='turn'] .dock-head {
+  height: var(--narration-bar);
+  padding-left: 0;
+}
 .battle-screen.locked .action-line {
-  position: absolute;
-  top: 8px;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  left: max(var(--battle-edge), env(safe-area-inset-left));
-  right: max(var(--battle-edge), env(safe-area-inset-right));
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 8px;
-  height: auto;
-  padding: 18px 20px 16px;
-  border-radius: var(--radius-l);
+  gap: 0;
+  height: 100%;
+  padding: 8px 14px;
+  overflow: hidden;
+  border-radius: var(--radius-m);
   color: var(--ink);
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
   box-shadow:
     inset 0 0 0 1px #ffffff17,
     inset 0 1px 0 #ffffff26,
     0 4px 0 var(--ledge);
-  font-size: 20px;
-  line-height: 1.3;
+  font-size: 18px;
+  line-height: 1.25;
   white-space: normal;
-  animation: narrationBoxIn var(--dur-med) var(--ease-out);
+}
+.battle-screen.locked .action-line[data-fit='tight'] {
+  font-size: 16px;
 }
 .narration-line {
   display: block;
+  margin-block: auto;
 }
 .narration-line em {
   font-style: normal;
@@ -711,12 +720,11 @@
   font-weight: 900;
 }
 .narration-emphasis {
-  display: block;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 1.1em;
   font-weight: var(--weight-display);
-  line-height: 1.05;
+  line-height: 1;
 }
 .narration-emphasis[data-tone='good'] {
   color: var(--good);
@@ -733,14 +741,20 @@
 .narration-emphasis[data-tone='block'] {
   color: #9ef6ff;
 }
+/* Landscape: the bar lands in the strip above the fighters as the column
+   folds, so it fades in there (portrait: the dock glides, the bar does not). */
 @keyframes narrationBoxIn {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(-10px);
   }
 }
-/* Only the narration box animates (one compositor layer at turn start). The
-   tiles stay painted under it while it fades in, then hide without motion. */
+@media (orientation: landscape) {
+  .battle-screen.locked .action-line {
+    animation: narrationBoxIn var(--dur-med) var(--ease-out);
+  }
+}
+/* Locked for the outro, the fading dock's tiles hide without motion. */
 .battle-screen .battle-controls {
   position: static;
   display: block;
@@ -756,11 +770,12 @@
 /* ------------------------------------------------------------- stage room */
 /* The stage takes the room the rest of the screen leaves it (§11.2, hud.js
    restage): the dock while the player chooses, the slim narration bar while a
-   turn plays or a replacement is picked (portrait), the whole screen for the
-   outro. Each change lays out and re-fits the arena once, then the canvas,
-   the player's plate and the dock glide from where they were. The curtain
-   under the dock covers the room it gives up while it glides down; a
-   shrinking stage keeps painting down to the rising dock. */
+   turn plays or a replacement is picked (portrait: the dock's row; landscape:
+   the dock column folds away), the whole screen for the outro. Each change
+   lays out and re-fits the arena once, then the canvas, the plates and the
+   moved controls glide from where they were. The curtain under the dock covers
+   the room it gives up while it glides down; a shrinking stage keeps painting
+   down to the rising dock. */
 .battle-screen .battle-command-dock::after {
   content: '';
   position: absolute;
@@ -775,40 +790,15 @@
   overflow: visible;
   clip-path: inset(0 0 -100vh);
 }
+/* Landscape: the folded column's curtain (below) fades while the canvas glides wider. */
+@keyframes columnFold {
+  to {
+    opacity: 0;
+  }
+}
 @media (orientation: portrait) {
   .battle-screen[data-stage='turn'] .battle-command-dock {
     padding-top: 6px;
-  }
-  .battle-screen[data-stage='turn'] :is(.battle-controls, .dock-head > :not(.action-line)) {
-    display: none;
-  }
-  .battle-screen[data-stage='turn'] .dock-head {
-    height: var(--narration-bar);
-    padding-left: 0;
-  }
-  /* The slim narration bar: two lines of 18 px (16 px for a longer line),
-     names bold, moves cyan, the stamp's emphasis inline in its tone. */
-  .battle-screen.locked .action-line {
-    position: static;
-    height: 100%;
-    gap: 0;
-    padding: 8px 14px;
-    border-radius: var(--radius-m);
-    font-size: 18px;
-    line-height: 1.25;
-    overflow: hidden;
-    animation: none;
-  }
-  .battle-screen.locked .action-line[data-fit='tight'] {
-    font-size: 16px;
-  }
-  .battle-screen.locked .narration-line {
-    margin-block: auto;
-  }
-  .battle-screen.locked .narration-emphasis {
-    display: inline;
-    font-size: 1.1em;
-    line-height: 1;
   }
 }
 /* The outro: the stage takes the whole screen, the top row and the bar fade
@@ -1383,15 +1373,64 @@ body.high-contrast .battle-screen .prompt-hint {
     --plate-name: clamp(18px, 1.35vw, 24px);
     --plate-number: clamp(16px, 1.2vw, 21px);
     --top-btn: clamp(48px, 3.4vw, 56px);
+    --speed-w: 64px;
   }
   .battle-layout {
     grid-template-columns: minmax(0, 1fr) var(--dock-w);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas: 'stage top' 'stage dock';
   }
-  /* The outro folds the dock column away; its panels fade out in place. */
-  .battle-screen[data-stage='full'] .battle-layout {
+  .battle-screen .speed-btn {
+    width: var(--speed-w);
+  }
+  /* A turn folds the dock column away (§11.2): the stage takes the whole
+     screen, and the strip above the fighters, right of the rival's plate,
+     holds the narration bar, then pause and speed (the turn pill is back with
+     the choice). While the stage glides wider, a curtain in the column's
+     colour fades where the column was. The outro folds it too; its panels
+     fade out in place. */
+  .battle-screen:is([data-stage='turn'], [data-stage='full']) .battle-layout {
     grid-template-columns: minmax(0, 1fr) 0;
+  }
+  /* Out of the grid areas (a folded column is 0 px wide): placed in the whole layout. */
+  .battle-screen[data-stage='turn'] .battle-top {
+    grid-area: auto;
+    position: absolute;
+    top: 0;
+    right: 0;
+    grid-template-columns: var(--top-btn) var(--speed-w);
+    background: none;
+  }
+  .battle-screen[data-stage='turn'] .battle-turn {
+    display: none;
+  }
+  .battle-screen[data-stage='turn'] .battle-command-dock {
+    grid-area: auto;
+    position: absolute;
+    top: max(6px, env(safe-area-inset-top));
+    left: calc(max(var(--battle-edge), env(safe-area-inset-left)) + var(--plate-w) + var(--space-2));
+    right: calc(
+      var(--battle-edge) + var(--top-btn) + var(--space-2) + var(--speed-w) +
+        max(var(--battle-edge), env(safe-area-inset-right))
+    );
+    padding: 0;
+    box-shadow: none;
+    background: none;
+  }
+  .battle-screen[data-stage='turn'] .battle-command-dock::after {
+    content: none;
+  }
+  .battle-screen.restaging[data-stage='turn'] .battle-layout::after {
+    content: '';
+    position: absolute;
+    z-index: var(--z-stage);
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--dock-w);
+    background: var(--bg-0);
+    pointer-events: none;
+    animation: columnFold 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
   .battle-screen[data-stage='full'] :is(.battle-top, .battle-command-dock) {
     left: auto;
@@ -1501,11 +1540,8 @@ body.high-contrast .battle-screen .prompt-hint {
   .battle-screen.tutorial-mode .dock-head .prompt-lesson {
     display: flex;
   }
-  .battle-screen.locked .action-line {
-    top: 4px;
-    bottom: max(6px, env(safe-area-inset-bottom));
-    padding: 16px 18px 12px;
-    font-size: 19px;
+  .battle-screen[data-stage='turn'] .battle-command-dock {
+    top: max(4px, env(safe-area-inset-top));
   }
   /* Battle sheets go wide and lay their rows out in two columns. */
   .battle-sheet .sheet {
@@ -1549,7 +1585,10 @@ body.high-contrast .battle-screen .prompt-hint {
 @media (orientation: landscape) and (min-height: 600px) {
   .battle-screen {
     --dock-head: 56px;
-    --plate-w: clamp(260px, 30%, 380px);
+    --narration-bar: 76px;
+    /* A share of the choice stage, so a plate keeps its size while a turn
+       folds the dock column away. */
+    --plate-w: clamp(260px, calc((100vw - var(--dock-w)) * 0.3), 380px);
     --plate-name: clamp(20px, 1.6vw, 26px);
     --plate-number: clamp(17px, 1.35vw, 22px);
   }
@@ -1630,15 +1669,17 @@ body.high-contrast .battle-screen .prompt-hint {
   .battle-screen .plate-surge-number {
     font-size: var(--text-sm);
   }
-  .battle-screen.locked .action-line {
-    bottom: auto;
-    min-height: min(180px, 50%);
-    max-height: calc(100% - 16px);
-    padding: 26px 26px 20px;
-    font-size: clamp(21px, 1.6vw, 25px);
+  /* The narration bar starts right of the rival's plate and its text grows
+     with the screen. */
+  .battle-screen[data-stage='turn'] .battle-command-dock {
+    left: calc(max(var(--battle-edge) + var(--plate-w), 54%) + var(--space-2));
   }
-  .battle-screen.locked .narration-emphasis {
-    font-size: clamp(26px, 2vw, 32px);
+  .battle-screen.locked .action-line {
+    padding-inline: 18px;
+    font-size: clamp(18px, 1.45vw, 21px);
+  }
+  .battle-screen.locked .action-line[data-fit='tight'] {
+    font-size: clamp(16px, 1.3vw, 19px);
   }
 }
 body.high-contrast .battle-screen:not(.locked) .action-line {

@@ -44,6 +44,11 @@ const MOTE_CAPACITY = 170;
 const CHEER_MS = 1300;
 const PAD_REST_LIFT = 1;
 const PAD_DIM_LIFT = 0.35;
+// The outro lowers the loser's emptied pad under the floor (this much below it) and closes its
+// light pool over PAD_SINK_MS fx-ms, so the hero shot shows the winner alone (instant under
+// reduced motion).
+const PAD_SINK_CLEAR = 0.02;
+const PAD_SINK_MS = 500;
 // A standing enemy eases to a new hierarchy cap over this many fx-ms when the player switches.
 const ENEMY_EASE_MS = 250;
 // The impact punch pushes in toward this point between the fighters' centres (0 = the attacker,
@@ -180,11 +185,18 @@ export class ArenaScene {
     this.bulbsUntil = 0;
     this.cheerSerial = 0;
     this.shotRecord = null;
+    // The side a hero shot (outro) frames, re-framed on a refit; the loser's pad lowering away.
+    this.heroSide = null;
+    this.padSink = null;
     this.punchFocus = new THREE.Vector3();
     this.punchTarget = new THREE.Vector3();
     this.creatures = { player: null, enemy: null };
     this.cachedAnchors = null;
     this.rect = null;
+    // The drawing buffer's size in CSS px; the stage may show only its top-left corner (fitToStage).
+    this.buffer = null;
+    canvas.style.objectFit = 'cover';
+    canvas.style.objectPosition = '0 0';
     this.enemyLayout = null;
     this.enemyEase = null;
     this.framing = null;
@@ -306,7 +318,15 @@ export class ArenaScene {
       material.uniforms.uRim.value.set(t.glow);
       const mesh = new THREE.Mesh(padGeometry, material);
       mesh.renderOrder = -1;
-      this.pads[side] = { mesh, material, canvas, texture, lift: PAD_REST_LIFT };
+      this.pads[side] = {
+        mesh,
+        material,
+        canvas,
+        texture,
+        lift: PAD_REST_LIFT,
+        base: { x: 0, z: 0, depth: 1, radius: 1 },
+        sink: 0,
+      };
     }
     // Atmosphere: motes + flash-bulbs (one draw), high-tier light shafts (one draw).
     this.points = new THREE.Points(
@@ -396,7 +416,11 @@ export class ArenaScene {
   /* ------------------------------------------------------------------------------ layout */
 
   // Sizes the drawing buffer, solves the framing, places pads and fighters, recomputes and writes
-  // the anchors (§7.2–7.3) and renders one frame.
+  // the anchors (§7.2–7.3) and renders one frame. A smaller room that keeps the buffer's width
+  // (portrait) or height (landscape), as the choice stage after the turn's does (§11.2), is drawn
+  // in the buffer's top-left corner instead of reallocating it: a reallocation stalls the restage
+  // on a GPU round trip. The canvas shows that corner at the same device px per CSS px (object-fit
+  // cover from 0 0), and the viewport and scissor keep every draw inside it.
   fitToStage(stageRect, { force = false } = {}) {
     if (this.disposed) return this.cachedAnchors;
     const width = Math.max(1, Math.round(stageRect.width)),
@@ -406,8 +430,27 @@ export class ArenaScene {
     if (!force && this.rect?.width === width && this.rect?.height === height && this.rect.ratio === ratio)
       return this.cachedAnchors;
     this.rect = { width, height, ratio };
-    this.renderer.setPixelRatio(ratio);
-    this.renderer.setSize(width, height, false);
+    const buffer = this.buffer,
+      corner =
+        !force &&
+        buffer?.ratio === ratio &&
+        width <= buffer.width &&
+        height <= buffer.height &&
+        (width === buffer.width || height === buffer.height);
+    if (!corner) {
+      this.buffer = { width, height, ratio };
+      this.renderer.setPixelRatio(ratio);
+      this.renderer.setSize(width, height, false);
+    }
+    // In device px, the room's corner of the buffer (GL rows count from the bottom). three.js
+    // multiplies back by the ratio and rounds or floors: +¼ px keeps both on the same whole px.
+    const { width: bufferWidth, height: bufferHeight } = this.canvas,
+      roomWidth = Math.min(bufferWidth, Math.ceil(width * ratio)),
+      roomHeight = Math.min(bufferHeight, Math.ceil(height * ratio)),
+      room = [0, bufferHeight - roomHeight, roomWidth, roomHeight].map((px) => (px + 0.25) / ratio);
+    this.renderer.setViewport(...room);
+    this.renderer.setScissor(...room);
+    this.renderer.setScissorTest(roomWidth < bufferWidth || roomHeight < bufferHeight);
     // Integer upscale of a DPR-capped buffer stays crisp (pixel sprites) instead of bilinear.
     this.canvas.style.imageRendering = ratio < (globalThis.devicePixelRatio || 1) ? 'pixelated' : '';
     const framing = (this.framing = solveFraming({ width, height }, DESIGN_EXTENT));
@@ -427,6 +470,7 @@ export class ArenaScene {
     this.fighters.setLayout({ player });
     this.layoutEnemy(enemy, false);
     this.refreshAnchors();
+    if (this.heroSide) this.rig.retarget(this.heroTarget(this.heroSide));
     this.rig.step(0);
     this.renderFrame();
     return this.cachedAnchors;
@@ -450,9 +494,9 @@ export class ArenaScene {
       const s = sides[side],
         pad = this.pads[side],
         depth = Math.max(0.1, PAD_TOP + 0.045 * s.canvasHeight);
-      pad.mesh.position.set(s.feet.x, PAD_TOP - depth / 2, s.feet.z);
+      Object.assign(pad.base, { x: s.feet.x, z: s.feet.z, depth, radius: s.padRadius });
       pad.mesh.scale.set(s.padRadius, depth, s.padRadius);
-      u[side === 'player' ? 'uPadP' : 'uPadE'].value.set(s.feet.x, s.feet.z, s.padRadius);
+      this.placePad(side);
       // Light shaft behind the fighter's plane, wide at the pad, narrow up high.
       toCamera.copy(framing.camera.position).sub(s.feet).setY(0).normalize();
       const base = s.feet.clone().addScaledVector(toCamera, -0.35 * s.padRadius),
@@ -483,6 +527,29 @@ export class ArenaScene {
     p.uPixelRatio.value = this.renderer.getPixelRatio();
   }
 
+  // A pad at its base placement, lowered by `sink` (0–1) under the floor with its light pool and
+  // contact shade closing in: an emptied pad leaving the outro's hero shot.
+  placePad(side) {
+    const pad = this.pads[side],
+      { x, z, depth, radius } = pad.base;
+    pad.mesh.position.set(x, PAD_TOP - depth / 2 - pad.sink * (PAD_TOP + PAD_SINK_CLEAR), z);
+    this.floor.material.uniforms[side === 'player' ? 'uPadP' : 'uPadE'].value.set(
+      x,
+      z,
+      Math.max(1e-3, radius * (1 - pad.sink))
+    );
+  }
+
+  stepPadSink(fxDt) {
+    const sink = this.padSink;
+    if (!sink) return;
+    sink.age = Math.min(PAD_SINK_MS, sink.age + fxDt);
+    const u = sink.age / PAD_SINK_MS;
+    this.pads[sink.side].sink = u * u * (3 - 2 * u);
+    this.placePad(sink.side);
+    if (u >= 1) this.padSink = null;
+  }
+
   // setLayout entries for both sides: feet on the pad (slid when a wide creature needs the room) and
   // canvas heights fitted to the current pair, the enemy's pinned on whole device px per texel when
   // the buffer is not rescaled (§7.6).
@@ -496,7 +563,7 @@ export class ArenaScene {
       fits = fitCreatures(
         this.framing,
         { player: extent(this.creatures.player), enemy: extent(this.creatures.enemy) },
-        { devicePx: exact ? this.canvas.height / this.rect.height : 0 }
+        { devicePx: exact ? this.canvas.height / this.buffer.height : 0 }
       ),
       entries = {};
     for (const side of SIDES) {
@@ -608,25 +675,29 @@ export class ArenaScene {
     this.lastFx = null;
   }
 
-  // §7.4. Resolves true at completion, false when superseded or disposed.
-  shot(name, { side, duration } = {}) {
+  // §7.4. Resolves true at completion, false when superseded or disposed. A hero shot (outro)
+  // frames `side` and lowers the other side's emptied pad away.
+  shot(name, { side = 'player', duration } = {}) {
     if (!SHOTS[name]) throw new TypeError(`Unknown arena shot: ${name}`);
     if (this.disposed) return Promise.resolve(false);
     if (this.instant) return Promise.resolve(true);
     this.settleShot(false);
     this.endIntroLights();
+    const hero = Boolean(SHOTS[name].hero);
+    this.heroSide = hero ? side : null;
     if (name === 'cut') {
       this.rig.cut();
       this.setGrade();
       this.wake();
       return Promise.resolve(true);
     }
+    const target = hero ? this.heroTarget(side) : this.shotTarget(side);
+    if (hero) this.sinkPad(side === 'player' ? 'enemy' : 'player');
     if (this.reducedMotion) {
-      this.rig.cutTo(name);
+      this.rig.cutTo(name, target);
       this.wake();
       return Promise.resolve(true);
     }
-    const target = side ? this.shotTarget(side) : this.shotTarget('player');
     const record = {
       shot: this.rig.start(name, duration ?? SHOTS[name].duration, target),
       resolve: null,
@@ -644,6 +715,23 @@ export class ArenaScene {
       other = this.fighters.restAnchor(side === 'player' ? 'enemy' : 'player', 'center', new THREE.Vector3()),
       sign = (this.cachedAnchors?.[side].center.x ?? 0) > (this.rect?.width ?? 0) / 2 ? 1 : -1;
     return { center, feet, sign, other };
+  }
+
+  // A hero shot's target: the winner's victory box and the stage size (rig.js heroPose).
+  heroTarget(side) {
+    return {
+      ...this.shotTarget(side),
+      box: this.fighters.heroBox(side),
+      stage: { width: this.rect.width, height: this.rect.height },
+    };
+  }
+
+  sinkPad(side) {
+    if (this.reducedMotion) {
+      this.padSink = null;
+      this.pads[side].sink = 1;
+      this.placePad(side);
+    } else if (this.pads[side].sink < 1 && this.padSink?.side !== side) this.padSink = { side, age: 0 };
   }
 
   settleShot(result) {
@@ -819,6 +907,7 @@ export class ArenaScene {
       this.realTime < this.bulbsUntil ||
       this.fighters.isActive() ||
       this.enemyEase ||
+      this.padSink ||
       this.fx.isActive()
     );
   }
@@ -898,6 +987,7 @@ export class ArenaScene {
     this.rig.apply(this.camera, this.rect.width, this.rect.height);
     this.camera.updateMatrixWorld();
     this.stepEnemyEase(fxDt);
+    this.stepPadSink(fxDt);
     this.fighters.update(fxDt, realDt);
     this.fx.update(fxDt);
   }

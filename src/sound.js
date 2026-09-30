@@ -260,6 +260,8 @@ export class SoundSystem {
     this.screenId = null;
     // The current theme's player (startMusic): its decoded stems, buses and looping sources.
     this.music = null;
+    // deferMusic: a download gate for the music (null: none).
+    this.musicGate = null;
     this.tension = 0;
     this.hidden = Boolean(globalThis.document?.hidden);
     this.musicSources = new Set();
@@ -566,12 +568,20 @@ export class SoundSystem {
     void this.loadMusic(player);
   }
 
+  // Music waits for `promise` (settled either way) before it downloads: on a slow line the code
+  // the next tap needs goes first (main.js holds it until the lazy chunks are in).
+  deferMusic(promise) {
+    this.musicGate = Promise.resolve(promise).catch(() => {});
+  }
+
   // Fetches and decodes the theme's stems. A player replaced meanwhile is dropped before its
-  // decode (or right after it), so rapid screen changes never start a stale theme. A missing
-  // file or a browser that cannot decode Ogg Opus leaves the music silent, without a notice:
-  // the SFX still work.
+  // download or decode (or right after it), so rapid screen changes never start a stale theme. A
+  // missing file or a browser that cannot decode Ogg Opus leaves the music silent, without a
+  // notice: the SFX still work.
   async loadMusic(player) {
     try {
+      await this.musicGate;
+      if (this.music !== player) return;
       const buffers = await Promise.all(
         MUSIC_TRACKS[player.themeId].map(async (stem) => {
           const response = await fetch(musicUrl(player.themeId, stem));

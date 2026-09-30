@@ -215,6 +215,7 @@
       "normalized": {
         "colors": 90,
         "outline": false,
+        "scale": 0.84,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/brontusk.png"
       },
@@ -265,8 +266,9 @@
         "prompt": "Ancient squat rune golem of stacked dark stone slabs with one golden core eye and fortress shoulders."
       },
       "normalized": {
-        "colors": 89,
+        "colors": 88,
         "outline": false,
+        "scale": 0.88,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/monolith.png"
       },
@@ -275,7 +277,7 @@
         "from": "assets/monsters/monolith/battle.png",
         "bodyHue": 293,
         "hue": 60,
-        "colors": 89
+        "colors": 88
       }
     },
     {
@@ -319,6 +321,7 @@
       "normalized": {
         "colors": 89,
         "outline": false,
+        "scale": 0.86,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/nymbloom.png"
       },
@@ -392,6 +395,7 @@
       "normalized": {
         "colors": 91,
         "outline": false,
+        "scale": 0.84,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/magmoth.png"
       },
@@ -528,6 +532,7 @@
       "normalized": {
         "colors": 88,
         "outline": false,
+        "scale": 0.9,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/umbrawl.png"
       },
@@ -536,7 +541,7 @@
         "from": "assets/monsters/umbrawl/battle.png",
         "bodyHue": 302,
         "hue": 195,
-        "colors": 85
+        "colors": 86
       }
     },
     {
@@ -557,8 +562,9 @@
         "prompt": "Many-eyed non-humanoid owl-cephalopod mystic with crescent crown, feather mantle, rune charms, and curse wisps."
       },
       "normalized": {
-        "colors": 90,
+        "colors": 88,
         "outline": false,
+        "scale": 0.8,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/hexalune.png"
       },
@@ -567,7 +573,7 @@
         "from": "assets/monsters/hexalune/battle.png",
         "bodyHue": 284,
         "hue": 20,
-        "colors": 90
+        "colors": 88
       }
     },
     {

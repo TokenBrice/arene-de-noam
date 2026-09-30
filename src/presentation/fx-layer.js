@@ -39,6 +39,8 @@ const SOLID_CELL = -1;
 // back (this shade) while the flip turns it to the camera.
 const SWAY_RATE = 0.45;
 const BACK_SHADE = 0.6;
+// A stopped status loop fades out over this many virtual ms unless told otherwise.
+const ORBIT_STOP_FADE_MS = 180;
 
 const MODE_BILLBOARD = 0;
 const MODE_PILLAR = 1; // billboard pivoting on its bottom edge
@@ -487,9 +489,11 @@ export class FxLayer {
     else this.#start(record, index);
     this.#wake?.();
     return {
-      stop: () => {
+      // Persistent emitters end here; a stopped orbit's quads fade out over `fadeMs` (0: gone at
+      // once, as on a reduced-motion cut).
+      stop: ({ fadeMs = ORBIT_STOP_FADE_MS } = {}) => {
         if (record.generation !== generation || !record.active) return;
-        this.#stop(record, index);
+        this.#stop(record, index, fadeMs);
         this.#wake?.();
       },
     };
@@ -719,15 +723,16 @@ export class FxLayer {
     return chosen;
   }
 
-  #stop(record, index) {
+  #stop(record, index, fadeMs) {
     record.stopped = true;
     if (record.type === 'orbit') {
       const q = this.#quads;
       for (let slot = 0; slot < this.#live; slot++)
         if (q.emitter[slot] === index && q.persistent[slot]) {
           q.persistent[slot] = 0;
-          q.life[slot] = q.age[slot] + 180;
-          q.fadeOut[slot] = 180;
+          q.life[slot] = q.age[slot] + fadeMs;
+          q.fadeOut[slot] = fadeMs;
+          if (fadeMs <= 0) q.a[slot] = 0;
         }
       record.active = false;
     }

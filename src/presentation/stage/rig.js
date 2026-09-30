@@ -9,7 +9,8 @@ export const SHOTS = Object.freeze({
   lean: { duration: 700 },
   impact: { duration: 240 },
   ko: { duration: 600, holds: true },
-  victory: { duration: 2400, holds: true, loops: true },
+  victory: { duration: 2400, holds: true, loops: true, hero: true },
+  defeat: { duration: 1600, holds: true, hero: true },
   cut: { duration: 0 },
 });
 
@@ -22,11 +23,26 @@ const LEAN_OTHER = 0.5;
 const IMPACT_PUSH = 0.03;
 const KO_PUSH = 0.08;
 export const KO_SATURATION = 0.6;
-// Victory: the camera turns toward the winner (VICTORY_AIM of the way) and pushes in, so the
-// winner takes the centre of the frame, then orbits gently around it.
+// Hero framing (the outro's `victory` / `defeat` shots, §7.4): the camera stays where it rests (a
+// dolly would balloon a near winner), turns to the winner and narrows its fov until the winner's
+// victory box (fighters.js heroBox: widest landing squash, hop apex) fills HERO_FILL of the frame
+// height, centred across and in the room the outro banner leaves free. The room is in shares of
+// the stage height plus CSS px (battle-presentation.css: "VICTOIRE !" 5cqh from the top in a band
+// ≤ 125 px tall; "Défaite…" 9cqh from the bottom, ≤ 90 px). The box never leaves the room or
+// HERO_SIDE of the width on each side, orbit included: a winner too wide for it zooms out a little.
+// A box smaller than its room stands low in it: HERO_LOW of the spare height stays above it.
+const HERO_ROOM = Object.freeze({
+  victory: { top: [0.05, 125], bottom: [0.08, 0] },
+  defeat: { top: [0.07, 0], bottom: [0.09, 90] },
+});
+const HERO_SIDE = 0.04;
+const HERO_FILL = 0.58;
+const HERO_LOW = 0.6;
+const HERO_ZOOM = [0.8, 2];
+// The turn and push-in ease in over this many ms: brisk for a victory, slow and calm for a defeat.
+// Only the victory then orbits ±VICTORY_YAW around the winner's feet, once per shot duration.
+const HERO_EASE = Object.freeze({ victory: 600, defeat: 1000 });
 const VICTORY_YAW = THREE.MathUtils.degToRad(8);
-const VICTORY_AIM = 0.45;
-const VICTORY_PUSH = 0.1;
 const INTRO_YAW = THREE.MathUtils.degToRad(9);
 const SHOWDOWN_PUSH = 0.01;
 // Impact punch: a snap push-in of `kick × KICK_PUSH` (share of size) aimed at the punch focus, a
@@ -110,11 +126,13 @@ export class CameraRig {
 
   // Starts a shot from the current framing. `target` = { center, feet, sign, other } of the shot's
   // side (sign: +1 when that side is right of the screen centre; other: the other fighter's
-  // centre). Returns the shot record.
+  // centre); hero shots add `box` (fighters.js heroBox) and `stage` ({ width, height }, CSS px).
+  // Returns the shot record.
   start(name, duration, target) {
     const shot = { name, duration, target, age: 0, sweeps: 0, from: copyPose(pose(), this.shotPose) };
     if (name === 'intro') shot.blend = 0;
     else shot.blend = Math.min(250, duration * 0.35);
+    if (SHOTS[name].hero) shot.hero = this.heroPose(name, target);
     this.active = shot;
     this.held = null;
     if (name === 'ko') this.tweenSaturation(KO_SATURATION, duration);
@@ -130,10 +148,104 @@ export class CameraRig {
     copyPose(this.shotPose, this.rest);
   }
 
-  // Reduced motion: shots are cuts; only the K.O. desaturation applies (instantly).
-  cutTo(name) {
+  // Reduced motion: shots are cuts. The K.O. desaturation applies instantly, and a hero shot cuts
+  // to its final framing (no orbit) and holds it.
+  cutTo(name, target) {
     this.cut();
     if (name === 'ko') this.grade.saturation = this.grade.to = this.grade.from = KO_SATURATION;
+    if (!SHOTS[name].hero) return;
+    this.held = {
+      name,
+      target,
+      still: true,
+      age: 0,
+      duration: 1,
+      blend: 0,
+      hero: this.heroPose(name, target),
+    };
+    this.evaluate(this.held, this.shotPose);
+  }
+
+  // The stage was re-fitted during a hero shot: frame the winner again from the new rest.
+  retarget(target) {
+    const shot = this.active ?? this.held;
+    if (!shot || !SHOTS[shot.name].hero) return;
+    shot.target = target;
+    shot.hero = this.heroPose(shot.name, target);
+  }
+
+  // Hero framing (HERO_ROOM): the rest position with the orientation and fov that frame the
+  // winner's box. The box is measured on its corners in the frame (the victory orbit's extremes
+  // included), placed from small-angle estimates, then re-measured and corrected twice.
+  heroPose(name, target) {
+    const rest = this.rest,
+      { feet, box, stage } = target,
+      room = HERO_ROOM[name],
+      top = 1 - 2 * (room.top[0] + room.top[1] / stage.height),
+      bottom = -1 + 2 * (room.bottom[0] + room.bottom[1] / stage.height),
+      // NDC centre of a box `h` tall standing in the room.
+      place = (h) => top - HERO_LOW * Math.max(0, top - bottom - h) - h / 2,
+      side = 1 - 2 * HERO_SIDE,
+      tanY = Math.tan(THREE.MathUtils.degToRad(rest.fov) / 2),
+      tanX = tanY * this.camera.aspect,
+      right = new THREE.Vector3(1, 0, 0).applyQuaternion(rest.quaternion),
+      up = new THREE.Vector3(0, 1, 0).applyQuaternion(rest.quaternion),
+      corners = [];
+    for (const x of [-box.halfWidth, box.halfWidth])
+      for (const y of [0, box.height + box.lift]) {
+        const corner = feet.clone().addScaledVector(right, x).addScaledVector(up, y);
+        corners.push(corner);
+        // The orbit turns the camera about the vertical through the feet: the same as turning
+        // the box the other way.
+        if (name === 'victory')
+          for (const angle of [-VICTORY_YAW, VICTORY_YAW])
+            corners.push(corner.clone().sub(feet).applyAxisAngle(UP, angle).add(feet));
+      }
+    const view = new THREE.Matrix4(),
+      p = new THREE.Vector3(),
+      axis = new THREE.Vector3(),
+      quaternion = new THREE.Quaternion(),
+      // NDC extents of the box through `q` at magnification `zoom` (vs rest).
+      measure = (q, zoom) => {
+        view.compose(rest.position, q, p.set(1, 1, 1)).invert();
+        const e = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+        for (const corner of corners) {
+          p.copy(corner).applyMatrix4(view);
+          const depth = Math.max(1e-6, -p.z),
+            x = (p.x / depth / tanX) * zoom,
+            y = (p.y / depth / tanY) * zoom;
+          e.x0 = Math.min(e.x0, x);
+          e.x1 = Math.max(e.x1, x);
+          e.y0 = Math.min(e.y0, y);
+          e.y1 = Math.max(e.y1, y);
+        }
+        return e;
+      },
+      // Orientation looking along rest-view tangents (u, v), without roll.
+      aim = (u, v) => {
+        axis.set(u, v, -1).applyQuaternion(rest.quaternion).add(rest.position);
+        return quaternion.setFromRotationMatrix(this.tmp.m.lookAt(rest.position, axis, UP));
+      };
+    let e = measure(rest.quaternion, 1),
+      zoom = Math.min(
+        Math.max(1, (2 * HERO_FILL) / (e.y1 - e.y0)),
+        (top - bottom) / (e.y1 - e.y0),
+        (2 * side) / (e.x1 - e.x0)
+      ),
+      u = ((e.x0 + e.x1) / 2) * tanX,
+      v = ((e.y0 + e.y1) / 2) * tanY;
+    zoom = Math.min(HERO_ZOOM[1], Math.max(HERO_ZOOM[0], zoom));
+    v -= (place((e.y1 - e.y0) * zoom) * tanY) / zoom;
+    for (let pass = 0; pass < 2; pass++) {
+      e = measure(aim(u, v), zoom);
+      const fit = Math.min(1, (2 * side) / (e.x1 - e.x0), (top - bottom) / (e.y1 - e.y0)),
+        next = Math.max(HERO_ZOOM[0], zoom * fit),
+        k = next / zoom;
+      u += (((e.x0 + e.x1) / 2) * k * tanX) / next;
+      v += ((((e.y0 + e.y1) / 2) * k - place((e.y1 - e.y0) * k)) * tanY) / next;
+      zoom = next;
+    }
+    return { quaternion: aim(u, v).clone(), fov: zoomFov(rest.fov, zoom - 1) };
   }
 
   tweenSaturation(to, ms) {
@@ -242,20 +354,24 @@ export class CameraRig {
       case 'ko':
         this.push(out, target.center, KO_PUSH * easeInOutCubic(t));
         break;
-      case 'victory': {
-        const ease = smooth(clamp01(shot.age / 600)),
-          angle = VICTORY_YAW * Math.sin((2 * Math.PI * shot.age) / shot.duration) * ease;
-        yawQuat(angle, q);
-        out.position.sub(target.feet).applyQuaternion(q).add(target.feet);
-        out.quaternion.premultiply(q);
-        this.push(out, target.center, VICTORY_PUSH * ease, VICTORY_AIM * ease);
+      case 'victory':
+      case 'defeat': {
+        const ease = shot.still ? 1 : smooth(clamp01(shot.age / HERO_EASE[shot.name]));
+        out.quaternion.slerp(shot.hero.quaternion, ease);
+        out.fov += (shot.hero.fov - out.fov) * ease;
+        if (shot.name === 'victory' && !shot.still) {
+          yawQuat(VICTORY_YAW * Math.sin((2 * Math.PI * shot.age) / shot.duration) * ease, q);
+          out.position.sub(target.feet).applyQuaternion(q).add(target.feet);
+          out.quaternion.premultiply(q);
+        }
         break;
       }
     }
     if (shot.blend > 0 && shot.age < shot.blend) {
       const w = smooth(shot.age / shot.blend);
       out.position.lerpVectors(shot.from.position, out.position, w);
-      out.quaternion.slerpQuaternions(shot.from.quaternion, out.quaternion, w);
+      // slerpQuaternions(from, out.quaternion) would copy `from` over its own second argument.
+      out.quaternion.slerp(shot.from.quaternion, 1 - w);
       out.fov = shot.from.fov + (out.fov - shot.from.fov) * w;
     }
     return out;

@@ -663,7 +663,7 @@ test('Evasive preserves an unspent Focused attack', () => {
   assert.ok(activeOf(result.state, 'player').statuses.focused);
 });
 
-test('preview resolves Last Bastion barriers between Echo Chorus hits', () => {
+test('preview resolves Final Bastion barriers between Echo Chorus hits', () => {
   const state = createBattle({
     playerTeam: ['lumivox', 'orakyn', 'virelia'],
     enemyTeam: ['brontusk', 'kordane', 'calderoc'],

@@ -20,23 +20,23 @@ function t(key, vars) {
 const PORTRAIT_FOCUS = {
   abyssar: [100, 36],
   aubeastre: [84, 36],
-  brontusk: [82, 52],
+  brontusk: [79, 64],
   calderoc: [26, 98],
   deuilastre: [100, 76],
   farfombre: [62, 66],
   ferrax: [104, 42],
   flambelier: [86, 50],
   florafae: [78, 42],
-  hexalune: [64, 34],
+  hexalune: [64, 52],
   kordane: [70, 44],
   lumivox: [68, 50],
-  magmoth: [96, 66],
+  magmoth: [91, 76],
   mareclat: [48, 60],
   mnemora: [88, 62],
-  monolith: [70, 30],
+  monolith: [69, 42],
   mossaur: [106, 90],
   nocturnyx: [70, 52],
-  nymbloom: [76, 40],
+  nymbloom: [74, 52],
   orakyn: [57, 40],
   pactigon: [100, 76],
   prismage: [72, 58],
@@ -44,7 +44,7 @@ const PORTRAIT_FOCUS = {
   riptalon: [92, 34],
   solflare: [98, 68],
   thornox: [100, 80],
-  umbrawl: [94, 66],
+  umbrawl: [91, 72],
   virelia: [88, 50],
   voltide: [90, 36],
   xylocorne: [84, 84],
@@ -285,12 +285,13 @@ function buildIntro(node, { player, enemy }) {
   ];
 }
 
-// "Forge du volcan : Feu +20 %, Plante −20 %": boosts first, then the weakened type.
+// "Forge du volcan : [Feu +20 %] [Plante −20 %]": boosts first, then the weakened type; the chips
+// sit side by side (a gap, no comma), and wrap as a pair under the arena's name.
 function buildWeather(node, { arena, weather }) {
   const pill = element('div', 'fx-pill fx-weather-pill'),
     effects = element('span', 'fx-weather-effects'),
     entries = Object.entries(weather).sort(([, a], [, b]) => b - a);
-  entries.forEach(([type, multiplier], index) => {
+  for (const [type, multiplier] of entries) {
     const percent = Math.round((multiplier - 1) * 100),
       chip = element('span', `fx-weather-chip ${percent > 0 ? 'boost' : 'nerf'}`);
     chip.style.setProperty('--chip-color', AFFINITIES[type].color);
@@ -301,9 +302,8 @@ function buildWeather(node, { arena, weather }) {
         percent: `${percent > 0 ? '+' : MINUS}${Math.abs(percent)}`,
       })
     );
-    if (index) effects.append(', ');
     effects.append(chip);
-  });
+  }
   appendTemplate(pill, 'battle.weatherBanner', {
     arena: element('b', 'fx-weather-arena', t(`arena.${arena}`)),
     effects,
@@ -422,8 +422,10 @@ function stop(entry) {
 
 const NOTHING = Object.freeze({ done: Promise.resolve(true), remove() {} });
 
-// Pills that must never sit on the fighters (§6.4) live in the top band, over the top row and
-// outside the stage: full width in portrait, the dock column's top in landscape.
+// Pills that must never sit on the fighters (§6.4) live in the top band, a box on the screen root:
+// Signature ready and switch-in over the top row (portrait: full width; landscape: its column);
+// the intro's weather pill under it, in the rival plate's corner that stays empty until the intro
+// ends (battle-presentation.css), so it never covers pause, the turn or speed.
 const TOP_BAND = new Set(['signature-ready', 'switch-in', 'weather']);
 
 export function showBanner(kind, data = {}, { layer, clock, reducedMotion = false }) {
