@@ -201,6 +201,35 @@ test('a stalled frame loop (hidden tab) never skips the turn ahead', async () =>
   assert.ok(clock.now() <= MAX_STEP_MS + 20 + 1e-6, `virtual ${clock.now()}`);
 });
 
+test('pacedMs is the same at any frame rate: no idle time, stall excess or hit-stop overshoot', async () => {
+  for (const { hz, stallMs } of [
+    { hz: 62.5, stallMs: 0 },
+    { hz: 12.5, stallMs: 0 },
+    { hz: 12.5, stallMs: 1000 },
+  ]) {
+    const h = harness({ hz }),
+      { clock } = h;
+    await h.run(500); // idle: nothing pending
+    const start = clock.now(),
+      began = h.time;
+    assert.equal(clock.pacedMs, 0);
+    let done = false;
+    void (async () => {
+      // A chain: 200 ms, three 40 ms hit-stops, 200 ms more.
+      await clock.waitUntil(start + 200);
+      for (let hit = 0; hit < 3; hit++) await clock.hitStop(40);
+      await clock.waitUntil(start + 400);
+      done = true;
+    })();
+    if (stallMs) await h.run(stallMs, { deliver: false });
+    while (!done) await h.run(1000 / hz);
+    // Give or take the frame that lands past the last deadline.
+    assert.ok(Math.abs(clock.pacedMs - 520) <= 1000 / hz, `${hz} Hz, stall ${stallMs}: ${clock.pacedMs}`);
+    // Real time ran longer at 12.5 Hz (each hit-stop ends on a later frame) and with the stall.
+    if (hz < 60) assert.ok(h.time - began >= 520 + 3 * 40 + stallMs * 0.9, `took ${h.time - began} ms`);
+  }
+});
+
 test('instant mode (?animations=0) runs each timed step on a ~1 ms tick, in order', async () => {
   const h = harness({ hz: 1000, instant: true }),
     { clock } = h,

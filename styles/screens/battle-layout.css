@@ -15,7 +15,10 @@
   --top-btn: var(--hit);
   --dock-head: var(--hit);
   --narration-bar: 62px;
-  overflow: hidden;
+  /* Clip, never scroll: the dock's curtain hangs a screen below it, and a focus moving to a tile
+     still sliding in would otherwise scroll the whole battle up out of reach (hidden still
+     scrolls programmatically). Sheets and the dock's tiles keep their own scrollers. */
+  overflow: clip;
   background:
     radial-gradient(120% 70% at 50% 0%, var(--arena-accent, #5b6cff) -60%, transparent 70%),
     linear-gradient(

@@ -126,8 +126,8 @@ export class CameraRig {
 
   // Starts a shot from the current framing. `target` = { center, feet, sign, other } of the shot's
   // side (sign: +1 when that side is right of the screen centre; other: the other fighter's
-  // centre); hero shots add `box` (fighters.js heroBox) and `stage` ({ width, height }, CSS px).
-  // Returns the shot record.
+  // centre); hero shots add `box` (fighters.js heroBox, or null when the winner's own creature
+  // fell in the final turn) and `stage` ({ width, height }, CSS px). Returns the shot record.
   start(name, duration, target) {
     const shot = { name, duration, target, age: 0, sweeps: 0, from: copyPose(pose(), this.shotPose) };
     if (name === 'intro') shot.blend = 0;
@@ -176,8 +176,11 @@ export class CameraRig {
 
   // Hero framing (HERO_ROOM): the rest position with the orientation and fov that frame the
   // winner's box. The box is measured on its corners in the frame (the victory orbit's extremes
-  // included), placed from small-angle estimates, then re-measured and corrected twice.
+  // included), placed from small-angle estimates, then re-measured and corrected twice. Without a
+  // box (the winner fell with the loser: a double K.O.) the shot stays wide: it eases back to the
+  // rest framing and holds it, with no orbit around an empty pad.
   heroPose(name, target) {
+    if (!target.box) return { wide: true };
     const rest = this.rest,
       { feet, box, stage } = target,
       room = HERO_ROOM[name],
@@ -356,6 +359,7 @@ export class CameraRig {
         break;
       case 'victory':
       case 'defeat': {
+        if (shot.hero.wide) break;
         const ease = shot.still ? 1 : smooth(clamp01(shot.age / HERO_EASE[shot.name]));
         out.quaternion.slerp(shot.hero.quaternion, ease);
         out.fov += (shot.hero.fov - out.fov) * ease;

@@ -249,6 +249,7 @@ new FxClock({
 | `instant` | `true` under `?animations=0`; the director's switch to the readout-only path (§6.5). |
 | `cancelAll()` | Resolves every pending wait/hit-stop with `false` and drops callbacks. The clock stays usable. |
 | `dispose()` / `disposed` | `cancelAll()` and refuse further scheduling (waits resolve `false` immediately). Also happens automatically when `alive()` returns `false` (checked on each tick and each scheduling call). |
+| `pacedMs` | Real ms the clock has spent pacing: running with a wait or callback pending (each step stall-clamped like virtual time) plus each hit-stop's scheduled length, never the frame that lands past a hit-stop's end. A turn's length at any steady frame rate; reading it does not sample the clock. The e2e pacing checks (×2, hold) measure turns with it (§17). |
 
 Exported constants: `HURRY_RATE = 3`, `READOUT_FLOOR_MS = 350` (floor time a readout stays on screen, its exit fade
 included: 350 real ms at ×1 and ×2, ≈ 117 real ms while held), `MAX_STEP_MS = 100`.
@@ -456,7 +457,11 @@ about 18 + 15 over 1.1 s. "VICTOIRE !" enters
 at 200 ms, once the plates (faded by `battle-outro`) are gone, and stays ≥ 800 ms. Defeat is dignified: no confetti,
 cheer or shake. `arena.shot('defeat', { side: 'enemy' })` frames the rival as the hero with a slow push and no orbit, and
 the player's emptied pad lowers away. The rival hops once, and "Défaite… Bien joué !" enters at 200 ms in the band
-below it. Then a
+below it. **Double K.O.** (the winner's own active fainted in the final turn: recoil, a reflect, a burn tick): the
+director drops every cue anchored on the fallen champion (hops, flash, court ring, spotlight, the confetti pop and
+stars from its head), so nothing celebrates an empty pad. The hero shot stays wide (§7.4), and the stands' roars, the
+banner and the `band` confetti falling over the whole upper stage carry the victory (under reduced motion that confetti
+would be one glow at the fallen creature's head, §9.3, so it is dropped too). Then a
 quick clean `.battle-exit` fade (opacity only, 180 ms; 150 ms reduced; floor time: the director sets the layout's
 `transition-duration` to `clock.realFloorMs(ms)` and waits it, so the results never replace a half-faded layout) and
 `arena.setPaused(true)`. Holding the stage hurries the whole outro (§6.5). The results fanfare stays owned by
@@ -554,7 +559,9 @@ the top for "VICTOIRE !", and 9 % + 90 px up from the bottom for "Défaite…" (
 leaves that room or 4 % of the width on either side, the victory orbit's extremes included. A winner too wide for the
 room zooms out, down to 0.8×. The first estimate is a small-angle one; the solver then re-measures the box corners in the
 frame and corrects twice. A hero shot also lowers the other side's emptied pad under the floor and closes its light pool
-(500 fx-ms), so the winner stands alone.
+(500 fx-ms), so the winner stands alone. When the winner's own creature has fainted (a double K.O.; the fighter's phase
+is `fainted`), there is no box: the shot eases back to the rest framing and holds it (no orbit, no zoom), and both
+emptied pads stay.
 
 The move grammar (`strike / rush / heavy / ultimate`) maps to `attack`/`impact` durations in choreography data. Reduced
 motion: shots are cuts. Only the `ko` desaturation applies, and the camera stays on the base framing, except for a hero
@@ -1270,4 +1277,5 @@ documented reduced-motion / `?animations=0` rules, and no compatibility alias of
 - `tools/perf/gpu-budget.mjs` keeps using `arenaScene.renderer/scene/camera`.
 - e2e hooks: `#fighter-*[data-creature][data-phase]`, `#action-line`, `.battle-outro` during the outro, `#arena` visible,
   `arena-context-lost`; theater `.move-theater[data-move][data-state]`, `.theater-stage #arena` and
-  `#fx-text .fx-number[data-side][data-kind]`.
+  `#fx-text .fx-number[data-side][data-kind]`; the session clock's `pacedMs` (§4), read through `ctx.battleSession.clock`, for
+  the ×2 and hold pacing checks (wall time under parallel SwiftShader measures the runner's frame rate).

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { MAX_STEP_MS } from '../src/battle-ui/fx-clock.js';
+import { HURRY_RATE } from '../src/battle-ui/fx-clock.js';
 import {
   arenaReady,
   expectNoRuntimeLeaks,
@@ -57,41 +57,37 @@ async function controlsBack(page, timeout = 10000) {
   await expect(controls(page).first()).toBeVisible({ timeout });
 }
 
-// Real ms from a click on `locator` until the controls come back (the turn's playback), less the
-// time the fx-clock never counts: it advances at most MAX_STEP_MS per frame (§4), so one stalled
-// frame (SwiftShader compiling a first draw while the other workers load the CPU) lengthens the
-// turn by its whole excess, whatever the speed.
+// The clock ms the turn played from a click on `locator` until the dock unlocks: the session
+// clock's `pacedMs` (§4), its running time with work pending plus each hit-stop's scheduled length.
+// That is the turn's length at any steady frame rate: wall time under parallel SwiftShader (50-100
+// ms frames, stalls, a frame past every hit-stop's end) measures the machine instead. `hold`
+// presses the stage before the move is picked, so the whole turn plays hurried (§6.5).
 async function turnMs(page, locator, { hold = false } = {}) {
-  await page.evaluate((maxStepMs) => {
+  await page.evaluate(async () => {
+    const { ctx } = await import('/src/app/context.js');
+    const screen = document.querySelector('.battle-screen');
     window.__turn = null;
     const start = () => {
-      const began = performance.now();
-      let last = began,
-        stalled = 0,
-        seenLock = false;
-      const tick = () => {
-        const now = performance.now();
-        stalled += Math.max(0, now - last - maxStepMs);
-        last = now;
-        const locked = document.querySelector('.battle-screen.locked');
-        seenLock ||= Boolean(locked);
-        if (seenLock && !locked && document.querySelector('[data-move]:not([disabled])'))
-          window.__turn = now - began - stalled;
-        else requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
+      const clock = ctx.battleSession.clock,
+        from = clock.pacedMs;
+      let seenLock = false;
+      const observer = new MutationObserver(() => {
+        const locked = screen.classList.contains('locked');
+        seenLock ||= locked;
+        if (!seenLock || locked) return;
+        observer.disconnect();
+        window.__turn = clock.pacedMs - from;
+      });
+      observer.observe(screen, { attributes: true, attributeFilter: ['class'] });
     };
     document.addEventListener('click', start, { capture: true, once: true });
-  }, MAX_STEP_MS);
-  await locator.click();
+  });
   if (hold) {
-    // Press the stage as soon as the dock locks; the director also catches a pointer that is
-    // already down when the turn starts.
-    await page.locator('.battle-screen.locked').waitFor();
     const stage = await page.locator('.battle-stage').boundingBox();
     await page.mouse.move(stage.x + stage.width / 2, stage.y + stage.height * 0.6);
     await page.mouse.down();
-  }
+    await locator.dispatchEvent('click');
+  } else await locator.click();
   await expect.poll(() => page.evaluate(() => window.__turn), { timeout: 20000 }).not.toBeNull();
   if (hold) await page.mouse.up();
   return page.evaluate(() => window.__turn);
@@ -384,7 +380,9 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
 
 test('×2 speed plays the same turn about twice as fast, rematches included', async ({ page }) => {
   test.setTimeout(120000);
-  const query = '/?seed=18&enemyHp=1&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre';
+  // Lucid Arc leaves Kordane at 2 HP: a K.O. beat would wait on the replacement's sprite decode,
+  // real time the clock does not pace, so the measured turn has none.
+  const query = '/?seed=18&enemyHp=70&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre';
   await installCompletedTutorial(page, {
     reducedMotion: false,
     battleSpeed: 1,
@@ -405,13 +403,16 @@ test('×2 speed plays the same turn about twice as fast, rematches included', as
   });
   await enter();
   const fast = await turnMs(page, arc);
+  // About half: floors never compress at ×2 (§4). The lower bound proves the turn played in full.
   expect(fast).toBeLessThan(normal * 0.7);
+  expect(fast).toBeGreaterThan(normal * 0.4);
   await playVisibleBattle(page, { maxIterations: 3000 });
   await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
   await page.locator('[data-action="rematch"]').click();
   await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
   const rematch = await turnMs(page, arc);
   expect(rematch).toBeLessThan(normal * 0.7);
+  expect(rematch).toBeGreaterThan(normal * 0.4);
 });
 
 test('holding the stage hurries the turn without dropping a single hit number', async ({ page }) => {
@@ -448,7 +449,9 @@ test('holding the stage hurries the turn without dropping a single hit number', 
     }).observe(layer, { childList: true, subtree: true });
   });
   const held = await turnMs(page, chorus, { hold: true });
+  // About a third: everything, floors included, runs HURRY_RATE× faster (§6.5).
   expect(held).toBeLessThan(normal * 0.6);
+  expect(held).toBeGreaterThan(normal / (HURRY_RATE + 1));
   // Each of the three hits bumps one running chain total: same node, growing damage.
   const numbers = await page.evaluate(() => window.__numbers);
   expect(numbers.map(({ text }) => text)).toEqual([

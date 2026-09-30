@@ -44,6 +44,7 @@ export class FxClock {
   #hitStopUntil = 0;
   #hitStopWaiters = [];
   #disposed = false;
+  #paced = 0;
 
   constructor({
     speed = 1,
@@ -95,6 +96,14 @@ export class FxClock {
   }
   get disposed() {
     return this.#disposed;
+  }
+
+  // Real ms the clock has spent pacing (tests measure a turn with it): running with a wait or
+  // callback pending, each step stall-clamped like virtual time, plus the scheduled length of
+  // hit-stops, never the frame that overshoots a hit-stop's end. So it is the length the paced
+  // work takes at any steady frame rate. Reading it does not sample the clock.
+  get pacedMs() {
+    return this.#paced;
   }
 
   // Current virtual time. Reading it advances the clock (stall-clamped), so frequent readers
@@ -232,7 +241,12 @@ export class FxClock {
     if (!this.#instant && !this.#disposed) {
       const elapsed = Math.max(0, real - this.#anchor);
       this.#floor += elapsed * this.floorRate;
-      if (this.#holds.size === 0) this.#virtual += Math.min(elapsed, this.#maxStep) * this.rate;
+      if (this.#holds.size === 0) {
+        const step = Math.min(elapsed, this.#maxStep);
+        this.#virtual += step * this.rate;
+        if (this.#timers.length) this.#paced += step;
+      } else if (this.#holds.size === 1 && this.#holds.has(HIT_STOP))
+        this.#paced += Math.max(0, Math.min(real, this.#hitStopUntil) - this.#anchor);
     }
     this.#anchor = real;
     return real;
@@ -291,13 +305,18 @@ export class FxClock {
     this.#schedule();
   };
 
+  // Fires the due timers in order. A callback that freezes the clock (a contact's hit-stop, a
+  // pause) stops the tick there: the timers still due wait for the release, so a long frame never
+  // lands two contacts of a chain in one frame (each hit paints its own running total).
   #fireDue() {
     const due = this.#timers
       .filter((timer) => timer.due <= this.#virtual && this.#floor >= timer.floorAt)
       .sort((a, b) => a.due - b.due || a.sequence - b.sequence);
-    if (!due.length) return;
-    this.#timers = this.#timers.filter((timer) => !due.includes(timer));
     for (const timer of due) {
+      if (this.#holds.size) break;
+      const index = this.#timers.indexOf(timer);
+      if (index < 0) continue; // cancelled by an earlier callback of this tick
+      this.#timers.splice(index, 1);
       if (timer.resolve) timer.resolve(true);
       else
         try {

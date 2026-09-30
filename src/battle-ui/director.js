@@ -238,6 +238,9 @@ class ReadoutLayer {
     });
     this.observer.observe(this.stage);
     this.keepOut = [];
+    // Last markup written per readout part: an unchanged part is never rewritten (a same-value
+    // write still repaints and re-rasters the block).
+    this.written = new WeakMap();
     // Showing and retiring nodes: { at (transform builder), box, fit, animation, shownAt, retiring }.
     this.live = new Map();
     const node = (className, html = '') => {
@@ -260,6 +263,12 @@ class ReadoutLayer {
     this.ally = node('fx-ally', '<img alt="" width="28" height="28"><span></span>');
     fragment.append(this.ally);
     element.append(fragment);
+  }
+
+  write(element, html) {
+    if (this.written.get(element) === html) return;
+    this.written.set(element, html);
+    element.innerHTML = html;
   }
 
   dispose() {
@@ -488,14 +497,14 @@ class ReadoutLayer {
     node.style.setProperty('--fx-number-size', `${fontSize}px`);
     node.dataset.effect = effect > 1 ? 'effective' : effect < 1 ? 'resisted' : 'neutral';
     node.classList.toggle('critical', critical);
-    value.innerHTML = text;
+    this.write(value, text);
     value.hidden = !text;
     count.hidden = !hits;
-    if (hits) count.textContent = t('battle.hitCount', { count: hits });
+    if (hits) this.write(count, t('battle.hitCount', { count: hits }));
     pill.hidden = !stamp;
     if (stamp) {
       pill.dataset.kind = stamp;
-      pill.innerHTML = stampHtml(stamp);
+      this.write(pill, stampHtml(stamp));
     }
     for (const tag of node.querySelectorAll('.fx-tag')) {
       const key = [...tag.classList].find((name) => name !== 'fx-tag'),
@@ -1171,14 +1180,18 @@ function execOp(run, cue, scope) {
 }
 
 // Plays timed items on the clock in (time, authoring) order. Items already due run in the same
-// frame; a `swap` (patchFighters) is awaited before later items. Absolute deadlines never drift.
+// frame, unless an earlier item froze the clock (a contact's hit-stop): then they wait for the
+// release, so a long frame never lands two hits of a chain in one frame and every hit paints its
+// own running total. A `swap` (patchFighters) is awaited before later items. Absolute deadlines
+// never drift.
 async function runSchedule(run, items) {
   items.sort((a, b) => a.time - b.time || a.order - b.order);
   for (const item of items) {
     // Nothing outlives the beat: an item authored past its end (a lethal action's tail, a
     // compressed beat's add-on) plays at the end.
     const deadline = run.start + Math.min(item.time, run.end ?? Infinity);
-    if (run.clock.now() < deadline && !(await run.clock.waitUntil(deadline))) return false;
+    if ((run.clock.paused || run.clock.now() < deadline) && !(await run.clock.waitUntil(deadline)))
+      return false;
     if (!sessionAlive(run.session)) return false;
     const result = item.exec();
     if (result && typeof result.then === 'function') await result;
@@ -2165,6 +2178,22 @@ export async function playOutro(state) {
   if (!sessionAlive(session)) session.cues.dispose();
 }
 
+// The winner's own creature fell with the loser (a double K.O.: recoil, a reflect, a burn tick):
+// nothing plays on its empty pad (no hops, flash, court ring, spotlight or pop from its head).
+// The celebration moves to the whole stage: the shot stays wide (§7.4), the stands still roar and
+// the `band` confetti still falls across the upper stage. Under reduced motion that confetti would
+// be one glow at the fallen creature's head (§9.3), so it goes too.
+function withoutChampion(timeline, reduced) {
+  return {
+    ...timeline,
+    cues: timeline.cues.filter(
+      (cue) =>
+        !(cue.op === 'fighter' && cue.who === 'actor') &&
+        !(cue.op === 'emit' && (cue.from?.who ?? 'actor') === 'actor' && (reduced || !cue.band))
+    ),
+  };
+}
+
 async function outroTimeline(session, state) {
   const clock = session.clock;
   // The winner's hero moment takes the whole screen (§6.7, §11.2).
@@ -2189,7 +2218,7 @@ async function outroTimeline(session, state) {
       }
     );
   clearStatusMarkers(run);
-  scheduleTimeline(queue, run, timeline, scope);
+  scheduleTimeline(queue, run, champion.hp > 0 ? timeline : withoutChampion(timeline, run.reduced), scope);
   const reduced = run.reduced;
   if (!(await runSchedule(run, queue.items)) || !(await clock.waitUntil(run.start + end))) return;
   // A quick clean fade (battle-fx.css: 180 ms, 150 ms reduced; floor time, so a hold shortens

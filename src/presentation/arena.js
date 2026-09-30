@@ -692,7 +692,8 @@ export class ArenaScene {
       return Promise.resolve(true);
     }
     const target = hero ? this.heroTarget(side) : this.shotTarget(side);
-    if (hero) this.sinkPad(side === 'player' ? 'enemy' : 'player');
+    // Only a standing winner stands alone: after a double K.O. both emptied pads stay.
+    if (target.box) this.sinkPad(side === 'player' ? 'enemy' : 'player');
     if (this.reducedMotion) {
       this.rig.cutTo(name, target);
       this.wake();
@@ -717,11 +718,12 @@ export class ArenaScene {
     return { center, feet, sign, other };
   }
 
-  // A hero shot's target: the winner's victory box and the stage size (rig.js heroPose).
+  // A hero shot's target: the winner's victory box (null when the winner's own creature fainted in
+  // the final turn: the shot stays wide) and the stage size (rig.js heroPose).
   heroTarget(side) {
     return {
       ...this.shotTarget(side),
-      box: this.fighters.heroBox(side),
+      box: this.fighters.phase(side) === 'fainted' ? null : this.fighters.heroBox(side),
       stage: { width: this.rect.width, height: this.rect.height },
     };
   }
