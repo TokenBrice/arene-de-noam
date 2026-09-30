@@ -250,6 +250,7 @@ new FxClock({
 | `cancelAll()` | Resolves every pending wait/hit-stop with `false` and drops callbacks. The clock stays usable. |
 | `dispose()` / `disposed` | `cancelAll()` and refuse further scheduling (waits resolve `false` immediately). Also happens automatically when `alive()` returns `false` (checked on each tick and each scheduling call). |
 | `pacedMs` | Real ms the clock has spent pacing: running with a wait or callback pending (each step stall-clamped like virtual time) plus each hit-stop's scheduled length, never the frame that lands past a hit-stop's end. A turn's length at any steady frame rate; reading it does not sample the clock. The e2e pacing checks (×2, hold) measure turns with it (§17). |
+| `idleMs` | Real ms the clock has run with nothing pending and no hold (stall-clamped the same way, counted on whichever frame samples the clock: the arena's). During a turn that is time spent awaiting something off the clock (a WAAPI `finished`, a decode, a real-time timer), which `pacedMs` never shows. Tests only; reading it does not sample the clock. |
 
 Exported constants: `HURRY_RATE = 3`, `READOUT_FLOOR_MS = 350` (floor time a readout stays on screen, its exit fade
 included: 350 real ms at ×1 and ×2, ≈ 117 real ms while held), `MAX_STEP_MS = 100`.
@@ -1277,5 +1278,8 @@ documented reduced-motion / `?animations=0` rules, and no compatibility alias of
 - `tools/perf/gpu-budget.mjs` keeps using `arenaScene.renderer/scene/camera`.
 - e2e hooks: `#fighter-*[data-creature][data-phase]`, `#action-line`, `.battle-outro` during the outro, `#arena` visible,
   `arena-context-lost`; theater `.move-theater[data-move][data-state]`, `.theater-stage #arena` and
-  `#fx-text .fx-number[data-side][data-kind]`; the session clock's `pacedMs` (§4), read through `ctx.battleSession.clock`, for
-  the ×2 and hold pacing checks (wall time under parallel SwiftShader measures the runner's frame rate).
+  `#fx-text .fx-number[data-side][data-kind]`; the session clock's `pacedMs` and `idleMs` (§4), read through
+  `ctx.battleSession.clock`, for the ×2 and hold pacing checks (wall time under parallel SwiftShader measures the runner's
+  frame rate). They count from the task after the tap's paint (the controller's afterPaint, a turn's one legitimate
+  off-clock gap) to the dock's unlock; each measured turn keeps `idleMs` under 150 ms (measured 5–12 ms under 6 parallel
+  workers; one unscaled 300 ms await per beat reads ≈ 610, an awaited readout exit ≈ 255).

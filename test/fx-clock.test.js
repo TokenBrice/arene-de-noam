@@ -230,6 +230,38 @@ test('pacedMs is the same at any frame rate: no idle time, stall excess or hit-s
   }
 });
 
+test('idleMs counts an off-clock await, never a clock wait, a hit-stop or a pause', async () => {
+  const h = harness({ hz: 50 }),
+    { clock } = h,
+    // The arena reads the clock on each of its frames, pending work or not.
+    frames = async (ms) => {
+      for (let elapsed = 0; elapsed < ms; elapsed += 20) {
+        await h.run(20);
+        clock.now();
+      }
+    };
+  let step = null;
+  void (async () => {
+    await clock.wait(200);
+    await clock.hitStop(60);
+    step = 'off-clock'; // awaits a WAAPI `finished` or a decode: nothing pending on the clock
+    await new Promise((resolve) => (h.release = resolve));
+    clock.pause('sheet');
+    step = 'paused';
+  })();
+  await frames(260);
+  assert.equal(step, 'off-clock');
+  assert.equal(clock.idleMs, 0);
+  await frames(300);
+  close(clock.idleMs, 300, 20);
+  const idle = clock.idleMs;
+  h.release();
+  await new Promise((resolve) => setImmediate(resolve));
+  await frames(200);
+  assert.equal(step, 'paused');
+  assert.equal(clock.idleMs, idle);
+});
+
 test('instant mode (?animations=0) runs each timed step on a ~1 ms tick, in order', async () => {
   const h = harness({ hz: 1000, instant: true }),
     { clock } = h,

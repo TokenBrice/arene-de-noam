@@ -57,26 +57,37 @@ async function controlsBack(page, timeout = 10000) {
   await expect(controls(page).first()).toBeVisible({ timeout });
 }
 
+// Real ms a turn may spend awaiting something off the session clock (see turnMs). Measured under 6
+// parallel SwiftShader workers: 5-12 ms (the engine's resolve before the first beat and each
+// beat's hand-over); one stalled frame counts at most MAX_STEP_MS.
+const TURN_IDLE_BUDGET_MS = 150;
+
 // The clock ms the turn played from a click on `locator` until the dock unlocks: the session
 // clock's `pacedMs` (§4), its running time with work pending plus each hit-stop's scheduled length.
 // That is the turn's length at any steady frame rate: wall time under parallel SwiftShader (50-100
-// ms frames, stalls, a frame past every hit-stop's end) measures the machine instead. `hold`
-// presses the stage before the move is picked, so the whole turn plays hurried (§6.5).
+// ms frames, stalls, a frame past every hit-stop's end) measures the machine instead. Time the turn
+// spends awaiting something off the clock (a WAAPI `finished`, a decode, a real-time timer) is not
+// paced: the clock's `idleMs` counts it, and it must stay under TURN_IDLE_BUDGET_MS. Both count
+// from the task after the tap's paint (the controller's afterPaint, the turn's one legitimate
+// off-clock gap). `hold` presses the stage before the move is picked, so the whole turn plays
+// hurried (§6.5).
 async function turnMs(page, locator, { hold = false } = {}) {
   await page.evaluate(async () => {
     const { ctx } = await import('/src/app/context.js');
     const screen = document.querySelector('.battle-screen');
     window.__turn = null;
     const start = () => {
-      const clock = ctx.battleSession.clock,
-        from = clock.pacedMs;
-      let seenLock = false;
+      const clock = ctx.battleSession.clock;
+      let from = null,
+        seenLock = false;
+      // Registered in the capture phase, before the controller's afterPaint: runs just ahead of it.
+      requestAnimationFrame(() => setTimeout(() => (from = { paced: clock.pacedMs, idle: clock.idleMs })));
       const observer = new MutationObserver(() => {
         const locked = screen.classList.contains('locked');
         seenLock ||= locked;
         if (!seenLock || locked) return;
         observer.disconnect();
-        window.__turn = clock.pacedMs - from;
+        window.__turn = { ms: clock.pacedMs - from.paced, idleMs: clock.idleMs - from.idle };
       });
       observer.observe(screen, { attributes: true, attributeFilter: ['class'] });
     };
@@ -90,7 +101,9 @@ async function turnMs(page, locator, { hold = false } = {}) {
   } else await locator.click();
   await expect.poll(() => page.evaluate(() => window.__turn), { timeout: 20000 }).not.toBeNull();
   if (hold) await page.mouse.up();
-  return page.evaluate(() => window.__turn);
+  const { ms, idleMs } = await page.evaluate(() => window.__turn);
+  expect(idleMs, 'real ms the turn awaited off the clock').toBeLessThan(TURN_IDLE_BUDGET_MS);
+  return ms;
 }
 
 // #fx-text readout blocks and K.O. stamps are pooled nodes animated with WAAPI. A per-frame

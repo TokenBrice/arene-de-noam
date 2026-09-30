@@ -45,6 +45,7 @@ export class FxClock {
   #hitStopWaiters = [];
   #disposed = false;
   #paced = 0;
+  #idle = 0;
 
   constructor({
     speed = 1,
@@ -98,12 +99,17 @@ export class FxClock {
     return this.#disposed;
   }
 
-  // Real ms the clock has spent pacing (tests measure a turn with it): running with a wait or
-  // callback pending, each step stall-clamped like virtual time, plus the scheduled length of
-  // hit-stops, never the frame that overshoots a hit-stop's end. So it is the length the paced
-  // work takes at any steady frame rate. Reading it does not sample the clock.
+  // Tests measure a turn with these two counters of real ms; neither changes timing, and reading
+  // them does not sample the clock (the arena's frames do). Each step is stall-clamped like
+  // virtual time. `pacedMs`: running with a wait or callback pending, plus the scheduled length of
+  // hit-stops, never the frame that overshoots a hit-stop's end, so it is the length the paced
+  // work takes at any steady frame rate. `idleMs`: running with nothing pending, so a turn that
+  // awaits something off the clock (a WAAPI `finished`, a decode, a real-time timer) shows it.
   get pacedMs() {
     return this.#paced;
+  }
+  get idleMs() {
+    return this.#idle;
   }
 
   // Current virtual time. Reading it advances the clock (stall-clamped), so frequent readers
@@ -245,6 +251,7 @@ export class FxClock {
         const step = Math.min(elapsed, this.#maxStep);
         this.#virtual += step * this.rate;
         if (this.#timers.length) this.#paced += step;
+        else this.#idle += step;
       } else if (this.#holds.size === 1 && this.#holds.has(HIT_STOP))
         this.#paced += Math.max(0, Math.min(real, this.#hitStopUntil) - this.#anchor);
     }
