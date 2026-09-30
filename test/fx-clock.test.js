@@ -155,17 +155,39 @@ test('a hit-stop freezes for its duration at the current rate, and overlaps exte
   );
 });
 
-test('a real-time floor keeps a hurried readout on screen', async () => {
+test('holding mid-hit-stop shortens the rest of the freeze', async () => {
+  const h = harness({ hz: 1000 }),
+    { clock } = h;
+  let released = null;
+  void clock.hitStop(110).then(() => (released = h.time));
+  await h.run(20);
+  clock.setHurry(true);
+  await h.run(100);
+  // 20 ms at ×1, then the remaining 90 virtual ms at ×3.
+  close(released, 20 + 90 / HURRY_RATE, 1);
+});
+
+test('a readout floor ignores ×2 but runs HURRY_RATE× faster while held, from the moment the hold starts', async () => {
   const h = harness({ hz: 100 }),
     { clock } = h;
-  clock.setHurry(true);
+  clock.setSpeed(2);
   let plain = null,
     floored = null;
   void clock.wait(300).then(() => (plain = h.time));
-  void clock.wait(300, { minRealMs: 350 }).then(() => (floored = h.time));
+  void clock.wait(300, { floorMs: 350 }).then(() => (floored = h.time));
   await h.run(500);
-  close(plain, 100, 10);
+  close(plain, 150, 10);
   assert.ok(floored >= 350 && floored <= 360, `floored at ${floored}`);
+  // A floor-only wait: 50 floor ms at ×2 unhurried, then the remaining 300 at HURRY_RATE.
+  const start = h.time;
+  let hurried = null;
+  void clock.wait(0, { floorMs: 350 }).then(() => (hurried = h.time - start));
+  await h.run(50);
+  assert.equal(hurried, null);
+  clock.setHurry(true);
+  assert.equal(clock.realFloorMs(300), 300 / HURRY_RATE);
+  await h.run(200);
+  close(hurried, 50 + 300 / HURRY_RATE, 10);
 });
 
 test('a stalled frame loop (hidden tab) never skips the turn ahead', async () => {

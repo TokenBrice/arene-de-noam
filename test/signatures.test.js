@@ -60,7 +60,7 @@ test('support Signatures carry a payload for the whole team', () => {
     );
 });
 
-test('every number in move effect copy comes from the move data, in both languages', () => {
+test('every number in move effect copy (simple and tactical detail) comes from the move data', () => {
   const known = (move) => {
     const values = new Set();
     const collect = (value) => {
@@ -74,11 +74,12 @@ test('every number in move effect copy comes from the move data, in both languag
     return values;
   };
   for (const lang of Object.keys(DICTIONARIES))
-    for (const move of Object.values(MOVES)) {
-      const text = DICTIONARIES[lang][`move.effect.${move.id}`],
-        values = known(move);
-      assert.ok(text, `${lang} move.effect.${move.id}`);
-      for (const [, raw] of text.matchAll(/(\d+(?:[.,]\d+)?)/g))
-        assert.ok(values.has(Number(raw.replace(',', '.'))), `${lang} ${move.id}: "${raw}" in "${text}"`);
-    }
+    for (const move of Object.values(MOVES))
+      for (const key of [`move.effect.${move.id}`, `move.effectDetail.${move.id}`]) {
+        const text = DICTIONARIES[lang][key],
+          values = known(move);
+        assert.ok(text, `${lang} ${key}`);
+        for (const [, raw] of text.matchAll(/(\d+(?:[.,]\d+)?)/g))
+          assert.ok(values.has(Number(raw.replace(',', '.'))), `${lang} ${key}: "${raw}" in "${text}"`);
+      }
 });

@@ -1,124 +1,1461 @@
-/* Three personal squad slots keep favorite team fantasies one tap away. */
-.custom-squads {
-  display: grid;
-  grid-template-columns: 180px 1fr;
+/* Team select (src/screens/team-select.js): one screen — the page topbar, the
+   rival strip, three slots, one row of type filters, the portrait grid (its own
+   scroller, opening with the matchup legend) and the single gold "Combattre !"
+   bar — plus the sheets it opens (creature, slot, rival, battle options,
+   teams), the shared one-element type badge and the matchup marker. */
+
+/* Type badge: `<i class="type-dot" data-type="flame">`. The generated
+   `.type-dot[data-type]` rules (team-select.js) set --type-color and
+   --type-icon (the authored icon from src/data/affinities.js), drawn here as a
+   mask in dark ink on the type disc. */
+.type-dot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--type-color, var(--bg-3));
+  box-shadow: inset 0 -2px 0 #00000033;
+  font-style: normal;
+}
+.type-dot::before {
+  content: '';
+  position: absolute;
+  inset: 17%;
+  background: #10132e;
+  -webkit-mask: var(--type-icon) center / contain no-repeat;
+  mask: var(--type-icon) center / contain no-repeat;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+/* Phone portrait: everything above the grid stays put and the grid scrolls,
+   so the picked trio is always in view; the bar closes the column. */
+.ts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 560px);
+  height: 100%;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0
+    max(16px, env(safe-area-inset-left));
+}
+/* The shared page topbar; its Équipes action is icon-only on a phone and gets
+   its label back on a desktop. */
+.ts > .topbar {
+  flex: none;
+  margin: 0;
+}
+.ts-teams-btn > span {
+  display: none;
+}
+/* One-time hint after the tutorial, in flow under the header. */
+.ts-guide {
+  display: flex;
+  flex: none;
   align-items: center;
-  gap: 12px;
-  margin: 3px 0 13px;
-  padding: 10px 12px;
-  border: 1px solid #7eeaff2b;
-  border-radius: 18px;
-  background: linear-gradient(120deg, #53dff10a, #7369ff0d);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-m);
+  color: var(--gold-soft);
+  background: #ffcb3d1a;
+  box-shadow: inset 0 0 0 1.5px #ffcb3d59;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  line-height: 1.3;
 }
-.custom-squads > div:first-child {
+.ts-guide .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+
+/* Matchup marker (`route.matchupMark`): a green up arrow on a card, slot or
+   legend that hits the rival hard, the same arrow turned over on red when the
+   rival hits it hard; nothing for an even match. */
+.matchup-mark {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #052a14;
+  background: var(--good);
+  font-style: normal;
+}
+.matchup-mark .ico {
+  width: 14px;
+  height: 14px;
+  stroke-width: 3.2;
+}
+:is([data-matchup='up'], [data-matchup='down']) > .matchup-mark,
+.matchup-mark:is(.is-up, .is-down) {
   display: grid;
-  gap: 3px;
 }
-.custom-squads > div:first-child small {
-  color: var(--muted);
+[data-matchup='down'] > .matchup-mark,
+.matchup-mark.is-down {
+  color: #fff;
+  background: var(--bad);
+}
+[data-matchup='down'] > .matchup-mark .ico,
+.matchup-mark.is-down .ico {
+  transform: rotate(180deg);
+}
+
+/* -------------------------------------------------------------- rival strip */
+
+/* The whole strip is one target: the round icon button's ::after stretches
+   over it (the heading stays a heading outside the button). */
+.ts-rival {
+  position: relative;
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) auto 40px;
+  grid-template-areas:
+    'eyebrow eyebrow open'
+    'name team open'
+    'chips chips chips';
+  align-items: center;
+  gap: 4px var(--space-2);
+  padding: 10px 10px 10px 14px;
+  border-radius: var(--radius-m);
+  background: linear-gradient(120deg, #3a1a44, #22184a 75%);
+  box-shadow:
+    inset 0 0 0 1.5px #ff8fc44d,
+    0 2px 0 var(--ledge);
+}
+.ts-rival:has(.ts-rival-open:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.ts-rival-text {
+  display: contents;
+}
+.ts-eyebrow {
+  display: block;
+  grid-area: eyebrow;
+  overflow: hidden;
+  color: #ff9fcf;
   font-size: var(--text-xs);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ts-rival h2 {
+  display: -webkit-box;
+  grid-area: name;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-lg);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ts-rival-team {
+  display: flex;
+  grid-area: team;
+}
+/* Earlier portraits sit on top, so each type badge stays whole. */
+.ts-foe {
+  position: relative;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: #0d0c28;
+  box-shadow: 0 0 0 2px #2c1a4a;
+}
+.ts-foe:first-child {
+  z-index: 3;
+  margin-left: 0;
+}
+.ts-foe:nth-child(2) {
+  z-index: 2;
+}
+.ts-foe img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.ts-foe .type-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 0 0 2px #2c1a4a;
+}
+.ts-foe.is-empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ffffff33;
+}
+.ts-rival-chips {
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: chips;
+  gap: 6px;
+  min-width: 0;
+}
+.ts-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  background: #ffffff14;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.ts-chip .type-dot {
+  width: 20px;
+  height: 20px;
+}
+.ts-weather {
+  padding-left: 10px;
+}
+.rule-chip {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 10px;
+  color: var(--gold-soft);
+  text-overflow: ellipsis;
+}
+.ts-rival-open {
+  display: grid;
+  grid-area: open;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: #ffffff1c;
+  cursor: pointer;
+}
+.ts-rival-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-m);
+}
+.ts-rival-open:focus-visible {
+  outline: none;
+}
+.ts-rival-open .ico {
+  width: 24px;
+  height: 24px;
+}
+@media (hover: hover) {
+  .ts-rival:hover .ts-rival-open {
+    background: #ffffff30;
+  }
+}
+
+/* -------------------------------------------------------------------- slots */
+
+/* A filled slot: the body opens its action sheet, the × (top right) removes
+   it, the crown plate hanging under it sends it in first. */
+.ts-slots {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding-bottom: 10px;
+}
+.ts-slot {
+  position: relative;
+  height: 108px;
+  border-radius: var(--radius-m);
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--type-color) 34%, transparent),
+      transparent 62%
+    ),
+    var(--bg-2);
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 2px 0 var(--ledge);
+}
+.ts-slot-main {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: 6px 6px 0;
+  border: 0;
+  border-radius: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.ts-slot-main img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.ts-slot-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--weight-display);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ts-slot > .type-dot {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  pointer-events: none;
+}
+/* ::before grows the 26 px disc to a 48 px target reaching into the gaps, clear
+   of the portrait's centre. */
+.ts-slot-remove {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: #0b0d24d9;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  cursor: pointer;
+}
+.ts-slot-remove::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 48px;
+  height: 48px;
+}
+.ts-slot-remove .ico {
+  width: 16px;
+  height: 16px;
+  stroke-width: 3;
+}
+.ts-slot.is-lead {
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--type-color) 34%, transparent),
+      transparent 62%
+    ),
+    var(--bg-3);
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    0 2px 0 var(--gold-ledge);
+}
+/* Crown plate on the bottom edge: gold "Meneur" on the lead, cyan "Conseillé"
+   on the scouted lead, a bare crown elsewhere. ::before grows the hit area to
+   48 px (up over the name, not into the filters). */
+.ts-crown {
+  position: absolute;
+  z-index: 1;
+  bottom: -10px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--bg-3);
+  box-shadow: 0 2px 0 var(--ledge);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+.ts-crown::before {
+  content: '';
+  position: absolute;
+  inset: -14px -8px -8px;
+}
+.ts-crown .ico {
+  width: 16px;
+  height: 16px;
+}
+.ts-crown[aria-pressed='true'] {
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  box-shadow: 0 2px 0 var(--gold-ledge);
+}
+.ts-slot.is-suggested:not(.is-lead) .ts-crown {
+  color: #03262d;
+  background: var(--cyan);
+}
+.ts-slot.is-empty {
+  display: grid;
+  place-items: center;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ffffff26;
+}
+.ts-slot-empty {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+.ts-slot-empty .ico {
+  width: 28px;
+  height: 28px;
+}
+.ts-slot.is-new {
+  animation: tsSlotPop var(--dur-med) var(--ease-pop);
+}
+.ts-slots.is-full {
+  animation: tsSlotsNudge 320ms var(--ease-out);
+}
+@keyframes tsSlotPop {
+  from {
+    transform: scale(0.86);
+  }
+}
+@keyframes tsSlotsNudge {
+  25% {
+    transform: translateX(-6px);
+  }
+  55% {
+    transform: translateX(5px);
+  }
+  80% {
+    transform: translateX(-2px);
+  }
+}
+
+/* ------------------------------------------------------------ type filters */
+
+.ts-filters {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.ts-filter.type-dot {
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  cursor: pointer;
+}
+.ts-filter.type-dot::before {
+  inset: 12px;
+  background: var(--type-color);
+}
+.ts-filter[aria-pressed='true'] {
+  background: var(--type-color);
+  box-shadow:
+    inset 0 0 0 3px var(--ink),
+    0 2px 0 var(--ledge);
+}
+.ts-filter[aria-pressed='true']::before {
+  background: #10132e;
+}
+
+/* --------------------------------------------------------------------- grid */
+
+.ts-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  margin: -4px;
+  padding: 4px 4px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The legend opens the grid (a full row that scrolls with it). */
+.ts-legend {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 2px 6px;
+  margin: 0;
+  padding: 0 2px;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  line-height: 20px;
+}
+.ts-legend span:not(:last-child) {
+  margin-right: 6px;
+}
+/* A card is the portrait button (a tap picks) plus the (i) corner button. */
+.ts-card {
+  position: relative;
+  min-width: 0;
+}
+.ts-card[hidden] {
+  display: none;
+}
+.ts-cell {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  width: 100%;
+  height: 96px;
+  padding: 13px 2px 4px;
+  border: 0;
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--bg-1);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 2px 0 var(--ledge);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  /* Off-screen cells skip layout and paint until scrolled near. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+.ts-cell:focus-visible {
+  outline-offset: -3px;
+}
+.ts-cell img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.ts-cell-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ts-cell > .type-dot {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+}
+/* Matchup against the rival, under the type badge (the sentence is in the
+   button's accessible name). */
+.ts-cell > .matchup-mark {
+  position: absolute;
+  top: 28px;
+  left: 4px;
+}
+/* (i): a 24 px disc whose ::before makes a 48 px target over the corner and
+   the gaps; the portrait keeps its centre, 13 px lower, for the pick. */
+.ts-cell-info {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: #ffffff1f;
+  box-shadow: inset 0 0 0 1.5px #ffffff38;
+  cursor: pointer;
+}
+.ts-cell-info::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 48px;
+  height: 48px;
+}
+.ts-cell-info .ico {
+  width: 18px;
+  height: 18px;
+}
+@media (hover: hover) {
+  .ts-cell-info:hover {
+    background: #ffffff38;
+  }
+}
+.ts-cell.is-picked {
+  background: var(--bg-3);
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    0 2px 0 var(--gold-ledge);
+}
+.ts-cell:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 0 0 var(--ledge);
+}
+@media (hover: hover) {
+  .ts-cell:not(.is-picked):hover {
+    background: var(--bg-2);
+  }
+}
+
+/* ---------------------------------------------------------------------- bar */
+
+.ts-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  margin-inline: calc(-1 * max(16px, env(safe-area-inset-left)))
+    calc(-1 * max(16px, env(safe-area-inset-right)));
+  padding: 10px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background: var(--bg-0);
+  box-shadow: 0 -1px 0 var(--line);
+}
+.ts-trio {
+  display: flex;
+  flex: none;
+}
+.ts-trio > * {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  box-shadow: 0 0 0 2px var(--bg-0);
+  object-fit: contain;
+}
+.ts-trio > :first-child {
+  margin-left: 0;
+}
+.ts-trio > i {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ffffff33;
+}
+.ts-trio > img.is-lead {
+  z-index: 1;
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 0 4px var(--bg-0);
+}
+.ts-fight {
+  flex: 1 1 auto;
+  min-height: 56px;
+  font-size: var(--text-xl);
+}
+
+/* The inline creature sheet only exists on a tall desktop (below). */
+.ts-detail {
+  display: none;
+}
+
+/* Two columns once there is room beside the grid (tablet, desktop, phone held
+   sideways): header, rival, slots and the bar on the left, filters and the
+   scrolling grid on the right. */
+@media (min-width: 720px), (orientation: landscape) and (max-height: 480px) {
+  .ts {
+    display: grid;
+    grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-areas:
+      'head filters'
+      'rival grid'
+      'slots grid'
+      'bar grid'
+      '. grid';
+    gap: var(--space-2) var(--space-5);
+    width: min(100%, 1240px);
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .ts.has-guide {
+    grid-template-rows: auto auto auto auto auto 1fr;
+    grid-template-areas:
+      'head filters'
+      'guide grid'
+      'rival grid'
+      'slots grid'
+      'bar grid'
+      '. grid';
+  }
+  .ts > .topbar {
+    grid-area: head;
+  }
+  .ts-guide {
+    grid-area: guide;
+  }
+  .ts-rival {
+    grid-area: rival;
+  }
+  .ts-slots {
+    grid-area: slots;
+  }
+  .ts-filters {
+    grid-area: filters;
+    align-self: center;
+    justify-content: flex-start;
+  }
+  .ts-grid {
+    grid-area: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  }
+  .ts-bar {
+    grid-area: bar;
+    margin: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  .ts {
+    grid-template-columns: 320px minmax(0, 1fr);
+    column-gap: var(--space-4);
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    row-gap: 6px;
+  }
+  .ts > .topbar {
+    min-height: 48px;
+  }
+  .ts-rival {
+    padding-block: 6px;
+    row-gap: 4px;
+  }
+  .ts-rival h2 {
+    -webkit-line-clamp: 1;
+  }
+  .ts-slot {
+    height: 100px;
+  }
+  .ts-slot-main {
+    padding: 4px 4px 0;
+  }
+  .ts-slot-name {
+    font-size: var(--text-sm);
+  }
+  .ts-fight {
+    min-height: 48px;
+  }
+}
+/* Desktop: 1:1 sprites (128 px) in bigger slots and cells; Équipes gets its
+   label back. */
+@media (min-width: 1100px) and (min-height: 700px) {
+  .ts {
+    grid-template-columns: 460px minmax(0, 1fr);
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: 24px;
+    row-gap: var(--space-3);
+  }
+  .ts-teams-btn {
+    padding-inline: 12px 16px;
+  }
+  .ts-teams-btn > span {
+    display: inline;
+  }
+  .ts-rival {
+    padding: 14px 14px 14px 18px;
+  }
+  .ts-rival h2 {
+    font-size: var(--text-xl);
+  }
+  .ts-foe,
+  .ts-foe img {
+    width: 56px;
+    height: 56px;
+  }
+  .ts-slot {
+    height: 176px;
+  }
+  .ts-slot-main img {
+    width: 128px;
+    height: 128px;
+  }
+  .ts-grid {
+    grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+    gap: var(--space-3);
+  }
+  .ts-legend {
+    font-size: var(--text-sm);
+  }
+  .ts-cell {
+    height: 168px;
+    contain-intrinsic-size: auto 168px;
+  }
+  .ts-cell img {
+    width: 128px;
+    height: 128px;
+  }
+  .ts-cell-name {
+    font-size: var(--text-md);
+  }
+  .ts-cell > .type-dot,
+  .ts-cell > .matchup-mark,
+  .ts-cell-info {
+    width: 28px;
+    height: 28px;
+  }
+  .ts-cell > .matchup-mark {
+    top: 36px;
+  }
+  .ts-cell > .matchup-mark .ico,
+  .ts-cell-info .ico {
+    width: 20px;
+    height: 20px;
+  }
+}
+/* Tall desktop: the inspected creature's sheet fills the column under the bar
+   (team-select.js INLINE_DETAIL uses the same query). */
+@media (min-width: 1100px) and (min-height: 820px) {
+  .ts {
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'head filters'
+      'rival grid'
+      'slots grid'
+      'bar grid'
+      'detail grid';
+  }
+  .ts.has-guide {
+    grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'head filters'
+      'guide grid'
+      'rival grid'
+      'slots grid'
+      'bar grid'
+      'detail grid';
+  }
+  .ts-detail {
+    display: block;
+    grid-area: detail;
+    min-height: 0;
+    padding: 16px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: var(--radius-l);
+    background: var(--bg-1);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .ts-detail .creature-sheet-name {
+    outline-offset: 4px;
+  }
+}
+
+/* ------------------------------------------------------------------- sheets */
+
+.sheet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px 4px 5px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  white-space: nowrap;
+}
+.sheet-chip .class-icon {
+  width: 20px;
+  height: 20px;
+  margin-left: 3px;
+  color: var(--class-color);
+}
+.sheet-chip .ico {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+}
+.sheet-chip.is-mastery {
+  color: var(--gold);
+}
+.sheet-hint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
   line-height: 1.35;
 }
-.custom-squad-track {
+.sheet-row {
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+}
+.sheet-row b {
+  display: block;
+  font-size: var(--text-md);
+}
+.sheet-row p {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+.sheet-row.rival-ace b,
+.sheet-row.rival-condition b {
+  color: var(--gold);
+}
+
+/* Creature sheet (also the bestiary's, via route.creatureSheetHtml). */
+.creature-sheet {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 7px;
+  gap: var(--space-3);
+}
+.creature-sheet-head {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+.creature-sheet-portrait {
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  border-radius: var(--radius-m);
+  background:
+    radial-gradient(
+      circle at 50% 62%,
+      color-mix(in srgb, var(--type-color) 40%, transparent),
+      transparent 68%
+    ),
+    var(--bg-2);
+}
+.creature-sheet-portrait img {
+  width: 128px;
+  height: 128px;
+  image-rendering: pixelated;
+}
+.creature-sheet-name {
+  margin: 0 0 8px;
+  font-size: var(--text-2xl);
+}
+.creature-sheet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.creature-sheet-matchup {
+  width: fit-content;
+  margin: 6px 0 0;
+  padding-left: 8px;
+  white-space: normal;
+}
+.creature-sheet-matchup.is-up {
+  color: #93f2b8;
+  background: #0f3a28;
+}
+.creature-sheet-matchup.is-down {
+  color: #ffb6bd;
+  background: #47131f;
+}
+.creature-sheet-matchup.is-even {
+  padding-left: 12px;
+}
+.creature-sheet-stats {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.creature-sheet-stats > div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+.creature-sheet-stats dt {
+  color: var(--ink-2);
+  font-size: var(--text-md);
+}
+.creature-sheet-stats dd {
+  display: contents;
+}
+.creature-sheet-stats i {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-0);
+}
+.creature-sheet-stats u {
+  display: block;
+  height: 100%;
+  background: #8f9cff;
+  transform: scaleX(var(--fill));
+  transform-origin: left;
+}
+.creature-sheet-stats b {
+  font-size: var(--text-lg);
+  text-align: right;
+}
+.creature-sheet-talent {
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+}
+.creature-sheet-talent small {
+  display: block;
+  color: var(--gold);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.creature-sheet-talent b {
+  font-size: var(--text-md);
+}
+.creature-sheet-talent p {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+.creature-sheet-moves {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.creature-sheet-move {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--move-color) 14%, var(--bg-2));
+  box-shadow: inset 4px 0 0 var(--move-color);
+  font: inherit;
+  text-align: left;
+}
+button.creature-sheet-move {
+  cursor: pointer;
+  box-shadow:
+    inset 4px 0 0 var(--move-color),
+    0 2px 0 var(--ledge);
+}
+.creature-sheet-move .type-dot,
+.creature-sheet-signature {
+  width: 36px;
+  height: 36px;
+}
+.creature-sheet-signature {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--gold-ink);
+  background: var(--gold);
+  font-style: normal;
+}
+.creature-sheet-signature .ico {
+  width: 22px;
+  height: 22px;
+}
+.creature-sheet-move.is-signature {
+  background: color-mix(in srgb, var(--gold) 14%, var(--bg-2));
+  box-shadow: inset 4px 0 0 var(--gold);
+}
+.creature-sheet-move b {
+  display: block;
+  font-size: var(--text-md);
+}
+.creature-sheet-move small {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.3;
+}
+.creature-sheet-note {
+  margin: 0;
+  color: var(--warn);
+  font-weight: 800;
+}
+
+/* Rival sheet. */
+.rival-sheet {
+  display: grid;
+  gap: var(--space-2);
+}
+.rival-sheet-team {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  padding: 0;
+  list-style: none;
+}
+.rival-sheet-team li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: 4px 12px 4px 4px;
+  border-radius: var(--radius-m);
+  background:
+    radial-gradient(
+      circle at 36px 50%,
+      color-mix(in srgb, var(--type-color) 32%, transparent),
+      transparent 44px
+    ),
+    var(--bg-2);
+}
+.rival-sheet-team img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+.rival-sheet-team b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+.rival-sheet-team small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+.rival-sheet-team small .type-dot {
+  width: 18px;
+  height: 18px;
+}
+
+/* Battle options sheet (quick battle only): difficulty, arena and rule chips,
+   then the labelled rival picker. */
+.options-sheet {
+  display: grid;
+  gap: var(--space-4);
+}
+.sheet-field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.sheet-field > legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ts-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.ts-segmented .subtle-btn {
+  padding-inline: 6px;
+}
+.ts-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.ts-choices .ts-choice {
+  justify-content: flex-start;
+  padding: 8px 12px 8px 10px;
+  line-height: 1.2;
+  text-align: left;
+}
+/* Crystal Dome has no weather: an empty ring where the others show a type. */
+.ts-choice-calm {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+.sheet-wide {
+  width: 100%;
+}
+.enemy-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
+.enemy-pick {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  padding: 4px 2px 6px;
+  border: 0;
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  font: inherit;
+  cursor: pointer;
+}
+.enemy-pick img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+.enemy-pick > .type-dot {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+}
+.enemy-pick-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.enemy-pick.active {
+  background: var(--bg-3);
+  box-shadow:
+    inset 0 0 0 3px var(--cyan),
+    var(--elev-1);
+}
+
+/* Slot sheet: the creature, its type, lead and matchup, then a column of
+   actions (send in first, card, remove). */
+.slot-sheet {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+.slot-sheet-portrait {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-m);
+  background:
+    radial-gradient(
+      circle at 50% 60%,
+      color-mix(in srgb, var(--type-color) 40%, transparent),
+      transparent 70%
+    ),
+    var(--bg-2);
+}
+.slot-sheet-portrait img {
+  display: block;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+.slot-sheet .creature-sheet-matchup {
+  margin: 0;
+}
+.sheet-chip.is-lead {
+  color: var(--gold);
+}
+.sheet-chip.is-suggested {
+  color: var(--cyan);
+}
+.sheet:has(.slot-sheet) .sheet-actions {
+  flex-direction: column;
+}
+.sheet:has(.slot-sheet) .sheet-actions > button {
+  flex: none;
+}
+
+/* Teams sheet: my three saved teams, then the recommended ones. */
+.teams-sheet {
+  display: grid;
+  gap: var(--space-5);
+}
+.teams-section {
+  display: grid;
+  gap: var(--space-2);
+}
+.teams-section h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.teams-section-head {
+  display: grid;
+  gap: var(--space-2);
+}
+.team-trio {
+  display: flex;
+  align-items: center;
+}
+.team-trio img {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--bg-1);
+  box-shadow: 0 0 0 2px var(--bg-2);
+  object-fit: contain;
+}
+.team-trio img:first-child {
+  margin-left: 0;
+}
+.team-trio img.is-lead {
+  z-index: 1;
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 0 4px var(--bg-2);
 }
 .custom-squad {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'name trio'
+    'actions actions';
   align-items: center;
-  gap: 4px;
-  min-height: 70px;
-  padding: 7px 8px;
-  border: 1px solid #ffffff13;
-  border-radius: 12px;
-  background: #07091d77;
+  gap: var(--space-2) var(--space-3);
+  padding: 10px 12px;
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
 }
-.custom-squad > span {
-  display: grid;
+.custom-squad > b {
+  grid-area: name;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
 }
-.custom-squad > span b {
-  font-size: var(--text-xs);
-}
-.custom-squad > span small {
-  color: #a9abc0;
-  font-size: var(--text-xs);
-}
-.custom-squad-team {
-  display: flex;
-  align-items: center;
+.custom-squad .team-trio {
+  grid-area: trio;
   justify-content: flex-end;
-  min-height: 35px;
-  color: #65677f;
-  font-size: 13px;
+  min-height: 44px;
+  color: var(--ink-3);
 }
-.custom-squad-team i {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  margin-left: -7px;
-  border-radius: 50%;
-  background: #10132e;
+.custom-squad .team-trio small {
+  font-size: var(--text-sm);
 }
-.custom-squad-team i.lead::after {
-  content: '★';
-  position: absolute;
-  right: -1px;
-  top: -2px;
-  color: #ffe376;
-  font-size: var(--text-xs);
-  text-shadow: 0 0 5px #ffd448;
+.custom-squad:not(.is-filled) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name actions'
+    'trio actions';
+  row-gap: 0;
 }
-.custom-squad-team img {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  image-rendering: pixelated;
+.custom-squad:not(.is-filled) .team-trio {
+  justify-content: flex-start;
+  min-height: 0;
 }
 .custom-squad-actions {
-  grid-column: 1/3;
   display: flex;
-  gap: 4px;
+  grid-area: actions;
+  gap: var(--space-2);
 }
-.custom-squad-actions button {
-  min-height: 44px;
-  padding: 3px 7px;
-  border: 1px solid #ffffff16;
-  border-radius: 7px;
-  color: #cfd1e2;
-  background: #ffffff08;
-  font-size: var(--text-xs);
-  font-weight: 850;
+.custom-squad-actions .subtle-btn {
+  flex: 1 1 0;
+  padding-inline: 8px;
+}
+.custom-squad :is(.subtle-btn, .icon-btn):not(:disabled) {
+  background: var(--bg-3);
+}
+.team-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
-.custom-squad-actions button:first-child {
-  flex: 1;
-  border-color: #72e8ff3d;
-  color: #c5f6ff;
+.team-row[aria-pressed='true'] {
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    0 2px 0 var(--gold-ledge);
 }
-.custom-squad-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.38;
+.team-row-text b {
+  display: block;
+  font-size: var(--text-md);
 }
-.custom-squad.filled {
-  border-color: #76e8ff30;
-  background: linear-gradient(120deg, #64dfff0d, #ffffff06);
+.team-row-text small {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.3;
 }
-@media (max-width: 760px) {
-  .custom-squads {
-    grid-template-columns: 1fr;
+@media (hover: hover) {
+  .team-row:hover {
+    background: var(--bg-3);
   }
-  .custom-squad-track {
-    position: relative;
-    display: flex;
-    overflow: auto;
-    scroll-snap-type: x proximity;
-    -webkit-mask-image: linear-gradient(to right, #000 0 calc(100% - 24px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 0 calc(100% - 24px), transparent 100%);
-  }
-  .custom-squad {
-    flex: 0 0 min(240px, 78vw);
-    scroll-snap-align: start;
-  }
+}
+
+/* High contrast: solid outlines instead of tints. */
+body.high-contrast :is(.ts-cell, .ts-slot, .team-row, .custom-squad, .sheet-row, .enemy-pick) {
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+body.high-contrast :is(.ts-cell.is-picked, .ts-slot.is-lead, .team-row[aria-pressed='true']) {
+  box-shadow: inset 0 0 0 4px var(--gold);
+}
+body.high-contrast .enemy-pick.active {
+  box-shadow: inset 0 0 0 4px var(--cyan);
+}
+body.high-contrast :is(.ts-cell-info, .ts-slot-remove, .ts-choice-calm) {
+  background: var(--bg-0);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+body.high-contrast .ts-guide {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+body.high-contrast .ts-slot.is-empty {
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+  outline: 2px dashed var(--line-strong);
+  outline-offset: -6px;
+}
+body.high-contrast .ts-rival {
+  box-shadow: inset 0 0 0 2px #ffb3d9;
+}
+body.high-contrast .ts-filter[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 4px #fff;
 }

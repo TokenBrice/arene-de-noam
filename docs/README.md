@@ -33,7 +33,7 @@ This directory is the implementation map for coding agents. It is intentionally 
 | Event animation/audio | `src/battle-ui/director.js` (beats → cue timelines on `fx-clock.js`), `src/presentation/{fighters,fx-layer}.js`, `src/data/choreo.js`, `src/battle-ui/banners.js`, `src/sound.js` | `docs/battle-presentation.md`; reduced-motion, ×2, hurry and `?animations=0` behavior |
 | Screen/navigation UI | `src/screens/`, `src/app/shell.js` | `registerRoutes`, focus/escape behavior, responsive e2e |
 | Persisted shape | `src/save.js` | Bump `SAVE_VERSION`, add one migration, validate old/corrupt/future saves |
-| User-facing copy | `src/i18n.js` | Add the same key to `fr` and `en`; test `?lang=en` |
+| User-facing copy | `src/i18n.js` | Use the words in [`glossary.md`](glossary.md); add the same key to `fr` and `en`; test `?lang=en` |
 | CSS | `styles/` and sometimes `index.html` | Preserve cascade order and battle lazy-load anchor order |
 | Sprite/art | `assets/monsters/`, `assets/asset-manifest.json` | Keep runtime local; generation material stays dev-only under `art/`/`tools/` |
 

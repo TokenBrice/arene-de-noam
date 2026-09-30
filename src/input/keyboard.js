@@ -1,12 +1,16 @@
 import { ctx, registerRoutes, route } from '../app/context.js';
 
 const { activeOf, screen, persist } = ctx;
-const { renderCurrent, handleEscape, trapModalTab } = route;
+const { renderCurrent, goBack, trapModalTab } = route;
 
 function startInput() {
   document.addEventListener('keydown', (event) => {
     if (trapModalTab(event)) return;
-    if (event.key.toLowerCase() === 'm') {
+    // Letter shortcuts never fire while typing (Bestiary search).
+    if (
+      event.key.toLowerCase() === 'm' &&
+      !event.target.matches?.('input[type="search"], input[type="text"]')
+    ) {
       if (screen.dataset.page === 'battle') route.setBattleMuted(!ctx.save.muted);
       else {
         ctx.save.muted = !ctx.save.muted;
@@ -16,7 +20,7 @@ function startInput() {
       return;
     }
     if (event.key === 'Escape') {
-      handleEscape();
+      goBack();
       return;
     }
     if (screen.dataset.page !== 'battle') return;

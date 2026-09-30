@@ -1,3 +1,8 @@
+import { CREATURES } from './creatures.js';
+
+/* `badge` is the rival's badge motif: stroke-only SVG path data on the 24-unit grid, drawn over
+   the type-coloured gem of the shared badge art (ctx.badgeArt). Each motif is original, one per
+   rival, and keeps clear of the type, class, status and chrome icon silhouettes. */
 export const TRAINERS = [
   {
     id: 'dawn',
@@ -7,7 +12,7 @@ export const TRAINERS = [
     style: 'direct',
     difficulty: 'apprentice',
     ace: 'second_wind',
-    badge: '✦',
+    badge: 'M3 17.5h18M7 17.5a5 5 0 0 1 10 0M12 6v2.6M5.3 9.3l1.8 1.8M18.7 9.3l-1.8 1.8M8 21h8',
     badgeNameKey: 'badge.dawn',
     colors: ['#ffd76a', '#ff8a5b'],
   },
@@ -19,7 +24,7 @@ export const TRAINERS = [
     style: 'speed',
     difficulty: 'apprentice',
     ace: 'redline',
-    badge: 'ϟ',
+    badge: 'M14.5 3 8 13h4.5l-2 8 7-10.5H13zM2.8 9.5H6M3.8 14h2.6',
     badgeNameKey: 'badge.velocity',
     colors: ['#7ff8ff', '#6d7cff'],
   },
@@ -33,7 +38,8 @@ export const TRAINERS = [
     style: 'endurance',
     difficulty: 'apprentice',
     ace: 'overgrowth',
-    badge: '❧',
+    badge:
+      'M12 20s-7.5-4.4-7.5-9.8A4 4 0 0 1 12 7.8a4 4 0 0 1 7.5 2.4C19.5 15.6 12 20 12 20zM12 17v-6.5M12 13.2l-2.3-1.9M12 15.2l2.3-1.9',
     badgeNameKey: 'badge.wildheart',
     colors: ['#a8ff72', '#2fc986'],
   },
@@ -45,7 +51,7 @@ export const TRAINERS = [
     style: 'control',
     difficulty: 'apprentice',
     ace: 'mindlock',
-    badge: '◈',
+    badge: 'M11 4.5 17.5 17h-13zM2.5 12.5l6.2-1.3M14.9 11l6.6-2.2M15.7 13.1h5.8M16.6 15.3l4.9 1.9',
     badgeNameKey: 'badge.resonance',
     colors: ['#d8a2ff', '#746cff'],
   },
@@ -59,7 +65,8 @@ export const TRAINERS = [
     style: 'endurance',
     difficulty: 'standard',
     ace: 'high_tide',
-    badge: '≋',
+    badge:
+      'M12 5.5a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6zM10.3 8.6a1.9 1.9 0 0 1 1.5-1.5M3 16.5c1.5-1.3 3-1.3 4.5 0s3 1.3 4.5 0 3-1.3 4.5 0 3 1.3 4.5 0M6 20c1.1-.9 2.2-.9 3.3 0s2.3.9 3.4 0 2.3-.9 3.3 0',
     badgeNameKey: 'badge.undertide',
     colors: ['#74f7ed', '#3288ff'],
   },
@@ -73,7 +80,7 @@ export const TRAINERS = [
     style: 'pressure',
     difficulty: 'standard',
     ace: 'citadel',
-    badge: '◆',
+    badge: 'M7 4.5h10l3.5 5L12 20 3.5 9.5zM3.5 9.5h17M9.3 4.5 8 9.5l4 10.5 4-10.5-1.3-5',
     badgeNameKey: 'badge.ironwall',
     colors: ['#ffd18c', '#c77b46'],
   },
@@ -87,7 +94,8 @@ export const TRAINERS = [
     style: 'pressure',
     difficulty: 'standard',
     ace: 'wildfire',
-    badge: '♨',
+    badge:
+      'M5.5 14.5h13l-2.2 5H7.7zM12 3.5c2.6 2.4 3.8 4.4 3.8 6.4a3.8 3.8 0 0 1-7.6 0c0-1.3.5-2.4 1.4-3.3.2 1.1.8 1.9 1.7 2.2-.5-2-.1-3.7.7-5.3z',
     badgeNameKey: 'badge.inferno',
     colors: ['#fff075', '#ff4d31'],
   },
@@ -99,7 +107,8 @@ export const TRAINERS = [
     style: 'deception',
     difficulty: 'standard',
     ace: 'vanishing_act',
-    badge: '☾',
+    badge:
+      'M11 3.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2zM9.6 6.6h.01M12.4 9.4h.01M2.5 20.5 8 14.5l3.5 3.5 4-4.5 6 7z',
     badgeNameKey: 'badge.nightfall',
     colors: ['#e996ff', '#6f38c5'],
   },
@@ -111,7 +120,7 @@ export const TRAINERS = [
     style: 'speed',
     difficulty: 'champion',
     ace: 'stormfront',
-    badge: '☈',
+    badge: 'M12 12a1.5 1.5 0 0 1 3 0 3 3 0 0 1-6 0 4.5 4.5 0 0 1 9 0 6 6 0 0 1-12 0 7.5 7.5 0 0 1 7.5-7.5',
     badgeNameKey: 'badge.tempest',
     colors: ['#c9ffff', '#5c7aff'],
   },
@@ -123,7 +132,7 @@ export const TRAINERS = [
     style: 'endurance',
     difficulty: 'champion',
     ace: 'titanheart',
-    badge: '⬢',
+    badge: 'M5 20.5h14M6.5 20.5V16h11v4.5M8 16v-4.5h8V16M9.5 11.5V7h5v4.5M11 7V4.5h2V7',
     badgeNameKey: 'badge.colossus',
     colors: ['#dcba76', '#769d62'],
   },
@@ -135,7 +144,8 @@ export const TRAINERS = [
     style: 'control',
     difficulty: 'champion',
     ace: 'dark_fate',
-    badge: '☿',
+    badge:
+      'M16 3.5l1.4 3.1 3.1 1.4-3.1 1.4-1.4 3.1-1.4-3.1-3.1-1.4 3.1-1.4zM12.5 11.5c-3.2 3.3-5.8 6-9 9M11.5 8.6c-2.6 1.4-4.8 3.2-6.5 5.4M15.4 13.5c-1.4 2.6-3.2 4.8-5.4 6.5',
     badgeNameKey: 'badge.omen',
     colors: ['#ff8bd9', '#7f5cff'],
   },
@@ -149,10 +159,18 @@ export const TRAINERS = [
     style: 'champion',
     difficulty: 'champion',
     ace: 'royal_ascension',
-    badge: '♛',
+    badge:
+      'M4.5 17.5 3.5 9l5 3.5L12 6l3.5 6.5 5-3.5-1 8.5zM4.5 20.5h15M3.5 7.3v.01M12 4.2v.01M20.5 7.3v.01M12 14.5v.01',
     badgeNameKey: 'badge.crown',
     colors: ['#fff1a6', '#ff5e99'],
   },
 ];
 
 export const ARENAS = ['crystal', 'grove', 'tidal', 'volcano', 'astral', 'eclipse'];
+
+// The type a rival fields most often (ties go to the lead's type): its badge gem and map node.
+export function mainAffinity(team) {
+  const counts = new Map();
+  for (const id of team) counts.set(CREATURES[id].affinity, (counts.get(CREATURES[id].affinity) || 0) + 1);
+  return [...counts].reduce((best, entry) => (entry[1] > best[1] ? entry : best))[0];
+}

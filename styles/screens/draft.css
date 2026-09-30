@@ -1,376 +1,611 @@
-/* Daily draft: three authored choices at a time, presented like a ceremonial
-   card reveal instead of another roster grid. */
-.draft-btn {
-  border-color: #e69bff55;
-  background: linear-gradient(130deg, #4b296c, #243467) !important;
+/* Pioche du jour (src/screens/draft.js): three picks from three offers, then
+   the rival reveal with the lead choice and one sticky "Combattre !" bar.
+   Shares the page topbar (base.css), the chips (.ts-chip, .sheet-chip), the
+   bar (.ts-bar, .ts-fight), the type badge (.type-dot) and the matchup marker
+   (.matchup-mark) from selection.css. */
+.draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(100%, 560px);
+  height: 100%;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0
+    max(16px, env(safe-area-inset-left));
 }
-.draft-page {
-  width: min(1120px, 100%);
-}
-.draft-head {
-  text-align: center;
-  margin: 22px auto 14px;
-}
-.draft-head h1 {
-  margin: 6px 0 4px;
-  font-size: clamp(42px, 7vw, 72px);
-  letter-spacing: -0.045em;
-}
-.draft-head p {
+.draft > .topbar {
+  flex: none;
   margin: 0;
-  color: var(--muted);
 }
-.draft-progress {
-  display: flex;
-  justify-content: center;
-  gap: 7px;
-  margin: 13px 0;
+.draft:not(.is-complete) {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
-.draft-progress i {
-  width: 44px;
-  height: 5px;
-  border-radius: 99px;
-  background: #ffffff14;
+.draft-lede {
+  flex: none;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-md);
+  line-height: 1.3;
 }
-.draft-progress i.active {
-  background: #c491ff;
-  box-shadow: 0 0 12px #bd76ff;
-}
-.draft-progress i.done {
-  background: #ffe079;
-}
+
+/* Lineup: the three picks; after the last pick each slot chooses the lead (the
+   crown plate hangs under it, as in team select). */
 .draft-lineup {
-  display: flex;
-  justify-content: center;
-  gap: 9px;
-  margin: 10px 0 18px;
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding-bottom: 10px;
 }
 .draft-slot {
   position: relative;
   display: grid;
-  grid-template-columns: 28px 58px 1fr;
-  align-items: center;
-  width: min(210px, 31vw);
-  height: 66px;
-  padding: 4px 9px;
-  border: 1px dashed #ffffff26;
-  border-radius: 15px;
-  color: #7f819b;
-  background: #ffffff05;
+  align-content: center;
+  justify-items: center;
+  min-width: 0;
+  height: 108px;
+  padding: 6px 4px 0;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink-3);
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #ffffff26;
+  font: inherit;
 }
-.draft-slot > span {
-  font-size: var(--text-xs);
-  font-weight: 1000;
+.draft-slot-empty {
+  align-self: center;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-display);
+  line-height: 1;
 }
-.draft-slot > i {
-  font-size: 25px;
-  font-style: normal;
-  text-align: center;
-}
-.draft-slot img {
-  width: 58px;
-  height: 58px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.draft-slot b {
+.draft-slot > b {
+  max-width: 100%;
   overflow: hidden;
-  font-size: var(--text-xs);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-display);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .draft-slot.filled {
-  border-style: solid;
-  border-color: #d2adff55;
-  color: #f2ecff;
-  background: linear-gradient(120deg, #6d44a01c, #ffffff06);
-}
-.draft-offers {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  max-width: 940px;
-  margin: auto;
-}
-.draft-card {
-  position: relative;
-  min-height: 410px;
-  padding: 15px;
-  border: 1px solid color-mix(in srgb, var(--draft-color) 52%, #ffffff22);
-  border-radius: 23px;
+  align-content: start;
   color: var(--ink);
   background:
     radial-gradient(
-      circle at 50% 20%,
-      color-mix(in srgb, var(--draft-color) 25%, transparent),
-      transparent 45%
+      circle at 50% 40%,
+      color-mix(in srgb, var(--type-color) 34%, transparent),
+      transparent 62%
     ),
-    linear-gradient(150deg, #222650, #090b24);
-  box-shadow: 0 18px 45px #0006;
+    var(--bg-2);
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 2px 0 var(--ledge);
+}
+.draft-slot img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+.draft-slot > .type-dot {
+  position: absolute;
+  top: 8px;
+  left: 7px;
+}
+button.draft-slot {
+  cursor: pointer;
+}
+.draft-slot.lead {
+  background:
+    radial-gradient(
+      circle at 50% 40%,
+      color-mix(in srgb, var(--type-color) 34%, transparent),
+      transparent 62%
+    ),
+    var(--bg-3);
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    0 2px 0 var(--gold-ledge);
+}
+.draft-crown {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--bg-3);
+  box-shadow: 0 2px 0 var(--ledge);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.draft-crown .ico {
+  width: 16px;
+  height: 16px;
+}
+.draft-slot.lead .draft-crown {
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  box-shadow: 0 2px 0 var(--gold-ledge);
+}
+.draft-slot.recommended:not(.lead) .draft-crown {
+  color: #03262d;
+  background: var(--cyan);
+}
+/* Matchup of each pick against the revealed rival (as in team select). */
+.draft-slot > .matchup-mark {
+  position: absolute;
+  top: 8px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+}
+
+/* Offers: three cards, all in view; a tap takes the creature, "i" opens its
+   sheet (moves, talent, stats). */
+.draft-offers {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  margin: -4px;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.draft-offer {
+  position: relative;
+}
+.draft-offer-pick {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 136px;
+  padding: 6px 12px 6px 4px;
+  border: 0;
+  border-radius: 20px;
+  color: var(--ink);
+  background:
+    radial-gradient(
+      circle at 68px 58%,
+      color-mix(in srgb, var(--type-color) 34%, transparent),
+      transparent 72px
+    ),
+    var(--bg-2);
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--type-color) 45%, transparent),
+    0 3px 0 var(--ledge);
+  font: inherit;
   text-align: left;
   cursor: pointer;
-  overflow: hidden;
-  transition:
-    transform 0.2s,
-    border-color 0.2s;
 }
-.draft-card:hover,
-.draft-card:focus-visible {
-  transform: translateY(-7px) scale(1.015);
-  border-color: #fff8;
+.draft-offer-pick:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--type-color) 45%, transparent),
+    0 1px 0 var(--ledge);
 }
-.draft-card > em {
-  position: absolute;
-  z-index: 2;
-  left: 12px;
-  top: 10px;
-  color: #ffe582;
-  font-size: var(--text-xs);
-  font-style: normal;
-}
-.draft-portrait {
-  position: relative;
-  height: 192px;
-}
-.draft-portrait img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.draft-offer-portrait img {
+  display: block;
+  width: 128px;
+  height: 128px;
   image-rendering: pixelated;
-  filter: drop-shadow(0 18px 12px #0009);
 }
-.draft-portrait i {
+.draft-offer-text {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+.draft-offer-name {
+  max-width: 100%;
+  padding-right: 40px;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-display);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-offer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.draft-offer-chips .sheet-chip {
+  min-height: 30px;
+  background: var(--bg-3);
+}
+.draft-offer-insight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  line-height: 1.25;
+}
+.draft-offer-insight.is-new-type {
+  color: #9ff3ff;
+}
+.draft-offer-insight .type-dot {
+  width: 18px;
+  height: 18px;
+}
+.draft-offer-info {
   position: absolute;
-  right: 6px;
-  bottom: 8px;
+  top: 4px;
+  right: 4px;
+  background: transparent;
+  box-shadow: none;
+}
+.draft-offer-info .ico {
+  width: 26px;
+  height: 26px;
+}
+@media (hover: hover) {
+  .draft-offer-pick:hover {
+    background:
+      radial-gradient(
+        circle at 68px 58%,
+        color-mix(in srgb, var(--type-color) 42%, transparent),
+        transparent 72px
+      ),
+      var(--bg-3);
+  }
+}
+
+/* Reveal: a "VS" seal, the rival trio as rows (portrait, name, type and
+   class; its lead marked) and the arena, then the sticky bar. On a phone the
+   card takes the height the bar leaves, its rows sharing it. */
+.draft-final {
+  position: relative;
+  display: grid;
+  flex: none;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px 14px;
+  border-radius: var(--radius-m);
+  background: linear-gradient(120deg, #3a1a44, #22184a 75%);
+  box-shadow:
+    inset 0 0 0 1.5px #ff8fc44d,
+    0 2px 0 var(--ledge);
+}
+.draft.is-complete .draft-final {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.draft-final::before {
+  content: 'VS';
+  position: absolute;
+  top: -18px;
+  left: 50%;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  color: #0b1025;
-  background: var(--draft-color);
-  font-style: normal;
-  font-size: 20px;
-  box-shadow: 0 0 18px var(--draft-color);
-}
-.draft-portrait i .affinity-icon {
-  width: 24px;
-  height: 24px;
-}
-.draft-card h2 {
-  margin: 4px 0 9px;
-  font-size: 26px;
-}
-.draft-card .eyebrow {
-  font-size: var(--text-xs);
-}
-.draft-talent {
-  display: grid;
-  gap: 2px;
-  padding: 8px;
-  border: 1px solid #ffffff14;
-  border-radius: 10px;
-  background: #05071977;
-}
-.draft-talent b {
-  font-size: var(--text-xs);
-}
-.draft-talent small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.35;
-}
-.draft-card ul {
-  display: grid;
-  gap: 5px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-  color: #c8cada;
-  font-size: var(--text-xs);
-}
-.draft-final {
-  display: grid;
-  grid-template-columns: 1fr 310px;
-  gap: 18px;
-  max-width: 900px;
-  margin: auto;
-  padding: 22px;
-  border: 1px solid #d2adff3f;
-  border-radius: 23px;
-  background: linear-gradient(145deg, #252850d9, #0c0e29e6);
-  box-shadow: 0 20px 60px #0007;
+  width: 52px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  box-shadow: 0 2px 0 var(--gold-ledge);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-display);
+  transform: translateX(-50%);
 }
 .draft-final h2 {
-  font-size: 34px;
-  margin: 4px 0 8px;
-}
-.draft-final aside {
-  padding-left: 16px;
-  border-left: 1px solid #ffffff15;
+  margin: 0;
+  color: #ff9fcf;
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .draft-rival-team {
-  display: flex;
-  gap: 5px;
-}
-.draft-rival-team span {
   display: grid;
-  place-items: center;
-  flex: 1;
-  padding: 6px;
-  border-radius: 12px;
-  background: #ffffff07;
+  grid-auto-rows: minmax(72px, 1fr);
+  gap: var(--space-2);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.draft-rival-team img {
-  width: 95px;
-  height: 95px;
-  object-fit: contain;
+.draft-rival {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 4px 12px 4px 6px;
+  border-radius: 14px;
+  background:
+    radial-gradient(
+      circle at 38px 50%,
+      color-mix(in srgb, var(--type-color) 32%, transparent),
+      transparent 46px
+    ),
+    #0d0c28;
+}
+.draft-rival img {
+  width: 64px;
+  height: 64px;
   image-rendering: pixelated;
 }
-.draft-rival-team b {
+.draft-rival-text {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.draft-rival b {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-rival small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.draft-rival small > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-rival small .type-dot {
+  width: 18px;
+  height: 18px;
+}
+/* The rival's lead: it enters first, so the lead choice answers it. */
+.draft-rival-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  color: #ffc2e1;
+  background: #ff8fc426;
   font-size: var(--text-xs);
+  font-weight: 900;
+  white-space: nowrap;
 }
-.draft-victory {
-  margin: 8px 0;
-  padding: 9px;
-  border: 1px solid #d49cff66;
-  border-radius: 12px;
-  color: #edceff;
-  background: #bd6fff10;
+.draft-rival-lead .ico {
+  width: 16px;
+  height: 16px;
 }
-.draft-carousel {
-  display: none;
+.draft-arena {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-@media (max-width: 700px) {
-  .draft-head {
-    margin-top: 12px;
+.draft-arena .ts-chip .ico {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+}
+.draft-bar {
+  margin-top: auto;
+}
+
+/* Phone held sideways: header, lineup and bar on the left, the offers or the
+   reveal on the right. */
+@media (orientation: landscape) and (max-height: 480px) {
+  .draft {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-areas:
+      'head main'
+      'lede main'
+      'lineup main'
+      'bar main'
+      '. main';
+    gap: 6px var(--space-4);
+    width: 100%;
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
   }
-  .draft-head h1 {
-    font-size: 40px;
+  .draft > .topbar {
+    grid-area: head;
+    min-height: 48px;
+  }
+  .draft-lede {
+    grid-area: lede;
   }
   .draft-lineup {
-    gap: 4px;
+    grid-area: lineup;
   }
-  .draft-slot {
-    grid-template-columns: 18px 42px 1fr;
-    height: 52px;
-    padding: 3px;
-  }
-  .draft-slot img {
-    width: 42px;
-    height: 42px;
-  }
-  .draft-slot b {
-    font-size: var(--text-xs);
-  }
-  .draft-offers {
-    grid-template-columns: 1fr;
-    max-width: 360px;
-  }
-  .draft-card {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: 105px 1fr;
-    padding: 10px;
-  }
-  .draft-portrait {
-    grid-row: 1/6;
-    height: 125px;
-  }
-  .draft-card .eyebrow,
-  .draft-card h2,
-  .draft-card .draft-talent,
-  .draft-card ul {
-    grid-column: 2;
-  }
-  .draft-card h2 {
-    font-size: 21px;
-  }
-  .draft-card ul {
-    grid-template-columns: 1fr;
+  .draft-offers,
+  .draft-final {
+    grid-area: main;
+    align-self: start;
+    max-height: 100%;
   }
   .draft-final {
-    grid-template-columns: 1fr;
-    padding: 14px;
+    margin-top: 16px;
   }
-  .draft-final aside {
-    padding: 0;
-    border: 0;
+  /* The trio as three cards beside the lineup. */
+  .draft-rival-team {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
   }
-  .draft-rival-team img {
-    width: 76px;
-    height: 76px;
+  .draft-rival {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 2px;
+    padding: 6px 4px;
+    background:
+      radial-gradient(
+        circle at 50% 40%,
+        color-mix(in srgb, var(--type-color) 30%, transparent),
+        transparent 60%
+      ),
+      #0d0c28;
+    text-align: center;
   }
-}
-@media (max-width: 600px) {
-  .draft-page {
-    padding-inline: var(--space-3);
+  .draft-rival-text {
+    justify-items: center;
+    max-width: 100%;
   }
-  .draft-lineup {
-    flex-wrap: wrap;
+  .draft-rival b {
+    max-width: 100%;
+    font-size: var(--text-sm);
   }
-  .draft-slot {
-    width: calc(50% - var(--space-1));
-    min-width: 145px;
-    height: auto;
-    min-height: 58px;
-  }
-  .draft-offers .draft-card {
+  .draft-rival small {
     display: none;
   }
-  .draft-offers .draft-card.mobile-active {
-    display: grid;
-  }
-  .draft-carousel {
-    display: grid;
-    grid-template-columns: 44px 1fr 44px;
-    align-items: center;
-    gap: var(--space-3);
-    max-width: 360px;
-    margin: var(--space-3) auto 0;
-  }
-  .draft-carousel > button {
-    min-width: 44px;
-    min-height: 44px;
-    border: 1px solid #d8b5ff55;
-    border-radius: 50%;
-    color: var(--ink);
-    background: #252850;
-    font-size: var(--text-2xl);
-  }
-  .draft-dots {
-    display: flex;
-    justify-content: center;
-    gap: var(--space-2);
-  }
-  .draft-dots button {
-    position: relative;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-  .draft-dots button::after {
-    content: '';
+  .draft-rival-lead {
     position: absolute;
-    inset: 6px;
-    border: 1px solid #d8b5ff88;
-    border-radius: 50%;
+    top: 4px;
+    right: 4px;
+    width: 26px;
+    padding: 0;
+    justify-content: center;
   }
-  .draft-dots button.active::after {
-    background: #d8b5ff;
-    box-shadow: 0 0 10px #bd76ff;
+  .draft-rival-lead span {
+    display: none;
+  }
+  .draft-slot {
+    height: 100px;
+  }
+  .draft-slot.filled {
+    padding-top: 2px;
+  }
+  .draft-bar {
+    grid-area: bar;
+    margin: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .draft-offer-pick {
+    min-height: 112px;
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+  .draft-offer-portrait img {
+    width: 96px;
+    height: 96px;
   }
 }
-/* Coarse pointers: the visible dot stays small, the hit area grows to 44px. */
-@media (max-width: 700px) and (pointer: coarse) {
-  .draft-dots button {
-    width: 44px;
-    height: 44px;
+/* Tablet and desktop: one wider centred column, the three offers side by side
+   and 1:1 sprites. */
+@media (min-width: 720px) and (min-height: 481px) {
+  .draft {
+    gap: var(--space-3);
+    width: min(100%, 880px);
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
   }
-  .draft-dots button::after {
-    inset: 16px;
+  .draft-slot {
+    height: 176px;
   }
+  .draft-slot img,
+  .draft-rival img {
+    width: 128px;
+    height: 128px;
+  }
+  .draft-slot > b {
+    font-size: var(--text-lg);
+  }
+  /* The trio as three cards with 1:1 portraits; the card keeps its height. */
+  .draft.is-complete .draft-final {
+    flex: none;
+  }
+  .draft-rival-team {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+  }
+  .draft-rival {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 6px;
+    padding: 12px 8px 14px;
+    background:
+      radial-gradient(
+        circle at 50% 38%,
+        color-mix(in srgb, var(--type-color) 30%, transparent),
+        transparent 90px
+      ),
+      #0d0c28;
+    text-align: center;
+  }
+  .draft-rival-text {
+    justify-items: center;
+  }
+  .draft-rival-lead {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+  .draft-offers {
+    flex: none;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    overflow: visible;
+  }
+  .draft-offer-pick {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    height: 100%;
+    padding: 16px 16px 20px;
+    background:
+      radial-gradient(
+        circle at 50% 30%,
+        color-mix(in srgb, var(--type-color) 34%, transparent),
+        transparent 110px
+      ),
+      var(--bg-2);
+  }
+  .draft-offer-text {
+    justify-items: center;
+    text-align: center;
+  }
+  .draft-offer-name {
+    padding-right: 0;
+  }
+  .draft-offer-chips {
+    justify-content: center;
+  }
+  .draft-bar {
+    justify-content: center;
+    margin-inline: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .draft-bar .ts-fight {
+    flex: 0 1 440px;
+  }
+}
+
+body.high-contrast :is(.draft-slot.filled, .draft-offer-pick, .draft-rival) {
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+body.high-contrast .draft-slot.lead {
+  box-shadow: inset 0 0 0 4px var(--gold);
+}
+body.high-contrast .draft-final {
+  box-shadow: inset 0 0 0 2px #ffb3d9;
 }

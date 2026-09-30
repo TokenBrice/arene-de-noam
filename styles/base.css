@@ -30,7 +30,6 @@ h3 {
 /* Long-presses on the stage, cards and sprites must not select text or raise
    the browser's image menu; form fields keep their normal behaviour. */
 .battle-screen,
-.creature-card,
 img {
   -webkit-user-select: none;
   user-select: none;
@@ -97,19 +96,6 @@ input:focus-visible {
 button:not(:disabled):is(:active, .is-pressed),
 [role='button']:not([aria-disabled='true']):is(:active, .is-pressed) {
   translate: 0 2px;
-}
-/* Title mode tiles sit on a 3 px ledge; pressed, they drop onto it and light
-   up under a static overlay (inset shadow: their gradients are !important). */
-:is(.menu-mode-grid, .menu-library-grid) button {
-  box-shadow:
-    0 3px 0 #03041499,
-    inset 0 1px #fff1;
-}
-:is(.menu-mode-grid, .menu-library-grid) button:not(:disabled):is(:active, .is-pressed) {
-  box-shadow:
-    0 1px 0 #03041499,
-    inset 0 0 0 2px #ffffff4d,
-    inset 0 0 0 100vmax #ffffff21;
 }
 .screen {
   position: relative;
@@ -210,28 +196,39 @@ body.reduced-motion .screen.screen-entering {
   margin: auto;
   padding: max(18px, env(safe-area-inset-top)) clamp(16px, 3vw, 42px) max(20px, env(safe-area-inset-bottom));
 }
+/* The page header (ctx.topbar): a 48 px chevron back, the page title (with an optional
+   eyebrow), then the screen's own actions, mute and settings. The title takes the free width
+   and wraps to two lines before it ever pushes a button off screen. */
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
   min-height: 56px;
+  margin-bottom: var(--space-2);
 }
-.topbar > .subtle-btn {
-  padding-inline: 10px 16px;
+.topbar-back .ico {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.6;
 }
-.brand-small {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.topbar-title {
+  display: grid;
+  gap: 2px;
   min-width: 0;
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-display);
-  white-space: nowrap;
 }
-.brand-small .ico {
-  color: var(--gold);
+.topbar-title .eyebrow {
+  line-height: 1.2;
+}
+.topbar-title h1 {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(var(--text-xl), 6vw, var(--text-2xl));
+  line-height: 1.1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: break-word;
 }
 .icon-actions {
   display: flex;
@@ -317,135 +314,552 @@ body.reduced-motion .screen.screen-entering {
   background: var(--bg-1);
   box-shadow: none;
 }
-.hero {
+/* Title hub (UI-09). Portrait stacks logo, hero, League strip, JOUER, four
+   mode tiles and one stats line; landscape puts the hero left and the buttons
+   right. Creatures render at integer scales of their 128-texel canvas
+   (--hub-lead / --hub-bench), feet on texel row 125. The ambience is one
+   static gradient; the only running animation is the lead's one-texel stepped
+   idle bob (its halo rides along), off on Low, reduced motion and
+   ?animations=0. */
+.screen.hub-screen {
+  background: radial-gradient(120% 62% at 50% 26%, #2b3590 0, #141a4f 46%, var(--bg-0) 78%);
+}
+.hub {
+  --hub-lead: 256px;
+  --hub-bench: 128px;
+  --hub-bench-spread: 0.5;
+  --hub-floor: 24px;
+  --hub-pad-x: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.7fr);
-  gap: clamp(24px, 5vw, 70px);
-  align-items: center;
-  min-height: calc(100vh - 100px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-areas:
+    'logo icons'
+    'hero hero'
+    'league league'
+    'play play'
+    'modes modes'
+    'stats stats';
+  gap: var(--space-3);
+  width: min(100%, 520px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: max(10px, env(safe-area-inset-top)) var(--hub-pad-x) max(14px, env(safe-area-inset-bottom));
 }
-/* Title ambience (plan §6.4): a slow drifting glow plus a few rising motes.
-   Pure CSS, eight static nodes, no per-frame allocation. Touch devices get a
-   static glow and three motes (PERF-07). */
-.title-ambience {
+.hub-logo {
+  grid-area: logo;
+  align-self: center;
+  margin: 0;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.hub-logo span {
+  color: var(--cyan);
+}
+.hub-icons {
+  grid-area: icons;
+  display: flex;
+  gap: var(--space-2);
+}
+.hub-icons .ico {
+  width: 24px;
+  height: 24px;
+}
+/* Hero: full-bleed in portrait so the bench can lean past the margins. */
+.hub-hero {
+  grid-area: hero;
+  display: grid;
+  min-height: calc(var(--hub-lead) + var(--hub-floor));
+  margin-inline: calc(-1 * var(--hub-pad-x));
+  overflow: clip;
+}
+.hub-stage {
+  position: relative;
+  min-height: calc(var(--hub-lead) + var(--hub-floor));
+}
+.hub-stage img {
   position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
+  image-rendering: pixelated;
 }
-.title-ambience::before {
+/* The spotlight: a beam from the top of the hero down to the pad (two
+   stacked trapezoids fake a soft edge), the pad with the lead's contact
+   shadow on the feet line, and a glow pooled on the pad. */
+.hub-cone,
+.hub-pad {
+  position: absolute;
+  left: 50%;
+}
+.hub-cone {
+  top: 0;
+  bottom: var(--hub-floor);
+  width: calc(var(--hub-lead) * 1.24);
+  margin-left: calc(var(--hub-lead) * -0.62);
+  clip-path: polygon(34% 0, 66% 0, 100% 100%, 0 100%);
+  background:
+    radial-gradient(ellipse 50% 22% at 50% 100%, #7686ff3d, transparent),
+    linear-gradient(180deg, #aebcff00, #aebcff0d 40%, #aebcff1f);
+}
+.hub-cone::before {
   content: '';
   position: absolute;
-  inset: -22%;
-  background:
-    radial-gradient(circle at 30% 28%, #7d86ff14, transparent 42%),
-    radial-gradient(circle at 72% 68%, #58e8ff10, transparent 46%);
-  animation: titleDrift 26s ease-in-out infinite alternate;
+  inset: 0 14%;
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, #c8d2ff00, #c8d2ff0f 45%, #c8d2ff1f);
 }
-.title-ambience i {
-  position: absolute;
-  left: calc(6% + var(--mote, 0) * 10.5%);
-  bottom: -3%;
-  width: 5px;
-  height: 5px;
+.hub-pad {
+  bottom: calc(var(--hub-floor) - var(--hub-lead) * 0.1);
+  width: calc(var(--hub-lead) * 1.16);
+  height: calc(var(--hub-lead) * 0.2);
+  margin-left: calc(var(--hub-lead) * -0.58);
   border-radius: 50%;
-  background: #aab2ff;
-  box-shadow: 0 0 10px #7d86ff;
-  opacity: 0;
-  animation: titleMote 16s linear calc(var(--mote, 0) * -2.3s) infinite;
+  background:
+    radial-gradient(closest-side, #05061ad9 0, #05061a99 34%, transparent 36%) 50% 50% / 52% 44% no-repeat,
+    radial-gradient(closest-side, #6a7bff66, #4a58d833 62%, #3a46b01a 88%, transparent);
+  box-shadow:
+    inset 0 0 0 2px #9aaaff40,
+    inset 0 -3px 0 #ffffff14;
 }
-.title-ambience i:nth-child(2n) {
-  width: 4px;
-  height: 4px;
-  background: #8fe6ff;
-  box-shadow: 0 0 9px #58e8ff;
+.hub-bench {
+  bottom: calc(var(--hub-floor) + var(--hub-lead) * 0.09 - var(--hub-bench) * 3 / 128);
+  width: var(--hub-bench);
+  height: var(--hub-bench);
+  filter: brightness(0.7) saturate(0.85);
 }
-.title-ambience i:nth-child(1) {
-  --mote: 0;
+.hub-bench-left {
+  left: calc(50% - var(--hub-lead) * var(--hub-bench-spread) - var(--hub-bench) * 0.42);
+  transform: scaleX(-1);
 }
-.title-ambience i:nth-child(2) {
-  --mote: 1.7;
+.hub-bench-right {
+  left: calc(50% + var(--hub-lead) * var(--hub-bench-spread) - var(--hub-bench) * 0.58);
 }
-.title-ambience i:nth-child(3) {
-  --mote: 2.9;
+.hub-lead {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--hub-floor) - var(--hub-lead) * 3 / 128);
+  width: var(--hub-lead);
+  height: var(--hub-lead);
+  margin-left: calc(var(--hub-lead) * -0.5);
+  animation: hubIdle 2.4s steps(1, end) infinite;
 }
-.title-ambience i:nth-child(4) {
-  --mote: 4.2;
+.hub-lead::before {
+  content: '';
+  position: absolute;
+  inset: 12% 8% 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #9fb0ff30, transparent);
 }
-.title-ambience i:nth-child(5) {
-  --mote: 5.1;
+.hub-lead img {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(-1);
 }
-.title-ambience i:nth-child(6) {
-  --mote: 6.4;
-}
-.title-ambience i:nth-child(7) {
-  --mote: 7.3;
-}
-.title-ambience i:nth-child(8) {
-  --mote: 8.2;
-}
-@keyframes titleMote {
-  0% {
-    transform: translateY(0);
-    opacity: 0;
-  }
-  12% {
-    opacity: 0.5;
-  }
-  82% {
-    opacity: 0.38;
-  }
-  100% {
-    transform: translateY(-80vh);
-    opacity: 0;
+@keyframes hubIdle {
+  50% {
+    transform: translateY(calc(var(--hub-lead) / -128));
   }
 }
-@keyframes titleDrift {
-  to {
-    transform: rotate(7deg) scale(1.08);
-  }
-}
-@media (pointer: coarse) {
-  .title-ambience::before {
-    animation: none;
-  }
-  .title-ambience i:nth-child(n + 4) {
-    display: none;
-  }
-  .title-ambience i:nth-child(2) {
-    --mote: 4.2;
-  }
-  .title-ambience i:nth-child(3) {
-    --mote: 8.2;
-  }
+.hub-still .hub-lead,
+html.q-low .hub-lead {
+  animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .title-ambience::before {
+  .hub-lead {
     animation: none;
   }
-  .title-ambience i {
-    animation: none;
-    opacity: 0.25;
-  }
 }
-body.reduced-motion .title-ambience::before {
-  animation: none;
+/* League strip: progress, next rival and the twelve badge hexes. */
+.hub-league {
+  grid-area: league;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 8px 10px 8px 12px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: var(--bg-1);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    var(--elev-1);
+  text-align: left;
+  cursor: pointer;
 }
-body.reduced-motion .title-ambience i {
-  animation: none;
-  opacity: 0.25;
+.hub-league .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--ink-3);
 }
-.hero-copy h1 {
-  font-size: clamp(48px, 8vw, 92px);
-  line-height: 0.86;
-  letter-spacing: -0.065em;
-  margin: 18px 0 22px;
-  max-width: 770px;
+.hub-league-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #ffcb3d1f;
 }
-.hero-copy h1 span {
+.hub-league-icon .ico {
+  width: 26px;
+  height: 26px;
+  color: var(--gold);
+}
+.hub-league b,
+.hub-tile b,
+.hub-challenge b {
   display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-display);
+  line-height: 1.1;
+}
+.hub-league small,
+.hub-tile small,
+.hub-challenge small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+  line-height: 1.2;
+}
+.hub-badges {
+  display: grid;
+  grid-template-columns: repeat(6, 14px);
+  gap: 2px 3px;
+}
+/* JOUER is the screen's one gold call to action; "Mon équipe" sits beside it. */
+.hub-play-row {
+  grid-area: play;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px;
+}
+.hub-play,
+.hub-team {
+  flex-direction: column;
+  min-height: 76px;
+  border-radius: 20px;
+}
+.hub-play {
+  gap: 2px;
+  padding: 8px 16px;
+}
+.hub-play-label {
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.hub-play small {
+  color: #4a3100;
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+.hub-team {
+  gap: 4px;
+  padding: 8px 6px;
+  font-size: var(--text-sm);
+  text-align: center;
+}
+.hub-team .ico {
+  width: 26px;
+  height: 26px;
   color: var(--cyan);
-  text-shadow: 0 0 36px #32c9ff55;
+}
+/* Mode tiles: an opaque tint of the tile colour on a solid ledge. */
+.hub-modes {
+  grid-area: modes;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.hub-tile {
+  --tile: #5ee8ff;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 76px;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tile) 26%, var(--bg-2)),
+    color-mix(in srgb, var(--tile) 12%, var(--bg-1))
+  );
+  box-shadow:
+    inset 0 1px 0 #ffffff1f,
+    inset 0 0 0 1px color-mix(in srgb, var(--tile) 42%, transparent),
+    0 3px 0 var(--ledge);
+  text-align: left;
+  cursor: pointer;
+}
+.hub-tile--challenges {
+  --tile: #ff7eb6;
+}
+.hub-tile--bestiary {
+  --tile: #8dffbd;
+}
+.hub-tile--academy {
+  --tile: #b69cff;
+}
+.hub-tile-icon,
+.hub-challenge-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: var(--bg-0);
+  background: var(--tile);
+  box-shadow: inset 0 -3px 0 #0003;
+}
+.hub-tile-icon .ico,
+.hub-challenge-icon .ico {
+  width: 24px;
+  height: 24px;
+}
+.hub-stats {
+  grid-area: stats;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+  text-align: center;
+}
+/* Défis sheet: one row per side mode; locked rows say how many badges open
+   them. */
+.hub-challenges {
+  display: grid;
+  gap: 10px;
+}
+.hub-challenge {
+  --tile: #ff7eb6;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  text-align: left;
+  cursor: pointer;
+}
+.hub-challenge--gauntlet {
+  --tile: #7cf0b8;
+}
+.hub-challenge--trials {
+  --tile: #c3a6ff;
+}
+.hub-challenge > .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--ink-3);
+}
+.hub-challenge.is-locked {
+  background: var(--bg-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: default;
+}
+.hub-challenge.is-locked .hub-challenge-icon {
+  color: var(--ink-3);
+  background: var(--bg-3);
+}
+.hub-challenge.is-locked b {
+  color: var(--ink-2);
+}
+.hub-challenge .hub-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+}
+.hub-lock .ico {
+  width: 18px;
+  height: 18px;
+}
+/* Pressed: every hub control drops onto its ledge (plus the global 2 px
+   translate). */
+.hub-league:is(:active, .is-pressed),
+.hub-challenge:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    var(--elev-0);
+}
+.hub-tile:is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 1px 0 #ffffff1f,
+    inset 0 0 0 2px color-mix(in srgb, var(--tile) 70%, transparent),
+    0 1px 0 var(--ledge);
+}
+@media (hover: hover) {
+  :is(.hub-league, .hub-tile, .hub-challenge:not(:disabled)):hover {
+    filter: brightness(1.12);
+  }
+}
+/* High contrast: every hub control gets a solid 2 px outline, secondary text
+   brightens, and locked side modes add a dashed (non-colour) cue. */
+body.high-contrast :is(.hub-league, .hub-tile, .hub-team, .hub-challenge):not(:focus-visible) {
+  outline: 2px solid var(--line-strong);
+  outline-offset: -2px;
+}
+body.high-contrast .hub-challenge.is-locked {
+  outline-style: dashed;
+}
+body.high-contrast :is(.hub-stats, .hub-tile small, .hub-league small) {
+  color: var(--ink);
+}
+body.high-contrast .hub-bench {
+  filter: none;
+}
+/* Short portrait phones: a 1.5× hero (3 device pixels per texel at DPR 2)
+   keeps every action in one viewport. */
+@media (orientation: portrait) and (max-height: 720px) {
+  .hub {
+    --hub-lead: 192px;
+  }
+}
+/* Landscape: hero and stats left; League strip, JOUER and tiles right. The
+   hub sits vertically centred at its content height; the empty spacer row
+   absorbs a hero taller than the right column, so tiles never stretch. */
+@media (orientation: landscape) {
+  .screen.hub-screen {
+    display: grid;
+    background: radial-gradient(70% 95% at 24% 48%, #2b3590 0, #141a4f 52%, var(--bg-0) 88%);
+  }
+  .hub {
+    --hub-lead: 192px;
+    --hub-floor: 20px;
+    --hub-bench-spread: 0.36;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'logo league icons'
+      'hero play play'
+      'hero modes modes'
+      'hero . .'
+      'stats . .';
+    align-self: center;
+    column-gap: 20px;
+    row-gap: 10px;
+    width: min(100%, 1180px);
+    min-height: 0;
+  }
+  .hub-logo {
+    align-self: start;
+    padding-top: 12px;
+  }
+  .hub-hero {
+    margin-inline: 0;
+  }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  .hub-play,
+  .hub-team {
+    min-height: 64px;
+  }
+  .hub-play-label {
+    font-size: 28px;
+  }
+  .hub-tile {
+    grid-template-columns: 40px minmax(0, 1fr);
+    min-height: 64px;
+    padding-block: 6px;
+  }
+  .hub-tile-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+@media (orientation: landscape) and (min-height: 560px) {
+  .hub {
+    --hub-lead: 256px;
+    --hub-floor: 28px;
+    row-gap: 14px;
+  }
+  .hub-logo {
+    font-size: 34px;
+  }
+  .hub-tile {
+    min-height: 96px;
+  }
+}
+/* Large desktop: a 4× hero on a wider hub and taller controls, so the hub fills most of a
+   900 px-high window instead of floating in its middle third. The beam and pad narrow a
+   little to stay inside the hero column. */
+@media (orientation: landscape) and (min-height: 800px) and (min-width: 1200px) {
+  .hub {
+    --hub-lead: 512px;
+    --hub-floor: 56px;
+    --hub-bench-spread: 0.4;
+    row-gap: 18px;
+    column-gap: 32px;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) auto;
+    width: min(100%, 1320px);
+  }
+  .hub-cone {
+    width: calc(var(--hub-lead) * 1.12);
+    margin-left: calc(var(--hub-lead) * -0.56);
+  }
+  .hub-pad {
+    width: calc(var(--hub-lead) * 1.08);
+    margin-left: calc(var(--hub-lead) * -0.54);
+  }
+  .hub-logo {
+    font-size: 44px;
+  }
+  .hub-league {
+    min-height: 80px;
+    padding-inline: 16px 14px;
+  }
+  .hub-league b,
+  .hub-tile b {
+    font-size: var(--text-xl);
+  }
+  .hub-league small,
+  .hub-tile small {
+    font-size: var(--text-md);
+  }
+  .hub-play,
+  .hub-team {
+    min-height: 104px;
+  }
+  .hub-play-row {
+    grid-template-columns: minmax(0, 1fr) 128px;
+  }
+  .hub-play-label {
+    font-size: var(--text-hero);
+  }
+  .hub-play small,
+  .hub-team {
+    font-size: var(--text-md);
+  }
+  .hub-tile {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 14px;
+    min-height: 176px;
+    padding-inline: 18px;
+  }
+  .hub-tile-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+  }
+  .hub-tile-icon .ico {
+    width: 30px;
+    height: 30px;
+  }
 }
 .eyebrow {
   color: var(--gold);
@@ -453,84 +867,6 @@ body.reduced-motion .title-ambience i {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-size: 12px;
-}
-.hero-copy > p {
-  max-width: 600px;
-  color: var(--muted);
-  font-size: clamp(16px, 2vw, 20px);
-}
-.menu {
-  display: grid;
-  gap: 12px;
-  margin-top: 30px;
-  max-width: 520px;
-}
-.menu button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  font-size: 18px;
-  padding: 16px 20px;
-}
-.progress-card {
-  overflow: hidden;
-}
-.progress-orbit {
-  position: absolute;
-  width: 360px;
-  height: 360px;
-  border: 1px solid #6ae6ff33;
-  border-radius: 50%;
-  right: -180px;
-  top: -170px;
-  box-shadow: 0 0 80px #4d6fff33;
-}
-.progress-card h2 {
-  font-size: 23px;
-  margin: 0 0 6px;
-}
-.emblems {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
-  margin: 24px 0;
-}
-.emblem {
-  aspect-ratio: 1;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  border: 1px solid #fff2;
-  background: #05071e99;
-  color: #8f91ad;
-}
-.emblem.earned {
-  color: #16233e;
-  background: radial-gradient(circle at 35% 30%, #fff5bf, #ffca55 60%, #bb6e20);
-  box-shadow: 0 0 20px #ffcc5366;
-}
-.roster-fan {
-  display: flex;
-  justify-content: center;
-  align-items: end;
-  height: 140px;
-  margin: -4px -18px 0;
-}
-.roster-fan img {
-  width: 120px;
-  height: 120px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 14px 12px #0008);
-  margin: 0 -27px;
-  transform-origin: bottom;
-}
-.roster-fan img:nth-child(odd) {
-  transform: translateY(18px) rotate(-5deg);
-}
-.roster-fan img:nth-child(even) {
-  transform: rotate(5deg);
 }
 .page-head {
   display: flex;
@@ -546,85 +882,6 @@ body.reduced-motion .title-ambience i {
 .page-head p {
   color: var(--muted);
   margin: 0;
-}
-.selection-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 22px;
-}
-.creature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-.creature-card {
-  position: relative;
-  min-height: 245px;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--bg-1);
-  box-shadow: var(--elev-1);
-  padding: 14px;
-  cursor: pointer;
-  overflow: hidden;
-  transition:
-    transform var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast);
-}
-@media (hover: hover) {
-  .creature-card:hover {
-    transform: translateY(-3px);
-    border-color: #a9e9ff77;
-  }
-}
-.creature-card.selected {
-  border-color: var(--cyan);
-  box-shadow:
-    inset 0 0 0 1px var(--cyan),
-    var(--elev-1);
-}
-.creature-card.lead::after {
-  content: attr(data-lead);
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  background: var(--gold);
-  color: #20223d;
-  padding: 4px 8px;
-  border-radius: 9px;
-  font-size: var(--text-xs);
-  font-weight: 900;
-}
-.creature-card img {
-  display: block;
-  width: 128px;
-  height: 128px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  margin: -7px auto 0;
-  filter: drop-shadow(0 13px 10px #0008);
-}
-.creature-card h3 {
-  margin: 2px 0;
-  font-size: 20px;
-}
-.meta-row,
-.affinity-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.affinity-dot {
-  display: inline-grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border-radius: 8px;
-  color: #0a1022;
-  font-weight: 900;
 }
 .affinity-icon {
   display: block;
@@ -642,75 +899,8 @@ body.reduced-motion .title-ambience i {
   flex: 0 0 auto;
   vertical-align: -0.2em;
 }
-.class-chip,
-.affinity-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 3px 8px;
-  border: 2px solid var(--class-color, var(--chip-color, currentColor));
-  border-radius: 999px;
-  color: #eef0f7;
-  background: color-mix(in srgb, var(--class-color, var(--chip-color, #8991a1)) 14%, #111426);
-  font-size: var(--text-xs);
-  font-style: normal;
-  line-height: 1;
-}
-.affinity-chip {
-  border-width: 1px;
-}
-.class-chip .class-icon,
-.affinity-chip .affinity-icon {
-  width: 17px;
-  height: 17px;
-  color: var(--class-color, var(--chip-color, currentColor));
-}
-body.high-contrast .class-chip,
-body.high-contrast .class-tab,
-body.high-contrast [data-bestiary-class] {
+body.high-contrast .bestiary-chip > i {
   --class-color: currentColor !important;
-}
-.affinity-dot .affinity-icon {
-  width: 16px;
-  height: 16px;
-}
-.mini-stats {
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.select-aside {
-  align-self: start;
-  position: sticky;
-  top: 18px;
-}
-.select-aside h2 {
-  margin-top: 0;
-}
-.selected-list,
-.enemy-list {
-  display: grid;
-  gap: 8px;
-  margin: 14px 0;
-}
-.selected-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 50px;
-  border-radius: 13px;
-  background: #ffffff08;
-  padding: 6px 9px;
-}
-.selected-row img {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.selected-row button {
-  margin-left: auto;
 }
 .field {
   display: grid;

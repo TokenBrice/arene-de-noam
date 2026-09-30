@@ -813,7 +813,8 @@ export class FighterLayer {
     texture.generateMipmaps = false;
     texture.needsUpdate = true;
     this.renderer?.initTexture(texture);
-    if (!this.luminance.has(creatureId)) this.luminance.set(creatureId, spriteLuminance(image));
+    const lumaKey = `${creatureId}:${variant}`;
+    if (!this.luminance.has(lumaKey)) this.luminance.set(lumaKey, spriteLuminance(image));
     const random = fxRandom(fxSeed(creatureId)),
       layout = spriteLayout(creatureId);
     s.creature?.texture.dispose();
@@ -824,7 +825,7 @@ export class FighterLayer {
       layout,
       color: new THREE.Color(AFFINITIES[CREATURES[creatureId].affinity].color),
       // Dark sprites on dark arenas need more rim to separate from the stage.
-      rimBoost: 1 + Math.min(0.8, Math.max(0, (0.34 - this.luminance.get(creatureId)) * 3)),
+      rimBoost: 1 + Math.min(0.8, Math.max(0, (0.34 - this.luminance.get(lumaKey)) * 3)),
       breath: {
         period: BREATH_PERIOD_MS[layout.sizeClass] ?? BREATH_PERIOD_MS.M,
         phase: random() * Math.PI * 2,

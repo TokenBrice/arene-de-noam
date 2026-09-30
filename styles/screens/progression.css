@@ -1,209 +1,65 @@
-/* Expansion UI: a 30-creature roster, collectible relic-like badges, and
-   battlefield-readable states. */
-.selection-layout {
-  grid-template-columns: minmax(0, 1fr) 350px;
-}
-.creature-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.creature-card {
-  min-height: 218px;
-}
-.creature-card img {
-  width: 112px;
-  height: 112px;
-}
-.affinity-tabs,
-.class-tabs {
-  display: flex;
-  gap: 8px;
-  overflow: auto;
-  padding: 4px 2px 14px;
-  scrollbar-width: thin;
-}
-.affinity-tab,
-.class-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  min-width: 44px;
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 7px 13px;
-  background: #ffffff09;
-  color: var(--muted);
-  cursor: pointer;
-}
-.affinity-tab .affinity-icon {
-  width: 18px;
-  height: 18px;
-}
-.class-tab .class-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--class-color);
-}
-.affinity-tab.active {
-  color: var(--ink);
-  border-color: var(--tab-color, var(--cyan));
-  background: color-mix(in srgb, var(--tab-color, var(--cyan)) 22%, #11142f);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--tab-color, var(--cyan)) 30%, transparent);
-}
-.class-tab.active {
-  color: var(--ink);
-  border-color: var(--class-color);
-  background: color-mix(in srgb, var(--class-color) 24%, #11142f);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--class-color) 26%, transparent);
-}
-.selection-filters {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 12px;
-  background: var(--panel);
-}
-.filter-row {
-  display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-}
-.filter-row > b {
-  padding-top: 14px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-}
-.enemy-picker {
-  grid-template-columns: repeat(8, 1fr);
-  max-height: 142px;
-  overflow: auto;
-  padding-right: 3px;
-}
-@media (max-width: 600px) {
-  .enemy-picker {
-    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
-  }
-}
-.trainer-badge {
-  display: grid;
-  place-items: center;
-  margin: -8px 0 8px;
-}
-.trainer-badge .emblem {
-  width: 116px;
-}
-.trainer-badge .emblem small {
+/* Expansion UI: League badges, a 30-creature roster and battlefield-readable states. */
+
+/* League badge art (ctx.badgeArt): one SVG hex per rival. Earned: gold rim, a gem in the
+   rival's main type colour (--gem) with a lit crown facet, and the rival's white motif.
+   Open (revealed, not won): dark face, type-tinted rim, motif in the type colour. Locked: the
+   bare dark hex. Width sets the size; the height follows the 40 × 44 viewBox. */
+.badge-art {
   display: block;
-}
-.epic-emblems {
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
-}
-.emblem.ornate {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 24%;
-  isolation: isolate;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 40 / 44;
   overflow: visible;
-  border: 0;
-  background: linear-gradient(145deg, #20233e, #070818);
-  clip-path: polygon(50% 0, 82% 11%, 100% 42%, 89% 80%, 50% 100%, 11% 80%, 0 42%, 18% 11%);
-  box-shadow: none;
 }
-.emblem.ornate::before {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  z-index: -1;
-  background: linear-gradient(145deg, #353850, #0a0b1d);
-  clip-path: inherit;
+.badge-rim {
+  fill: #343a6c;
 }
-.emblem.ornate::after {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  z-index: -2;
-  background: linear-gradient(135deg, #62657b, #22233a);
-  clip-path: inherit;
+.badge-face {
+  fill: #151937;
 }
-.emblem.ornate i {
-  position: absolute;
-  inset: 18%;
-  border: 1px solid #ffffff20;
-  transform: rotate(45deg);
-  border-radius: 25%;
+.badge-art--earned .badge-rim {
+  fill: var(--gold);
+  stroke: var(--gold-ledge);
+  stroke-width: 1.2;
 }
-.emblem.ornate b {
-  font-size: clamp(14px, 2vw, 25px);
-  color: #696b81;
-  text-shadow: 0 2px #000;
+.badge-art--earned .badge-face {
+  fill: var(--gem);
+  stroke: #0b0f2a;
+  stroke-opacity: 0.35;
+  stroke-width: 1.4;
 }
-.emblem.ornate small {
+.badge-art--open .badge-rim {
+  fill: color-mix(in srgb, var(--gem) 60%, #151937);
+}
+.badge-crown {
+  fill: #fff;
+  opacity: 0.26;
+}
+.badge-base {
+  fill: #000;
+  opacity: 0.2;
+}
+.badge-motif path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.badge-motif .badge-motif-shade {
+  stroke: #0b0f2a;
+  stroke-width: 4.6;
+  opacity: 0.45;
+}
+.badge-art--open .badge-motif path {
+  stroke: var(--gem);
+}
+.badge-art--open .badge-motif .badge-motif-shade {
   display: none;
-  position: absolute;
-  top: 105%;
-  width: 130px;
-  text-align: center;
-  color: var(--gold);
-  font-size: var(--text-xs);
-  font-weight: 800;
 }
-.emblem.ornate.earned {
-  background: radial-gradient(circle at 35% 25%, #fff 0 3%, var(--badge-a) 18%, var(--badge-b) 65%, #221631);
-}
-.emblem.ornate.earned::before {
-  background: radial-gradient(circle at 40% 30%, #fff9, var(--badge-a) 18%, var(--badge-b) 72%);
-}
-.emblem.ornate.earned::after {
-  background: conic-gradient(from 20deg, var(--badge-a), #fff, var(--badge-b), #fff, var(--badge-a));
-}
-.emblem.ornate.earned b {
-  color: #fff9d6;
-  text-shadow:
-    0 2px 1px #4b1736,
-    0 0 10px #fff;
-}
-.trainer-badge .emblem small {
-  display: block;
-}
-.bestiary-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.bestiary-card {
-  position: relative;
-  background: linear-gradient(155deg, color-mix(in srgb, var(--card-affinity) 10%, #151630), #090a1d 70%);
-  border-color: color-mix(in srgb, var(--card-affinity) 35%, var(--line));
-}
-.bestiary-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--card-affinity), transparent);
-}
-.bestiary-card-head {
-  grid-template-columns: 95px 1fr;
-}
-.bestiary-card img {
-  width: 100px;
-  height: 100px;
-}
-.bestiary-portrait {
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--card-affinity) 28%, transparent),
-    transparent 68%
-  );
-}
-.signature-entry {
-  border-left: 2px solid var(--gold);
-  background: linear-gradient(90deg, #ffd66b16, #05071c77) !important;
-}
-.signature-entry strong {
-  color: #fff1ab;
+body.high-contrast .badge-art--locked .badge-rim,
+body.high-contrast .badge-art--open .badge-rim {
+  fill: var(--line-strong);
 }
 .signature-move {
   border-color: color-mix(in srgb, var(--move-color) 70%, #fff);
@@ -343,26 +199,6 @@
   font-size: var(--text-xs);
   letter-spacing: 0.02em;
 }
-.arena-rule {
-  display: grid;
-  gap: 4px;
-  margin: 10px 0 16px;
-  padding: 10px 12px;
-  border: 1px solid #ffffff18;
-  border-radius: 12px;
-  background: linear-gradient(120deg, #756dff15, #73eaff0b);
-}
-.arena-rule b {
-  color: #d9d6ff;
-  font-size: var(--text-xs);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-}
-.arena-rule span {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
 .signature-cost {
   color: #d6b8ff;
   font-weight: 900;
@@ -379,20 +215,6 @@
   border-radius: 99px;
   color: #b9a6d8;
   background: #050617aa;
-}
-.card-talent {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-left: 3px;
-  border: 1px solid #d9c5ff55;
-  border-radius: 50%;
-  color: #eadcff;
-  background: #6c55c52b;
-  font-size: 12px;
-  font-style: normal;
-  vertical-align: middle;
 }
 .talent-chip {
   max-width: 105px;
@@ -425,567 +247,12 @@
   font-size: var(--text-xs);
   line-height: 1.35;
 }
-.card-rank {
-  position: absolute;
-  z-index: 3;
-  left: 10px;
-  top: 9px;
-  padding: 3px 6px;
-  border: 1px solid #ffe68055;
-  border-radius: 999px;
-  color: #ffe991;
-  background: #19152bd9;
-  font-size: var(--text-xs);
-  letter-spacing: 1px;
-  box-shadow: 0 0 10px #ffd95d20;
-}
-.mastery-card-5 {
-  border-color: #ffe47d80 !important;
-  box-shadow: 0 0 22px #ffda5725 !important;
-}
 .battle-rank {
   color: #ffe481;
   font-size: var(--text-xs);
   font-style: normal;
   letter-spacing: 1px;
   text-shadow: 0 0 8px #ffd245;
-}
-.feat-hall {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  align-items: start;
-  gap: 18px;
-  margin: -2px 0 22px;
-  padding: 18px;
-  border: 1px solid #ffe27d42;
-  border-radius: 22px;
-  background: radial-gradient(circle at 0 0, #ffc84a15, transparent 38%), #ffffff06;
-}
-.feat-hall h2 {
-  margin: 5px 0;
-}
-.feat-gallery {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 7px;
-}
-@media (max-width: 900px) {
-  .feat-hall {
-    grid-template-columns: 1fr;
-  }
-  .feat-gallery {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-.feat-card {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  align-items: center;
-  gap: 7px;
-  min-height: 58px;
-  padding: 7px;
-  border: 1px solid #ffffff12;
-  border-radius: 11px;
-  background: #ffffff07;
-}
-.feat-card i {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  color: var(--gold-soft);
-  background: #9e77492b;
-  font-size: 18px;
-  font-style: normal;
-}
-.feat-card span {
-  display: grid;
-  gap: 2px;
-}
-.feat-card b {
-  font-size: var(--text-xs);
-}
-.feat-card small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.3;
-}
-.feat-card.earned {
-  border-color: #ffe07b55;
-  background: linear-gradient(135deg, #ffce5314, #7e63e711);
-}
-.feat-card.locked {
-  position: relative;
-  filter: none;
-  opacity: 1;
-  border-color: #cfd4ff88;
-}
-.feat-card.locked > i {
-  color: #d8d8e8;
-  background: #ffffff0a;
-  filter: saturate(0.6);
-}
-.feat-card.locked::after {
-  content: '🔒';
-  position: absolute;
-  top: 5px;
-  right: 6px;
-  font-size: var(--text-xs);
-  line-height: 1;
-}
-.trainer-strategy {
-  display: grid;
-  gap: 3px;
-  margin-top: 10px;
-  padding: 9px 11px;
-  border-left: 2px solid #b589ff;
-  background: linear-gradient(90deg, #9a6bff18, transparent);
-}
-.trainer-strategy b {
-  color: #e7dbff;
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.trainer-strategy span {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.3;
-}
-.career-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 8px 0 15px;
-}
-.career-strip span {
-  padding: 5px 8px;
-  border: 1px solid #ffffff17;
-  border-radius: 999px;
-  color: #cdd1e6;
-  background: #ffffff08;
-  font-size: var(--text-xs);
-  font-weight: 850;
-}
-.career-highlights,
-.career-records {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  width: 100%;
-}
-.career-expander {
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid #ffffff20;
-  border-radius: 999px;
-  color: var(--cyan);
-  background: #ffffff08;
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: 800;
-  cursor: pointer;
-}
-.career-records[hidden] {
-  display: none;
-}
-.mastery-mini {
-  display: grid;
-  gap: 3px;
-}
-.mastery-mini b {
-  color: #ffe17c;
-  font-size: var(--text-xs);
-  letter-spacing: 1px;
-}
-.mastery-mini i,
-.mastery-reward i {
-  display: block;
-  height: 5px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: #050617;
-}
-.mastery-mini u,
-.mastery-reward u {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--card-affinity, #736cff), #fff197);
-  text-decoration: none;
-}
-.bestiary-card.rank-5 {
-  box-shadow: 0 0 32px color-mix(in srgb, var(--card-affinity) 30%, transparent);
-}
-.mastery-rewards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 7px;
-  margin: 12px 0;
-}
-.mastery-reward {
-  display: grid;
-  grid-template-columns: 42px 1fr;
-  align-items: center;
-  gap: 7px;
-  padding: 7px;
-  border: 1px solid #ffffff16;
-  border-radius: 12px;
-  background: #ffffff08;
-  text-align: left;
-}
-.mastery-reward img {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.mastery-reward span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.mastery-reward b {
-  overflow: hidden;
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mastery-reward small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.mastery-reward.rank-up {
-  border-color: #ffe076aa;
-  box-shadow: 0 0 18px #ffd65b22;
-}
-.mastery-reward.rank-up b {
-  color: #ffe99a;
-}
-.feat-rewards {
-  display: grid;
-  gap: 7px;
-  margin: 14px 0;
-  padding: 12px;
-  border: 1px solid #ffe27d66;
-  border-radius: 15px;
-  background: radial-gradient(circle at top, #ffc74d1a, transparent 65%);
-}
-.feat-rewards > strong {
-  color: #ffe792;
-  font-size: var(--text-xs);
-  letter-spacing: 0.15em;
-}
-.feat-rewards > div {
-  display: grid;
-  gap: 2px;
-}
-.feat-rewards b {
-  color: #fff4c2;
-  font-size: 12px;
-}
-.feat-rewards span {
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.squad-presets {
-  display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 12px;
-}
-.squad-presets > div:first-child {
-  display: grid;
-  gap: 3px;
-}
-.squad-presets > div:first-child small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.35;
-}
-.squad-preset-track {
-  min-width: 0;
-  max-width: 100%;
-  display: flex;
-  gap: 7px;
-  overflow-x: auto;
-  padding: 4px 3px 8px;
-  scroll-snap-type: x proximity;
-}
-.squad-preset {
-  position: relative;
-  display: grid;
-  grid-template-columns: 28px 1fr 78px;
-  align-items: center;
-  gap: 5px;
-  min-width: 235px;
-  min-height: 68px;
-  padding: 7px 8px;
-  border: 1px solid #ffffff15;
-  border-radius: 13px;
-  color: var(--text);
-  background: linear-gradient(135deg, #ffffff0b, #6352bf0c);
-  text-align: left;
-  cursor: pointer;
-  scroll-snap-align: start;
-}
-.squad-preset:hover,
-.squad-preset.active {
-  border-color: #8cefff70;
-  background: linear-gradient(135deg, #53e6ff12, #8c61ff18);
-  transform: translateY(-2px);
-}
-.squad-preset > i {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  color: var(--gold-soft);
-  background: #7f65d642;
-  font-style: normal;
-}
-.squad-preset > span {
-  display: grid;
-  gap: 2px;
-}
-.squad-preset b {
-  font-size: var(--text-xs);
-}
-.squad-preset small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.squad-preset > div {
-  display: flex;
-  justify-content: end;
-}
-.squad-preset img {
-  width: 38px;
-  height: 38px;
-  margin-left: -13px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.trial-btn {
-  border-color: #ffe68866 !important;
-  background: linear-gradient(135deg, #3b225b, #8b4d5d) !important;
-}
-.trial-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  padding-bottom: 50px;
-}
-.trial-card {
-  position: relative;
-  min-height: 355px;
-  overflow: hidden;
-  padding: 22px;
-  border: 1px solid color-mix(in srgb, var(--trial-a) 42%, var(--line));
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 80% 0, color-mix(in srgb, var(--trial-a) 18%, transparent), transparent 42%),
-    linear-gradient(150deg, color-mix(in srgb, var(--trial-b) 18%, #161735), #08091b 70%);
-  box-shadow: 0 18px 45px #0005;
-}
-.trial-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  background: linear-gradient(90deg, var(--trial-b), #fff, var(--trial-a));
-}
-.trial-card.cleared {
-  box-shadow: 0 0 28px color-mix(in srgb, var(--trial-a) 28%, transparent);
-}
-.trial-sigil {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 16px;
-  border: 2px solid var(--trial-a);
-  border-radius: 26% 74% 30% 70%;
-  color: #fff3c0;
-  background: radial-gradient(circle, var(--trial-a), var(--trial-b) 65%, #18142e);
-  box-shadow: 0 0 25px color-mix(in srgb, var(--trial-a) 38%, transparent);
-  font-size: 33px;
-  transform: rotate(-8deg);
-}
-.trial-card h2 {
-  margin: 7px 0;
-  font-size: 24px;
-}
-.trial-card p {
-  min-height: 62px;
-  color: var(--muted);
-  line-height: 1.45;
-}
-.trial-enemies {
-  display: flex;
-  height: 92px;
-  margin: 8px 0;
-}
-.trial-enemies img {
-  width: 88px;
-  height: 88px;
-  margin-right: -17px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.trial-clear {
-  position: absolute;
-  right: 18px;
-  top: 18px;
-  color: #fff2a7;
-  font-size: var(--text-xs);
-  letter-spacing: 0.12em;
-}
-.trial-squad {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.trial-squad > small {
-  margin-right: 8px;
-  color: var(--muted);
-}
-.trial-squad span {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-left: -7px;
-  border: 1px solid #ffffff24;
-  border-radius: 50%;
-  background: #0b0e29;
-}
-.trial-squad img {
-  width: 44px;
-  height: 44px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.trial-squad b {
-  font-size: var(--text-xs);
-}
-.trial-victory {
-  margin: 12px 0;
-  padding: 11px;
-  border: 1px solid #ffe27777;
-  border-radius: 13px;
-  color: var(--gold-soft);
-  background: #ffce5410;
-  font-weight: 900;
-}
-.gauntlet-btn {
-  border-color: #8effca66 !important;
-  background: linear-gradient(135deg, #15534b, #3f3884) !important;
-}
-.gauntlet-reward {
-  display: grid;
-  place-items: center;
-  min-height: calc(100vh - 80px);
-  padding: 25px 0;
-}
-.gauntlet-reward > section {
-  width: min(850px, 100%);
-  text-align: center;
-}
-.gauntlet-reward h1 {
-  margin: 8px 0;
-  font-size: clamp(38px, 7vw, 68px);
-}
-.gauntlet-reward > section > p {
-  color: var(--muted);
-}
-.boon-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin: 22px 0;
-}
-.boon-card {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  align-items: center;
-  gap: 12px;
-  min-height: 110px;
-  padding: 14px;
-  border: 1px solid #9effd250;
-  border-radius: 17px;
-  color: var(--text);
-  background: radial-gradient(circle at left, #5dffbd17, transparent 60%), #ffffff08;
-  text-align: left;
-  cursor: pointer;
-}
-.boon-card:hover {
-  transform: translateY(-4px);
-  border-color: #c7ffe3;
-  box-shadow: 0 12px 30px #3dffae18;
-}
-.boon-card > i {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  border: 2px solid #9affd0;
-  border-radius: 28% 72% 35% 65%;
-  color: #faffc0;
-  background: linear-gradient(135deg, #2f9d7d, #5c4fa7);
-  font-size: 34px;
-  font-style: normal;
-  box-shadow: 0 0 20px #5dffc544;
-}
-.boon-card span {
-  display: grid;
-  gap: 5px;
-}
-.boon-card b {
-  font-size: 17px;
-}
-.boon-card small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-}
-.next-gauntlet {
-  display: grid;
-  place-items: center;
-  gap: 6px;
-  margin-top: 20px;
-  padding: 13px;
-  border-top: 1px solid #ffffff18;
-}
-.next-gauntlet > span {
-  color: var(--gold);
-  font-size: var(--text-xs);
-  font-weight: 1000;
-  letter-spacing: 0.15em;
-}
-.next-gauntlet > div {
-  display: flex;
-  height: 75px;
-}
-.next-gauntlet img {
-  width: 75px;
-  height: 75px;
-  margin: 0 -8px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.gauntlet-victory {
-  margin: 12px 0;
-  padding: 13px;
-  border: 1px solid #83ffca77;
-  border-radius: 13px;
-  color: #caffdf;
-  background: #4bffad10;
-  font-weight: 1000;
-  box-shadow: 0 0 22px #59ffc022;
 }
 .order-first {
   color: #9effb8;
@@ -1001,43 +268,4 @@
   color: #e2d3ff;
   background: #a172ff13;
   font-weight: 900;
-}
-/* Trials responsive layout lives with the Trials screen (UI-01): Title →
-   Épreuves never loads the lazy battle sheets. */
-@media (max-width: 1100px) {
-  .trial-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 600px) {
-  [data-page='trials'] .page-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .trial-grid {
-    grid-template-columns: 1fr;
-  }
-  .trial-card {
-    min-height: 0;
-    padding: 18px;
-  }
-  .trial-sigil {
-    width: 56px;
-    height: 56px;
-    margin-bottom: 10px;
-    font-size: 26px;
-  }
-  .trial-card h2 {
-    font-size: 22px;
-  }
-  .trial-card p {
-    min-height: 0;
-  }
-  .trial-squad {
-    width: 100%;
-    margin-top: 10px;
-  }
-  .trial-squad b {
-    display: none;
-  }
 }

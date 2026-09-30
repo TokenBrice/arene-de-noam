@@ -14,7 +14,9 @@
 
 /* Self-hosted OFL families, Latin subsets (fonts/OFL-*.txt). Baloo 2 is the
    display face (titles, names, numbers, calls to action); Nunito is the text
-   face and is preloaded by index.html. */
+   face and is preloaded by index.html. Arene Sparkle holds one glyph, ✦
+   (U+2726), drawn from the sparkle icon by tools/build-sparkle-font.mjs, so the
+   ✦ in copy matches the chrome instead of a system fallback. */
 @font-face {
   font-family: 'Baloo 2';
   src: url('../fonts/baloo2-latin.woff2') format('woff2');
@@ -33,6 +35,14 @@
   font-display: swap;
   unicode-range:
     U+0020-007E, U+00A0-00FF, U+0152-0153, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2212;
+}
+@font-face {
+  font-family: 'Arene Sparkle';
+  src: url('../fonts/sparkle.woff') format('woff');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2726;
 }
 /* Metric-matched fallbacks for the swap period: the local Roboto (Android) or
    Arial (desktop) is resized to the web face's average French/English glyph
@@ -74,8 +84,8 @@
   /* Type. Scale: 12 caption (never on a decision) · 14 secondary · 16 body and
      move names · 18 plate names · 22 section · 28 screen title · 44 hero.
      HP, damage and XP numbers use tabular numerals (.num / --numeric). */
-  --font-display: 'Baloo 2', 'Baloo 2 Fallback', system-ui, sans-serif;
-  --font-text: 'Nunito', 'Nunito Fallback', system-ui, sans-serif;
+  --font-display: 'Baloo 2', 'Arene Sparkle', 'Baloo 2 Fallback', system-ui, sans-serif;
+  --font-text: 'Nunito', 'Arene Sparkle', 'Nunito Fallback', system-ui, sans-serif;
   --text-xs: 12px;
   --text-sm: 14px;
   --text-md: 16px;

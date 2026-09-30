@@ -27,7 +27,7 @@ const FILE_LOADERS = { '.woff2': 'file', '.woff': 'file', '.png': 'file', '.svg'
 const STATIC_FILES = ['manifest.webmanifest'];
 const STATIC_DIRS = [
   ['assets/icons', (name) => name.endsWith('.png')],
-  ['assets/monsters', (name) => name === 'battle.png'],
+  ['assets/monsters', (name) => name === 'battle.png' || name === 'battle-shiny.png'],
   ['assets/fx', (name) => name === 'atlas.png'],
   ['fonts', (name) => name.endsWith('.txt')],
 ];

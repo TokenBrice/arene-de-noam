@@ -4,13 +4,16 @@
 // choreography consumer (director cues, fighter reactions, FX particles, camera shots) reads
 // this clock, so ×2, hold-to-hurry and hit-stop apply to all of them at once. Pausing freezes
 // virtual time (a true hit-stop). Real-time stalls (hidden tab, long task) are clamped to
-// `maxStepMs` so a resumed turn never skips ahead. `instant` (?animations=0) turns every timed
-// step into one ~1 ms timer tick. Nothing here touches the DOM or the engine.
+// `maxStepMs` so a resumed turn never skips ahead. Floor time is real time that runs
+// HURRY_RATE× faster while the player holds: the on-screen floors of readouts and stamps are
+// measured on it, so ×2 never shortens them and holding shortens everything. `instant`
+// (?animations=0) turns every timed step into one ~1 ms timer tick. Nothing here touches the
+// DOM or the engine.
 
 export const HURRY_RATE = 3;
-export const READOUT_MIN_REAL_MS = 350;
+// Floor time a readout (number, stamp) stays on screen, its exit fade included.
+export const READOUT_FLOOR_MS = 350;
 export const MAX_STEP_MS = 100;
-
 const HIT_STOP = Symbol('hit-stop');
 
 function reportAsync(error) {
@@ -29,6 +32,7 @@ export class FxClock {
   #instant;
   #maxStep;
   #virtual = 0;
+  #floor = 0;
   #anchor;
   #speed;
   #hurry = false;
@@ -82,6 +86,10 @@ export class FxClock {
   get rate() {
     return this.#speed * (this.#hurry ? HURRY_RATE : 1);
   }
+  // Floor ms per real ms: HURRY_RATE while hurried, else 1 (×2 never compresses a floor).
+  get floorRate() {
+    return this.#hurry ? HURRY_RATE : 1;
+  }
   get paused() {
     return this.#holds.size > 0;
   }
@@ -96,20 +104,43 @@ export class FxClock {
     return this.#virtual;
   }
 
+  // Current floor time: real ms since creation, HURRY_RATE× faster while hurried. Pauses and
+  // hit-stops never stop it (a covered or frozen readout is still on screen).
+  floorNow() {
+    this.#sample();
+    return this.#floor;
+  }
+
   // Virtual ms -> real ms at the current rate; 0 in instant mode.
   realMs(virtualMs) {
     return this.#instant ? 0 : Math.max(0, virtualMs) / this.rate;
   }
 
+  // Floor ms -> real ms at the current hurry; 0 in instant mode (WAAPI and CSS floors).
+  realFloorMs(floorMs) {
+    return this.#instant ? 0 : Math.max(0, floorMs) / this.floorRate;
+  }
+
   setSpeed(speed) {
-    const next = FxClock.#validRate(speed);
-    this.#sample();
+    const next = FxClock.#validRate(speed),
+      real = this.#sample(),
+      previous = this.rate;
     this.#speed = next;
+    this.#rescaleHitStop(real, previous);
   }
 
   setHurry(on) {
-    this.#sample();
+    const real = this.#sample(),
+      previous = this.rate;
     this.#hurry = Boolean(on);
+    this.#rescaleHitStop(real, previous);
+  }
+
+  // A running hit-stop keeps its remaining virtual length when the rate changes: holding
+  // mid-freeze shortens it too.
+  #rescaleHitStop(real, previousRate) {
+    if (this.#holds.has(HIT_STOP) && this.#hitStopUntil > real)
+      this.#hitStopUntil = real + ((this.#hitStopUntil - real) * previousRate) / this.rate;
   }
 
   pause(reason = 'manual') {
@@ -137,15 +168,15 @@ export class FxClock {
     });
   }
 
-  // Resolves true once virtual time reaches `time` and at least `minRealMs` real ms have passed
-  // since the call; false if the clock is cancelled or disposed first.
-  waitUntil(time, { minRealMs = 0 } = {}) {
+  // Resolves true once virtual time reaches `time` and floor time has advanced `floorMs` since
+  // the call; false if the clock is cancelled or disposed first.
+  waitUntil(time, { floorMs = 0 } = {}) {
     if (!this.#usable()) return Promise.resolve(false);
-    const real = this.#sample();
+    this.#sample();
     return new Promise((resolve) => {
       this.#timers.push({
         due: time,
-        minRealAt: this.#instant ? 0 : real + Math.max(0, minRealMs),
+        floorAt: this.#instant ? 0 : this.#floor + Math.max(0, floorMs),
         sequence: ++this.#sequence,
         resolve,
         callback: null,
@@ -161,7 +192,7 @@ export class FxClock {
   // Calls `callback(virtualNow)` once virtual time reaches `time`. Returns a cancel function.
   atTime(time, callback) {
     if (!this.#usable()) return () => {};
-    const timer = { due: time, minRealAt: 0, sequence: ++this.#sequence, resolve: null, callback };
+    const timer = { due: time, floorAt: 0, sequence: ++this.#sequence, resolve: null, callback };
     this.#timers.push(timer);
     this.#schedule();
     return () => {
@@ -198,8 +229,11 @@ export class FxClock {
 
   #sample() {
     const real = this.#realNow();
-    if (!this.#instant && !this.#disposed && this.#holds.size === 0)
-      this.#virtual += Math.min(Math.max(0, real - this.#anchor), this.#maxStep) * this.rate;
+    if (!this.#instant && !this.#disposed) {
+      const elapsed = Math.max(0, real - this.#anchor);
+      this.#floor += elapsed * this.floorRate;
+      if (this.#holds.size === 0) this.#virtual += Math.min(elapsed, this.#maxStep) * this.rate;
+    }
     this.#anchor = real;
     return real;
   }
@@ -252,14 +286,14 @@ export class FxClock {
         const next = Math.min(...this.#timers.map((timer) => timer.due));
         if (next > this.#virtual) this.#virtual = next;
       }
-      this.#fireDue(real);
+      this.#fireDue();
     }
     this.#schedule();
   };
 
-  #fireDue(real) {
+  #fireDue() {
     const due = this.#timers
-      .filter((timer) => timer.due <= this.#virtual && real >= timer.minRealAt)
+      .filter((timer) => timer.due <= this.#virtual && this.#floor >= timer.floorAt)
       .sort((a, b) => a.due - b.due || a.sequence - b.sequence);
     if (!due.length) return;
     this.#timers = this.#timers.filter((timer) => !due.includes(timer));

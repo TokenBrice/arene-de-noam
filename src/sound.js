@@ -1,5 +1,5 @@
 import { STATUS_DEFINITIONS } from './battle/statuses.js';
-import { fxRandom, fxSeed, moveTier } from './battle-ui/beats.js';
+import { fxRandom, fxSeed } from './battle-ui/beats.js';
 
 const clamp01 = (value, fallback = 0) =>
   Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
@@ -1876,16 +1876,6 @@ export class SoundSystem {
     if (cue) this.materialVoices(cue, materialFamily(affinity));
   }
 
-  guard() {
-    const cue = this.openCue({ reverb: 0.34, seed: 'guard' });
-    if (cue) this.guardVoices(cue);
-  }
-
-  heal() {
-    const cue = this.openCue({ reverb: 0.45, seed: 'heal' });
-    if (cue) this.healVoices(cue);
-  }
-
   victory() {
     if (!this.claimResultsSting()) return;
     const cue = this.openCue({ reverb: 0.42, seed: 'victory-sting' });
@@ -1943,43 +1933,9 @@ export class SoundSystem {
     return [...String(value)].reduce((total, character) => (total * 31 + character.charCodeAt(0)) >>> 0, 7);
   }
 
-  // A creature's arrival voice outside battle playback (Move Theater, team-select pick).
+  // A creature's arrival voice outside battle playback (team-select pick, Pioche du jour pick).
   call(id) {
     const cue = this.openCue({ reverb: 0.36, seed: `cry|${id}` });
     if (cue) this.cryVoices(cue, id, 'entry');
-  }
-
-  // Move Theater release: the same family gestures as battle (Signature: riser + motif).
-  move(move) {
-    if (!move) return;
-    const cue = this.openCue({ reverb: move.signature ? 0.32 : 0.16, seed: `move|${move.id}` });
-    if (!cue) return;
-    if (move.signature) {
-      this.duck(0.35, 0.9);
-      this.cutinVoices(cue, null, false);
-    } else this.releaseVoices(cue, materialFamily(move.affinity), move.kind === 'damage' ? 'PROJ' : 'BOOST');
-  }
-
-  // Move Theater contact: the battle contact recipe for a damage event shape.
-  impact(move, event = {}) {
-    const resisted = event.affinity < 1 && !event.critical;
-    const cue = this.openCue({
-      reverb: event.hp <= 0 ? 0.3 : 0.16,
-      lowpass: resisted ? RESISTED_LOWPASS_HZ : 0,
-      seed: `impact|${move.id}|${event.hit || 1}`,
-    });
-    if (!cue) return;
-    this.contactVoices(
-      cue,
-      materialFamily(move.affinity),
-      {
-        hit: event.hit,
-        tier: moveTier(move),
-        effectiveness: event.affinity ?? 1,
-        critical: event.critical,
-        lethal: event.hp <= 0,
-      },
-      new Set()
-    );
   }
 }

@@ -12,14 +12,17 @@ export const BEAT_BUDGET_MS = Object.freeze({
   extraHit: Object.freeze({ 1: 220, 2: 220, 3: 120 }),
   addOn: 250,
   actionCap: Object.freeze({ 1: 1500, 2: 1500, 3: 1800 }),
-  ko: 1200,
+  // The K.O. flash, stamp and dissolve (BEAT_TIMELINES.ko): short, so a lethal blow → K.O. →
+  // next creature chain stays short (K.O. turns are the pacing tail).
+  ko: 600,
   extraKo: 300,
   // A lethal action hands its readout tail to the K.O. beat that follows it (the K.O. stamp
-  // replaces the number; non-lethal numbers keep their full ≥ 450 ms).
+  // replaces the number; non-lethal numbers keep their full ≥ 450 ms). The director also ends it
+  // just after its last contact when that comes first.
   lethalHandOff: 400,
   switch: 700,
   // A replacement enters an empty pad (the fainted creature already dissolved): no recall.
-  replacement: 500,
+  replacement: 400,
   cutin: Object.freeze({ 'perfect-relay': 600, 'trainer-command': 700, ace: 900 }),
   tick: 500,
   effects: 300,

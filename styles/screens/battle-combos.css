@@ -6,28 +6,7 @@
   font-weight: 1000;
 }
 
-/* Quick-battle rule: the team-select preview and its pause-sheet codex card. */
-.battle-rule-preview {
-  display: grid;
-  gap: 4px;
-  margin: -4px 0 13px;
-  padding: 11px 12px;
-  border: 1px solid #ffd66b42;
-  border-radius: 12px;
-  background: linear-gradient(120deg, #ffd66b18, #ff6a9e0c);
-  box-shadow: inset 0 0 20px #ffd66b08;
-}
-.battle-rule-preview b {
-  color: #ffe7a1;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.battle-rule-preview span {
-  color: #c9c8da;
-  font-size: 12px;
-  line-height: 1.4;
-}
+/* Quick-battle rule: its pause-sheet codex card. */
 .quick-rule-codex {
   border-color: #ffd66b3b !important;
   background: linear-gradient(120deg, #ffd66b12, #ff6a9e0b) !important;

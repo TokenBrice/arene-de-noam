@@ -1,383 +1,660 @@
-/* Persistent creature careers turn the Bestiary into a personal hall of fame. */
-.record-hero {
+/* Bestiary: one sticky search/filter row over a compact 3-column portrait grid.
+   A tap opens the shared creature sheet (styles/screens/selection.css) with
+   the Chromatique switch, career record and lore; "Mes stats" holds the
+   favourite partner and the feat hall. Sprites keep integer scales: 64 px
+   (1:1 at DPR 2) on phones, 128 px on desktop. */
+.bestiary-page {
+  width: min(1120px, 100%);
+}
+/* "Mes stats" under the page header, with the feat count as the hook. */
+.bestiary-stats-btn {
+  width: 100%;
+  justify-content: flex-start;
+  margin-bottom: var(--space-2);
+}
+.bestiary-stats-btn .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+.bestiary-stats-btn b {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+}
+.bestiary-stats-btn .ico-chevron-right {
+  color: var(--ink-2);
+}
+.bestiary-tools {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 calc(-1 * var(--shell-pad, 16px)) var(--space-3);
+  padding: var(--space-2) var(--shell-pad, 16px);
+  background: var(--bg-0);
+  box-shadow: 0 1px 0 var(--line);
+}
+.bestiary-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--hit) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+.bestiary-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--hit);
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  color: var(--ink-3);
+  background: var(--bg-2);
+  box-shadow: inset 0 2px 0 #00000040;
+}
+.bestiary-search:focus-within {
+  box-shadow:
+    inset 0 2px 0 #00000040,
+    0 0 0 2px var(--focus);
+}
+.bestiary-search .ico {
+  width: 22px;
+  height: 22px;
+}
+.bestiary-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: none;
+  font: inherit;
+  font-size: var(--text-md);
+}
+.bestiary-search input::placeholder {
+  color: var(--ink-3);
+}
+.bestiary-filter-toggle[aria-expanded='true'] {
+  background: var(--bg-3);
+}
+.bestiary-filter-toggle.filtered {
+  color: var(--bg-0);
+  background: var(--cyan);
+}
+.bestiary-count {
+  min-width: 52px;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  text-align: center;
+}
+.bestiary-filter-chips {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+.bestiary-filter-chips[hidden] {
+  display: none;
+}
+.bestiary-filter-row {
+  display: flex;
+  gap: 6px;
+  margin: 0 calc(-1 * var(--shell-pad, 16px));
+  padding: 0 var(--shell-pad, 16px) 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bestiary-filter-row::-webkit-scrollbar {
+  display: none;
+}
+.bestiary-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--hit);
+  padding: 0 14px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+.bestiary-chip:first-child {
+  padding-left: 14px;
+}
+.bestiary-chip.active {
+  color: var(--bg-0);
+  background: var(--ink);
+}
+.bestiary-chip > i {
+  display: grid;
+  color: var(--class-color);
+}
+.bestiary-chip .class-icon {
+  width: 22px;
+  height: 22px;
+}
+.bestiary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.bestiary-card {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 20px;
-  min-height: 150px;
-  margin: -2px 0 18px;
-  padding: 12px 22px;
-  border: 1px solid color-mix(in srgb, var(--record-color) 55%, #ffffff22);
-  border-radius: 23px;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 4px 10px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
   background:
     radial-gradient(
-      circle at 12% 50%,
-      color-mix(in srgb, var(--record-color) 24%, transparent),
-      transparent 32%
+      circle at 50% 40%,
+      color-mix(in srgb, var(--type-color) 28%, transparent),
+      transparent 62%
     ),
-    linear-gradient(120deg, #20244be8, #0b0d26e8 65%);
-  box-shadow: 0 18px 45px #0005;
-  overflow: hidden;
+    var(--bg-1);
+  box-shadow: var(--elev-1);
+  font: inherit;
+  cursor: pointer;
 }
-.record-hero::after {
-  content: '';
-  position: absolute;
-  right: 22%;
-  width: 180px;
-  height: 180px;
-  border: 1px solid color-mix(in srgb, var(--record-color) 28%, transparent);
-  transform: rotate(45deg);
+.bestiary-card[hidden] {
+  display: none;
 }
-.record-creature {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: 135px 1fr;
-  align-items: center;
-}
-.record-creature img {
-  width: 135px;
-  height: 135px;
-  object-fit: contain;
+.bestiary-card img {
+  width: 64px;
+  height: 64px;
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 20px var(--record-color));
 }
-.record-creature span {
-  display: grid;
-}
-.record-creature small {
-  color: #ffe99b;
-  font-size: var(--text-xs);
-  font-weight: 1000;
-  letter-spacing: 0.2em;
-}
-.record-creature h2 {
-  margin: 2px 0;
+.bestiary-card > b {
+  max-width: 100%;
+  overflow: hidden;
   font-family: var(--font-display);
+  font-size: var(--text-md);
   font-weight: var(--weight-display);
-  font-size: clamp(30px, 5vw, 50px);
+  line-height: var(--leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.record-creature p {
+.bestiary-card > .type-dot {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+.bestiary-rank {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-height: 22px;
+  padding: 0 6px 0 4px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: var(--bg-0);
+  font-size: var(--text-xs);
+  font-style: normal;
+}
+.bestiary-rank .ico {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+.bestiary-chroma {
+  position: absolute;
+  top: 32px;
+  right: 7px;
+  color: var(--gold);
+}
+.bestiary-chroma .ico {
+  width: 18px;
+  height: 18px;
+}
+.bestiary-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+  color: var(--ink-2);
+  font-size: var(--text-md);
+}
+.bestiary-empty[hidden] {
+  display: none;
+}
+.bestiary-empty p {
   margin: 0;
-  max-width: 440px;
-  color: #c5c6d8;
-  font-size: var(--text-xs);
-  line-height: 1.45;
 }
-.record-hero-stats {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(2, 100px);
-  gap: 7px;
-}
-.record-hero-stats span {
-  display: grid;
-  place-items: center;
-  min-height: 57px;
-  padding: 7px;
-  border: 1px solid #ffffff16;
-  border-radius: 12px;
-  background: #07091c88;
-}
-.record-hero-stats b {
-  font-size: 19px;
-}
-.record-hero-stats small {
-  color: #aeb0c4;
-  font-size: var(--text-xs);
-  font-weight: 900;
-  text-transform: uppercase;
-}
-.record-hero.empty {
-  display: grid;
-  place-items: center;
-  min-height: 105px;
-  text-align: center;
-  --record-color: #8178d8;
-}
-.record-hero.empty h2 {
-  margin: 5px 0;
-  color: #d5d4e4;
-  font-size: 18px;
-}
-.creature-record {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  margin: 9px 0;
-}
-.creature-record span {
-  display: grid;
-  place-items: center;
-  min-height: 37px;
-  padding: 3px;
-  border: 1px solid color-mix(in srgb, var(--card-affinity) 22%, #ffffff10);
-  border-radius: 8px;
-  color: #9fa1b6;
-  background: #06071966;
-  font-size: var(--text-xs);
-  text-align: center;
-  text-transform: uppercase;
-}
-.creature-record b {
-  color: #f1f0fa;
-  font-size: var(--text-xs);
-}
-.bestiary-card:has(.creature-record span:first-child b:not(:empty)) {
-  isolation: isolate;
-}
-@media (max-width: 600px) {
-  .record-hero {
-    grid-template-columns: 1fr;
-    padding: 10px 12px;
+@media (min-width: 601px) {
+  .bestiary-grid {
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
   }
-  .record-creature {
-    grid-template-columns: 100px 1fr;
+}
+@media (min-width: 1000px) {
+  .bestiary-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-3);
   }
-  .record-creature img {
-    width: 100px;
-    height: 100px;
+  .bestiary-card img {
+    width: 128px;
+    height: 128px;
   }
-  .record-creature h2 {
-    font-size: 30px;
-  }
-  .record-hero-stats {
-    grid-template-columns: repeat(4, 1fr);
-  }
-  .record-hero-stats span {
-    min-width: 0;
-  }
-  .record-hero::after {
-    display: none;
+  .bestiary-chroma {
+    top: 34px;
   }
 }
 
-/* Compact summaries disclose the dense career dossier only on request. */
-.record-hall,
-.feat-hall-disclosure {
-  display: contents;
-}
-.record-hall > summary,
-.feat-hall-disclosure > summary {
-  display: none;
-}
-.record-hall > .record-hall-content,
-.feat-hall-disclosure > .feat-hall {
-  display: block;
-}
-@media (min-width: 901px) {
-  .bestiary-card.expanded {
-    grid-column: span 2;
-  }
-}
-@media (max-width: 600px) {
-  [data-page='bestiary'] .shell {
-    display: flex;
-    flex-direction: column;
-  }
-  [data-page='bestiary'] .shell > .topbar {
-    order: 0;
-  }
-  [data-page='bestiary'] .shell > .page-head {
-    order: 1;
-  }
-  [data-page='bestiary'] .shell .bestiary-search-row {
-    order: 2;
-  }
-  [data-page='bestiary'] .shell .bestiary-filter-chips {
-    order: 3;
-  }
-  [data-page='bestiary'] .shell > .record-hall {
-    order: 4;
-  }
-  [data-page='bestiary'] .shell > .feat-hall-disclosure {
-    order: 5;
-  }
-  [data-page='bestiary'] .shell > .bestiary-grid {
-    order: 6;
-  }
-  .record-hall,
-  .feat-hall-disclosure {
-    display: block;
-    margin: 0 0 12px;
-  }
-  .record-hall > summary,
-  .feat-hall-disclosure > summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    min-height: 44px;
-    padding: 8px 12px;
-    border: 1px solid #ffffff1b;
-    border-radius: 12px;
-    color: var(--ink);
-    background: #ffffff08;
-    cursor: pointer;
-    list-style: none;
-  }
-  .record-hall > summary::-webkit-details-marker,
-  .feat-hall-disclosure > summary::-webkit-details-marker {
-    display: none;
-  }
-  .record-hall > summary::after,
-  .feat-hall-disclosure > summary::after {
-    content: '＋';
-    color: var(--gold);
-    font-size: 18px;
-  }
-  .record-hall[open] > summary::after,
-  .feat-hall-disclosure[open] > summary::after {
-    content: '−';
-  }
-  .record-hall:not([open]) > .record-hall-content,
-  .feat-hall-disclosure:not([open]) > .feat-hall {
-    display: none;
-  }
-  .record-hall[open] > .record-hall-content,
-  .feat-hall-disclosure[open] > .feat-hall {
-    display: block;
-    margin-top: 10px;
-  }
-}
-.bestiary-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-  align-items: start;
+/* Creature sheet additions. */
+.bestiary-sheet {
+  display: grid;
   gap: var(--space-3);
 }
-.bestiary-card {
-  padding: 0;
-  border-radius: 18px;
-}
-.bestiary-summary {
-  display: grid;
-  grid-template-columns: 78px minmax(0, 1fr) 28px;
+.chroma-row {
+  display: flex;
   align-items: center;
   gap: var(--space-2);
+  margin: 0;
+}
+.chroma-row.locked {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  color: var(--ink-2);
+  background: var(--bg-2);
+  font-size: var(--text-sm);
+}
+.chroma-row.locked .ico {
+  width: 20px;
+  height: 20px;
+  color: var(--ink-3);
+}
+.chroma-switch {
   width: 100%;
-  min-height: 112px;
-  padding: var(--space-3);
+  min-height: 64px;
+  padding: 4px 14px 4px 4px;
   border: 0;
+  border-radius: var(--radius-m);
   color: var(--ink);
-  background: transparent;
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.bestiary-summary:hover,
-.bestiary-summary:focus-visible {
-  background: color-mix(in srgb, var(--card-affinity) 12%, transparent);
-}
-.bestiary-summary .bestiary-portrait,
-.bestiary-summary .bestiary-portrait img {
-  width: 78px;
-  height: 78px;
-}
-.bestiary-identity {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-.bestiary-identity h2 {
-  overflow: hidden;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-display);
-  text-overflow: ellipsis;
-}
-.bestiary-key-stats {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-}
-.bestiary-signature {
-  overflow: hidden;
-  color: var(--gold);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bestiary-expand {
+.chroma-preview {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  color: var(--card-affinity);
-  font-size: var(--text-xl);
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: radial-gradient(circle, #ffe57e40, transparent 70%), var(--bg-1);
 }
-.bestiary-detail {
-  padding: 0 var(--space-3) var(--space-3);
-  border-top: 1px solid color-mix(in srgb, var(--card-affinity) 24%, transparent);
+.chroma-preview img {
+  width: 64px;
+  height: 64px;
+  max-width: none;
+  image-rendering: pixelated;
 }
-.bestiary-detail[hidden] {
-  display: none;
-}
-.move-list button {
-  width: 100%;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  border: 0;
-  border-radius: 10px;
-  color: var(--ink);
-  background: #05071c77;
-  font: inherit;
-  font-size: var(--text-xs);
-  text-align: left;
-}
-.move-list button span {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--muted);
-  line-height: 1.45;
-}
-.move-list button .move-status-badges {
-  display: flex;
+.chroma-label {
+  display: inline-flex;
+  flex: 1;
   align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+.chroma-label .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+.chroma-track {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--bg-0);
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+.chroma-track::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.chroma-switch[aria-checked='true'] .chroma-track {
+  background: var(--gold);
+  box-shadow: none;
+}
+.chroma-switch[aria-checked='true'] .chroma-track::after {
+  background: var(--gold-ink);
+  transform: translateX(22px);
+}
+.creature-record {
+  display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 7px 0 2px;
 }
-.move-list button .status-badge {
+.creature-record span {
   display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--bg-2);
+  font-size: var(--text-sm);
+}
+.creature-record b {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+}
+.bestiary-lore {
   margin: 0;
-  color: color-mix(in srgb, var(--status-color) 82%, #fff);
-  line-height: 1;
+  color: var(--ink-2);
+  font-size: var(--text-md);
+  font-style: italic;
+  line-height: var(--leading-body);
 }
-.move-list button .status-badge-label {
-  display: inline;
+.bestiary-lore.locked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-style: normal;
+}
+.bestiary-lore.locked .ico {
+  width: 20px;
+  height: 20px;
+}
+
+/* Phone held sideways: the sheet body is only about 230 px tall, so the
+   creature reads in two columns (portrait, Chromatique and stats beside the
+   talent and moves), and the untitled sheet's close button floats in a right
+   gutter instead of taking a 48 px row. */
+@media (orientation: landscape) and (max-height: 480px) {
+  .sheet:has(.bestiary-sheet) .sheet-head {
+    position: absolute;
+    top: 4px;
+    right: max(16px, env(safe-area-inset-right));
+    z-index: 1;
+  }
+  .sheet:has(.bestiary-sheet) .sheet-body {
+    padding-right: calc(var(--hit) + var(--space-2));
+  }
+  .bestiary-sheet .creature-sheet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row dense;
+    align-items: start;
+    column-gap: var(--space-4);
+  }
+  .bestiary-sheet .creature-sheet > :is(.creature-sheet-head, .chroma-row, .creature-sheet-stats) {
+    grid-column: 1;
+  }
+  .bestiary-sheet .creature-sheet > .creature-sheet-talent {
+    grid-column: 2;
+  }
+  .bestiary-sheet .creature-sheet > .creature-sheet-moves {
+    grid-row: 2 / span 2;
+    grid-column: 2;
+  }
+  .bestiary-sheet .creature-sheet-head {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .bestiary-sheet .creature-sheet-portrait,
+  .bestiary-sheet .creature-sheet-portrait img {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+/* Mes stats sheet. */
+.record-hero {
+  --record-color: var(--bg-3);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-m);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--record-color) 30%, transparent), transparent 60%),
+    var(--bg-2);
+}
+.record-hero.empty p {
   margin: 0;
-  color: inherit;
-  line-height: 1;
+  color: var(--ink-2);
+  font-size: var(--text-md);
 }
-.theater-status-badges {
-  justify-content: center;
-  margin: 9px 0 0;
-  pointer-events: none;
+.record-creature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
-.theater-status-badges .status-badge {
-  background: color-mix(in srgb, var(--status-color) 24%, #050611);
+.record-creature img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
 }
-.bestiary-tools button {
-  min-height: 44px;
-  padding-inline: var(--space-3);
+.record-creature small {
+  color: var(--gold);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.record-creature h3 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.record-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.record-hero-stats span {
+  display: grid;
+  justify-items: center;
+  padding: 6px 2px;
+  border-radius: var(--radius-s);
+  background: var(--bg-1);
+}
+.record-hero-stats b {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+.record-hero-stats small {
+  color: var(--ink-2);
   font-size: var(--text-xs);
 }
-.bestiary-tools label {
-  min-height: 44px;
+.feat-hall h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-lg);
 }
-@media (max-width: 600px) {
-  .bestiary-grid {
+.feat-hall .eyebrow {
+  font-size: var(--text-sm);
+}
+.feat-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.feat-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px;
+  border-radius: var(--radius-s);
+  background: var(--bg-2);
+}
+.feat-card > i {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--gold-ink);
+  background: var(--gold);
+}
+.feat-card > i .ico {
+  width: 20px;
+  height: 20px;
+}
+.feat-card b {
+  display: block;
+  font-size: var(--text-sm);
+  line-height: 1.2;
+}
+.feat-card small {
+  display: block;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  line-height: 1.3;
+}
+/* A feat still to earn shows a teaser line on a dashed outline: something to
+   aim for, never a row of identical padlocks. */
+.feat-card.locked {
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+}
+.feat-card.locked > i {
+  color: var(--ink-2);
+  background: var(--bg-2);
+}
+.feat-card.locked b {
+  color: var(--ink-2);
+  font-weight: 700;
+}
+@media (max-width: 360px) {
+  .feat-gallery {
     grid-template-columns: 1fr;
   }
-  .bestiary-summary {
-    grid-template-columns: 70px minmax(0, 1fr) 28px;
+}
+
+/* Move Theater: a full-screen dialog above the creature sheet that plays one move on the battle's
+   WebGL stage (docs/battle-presentation.md §8.5). The stage box is the arena canvas (ArenaScene
+   fits its camera and fighters to it); its #fx-text readouts and banners use the battle sheets.
+   Portrait stacks the head, the stage and Rejouer; a short landscape screen puts the head and
+   Rejouer in a column beside the stage. */
+.move-theater {
+  position: fixed;
+  z-index: var(--z-theater);
+  inset: 0;
+  display: grid;
+  grid-template:
+    'head' auto
+    'stage' minmax(0, 1fr)
+    'actions' auto / minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: max(var(--space-2), env(safe-area-inset-top)) var(--space-2)
+    max(var(--space-3), env(safe-area-inset-bottom));
+  background: var(--bg-0);
+  color: var(--ink);
+}
+.theater-head {
+  grid-area: head;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  align-items: start;
+  gap: var(--space-1) var(--space-2);
+  padding-left: var(--space-2);
+}
+.theater-title {
+  display: grid;
+  align-content: center;
+  min-height: var(--hit);
+}
+.theater-title span {
+  color: var(--gold);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  letter-spacing: 0.2em;
+}
+.theater-title h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+}
+.theater-move {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+}
+.theater-move b {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+.theater-move small {
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.3;
+}
+.theater-status-badges {
+  margin-top: var(--space-1);
+}
+.theater-stage {
+  grid-area: stage;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--ledge);
+}
+.theater-error {
+  position: absolute;
+  inset: 50% var(--space-4) auto;
+  margin: 0;
+  transform: translateY(-50%);
+  color: var(--ink-2);
+  text-align: center;
+}
+.theater-actions {
+  grid-area: actions;
+  display: flex;
+  justify-content: center;
+}
+.theater-actions .subtle-btn {
+  min-width: min(260px, 100%);
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .move-theater {
+    grid-template:
+      'stage head' minmax(0, 1fr)
+      'stage actions' auto / minmax(0, 1fr) minmax(220px, 34%);
   }
-  .bestiary-summary .bestiary-portrait,
-  .bestiary-summary .bestiary-portrait img {
-    width: 70px;
-    height: 70px;
+  .theater-actions .subtle-btn {
+    width: 100%;
+  }
+}
+@media (min-width: 900px) and (min-height: 600px) {
+  .move-theater {
+    grid-template-columns: minmax(0, 1080px);
+    justify-content: center;
+    padding: var(--space-5);
   }
 }

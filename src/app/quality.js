@@ -16,8 +16,7 @@ const budget = (tier, arena, fx, audio) =>
   Object.freeze({ tier, arena: Object.freeze(arena), fx: Object.freeze(fx), audio: Object.freeze(audio) });
 
 // arena: renderer settings read by ArenaScene (DPR caps, MSAA, frame caps, ambient dust points).
-// fx: GPU FX layer live-quad budget and summed quad area (stage viewports), plus the Move
-// Theater's DOM particle multiplier.
+// fx: GPU FX layer live-quad budget and summed quad area (stage viewports).
 // audio: music lookahead (seconds) and reverb cost ('lite' = short mono impulses).
 export const QUALITY_BUDGETS = Object.freeze({
   low: budget(
@@ -31,7 +30,7 @@ export const QUALITY_BUDGETS = Object.freeze({
       activeFps: 30,
       dust: 60,
     },
-    { quads: 96, quadArea: 0.6, particleScale: 0.25 },
+    { quads: 96, quadArea: 0.6 },
     { horizon: 0.35, reverb: 'lite' }
   ),
   mid: budget(
@@ -45,7 +44,7 @@ export const QUALITY_BUDGETS = Object.freeze({
       activeFps: 60,
       dust: 120,
     },
-    { quads: 160, quadArea: 1, particleScale: 0.5 },
+    { quads: 160, quadArea: 1 },
     { horizon: 0.25, reverb: 'full' }
   ),
   high: budget(
@@ -59,7 +58,7 @@ export const QUALITY_BUDGETS = Object.freeze({
       activeFps: 60,
       dust: 170,
     },
-    { quads: 256, quadArea: 1.5, particleScale: 1 },
+    { quads: 256, quadArea: 1.5 },
     { horizon: 0.25, reverb: 'full' }
   ),
 });

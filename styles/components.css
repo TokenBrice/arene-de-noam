@@ -37,300 +37,331 @@
      GPU pass on every frame (PERF-04). */
   background: var(--scrim);
 }
-.tutorial-tip {
-  position: absolute;
-  z-index: 15;
-  left: 50%;
-  top: 80px;
-  transform: translateX(-50%);
-  width: min(520px, calc(100% - 24px));
-  border: 2px solid #ffcb3d88;
-  border-radius: var(--radius-m);
-  background: var(--bg-1);
-  padding: 14px 18px;
-  text-align: center;
-  box-shadow: var(--elev-2);
-}
-.tutorial-tip strong {
-  color: var(--gold);
-}
-.bestiary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.bestiary-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--bg-1);
-  box-shadow: var(--elev-1);
-  padding: 16px;
-  overflow: hidden;
-}
-.bestiary-card-head {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  align-items: center;
-}
-.bestiary-card img {
-  width: 120px;
-  height: 120px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.bestiary-card h2 {
-  margin: 0 0 7px;
-}
-.move-list {
-  display: grid;
-  gap: 7px;
-  margin-top: 12px;
-}
-.move-list div {
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: #05071c77;
-  font-size: 12px;
-}
-.lore {
-  color: #cfcee4;
-  font-style: italic;
-  min-height: 44px;
-}
-.locked-lore {
-  color: #75768d;
+/* Settings: four opaque cards (Son, Affichage, Jeu, Données). Every row is a
+   ≥ 48 px target with one label weight; switches are whole-row buttons
+   (role="switch") whose track carries a check, so "on" never relies on colour.
+   Phones stack the cards in one column that fits 360 × 800. */
+.shell.settings-page {
+  width: min(1040px, 100%);
+  padding-top: max(var(--space-2), env(safe-area-inset-top));
 }
 .settings-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'sound display'
+    'game display'
+    'data display';
   align-items: start;
-  gap: 18px;
+  gap: var(--space-3) var(--space-4);
 }
 .settings-card {
-  border: 1px solid var(--line);
+  padding: 0 var(--space-4) var(--space-1);
   border-radius: var(--radius-l);
   background: var(--bg-1);
   box-shadow: var(--elev-2);
-  padding: 20px;
 }
-.toggle-row {
+.settings-card--sound {
+  grid-area: sound;
+}
+.settings-card--display {
+  grid-area: display;
+}
+.settings-card--game {
+  grid-area: game;
+}
+.settings-card--data {
+  grid-area: data;
+}
+.settings-card-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  min-height: 54px;
-  border-bottom: 1px solid #ffffff0c;
+  gap: var(--space-3);
+  padding: 10px 0 2px;
 }
-.toggle-row input[type='checkbox'] {
-  inline-size: 24px;
-  block-size: 24px;
+.settings-card-head:has(button) {
+  padding-block: 6px 2px;
 }
-.range-control {
+.settings-card-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-inline-size: 140px;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-lg);
 }
-.toggle-row input[type='range'] {
-  inline-size: 180px;
-  min-inline-size: 140px;
-  block-size: 24px;
+.settings-card-title .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+.settings-card-head .danger-btn {
+  padding-inline: 12px 16px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--hit);
+  padding-block: var(--space-1);
+}
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+.settings-label {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  text-align: start;
+}
+.settings-label b {
+  font-size: var(--text-md);
+  font-weight: var(--weight-strong);
+  line-height: 1.25;
+}
+.settings-label small {
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-text);
+  line-height: 1.25;
+}
+/* Volume: label, a thick gold-filled track with a big thumb, the readout. */
+.settings-slider {
+  padding-block: 0;
+}
+.settings-slider .settings-label {
+  flex: 0 0 5.5em;
+}
+.settings-slider input[type='range'] {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  block-size: var(--hit);
+  margin: 0;
   appearance: none;
   background: transparent;
   cursor: pointer;
 }
-.toggle-row input[type='range']::-webkit-slider-runnable-track {
-  block-size: 4px;
+.settings-slider input[type='range']::-webkit-slider-runnable-track {
+  block-size: 10px;
   border-radius: 999px;
-  background: var(--line);
+  background: linear-gradient(90deg, var(--gold) 0 var(--fill), var(--bg-0) var(--fill) 100%);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.toggle-row input[type='range']::-moz-range-track {
-  block-size: 4px;
+.settings-slider input[type='range']::-moz-range-track {
+  block-size: 10px;
   border-radius: 999px;
-  background: var(--line);
+  background: linear-gradient(90deg, var(--gold) 0 var(--fill), var(--bg-0) var(--fill) 100%);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.toggle-row input[type='range']::-webkit-slider-thumb {
-  inline-size: 18px;
-  block-size: 18px;
-  margin-top: -7px;
-  border: 2px solid var(--ink);
+.settings-slider input[type='range']::-webkit-slider-thumb {
+  inline-size: 28px;
+  block-size: 28px;
+  margin-top: -9px;
+  border: 3px solid var(--ink);
   border-radius: 50%;
   background: var(--gold);
+  box-shadow: 0 2px 0 var(--gold-ledge);
   appearance: none;
 }
-.toggle-row input[type='range']::-moz-range-thumb {
-  inline-size: 18px;
-  block-size: 18px;
-  border: 2px solid var(--ink);
+.settings-slider input[type='range']::-moz-range-thumb {
+  inline-size: 22px;
+  block-size: 22px;
+  border: 3px solid var(--ink);
   border-radius: 50%;
   background: var(--gold);
+  box-shadow: 0 2px 0 var(--gold-ledge);
 }
-.range-control output {
-  min-inline-size: 3ch;
+.settings-slider output {
+  flex: 0 0 4.2ch;
   color: var(--gold);
-  font-weight: 800;
+  font-size: var(--text-lg);
   text-align: end;
 }
-.language-buttons,
-.speed-buttons {
+/* Muted: the levels stay adjustable but read as "not playing now". */
+.settings-card--sound:has(#muted[aria-checked='true']) .settings-slider {
+  opacity: 0.55;
+}
+/* Switch rows: the whole row toggles; the knob slides (transform only). */
+.settings-switch {
+  width: 100%;
+  padding-inline: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.settings-switch--inline {
   display: flex;
-  gap: var(--space-2);
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  min-height: var(--hit);
+  padding: 0;
 }
-.cycle {
-  font-weight: 800;
-  line-height: 1.7;
-  color: #d5d5e9;
+.settings-switch:not(:disabled):is(:active, .is-pressed) {
+  translate: none;
 }
-.result-page {
+.settings-switch:focus-visible {
+  outline-offset: -1px;
+  border-radius: var(--radius-s);
+}
+.switch-track {
   position: relative;
+  flex: none;
+  width: 58px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--bg-0);
+  box-shadow:
+    inset 0 0 0 2px var(--line-strong),
+    inset 0 2px 0 #0006;
 }
-.result-shell {
+.switch-knob {
+  position: absolute;
+  top: 5px;
+  left: 5px;
   display: grid;
   place-items: center;
-  min-height: calc(100vh - 90px);
-  padding: 24px 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  box-shadow: 0 2px 0 var(--ledge);
+  transition: transform var(--dur-fast) var(--ease-pop);
 }
-.result-card {
-  position: relative;
-  width: min(820px, 100%);
-  overflow: hidden;
-  text-align: center;
+.switch-knob .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--good);
+  stroke-width: 3.2;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
-.result-card.won {
-  border-color: #ffcb3d66;
+.settings-switch:not(:disabled):is(:active, .is-pressed) .switch-knob {
+  scale: 1.12;
+}
+.settings-switch[aria-checked='true'] .switch-track {
+  background: var(--good);
   box-shadow:
-    inset 0 0 0 1px #ffcb3d33,
-    var(--elev-2);
+    inset 0 0 0 2px #ffffff40,
+    inset 0 -2px 0 #0003;
 }
-.result-icon {
-  font-size: 64px;
-  color: var(--gold);
-  text-shadow: 0 0 24px #ffb62e88;
-  animation: resultCrown 0.8s cubic-bezier(0.15, 0.8, 0.2, 1);
+.settings-switch[aria-checked='true'] .switch-knob {
+  background: var(--ink);
+  transform: translateX(24px);
 }
-.result-card h1 {
-  font-size: clamp(44px, 8vw, 78px);
-  margin: 0;
+.settings-switch[aria-checked='true'] .switch-knob .ico {
+  opacity: 1;
 }
-.result-card p {
-  color: var(--muted);
-  font-size: 18px;
+.settings-switch:disabled {
+  cursor: not-allowed;
 }
-.result-team {
-  height: 180px;
+.settings-switch:disabled .settings-label b,
+.settings-switch:disabled .switch-track {
+  opacity: 0.45;
+}
+@media (hover: hover) {
+  .settings-switch:not(:disabled):hover .switch-track {
+    box-shadow:
+      inset 0 0 0 2px var(--cyan),
+      inset 0 2px 0 #0006;
+  }
+}
+/* Segmented choices: raised buttons, the chosen one ringed in cyan. */
+.settings-segments {
   display: flex;
-  align-items: end;
-  justify-content: center;
-}
-.result-team img {
-  width: 150px;
-  height: 150px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  margin: 0 -20px;
-  animation: resultHero 0.7s cubic-bezier(0.15, 0.8, 0.2, 1) backwards;
-}
-.result-team img:nth-child(2) {
-  animation-delay: 0.1s;
-}
-.result-team img:nth-child(3) {
-  animation-delay: 0.2s;
-}
-.result-team img.fallen {
-  filter: grayscale(0.45) brightness(0.8);
-  transform: rotate(8deg);
-}
-.battle-recap {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 12px;
-  margin: 4px 0 12px;
-  text-align: left;
-}
-.recap-stats--solo {
-  grid-column: 1 / -1;
-}
-.recap-mvp {
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  align-items: center;
-  padding: 8px;
-  border: 1px solid #ffdd7970;
-  border-radius: 15px;
-  background: radial-gradient(circle at left, #ffc94a24, transparent 72%);
-}
-.recap-mvp img {
-  width: 76px;
-  height: 76px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.recap-mvp span {
-  display: grid;
-}
-.recap-mvp small {
-  color: #ffe493;
-  font-size: var(--text-xs);
-  font-weight: 1000;
-  letter-spacing: 0.1em;
-}
-.recap-mvp b {
-  font-size: 16px;
-}
-.recap-mvp em {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-style: normal;
-}
-.recap-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
-.recap-stats span {
-  display: grid;
-  place-items: center;
-  padding: 7px;
-  border: 1px solid #ffffff13;
-  border-radius: 11px;
-  background: #ffffff08;
+.settings-segments .subtle-btn {
+  flex: 1 1 auto;
+  min-width: 64px;
+  padding-inline: 8px;
 }
-.recap-stats b {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
+.settings-choice--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding-block: var(--space-1) var(--space-2);
 }
-.recap-stats small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-}
-.result-moment {
-  font-size: 12px !important;
-}
-.result-actions {
+.settings-choice--stacked .settings-label {
   display: flex;
-  justify-content: center;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: baseline;
+  gap: 0 var(--space-2);
 }
-.victory-burst {
-  position: fixed;
-  z-index: 0;
-  left: 50%;
-  top: 38%;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
+.settings-choice--stacked .settings-segments {
+  flex-wrap: nowrap;
 }
-.victory-burst i {
-  position: absolute;
-  width: 9px;
-  height: 20px;
-  border-radius: 2px;
-  background: hsl(calc(var(--piece) * 37) 90% 65%);
-  /* Base style = final keyframe state; `backwards` covers the stagger delay and
-     lets each piece drop its composited layer once its flight ends. */
-  opacity: 0;
-  animation: victoryPiece 2.2s cubic-bezier(0.15, 0.65, 0.2, 1) var(--delay) backwards;
+.settings-choice--stacked .subtle-btn {
+  min-width: var(--hit);
+  padding-inline: 4px;
+}
+.settings-help p {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+}
+.settings-help .settings-help-cycle {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+  line-height: 1.6;
+}
+.settings-reset-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  color: var(--bad);
+  letter-spacing: 0.06em;
+}
+.settings-reset-warning + p {
+  margin: 0;
+  color: var(--ink-2);
+}
+@media (max-width: 600px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: 'sound' 'display' 'game' 'data';
+    gap: var(--space-2);
+  }
+  .settings-card {
+    padding-inline: var(--space-3);
+  }
+  /* Four graphics choices share one row; "Économie" needs the smaller size. */
+  .settings-choice--stacked .subtle-btn {
+    font-size: var(--text-sm);
+  }
+}
+/* Desktop: the same cards, roomier. */
+@media (min-width: 1001px) and (min-height: 700px) {
+  .shell.settings-page {
+    padding-top: var(--space-6);
+  }
+  .settings-page .topbar {
+    margin-bottom: var(--space-5);
+  }
+  .settings-grid {
+    gap: var(--space-5);
+  }
+  .settings-card {
+    padding: 0 var(--space-5) var(--space-3);
+  }
+  .settings-card-head,
+  .settings-card-head:has(button) {
+    padding-block: var(--space-4) var(--space-2);
+  }
+  .settings-card-title {
+    font-size: var(--text-xl);
+  }
+  .settings-row {
+    min-height: 60px;
+  }
 }
 /* Hidden (not just transparent) at rest: an invisible fixed box over the arena canvas still gets
    its own compositor layer every battle frame. `visibility` flips after the fade-out ends and
@@ -367,69 +398,20 @@
   }
 }
 @media (max-width: 900px) {
-  .hero {
-    grid-template-columns: 1fr;
-    align-content: start;
-    padding-top: 35px;
-  }
-  .hero-copy h1 {
-    font-size: clamp(50px, 12vw, 84px);
-  }
-  .progress-card {
-    margin-bottom: 30px;
-  }
   .selection-layout {
     grid-template-columns: 1fr;
   }
   .select-aside {
     position: static;
   }
-  .creature-grid,
-  .bestiary-grid {
+  .creature-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .settings-grid {
-    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 600px) {
-  .toggle-row:has(.range-control) {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding-block: 8px;
-  }
-  .toggle-row:has(.range-control) > label {
-    flex: 1 1 100%;
-  }
   .shell {
     padding-left: 12px;
     padding-right: 12px;
-  }
-  .topbar .brand-small {
-    font-size: var(--text-md);
-  }
-  .hero {
-    padding-top: 8px;
-  }
-  .hero-copy h1 {
-    font-size: 51px;
-  }
-  .hero-copy > p {
-    font-size: 15px;
-  }
-  .menu {
-    margin-top: 18px;
-  }
-  .progress-card {
-    padding: 22px;
-  }
-  .roster-fan {
-    height: 140px;
-  }
-  .roster-fan img {
-    width: 88px;
-    height: 88px;
   }
   .page-head {
     align-items: start;
@@ -438,44 +420,10 @@
   .page-head h1 {
     font-size: var(--text-2xl);
   }
-  .creature-grid,
-  .bestiary-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 9px;
-  }
-  .creature-card {
-    min-height: 211px;
-    padding: 9px;
-  }
-  .creature-card img {
-    width: 105px;
-    height: 105px;
-  }
-  .creature-card h3 {
-    font-size: 17px;
-  }
-  .bestiary-card {
-    grid-column: 1/-1;
-  }
   .action-line {
     bottom: 164px;
     font-size: 12px;
     padding: 7px 12px;
-  }
-  .tutorial-tip {
-    top: 54px;
-    font-size: 12px;
-  }
-  .result-team img {
-    width: 115px;
-    height: 115px;
-  }
-}
-/* Narrow phones: the sub-page header keeps Retour and its two 48 px icon
-   buttons; the brand would not fit between them without clipping. */
-@media (max-width: 400px) {
-  .topbar > button + .brand-small {
-    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -495,39 +443,6 @@ body.reduced-motion * {
   animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
-}
-.enemy-picker {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
-  margin: 10px 0;
-}
-.enemy-picker .icon-btn {
-  min-width: 0;
-  padding: 2px;
-  opacity: 0.45;
-}
-@media (max-width: 600px) {
-  .enemy-picker .icon-btn {
-    min-width: var(--hit);
-  }
-}
-.enemy-picker .icon-btn.active {
-  opacity: 1;
-  background: var(--bg-3);
-  box-shadow:
-    inset 0 0 0 2px var(--cyan),
-    var(--elev-1);
-}
-.enemy-picker img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.locked-lore {
-  color: #a8a9c0;
 }
 /* Bottom sheet (shell.js openSheet): anchored to the thumb zone over an
    opaque scrim; it rises with a transform and fades its scrim, nothing else

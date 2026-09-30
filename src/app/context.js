@@ -1,4 +1,10 @@
-import { AFFINITIES, AFFINITY_ORDER, AFFINITY_TRIANGLES, affinityMultiplier } from '../data/affinities.js';
+import {
+  AFFINITIES,
+  AFFINITY_ORDER,
+  AFFINITY_TRIANGLES,
+  ARENA_WEATHER,
+  affinityMultiplier,
+} from '../data/affinities.js';
 import { CREATURES, CREATURE_IDS } from '../data/creatures.js';
 import { CLASSES, CLASS_IDS, CLASS_ORDER, classIcon } from '../data/classes.js';
 import { MOVES } from '../data/moves.js';
@@ -7,15 +13,19 @@ import {
   FEATS,
   CURRENT_FEAT_IDS,
   PERFORMANCE_GRADES,
+  CHROMATIQUE_RANK,
   battleAchievementSignals,
+  chromatiqueUnlocked,
+  isChromatiqueShown,
   masteryProgress,
   masteryRank,
   performanceGrade,
+  unlockedModes,
 } from '../data/progression.js';
 import { SQUAD_PRESETS } from '../data/squads.js';
 import { QUICK_RULES, difficultyModifiers, quickRule } from '../data/battle-rules.js';
 import { battleAdviceKeys } from '../data/advice.js';
-import { TRAINERS, ARENAS } from '../data/trainers.js';
+import { TRAINERS, ARENAS, mainAffinity } from '../data/trainers.js';
 import { TRIALS } from '../data/trials.js';
 import { GAUNTLET_BOONS, GAUNTLET_STAGES } from '../data/gauntlet.js';
 import { createDraft, dailyDraftSeed } from '../data/draft.js';
@@ -120,11 +130,17 @@ export const ctx = {
   pendingRewards: null,
   gauntletRun: null,
   draftRun: null,
-  theaterTimers: [],
+  leaveGuard: null,
+  selectionGuide: null,
   routes: {},
 };
 
-const sprite = (id) => `./assets/monsters/${id}/battle.png`;
+// The single creature-image helper: DOM screens and the WebGL fighter show the same file, the
+// baked Chromatique (`battle-shiny.png`) when the save shows it. The Chromatique is the player's
+// own: rivals always pass 'normal'.
+const spriteVariant = (id) => (isChromatiqueShown(id, ctx.save) ? 'chromatique' : 'normal');
+const sprite = (id, variant = spriteVariant(id)) =>
+  `./assets/monsters/${id}/${variant === 'chromatique' ? 'battle-shiny' : 'battle'}.png`;
 const creatureName = (id) => t(`creature.${id}`);
 const affinity = (id) => AFFINITIES[CREATURES[id].affinity];
 const affinityName = (id) => t(AFFINITIES[id].nameKey);
@@ -157,6 +173,24 @@ function persist() {
   sound.update(ctx.save);
   syncPreferenceClasses();
   return ok;
+}
+
+// Chromatique display preference (save v18); unknown creature ids are ignored. Every creature
+// image comes from sprite(id), so swapping this creature's images refreshes whatever currently
+// shows it (screen and open sheets) without losing scroll, filters or an open sheet. Images
+// pinned to one look (`data-variant`, e.g. a before/after reveal) are left alone. Returns
+// whether the preference is now on.
+function setChromatique(id, shown) {
+  if (!CREATURE_IDS.includes(id)) return false;
+  const chromatiques = { ...ctx.save.chromatiques };
+  if (shown) chromatiques[id] = true;
+  else delete chromatiques[id];
+  ctx.save.chromatiques = chromatiques;
+  persist();
+  const url = sprite(id);
+  for (const img of document.querySelectorAll(`img[src*="/monsters/${id}/"]:not([data-variant])`))
+    if (img.getAttribute('src') !== url) img.src = url;
+  return Boolean(chromatiques[id]);
 }
 
 function syncPreferenceClasses() {
@@ -236,10 +270,27 @@ function disposeArena() {
   ctx.arenaScene = null;
 }
 
-function emblemHtml(index, earned = false) {
+/* League badge art, one design for the hub strip, the League map, the results badge moment
+   and the recap: a pointy-top hex with a gold rim, a gem in the rival's main type colour and
+   the rival's own motif (TRAINERS[i].badge, a stroke path on the 24-unit grid). States:
+   'earned' (won), 'open' (revealed, not won yet: dark face, motif in the type colour) and
+   'locked' (bare dark hex). Colours live in components.css (.badge-art). */
+const BADGE_RIM = '20,1 38.2,11.5 38.2,32.5 20,43 1.8,32.5 1.8,11.5',
+  BADGE_FACE = '20,5.5 34.3,13.75 34.3,30.25 20,38.5 5.7,30.25 5.7,13.75',
+  BADGE_CROWN = '5.7,13.75 20,5.5 34.3,13.75 20,22',
+  BADGE_BASE = '5.7,30.25 20,38.5 34.3,30.25 20,22';
+function badgeArt(index, state = 'earned', { label = '' } = {}) {
   const trainer = TRAINERS[index],
-    label = t(trainer.badgeNameKey);
-  return `<span class="emblem ornate ${earned ? 'earned' : ''}" style="--badge-a:${trainer.colors[0]};--badge-b:${trainer.colors[1]}" title="${earned ? label : '???'}"><i></i><b>${earned ? trainer.badge : '·'}</b><small>${earned ? label : ''}</small></span>`;
+    gem = AFFINITIES[mainAffinity(trainer.team)].color,
+    facets =
+      state === 'earned'
+        ? `<polygon class="badge-crown" points="${BADGE_CROWN}"/><polygon class="badge-base" points="${BADGE_BASE}"/>`
+        : '',
+    motif =
+      state === 'locked'
+        ? ''
+        : `<g class="badge-motif" transform="translate(9.2 11.2) scale(.9)"><path class="badge-motif-shade" d="${trainer.badge}"/><path d="${trainer.badge}"/></g>`;
+  return `<svg class="badge-art badge-art--${state}" viewBox="0 0 40 44" style="--gem:${gem}" focusable="false" ${label ? `role="img" aria-label="${escapeHtml(label)}"` : 'aria-hidden="true"'}><polygon class="badge-rim" points="${BADGE_RIM}"/><polygon class="badge-face" points="${BADGE_FACE}"/>${facets}${motif}</svg>`;
 }
 
 function draftInsightHtml(candidateId) {
@@ -254,17 +305,36 @@ function draftInsightHtml(candidateId) {
   return `<div class="draft-insight"><b>${t('draft.insight')}</b>${tags.length ? tags.map((tag) => `<span>${tag}</span>`).join('') : `<small>${t('draft.flexPick')}</small>`}</div>`;
 }
 
-// Shared sub-page header. Icons come from the sprite helper that shell.js
-// registers (src/app/icons.js); the text labels stay the accessible names.
-function topbar(backAction = 'title') {
+// Mute and settings, the chrome every screen but a battle carries (hub and topbar).
+function chromeActions({ settings = true } = {}) {
   const { icon } = route;
-  return `<header class="topbar"><button type="button" class="subtle-btn" data-action="${backAction}">${icon('back')}<span>${t('app.back')}</span></button><div class="brand-small">${icon('sparkle')}<span>${t('app.title')}</span></div><div class="icon-actions"><button type="button" class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}" aria-pressed="${ctx.save.muted}">${icon(ctx.save.muted ? 'sound-off' : 'sound-on')}</button><button type="button" class="icon-btn" data-action="settings" aria-label="${t('app.settings')}">${icon('settings')}</button></div></header>`;
+  return `<button type="button" class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}" aria-pressed="${ctx.save.muted}">${icon(ctx.save.muted ? 'sound-off' : 'sound-on')}</button>${settings ? `<button type="button" class="icon-btn" data-action="settings" aria-label="${t('app.settings')}">${icon('settings')}</button>` : ''}`;
+}
+
+/* The one page header of every screen but the hub and battle: a 48 px chevron back
+   (`data-action="back"`: shell.js goes up a level, or asks the leave guard first), the page's
+   h1 with an optional eyebrow line, the screen's own `actions` (HTML of .icon-btn or compact
+   .subtle-btn buttons), then mute and settings (`settings: false` on Réglages itself).
+   `title` and `eyebrow` are plain text. */
+function topbar(title, { eyebrow = '', actions = '', settings = true } = {}) {
+  const { icon } = route;
+  return `<header class="topbar"><button type="button" class="icon-btn topbar-back" data-action="back" aria-label="${escapeHtml(t('app.back'))}">${icon('chevron-left')}</button><div class="topbar-title">${eyebrow ? `<span class="eyebrow">${escapeHtml(eyebrow)}</span>` : ''}<h1>${escapeHtml(title)}</h1></div><div class="icon-actions">${actions}${chromeActions({ settings })}</div></header>`;
+}
+
+/* Leave guard: a screen holding progress that one tap could drop (an Expédition run between
+   stages) sets { message, detail?, confirm, cancel, onLeave? } (strings already translated).
+   While it is set on the showing page, shell.js turns back (gesture, Escape, [data-action=
+   "back"]) and home ([data-action="title"]) into a confirm sheet; confirming clears it, runs
+   onLeave, then leaves. Showing another page clears it. */
+function setLeaveGuard(guard) {
+  ctx.leaveGuard = guard ? { ...guard, page: screen.dataset.page } : null;
 }
 
 Object.assign(ctx, {
   AFFINITIES,
   AFFINITY_ORDER,
   AFFINITY_TRIANGLES,
+  ARENA_WEATHER,
   affinityMultiplier,
   CREATURES,
   CREATURE_IDS,
@@ -282,6 +352,10 @@ Object.assign(ctx, {
   masteryRank,
   performanceGrade,
   battleAchievementSignals,
+  CHROMATIQUE_RANK,
+  chromatiqueUnlocked,
+  isChromatiqueShown,
+  unlockedModes,
   SQUAD_PRESETS,
   QUICK_RULES,
   quickRule,
@@ -338,20 +412,25 @@ Object.assign(ctx, {
   LOG_EVENT_TYPES,
   LOG_TYPE_GROUPS,
   sprite,
+  spriteVariant,
   creatureName,
   affinity,
   affinityName,
   actionButton,
   wait,
   persist,
+  setChromatique,
   notify,
   escapeHtml,
   affinityIcon,
   disposeArena,
   ensureBattleStyles,
-  emblemHtml,
+  mainAffinity,
+  badgeArt,
   draftInsightHtml,
+  chromeActions,
   topbar,
+  setLeaveGuard,
 });
 
 export const route = new Proxy(

@@ -1,7 +1,7 @@
 import { ctx, registerRoutes, route } from '../app/context.js';
 
 const {
-  FEATS,
+  TRAINERS,
   GAUNTLET_BOONS,
   GAUNTLET_STAGES,
   bestLeadIndex,
@@ -13,11 +13,37 @@ const {
   persist,
   disposeArena,
   topbar,
+  setLeaveGuard,
 } = ctx;
-const { bindCommon, startBattle, renderResults, rerenderPreservingFocus } = route;
+const { arenaWeatherHtml, bindCommon, icon, startBattle, renderResults } = route;
+
+// Chrome icon per boon (the data keeps its glyph).
+const BOON_ICONS = Object.freeze({ surge: 'sparkle', aegis: 'shield', vitality: 'heart', focus: 'star' });
+
+/* A run lives in memory only (ctx.gauntletRun, never persisted). Between stages (stage
+   results, the faveur screen) leaving asks first and confirming drops the run. A run left
+   through the battle pause stays live: once a stage is cleared, the Défis sheet offers to
+   resume it at the faveur screen. */
+function guardGauntletRun() {
+  setLeaveGuard({
+    message: t('gauntlet.leaveTitle'),
+    detail: t('gauntlet.leaveDetail'),
+    confirm: t('gauntlet.leaveConfirm'),
+    cancel: t('gauntlet.leaveCancel'),
+    onLeave: () => {
+      ctx.gauntletRun = null;
+    },
+  });
+}
+
+// A live run with at least one cleared stage still to finish: the Défis sheet resumes it.
+function resumableGauntlet() {
+  const run = ctx.gauntletRun;
+  return run && run.stage > 0 && run.stage < GAUNTLET_STAGES.length ? run : null;
+}
 
 function startGauntlet(team, lead) {
-  ctx.gauntletRun = { team: [...team], lead, stage: 0, boons: [], condition: null };
+  ctx.gauntletRun = { team: [...team], lead, stage: 0, boons: [], condition: null, pendingBoon: null };
   startGauntletStage();
 }
 function startGauntletStage() {
@@ -48,63 +74,104 @@ function advanceGauntlet() {
     ])
   );
   ctx.gauntletRun.stage++;
+  ctx.gauntletRun.pendingBoon = null;
   if (ctx.gauntletRun.stage >= GAUNTLET_STAGES.length) {
     ctx.save.gauntletWins = Math.min(999, ctx.save.gauntletWins + 1);
     persist();
     renderResults(true);
     return;
   }
+  // "Qui commence ?" opens on the Conseillé creature for the next stage.
+  ctx.gauntletRun.lead = bestLeadIndex(
+    ctx.gauntletRun.team,
+    GAUNTLET_STAGES[ctx.gauntletRun.stage].enemyTeam
+  );
   renderGauntletBoons();
 }
 
-function performanceHtml(grade, compact = false, win = true) {
-  if (!grade) return '';
-  const parts = (win ? ['victory', 'tempo', 'survival'] : ['tempo', 'survival'])
-    .map((key) => `<span>${t(`grade.${key}`)} <b>+${grade.breakdown[key] || 0}</b></span>`)
-    .join('');
-  return `<div class="performance-grade grade-${grade.letter.toLowerCase()} ${compact ? 'compact' : ''}"><div class="grade-letter"><small>${t('grade.title')}</small><b>${grade.letter}</b><em>${grade.score}/100</em></div><div class="grade-detail">${parts}${grade.bonusXp ? `<strong>★ ${t('grade.bonus', { xp: grade.bonusXp })}</strong>` : ''}</div></div>`;
+const hpTone = (ratio) => (ratio > 0.5 ? 'high' : ratio >= 0.2 ? 'mid' : 'low');
+
+function leadButtonHtml(id, index, recommended) {
+  const run = ctx.gauntletRun,
+    ratio = run.condition?.[id] ?? 1,
+    percent = Math.round(ratio * 100),
+    lead = run.lead === index,
+    tag = recommended ? `<small class="gauntlet-tip">${icon('star')}${t('gauntlet.bestLead')}</small>` : '';
+  return `<button type="button" class="gauntlet-lead${lead ? ' lead' : ''}${recommended ? ' recommended' : ''}" data-gauntlet-lead="${index}" aria-pressed="${lead}"><img src="${sprite(id)}" alt="" width="128" height="128"><b>${creatureName(id)}</b>${tag}<span class="gauntlet-hp hp-${hpTone(ratio)}" aria-hidden="true"><i style="transform:scaleX(${ratio})"></i></span><em class="num">${t('app.percent', { value: percent })}</em></button>`;
+}
+
+function boonHtml(boon) {
+  const picked = ctx.gauntletRun.pendingBoon === boon.id;
+  return `<button type="button" class="boon-card${picked ? ' picked' : ''}" data-boon="${boon.id}" aria-pressed="${picked}"><i>${icon(BOON_ICONS[boon.id])}</i><b>${t(`boon.${boon.id}`)}</b><small>${t(`boon.effect.${boon.id}`)}</small></button>`;
+}
+
+// A resumed run already took this stage's faveur: it lists the ones it holds instead.
+function heldBoonHtml(id) {
+  return `<li class="boon-card held"><i>${icon(BOON_ICONS[id])}</i><b>${t(`boon.${id}`)}</b><small>${t(`boon.effect.${id}`)}</small></li>`;
 }
 
 function renderGauntletBoons() {
   disposeArena();
-  ctx.previousScreen = 'title';
   screen.dataset.page = 'gauntlet-boon';
   screen.className = 'screen';
-  const available = GAUNTLET_BOONS.filter((boon) => !ctx.gauntletRun.boons.includes(boon.id)),
-    next = GAUNTLET_STAGES[ctx.gauntletRun.stage],
-    mastery =
-      ctx.pendingRewards?.mastery
-        .map(
-          (reward) =>
-            `<div class="mastery-reward ${reward.afterRank > reward.beforeRank ? 'rank-up' : ''}"><img src="${sprite(reward.id)}" alt=""><span><b>${creatureName(reward.id)}</b><i><u style="width:${reward.progress.ratio * 100}%"></u></i><small>+${reward.gain} ${t('mastery.xp')}</small></span></div>`
-        )
-        .join('') || '',
-    feats = ctx.pendingRewards?.newFeats.length
-      ? `<div class="feat-rewards"><strong>${t('feat.unlocked')}</strong>${ctx.pendingRewards.newFeats.map((id) => `<div><b>${FEATS[id].icon} ${t(`feat.${id}`)}</b><span>${t(`feat.effect.${id}`)}</span></div>`).join('')}</div>`
-      : '';
-  screen.innerHTML = `<div class="shell">${topbar()}<div class="gauntlet-reward"><section class="glass-panel"><span class="eyebrow">${t('gauntlet.roundClear', { round: ctx.gauntletRun.stage, total: GAUNTLET_STAGES.length })}</span><h1>${t('gauntlet.chooseBoon')}</h1><p>${t('gauntlet.chooseBoonHint')}</p>${performanceHtml(ctx.pendingRewards?.grade, true)}<div class="mastery-rewards">${mastery}</div>${feats}<div class="boon-grid">${available.map((boon) => `<button type="button" class="boon-card" data-boon="${boon.id}"><i>${boon.icon}</i><span><b>${t(`boon.${boon.id}`)}</b><small>${t(`boon.effect.${boon.id}`)}</small></span></button>`).join('')}</div><div class="next-gauntlet"><span>${t('gauntlet.next')}</span><b>${t(next.nameKey)} · ${t(`arena.${next.arena}`)}</b><div>${next.enemyTeam.map((id) => `<img src="${sprite(id)}" alt="${creatureName(id)}">`).join('')}</div></div></section></div></div>`;
-  const scoutedLead = bestLeadIndex(ctx.gauntletRun.team, next.enemyTeam),
-    camp = `<div class="gauntlet-condition"><div><span class="eyebrow">${t('gauntlet.camp')}</span><small>${t('gauntlet.campHint')}</small></div>${ctx.gauntletRun.team
-      .map((id, index) => {
-        const ratio = ctx.gauntletRun.condition?.[id] || 1;
-        return `<button type="button" class="${ctx.gauntletRun.lead === index ? 'lead' : ''} ${scoutedLead === index ? 'recommended' : ''}" data-gauntlet-lead="${index}" data-focus-key="gauntlet-lead-${index}" aria-pressed="${ctx.gauntletRun.lead === index}"><img src="${sprite(id)}" alt=""><b>${creatureName(id)}${scoutedLead === index ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</b><i><u style="width:${ratio * 100}%"></u></i><em>${t('app.percent', { value: Math.round(ratio * 100) })}</em></button>`;
-      })
-      .join('')}</div>`;
-  screen.querySelector('.boon-grid')?.insertAdjacentHTML('beforebegin', camp);
+  const run = ctx.gauntletRun,
+    boonTaken = run.boons.length >= run.stage,
+    available = GAUNTLET_BOONS.filter((boon) => !run.boons.includes(boon.id)),
+    next = GAUNTLET_STAGES[run.stage],
+    scoutedLead = bestLeadIndex(run.team, next.enemyTeam),
+    colors = TRAINERS[next.trainerIndex].colors,
+    rivals = next.enemyTeam
+      .map((id) => `<img src="${sprite(id, 'normal')}" alt="${creatureName(id)}" width="128" height="128">`)
+      .join(''),
+    nextCard = `<section class="gauntlet-next league-card current" aria-labelledby="gauntlet-next-title" style="--rival-a:${colors[0]};--rival-b:${colors[1]}"><header class="league-card-head"><span class="eyebrow">${t('gauntlet.next')} · ${run.stage + 1}/${GAUNTLET_STAGES.length}</span><h2 id="gauntlet-next-title">${t(next.nameKey)}</h2></header><div class="league-card-team">${rivals}</div><div class="league-facts">${arenaWeatherHtml(next.arena)}</div></section>`,
+    leadButtons = run.team.map((id, index) => leadButtonHtml(id, index, index === scoutedLead)).join(''),
+    leads = `<section class="gauntlet-leads" aria-labelledby="gauntlet-lead-title"><h2 id="gauntlet-lead-title">${t('gauntlet.leadTitle')}</h2><p class="gauntlet-camp">${icon('heart')}<span>${t('gauntlet.campHint')}</span></p><div class="gauntlet-lead-row">${leadButtons}</div></section>`,
+    boons = boonTaken
+      ? `<section class="gauntlet-boons" aria-labelledby="gauntlet-boon-title"><h2 id="gauntlet-boon-title">${t('gauntlet.boons')}</h2><ul class="boon-grid">${run.boons.map(heldBoonHtml).join('')}</ul></section>`
+      : `<section class="gauntlet-boons" aria-labelledby="gauntlet-boon-title"><h2 id="gauntlet-boon-title">${t('gauntlet.chooseBoon')}</h2><p>${t('gauntlet.chooseBoonHint')}</p><div class="boon-grid">${available.map(boonHtml).join('')}</div></section>`,
+    ready = boonTaken || run.pendingBoon;
+  screen.innerHTML = `<div class="shell gauntlet-page">${topbar(t('gauntlet.title'), { eyebrow: t('gauntlet.roundClear', { round: run.stage, total: GAUNTLET_STAGES.length }) })}${nextCard}${leads}${boons}<div class="sticky-cta"><button type="button" class="primary-btn wide" data-action="gauntlet-continue"${ready ? '' : ' disabled'}>${t('app.continue')}${icon('chevron-right')}</button></div></div>`;
   bindCommon();
-  screen.querySelectorAll('[data-gauntlet-lead]').forEach((button) =>
-    button.addEventListener('click', () => {
-      ctx.gauntletRun.lead = Number(button.dataset.gauntletLead);
-      sound.ui();
-      rerenderPreservingFocus(() => renderGauntletBoons());
-    })
-  );
-  screen.querySelectorAll('[data-boon]').forEach((button) =>
-    button.addEventListener('click', () => {
-      ctx.gauntletRun.boons.push(button.dataset.boon);
-      startGauntletStage();
-    })
-  );
+  guardGauntletRun();
+  screen.querySelector('.gauntlet-lead-row').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-gauntlet-lead]');
+    if (!button) return;
+    run.lead = Number(button.dataset.gauntletLead);
+    sound.ui();
+    screen.querySelectorAll('[data-gauntlet-lead]').forEach((item) => {
+      const lead = item === button;
+      item.classList.toggle('lead', lead);
+      item.setAttribute('aria-pressed', String(lead));
+    });
+  });
+  const cta = screen.querySelector('[data-action="gauntlet-continue"]');
+  screen.querySelector('.boon-grid').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-boon]');
+    if (!button) return;
+    run.pendingBoon = button.dataset.boon;
+    sound.ui();
+    screen.querySelectorAll('[data-boon]').forEach((item) => {
+      const picked = item === button;
+      item.classList.toggle('picked', picked);
+      item.setAttribute('aria-pressed', String(picked));
+    });
+    cta.disabled = false;
+  });
+  cta.addEventListener('click', () => {
+    if (!boonTaken) {
+      if (!run.pendingBoon) return;
+      run.boons.push(run.pendingBoon);
+      run.pendingBoon = null;
+    }
+    startGauntletStage();
+  });
 }
 
-registerRoutes({ startGauntlet, startGauntletStage, advanceGauntlet, performanceHtml, renderGauntletBoons });
+registerRoutes({
+  startGauntlet,
+  startGauntletStage,
+  advanceGauntlet,
+  renderGauntletBoons,
+  guardGauntletRun,
+  resumableGauntlet,
+});

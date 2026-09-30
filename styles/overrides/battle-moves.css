@@ -4,7 +4,10 @@
    is never under 12 px, and a pressed tile drops onto its ledge. A name wraps
    between words only (≤ 2 lines): every layout keeps its name column wider
    than the longest single word at its font size (FR "continentale": 99 px at
-   17 px, 93 px at 16 px; hyphenated compounds break after the hyphen). */
+   17 px, 93 px at 16 px; hyphenated compounds break after the hyphen). Every
+   row of a tile has a fixed height whatever its text (the forecast row never
+   wraps; its pill breaks inside itself), so the dock, and with it the stage,
+   keeps one height for the whole battle in every language. */
 .battle-screen .move-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -20,7 +23,7 @@
   grid-template-rows: minmax(38px, auto) auto;
   align-content: center;
   column-gap: 9px;
-  row-gap: 6px;
+  row-gap: 4px;
   min-width: 0;
   min-height: var(--tile-h, 88px);
   margin: 0;
@@ -110,27 +113,34 @@
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  min-height: 26px;
+  height: 28px;
   font-size: 13px;
   font-weight: 900;
-  flex-wrap: wrap;
-  row-gap: 4px;
   white-space: nowrap;
 }
+/* One line when it fits beside the damage, else two 12 px lines in the same
+   28 px row ("Super / effective" on the narrowest tiles). */
 .battle-screen .move-effectiveness {
   flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
-  padding: 4px 8px;
-  border-radius: 999px;
+  min-height: 21px;
+  padding: 2px 8px;
+  border-radius: 11px;
   color: #b7ffd2;
   background: #06301acc;
   box-shadow: inset 0 0 0 1px #8dffbd33;
   font-size: var(--text-xs);
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1;
   letter-spacing: 0.01em;
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
   text-shadow: none;
 }
 .battle-screen .move-effectiveness.not-effective {
@@ -148,6 +158,7 @@
   box-shadow: 0 0 0 1px #00000033;
 }
 .battle-screen .tile-damage {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -179,9 +190,9 @@
 .battle-screen .tile-detail {
   grid-column: 1 / -1;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  min-height: 22px;
   margin-top: -2px;
 }
 .battle-screen .tile-chip {
@@ -358,10 +369,44 @@
 .battle-screen .move-tile.is-cooldown .tile-meta {
   opacity: 0.75;
 }
-/* Tutorial: the one move the lesson asks for glows. */
+/* Tutorial: the one tile the lesson asks for is ringed and beckons with a slow
+   glow (opacity only); the lesson text names its move in the same cyan. */
 .battle-screen .move-tile.tutorial-target:not(:disabled) {
   outline: 3px solid var(--cyan);
   outline-offset: 2px;
+}
+.battle-screen .move-tile.tutorial-target:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: calc(var(--radius-m) + 6px);
+  box-shadow:
+    0 0 0 3px #65e9ff73,
+    0 0 20px 6px #65e9ff66;
+  pointer-events: none;
+  animation: tutorialBeckon 1.2s ease-in-out infinite alternate;
+}
+@keyframes tutorialBeckon {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 1;
+  }
+}
+:root.reduced-motion .battle-screen .move-tile.tutorial-target::after {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-screen .move-tile.tutorial-target::after {
+    animation: none;
+  }
+}
+body.high-contrast .battle-screen .move-tile.tutorial-target:not(:disabled) {
+  outline: 4px solid #fff;
+}
+body.high-contrast .battle-screen .move-tile.tutorial-target:not(:disabled)::after {
+  content: none;
 }
 /* "Changer": bench portraits ringed by their HP colour. */
 .battle-screen .switch-tile {
@@ -491,12 +536,8 @@ body.high-contrast .battle-screen .tile-cooldown {
   .battle-screen .switch-label {
     font-size: 16px;
   }
-  .battle-screen .tile-meta {
-    gap: 4px;
-    min-height: 24px;
-  }
   .battle-screen .move-effectiveness {
-    padding: 4px 7px;
+    padding-inline: 7px;
   }
   .battle-screen .switch-tile {
     grid-template-columns: minmax(0, 1fr);
@@ -552,9 +593,13 @@ body.high-contrast .battle-screen .tile-cooldown {
   .battle-screen .tile-detail {
     grid-column: 2;
   }
+  /* The column scrolls here and the stage sits beside it: the forecast row
+     may grow for a two-line pill at 15 px. */
   .battle-screen .tile-meta {
     align-self: start;
     gap: 10px;
+    height: auto;
+    min-height: 28px;
     font-size: var(--text-md);
   }
   .battle-screen .move-effectiveness,
@@ -601,9 +646,11 @@ body.high-contrast .battle-screen .tile-cooldown {
   }
 }
 @media (max-width: 340px) {
-  .battle-screen .move-tile {
+  .battle-screen .move-tile:not(.switch-tile) {
     grid-template-columns: 32px minmax(0, 1fr);
     column-gap: 7px;
+  }
+  .battle-screen .move-tile {
     padding-inline: 8px;
   }
   .battle-screen .tile-disc {

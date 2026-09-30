@@ -21,32 +21,34 @@ The first launch offers a short tutorial. The game starts in French; change the 
 - Types form two independent triangles: **Water → Fire → Grass → Water** and **Psychic → Fighting → Dark → Psychic**. Follow an arrow for `2×`; reverse it for `0.5×`. Same-type and cross-triangle matchups are neutral at `1×`.
 - Every creature has exactly three moves. One may be a Signature, and cooldowns make a move wait before returning.
 - Priority decides turn order first, then Speed.
-- Actions fill the shared Surge gauge. At the required cost, choose a creature's Signature.
-- Eight effects shape battle: Focused, Haste, Elusive, Counter, Marked, Rooted, Dazed, and Burning.
+- Actions fill the shared **Signature ✦** gauge. At the required cost, choose a creature's Signature.
+- Eight effects shape battle: Focused, Haste, Dodge, Counter, Marked, Rooted, Dazed, and Burning.
 - Every creature has one innate talent. Every arena has a continuous weather: one type's attacks deal `+20%` and another's `−20%` for both teams (the Crystal Dome is neutral). Previews include it.
 - Each landed attack has a seeded `1/16` chance to be a **critical hit** (`×1.5`). Previews always show the non-critical value.
 - Apprentice rivals are a lower level (`×0.85` HP and Attack), only ever pick moves, and never land a critical hit on you.
 
-The universal **Coach Boost** can be used once per battle when the active creature has a penalty. It removes all its penalties and grants 15 Surge without spending the move or switch action.
+The universal **Coach Boost** can be used once per battle when the active creature has a penalty. It removes all its penalties and grants 15 ✦ without spending the move or switch action.
 
 ## Combo
 
 Any attack that lands on a **Marked** creature consumes Marked and deals **30% more damage** to every hit in that action. Venom Harvest also grows `+20%` per Burning stack on the target, without consuming it.
 
-If another ally applied Marked, a short cut-in credits that helper. The credit adds no damage and no Surge beyond the Combo's single 30% rule.
+If another ally applied Marked, a short cut-in credits that helper. The credit adds no damage and no ✦ beyond the Combo's single 30% rule.
 
 ## Modes
 
-- **Rival League** — twelve authored rivals, arenas, emblems, styles, and Ace phases.
+The title is the mode hub. **Play** opens the tutorial on first launch, then starts the next League battle (the Champion Circuit once the League is won) straight away with the last team; **My team** opens team selection first. **Challenges** groups Expedition, Mythic Trials and Daily Pick, which open at 2, 4 and 6 League badges (a mode already played stays open).
+
+- **Rival League** — twelve authored rivals, arenas, badges, styles, and Ace phases. A first win earns the rival's badge; **Next rival** starts the next duel straight away with the same team.
 - **Champion Circuit** — post-League battles under six rotating conditions.
-- **Quick Battle** — choose teams, lead, difficulty, arena, and one optional rule.
-- **Gauntlet** — three battles with persistent wounds, recovery, and boon choices.
-- **Daily Draft** — make three picks, choose a lead, and face the daily rival.
+- **Free Battle** — choose teams, lead, difficulty, arena, and one optional rule.
+- **Expedition** — three battles with persistent wounds, recovery, and boon choices. Leaving between stages asks first; a run left from the battle pause resumes from Challenges.
+- **Daily Pick** — make three picks, choose a lead, and face the daily rival.
 - **Mythic Trials** — six authored challenge encounters.
 - **Bestiary & Move Theater** — records, talents, lore, mastery progress, class filters, and all 90 move previews.
-- **Arena Academy** — the eight essentials, both type triangles, and the eight-effect reference.
+- **Arena School** — the eight essentials, both type triangles, and the eight-effect reference.
 
-Team selection and Draft show type coverage and team roles. Mastery ranks are collection progress only and never change combat stats.
+Team selection and the Daily Pick show type coverage and team classes (Defender, Speedster, Support, Tactician, Attacker, All-Rounder). Mastery ranks are collection progress only and never change combat stats. Player-facing words follow [`docs/glossary.md`](docs/glossary.md).
 
 ## Controls and accessibility
 
@@ -61,7 +63,7 @@ Settings include independent music/effect volume, mute, normal/`×2` speed, redu
 
 ## Saving
 
-Progress and preferences use the versioned `arene-de-noam-save` localStorage key. Save version **15** validates and migrates older data. It stores mode progress, emblems, cosmetic mastery XP, per-creature records, three `{ team, lead }` squads, feats, grades, streaks, settings, and the last team.
+Progress and preferences use the versioned `arene-de-noam-save` localStorage key. Save version **18** validates and migrates older data. It stores mode progress, emblems, cosmetic mastery XP, per-creature records, three `{ team, lead }` squads, feats, grades, streaks, settings (including graphics quality and the opt-in light vibrations), which unlocked creatures show their Chromatique, and the last team.
 
 New battles count `records.combos`. Existing `records.assists` and the `team_assist` feat remain readable as legacy history but are no longer awarded. Corrupt or future saves fall back safely with a friendly notice.
 

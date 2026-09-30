@@ -5,11 +5,13 @@
 //   - `assets/monsters/<id>/battle.png`: binary alpha, OKLab median-cut palette (no dithering),
 //     1 px selective dark outline, lowest opaque row on BASELINE_ROW, stored as an indexed PNG;
 //   - `src/data/sprite-metrics.js`: bbox, foot row, size class and mass for the renderers;
-//   - `assets/asset-manifest.json`: a `normalized` provenance block next to the generation record.
+//   - `assets/asset-manifest.json`: a `normalized` provenance block next to the generation record;
+//   - `assets/monsters/<id>/battle-shiny.png`: its Chromatique, a palette swap of `battle.png` (see
+//     CHROMATIQUES), recorded as a `chromatique` block in the manifest.
 // Family-A sprites (PixelLab pixel art that already matches the Orakyn anchor) only get the baseline.
 //
-// Deterministic: the same originals and SPRITES table always give byte-identical outputs.
-// Usage: node tools/normalize-sprites.mjs
+// Deterministic: the same originals and SPRITES/CHROMATIQUES tables always give byte-identical outputs.
+// Usage: node tools/normalize-sprites.mjs [--chromatiques]   (the flag re-bakes only the Chromatiques)
 
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -84,6 +86,57 @@ const SPRITES = {
   mareclat: { family: 'A', sizeClass: 'S' },
   xylocorne: { family: 'A', sizeClass: 'S' },
   pactigon: { family: 'A', sizeClass: 'M' },
+};
+
+// Chromatiques (GAME-11): one baked colour variant per creature, `assets/monsters/<id>/battle-shiny.png`,
+// a palette swap of the normalised battle sprite (same alpha mask, so the metrics serve both files).
+// In OKLCh the body's colours rotate so its dominant hue lands on `to`; neutrals (whites, greys,
+// blacks) and accents (small colour groups far from the body hue: eyes, gems, glows) are kept unless
+// the entry says otherwise. The targets spread over the hue wheel (no hue family holds more than
+// five variants) and dark creatures also change value, so every variant reads at a 64 px thumbnail.
+//   to      target OKLCh hue in degrees (≈ 29 red, 70 orange, 100 gold, 145 green, 195 cyan,
+//           265 blue, 305 violet, 345 pink)
+//   from    source hue that lands on `to`, when the chroma-weighted dominant hue is the wrong group
+//   chroma  multiplier on the rotated chroma (gamut-mapped by chroma reduction)
+//   ramp    degrees of extra hue per unit of lightness around L 0.62, so shadows warm and lights
+//           cool (gold needs amber shadows to not read olive)
+//   keep    extra OKLCh hue ranges [from, to] that never rotate
+//   light   exponent on the OKLab lightness of the recoloured colours (< 1 lightens: a dark creature
+//           needs a value change, not only a hue change, to read at thumbnail size); outline colours
+//           keep their lightness
+//   neutral when set, neutrals are recoloured too: lightness through `light`, this OKLCh chroma at
+//           hue `to` (0 = silver); by default they are kept
+const CHROMATIQUES = {
+  abyssar: { to: 85, chroma: 1.2, ramp: 40 },
+  aubeastre: { to: 340, chroma: 1.7, keep: [[200, 290]], neutral: 0.045 },
+  brontusk: { to: 250 },
+  calderoc: { to: 235 },
+  deuilastre: { to: 275, chroma: 0.7, light: 0.45, neutral: 0.015 },
+  farfombre: { to: 180, light: 0.5 },
+  ferrax: { to: 85, ramp: 50, chroma: 1.2, light: 0.6, neutral: 0 },
+  flambelier: { to: 250, chroma: 1.1, light: 0.32, neutral: 0.03 },
+  florafae: { to: 70, ramp: 40, chroma: 1.3 },
+  hexalune: { to: 20, chroma: 1.1, light: 0.85 },
+  kordane: { from: 70, to: 250, chroma: 0.3, light: 0.6, keep: [[230, 300]] },
+  lumivox: { to: 150 },
+  magmoth: { to: 200 },
+  mareclat: { to: 30, chroma: 1.3 },
+  mnemora: { to: 55, ramp: 20 },
+  monolith: { to: 60, chroma: 1.3 },
+  mossaur: { to: 35, chroma: 1.7 },
+  nocturnyx: { to: 55, ramp: 30 },
+  nymbloom: { to: 160 },
+  orakyn: { to: 100, ramp: 55, chroma: 1.5 },
+  pactigon: { to: 270, chroma: 1.4 },
+  prismage: { to: 150 },
+  pyrolynx: { to: 215 },
+  riptalon: { to: 150 },
+  solflare: { to: 250 },
+  thornox: { to: 75 },
+  umbrawl: { to: 195, chroma: 1.2, light: 0.8 },
+  virelia: { to: 355 },
+  voltide: { to: 350 },
+  xylocorne: { to: 300, chroma: 1.4 },
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -285,15 +338,19 @@ function rgbToOklab(r, g, b) {
   ];
 }
 
-function oklabToRgb(L, a, b) {
+function oklabToLinear(L, a, b) {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
   return [
-    toSrgb8(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-    toSrgb8(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-    toSrgb8(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
   ];
+}
+
+function oklabToRgb(L, a, b) {
+  return oklabToLinear(L, a, b).map(toSrgb8);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -675,6 +732,134 @@ async function normalizeSprite(id) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Chromatique variants (see CHROMATIQUES).
+
+const CHROMATIQUE_NEUTRAL_C = 0.03; // below this OKLCh chroma a colour is a neutral and is kept
+const CHROMATIQUE_ACCENT_GAP = 50; // degrees from the body hue beyond which a small group is an accent
+const CHROMATIQUE_ACCENT_SHARE = 0.12; // share of the chromatic texels under which a hue group is small
+const CHROMATIQUE_FAMILY = 25; // half-width in degrees of a hue group
+const CHROMATIQUE_OUTLINE_SHARE = 0.5; // share of silhouette-edge texels above which a colour is outline
+
+const hueGap = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+const inGamut = (rgb) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+
+// The chroma-weighted dominant hue: the peak of a smoothed 10° histogram, refined by the circular
+// mean of the colours within one group of that peak.
+function dominantHue(colours) {
+  const bins = new Float64Array(36);
+  for (const { count, C, h } of colours) bins[Math.floor(h / 10) % 36] += count * C;
+  let peak = 0;
+  let best = -1;
+  for (let i = 0; i < 36; i += 1) {
+    const value = bins[(i + 35) % 36] + 2 * bins[i] + bins[(i + 1) % 36];
+    if (value > best) [best, peak] = [value, i];
+  }
+  let x = 0;
+  let y = 0;
+  for (const { count, C, h } of colours) {
+    if (hueGap(h, peak * 10 + 5) > CHROMATIQUE_FAMILY) continue;
+    x += count * C * Math.cos((h * Math.PI) / 180);
+    y += count * C * Math.sin((h * Math.PI) / 180);
+  }
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+// OKLCh colour -> sRGB bytes, lowering chroma until the colour fits the sRGB gamut.
+function lchToRgb(L, C, h) {
+  const rad = (h * Math.PI) / 180;
+  const lab = (c) => [L, c * Math.cos(rad), c * Math.sin(rad)];
+  if (!inGamut(oklabToLinear(...lab(C)))) {
+    let lo = 0;
+    let hi = C;
+    for (let step = 0; step < 24; step += 1) {
+      const mid = (lo + hi) / 2;
+      if (inGamut(oklabToLinear(...lab(mid)))) lo = mid;
+      else hi = mid;
+    }
+    C = lo;
+  }
+  return oklabToRgb(...lab(C));
+}
+
+/** Maps every opaque colour of a normalised sprite to its Chromatique colour: `{ palette, body }`,
+ * `palette` a `Map<key, rgb>` and `body` the source hue that rotates onto `to`. */
+function chromatiquePalette(
+  rgba,
+  { to, from = null, chroma = 1, ramp = 0, keep = [], light = 1, neutral = null }
+) {
+  const counts = new Map();
+  const edges = new Map();
+  for (let i = 0; i < SIZE * SIZE; i += 1) {
+    const o = i * 4;
+    if (rgba[o + 3] === 0) continue;
+    const key = (rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2];
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const x = i % SIZE;
+    const y = (i - x) / SIZE;
+    const edge = NEIGHBOURS.some(([dx, dy]) => {
+      const nx = x + dx;
+      const ny = y + dy;
+      return nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE || rgba[(ny * SIZE + nx) * 4 + 3] === 0;
+    });
+    if (edge) edges.set(key, (edges.get(key) ?? 0) + 1);
+  }
+  const colours = [...counts.entries()]
+    .sort((p, q) => p[0] - q[0])
+    .map(([key, count]) => {
+      const [L, a, b] = rgbToOklab(key >> 16, (key >> 8) & 0xff, key & 0xff);
+      return { key, count, L, C: Math.hypot(a, b), h: ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360 };
+    });
+  const chromatic = colours.filter(({ C }) => C >= CHROMATIQUE_NEUTRAL_C);
+  const chromaticTexels = chromatic.reduce((sum, { count }) => sum + count, 0);
+  const body = from ?? dominantHue(chromatic);
+  const shift = to - body;
+  const groupShare = (hue) =>
+    chromatic.reduce((sum, { count, h }) => sum + (hueGap(h, hue) <= CHROMATIQUE_FAMILY ? count : 0), 0) /
+    chromaticTexels;
+  const kept = (h) =>
+    keep.some(([from, until]) => (from <= until ? h >= from && h <= until : h >= from || h <= until)) ||
+    (hueGap(h, body) > CHROMATIQUE_ACCENT_GAP && groupShare(h) < CHROMATIQUE_ACCENT_SHARE);
+  // Outline colours (mostly on the silhouette edge) keep their lightness so the contour still reads.
+  const lightness = (key, L) =>
+    (edges.get(key) ?? 0) / counts.get(key) > CHROMATIQUE_OUTLINE_SHARE ? L : L ** light;
+  const palette = new Map();
+  for (const { key, L, C, h } of colours) {
+    let rgb = [key >> 16, (key >> 8) & 0xff, key & 0xff];
+    if (C < CHROMATIQUE_NEUTRAL_C) {
+      if (neutral !== null) {
+        const lit = lightness(key, L);
+        rgb = lchToRgb(lit, neutral, (to + ramp * (lit - 0.62) + 720) % 360);
+      }
+    } else if (!kept(h)) {
+      rgb = lchToRgb(lightness(key, L), C * chroma, (h + shift + ramp * (L - 0.62) + 720) % 360);
+    }
+    palette.set(key, rgb);
+  }
+  return { palette, body };
+}
+
+async function bakeChromatique(id) {
+  const from = `assets/monsters/${id}/battle.png`;
+  const final = `assets/monsters/${id}/battle-shiny.png`;
+  const { rgba } = decodePng(await readFile(path.join(ROOT, from)));
+  const { palette, body } = chromatiquePalette(rgba, CHROMATIQUES[id]);
+  for (let i = 0; i < SIZE * SIZE; i += 1) {
+    const o = i * 4;
+    if (rgba[o + 3] === 0) continue;
+    rgba.set(palette.get((rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2]), o);
+  }
+  const metrics = measure(id, rgba);
+  const png = encodeIndexedPng({ width: SIZE, height: SIZE, rgba });
+  await writeFile(path.join(ROOT, final), png);
+  return {
+    id,
+    bytes: png.length,
+    metrics,
+    chromatique: { final, from, bodyHue: Math.round(body), hue: CHROMATIQUES[id].to, colors: metrics.colors },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Outputs: metrics module and manifest provenance.
 
 function metricsModule(results) {
@@ -734,34 +919,45 @@ export function spriteMassScale(id, target) {
 `;
 }
 
-async function updateManifest(results) {
+// Writes each result's `field` block (`normalized` or `chromatique`) into its manifest entry.
+async function updateManifest(results, field) {
   const file = path.join(ROOT, 'assets/asset-manifest.json');
   const manifest = JSON.parse(await readFile(file, 'utf8'));
-  const byId = new Map(results.map((result) => [result.id, result.normalized]));
+  const byId = new Map(results.map((result) => [result.id, result[field]]));
   for (const asset of manifest.assets) {
     if (!byId.has(asset.creature)) throw new Error(`manifest entry ${asset.creature} has no sprite config`);
-    asset.normalized = byId.get(asset.creature);
+    asset[field] = byId.get(asset.creature);
     byId.delete(asset.creature);
   }
   if (byId.size) throw new Error(`manifest has no entry for ${[...byId.keys()].join(', ')}`);
   await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-async function main() {
-  const { CREATURES } = await import(pathToFileURL(path.join(ROOT, 'src/data/creatures.js')).href);
-  const ids = Object.keys(CREATURES).sort();
-  const missing = ids.filter((id) => !SPRITES[id]);
-  if (missing.length) throw new Error(`no SPRITES entry for ${missing.join(', ')}`);
-  const results = [];
-  for (const id of ids) results.push(await normalizeSprite(id));
-  await writeFile(path.join(ROOT, 'src/data/sprite-metrics.js'), metricsModule(results));
-  await updateManifest(results);
-  for (const { id, bytes, metrics } of results) {
+function report(label, results) {
+  for (const { id, bytes, metrics } of results)
     console.log(
       `${id.padEnd(11)} ${String(metrics.colors).padStart(3)} colours ${String(bytes).padStart(6)} B`
     );
+  console.log(`${label} total ${results.reduce((sum, { bytes }) => sum + bytes, 0)} B`);
+}
+
+// `--chromatiques` only re-bakes the Chromatique variants from the current battle sprites.
+async function main() {
+  const { CREATURES } = await import(pathToFileURL(path.join(ROOT, 'src/data/creatures.js')).href);
+  const ids = Object.keys(CREATURES).sort();
+  const missing = ids.filter((id) => !SPRITES[id] || !CHROMATIQUES[id]);
+  if (missing.length) throw new Error(`no SPRITES/CHROMATIQUES entry for ${missing.join(', ')}`);
+  if (!process.argv.includes('--chromatiques')) {
+    const results = [];
+    for (const id of ids) results.push(await normalizeSprite(id));
+    await writeFile(path.join(ROOT, 'src/data/sprite-metrics.js'), metricsModule(results));
+    await updateManifest(results, 'normalized');
+    report('battle', results);
   }
-  console.log(`total ${results.reduce((sum, { bytes }) => sum + bytes, 0)} B`);
+  const variants = [];
+  for (const id of ids) variants.push(await bakeChromatique(id));
+  await updateManifest(variants, 'chromatique');
+  report('chromatique', variants);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

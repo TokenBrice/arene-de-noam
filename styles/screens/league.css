@@ -1,331 +1,407 @@
-/* League route: a replayable visual history of the authored rival ladder. */
-.league-btn {
-  border-color: #ffe47b55;
-  background: linear-gradient(130deg, #6d4b1f, #33245d) !important;
-}
-.emblem-map {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  border-radius: 18px;
-}
-.emblem-map:focus-visible {
-  outline: 3px solid var(--gold);
-  outline-offset: 6px;
-}
-.emblem-map:hover .epic-emblems {
-  filter: brightness(1.15);
-}
-.league-page {
-  width: min(1120px, 100%);
+/* Secondary screens kit (League, Trials, Expédition, Bestiary, Academy): a
+   compact header, rival/stage cards, fact chips (type, arena weather) and a
+   sticky gold call to action. Then the League's badge route. */
+.league-page,
+.trials-page,
+.gauntlet-page,
+.academy-page {
+  width: min(960px, 100%);
 }
 .league-head {
-  align-items: end;
-}
-.league-head > strong {
-  padding: 8px 12px;
-  border: 1px solid #ffe58142;
-  border-radius: 999px;
-  color: #ffe995;
-  background: #ffd85d0b;
-  font-size: var(--text-xs);
-}
-.league-route {
-  position: relative;
-  display: grid;
-  gap: 14px;
-  margin: 4px auto 34px;
-}
-.league-route::before {
-  content: '';
-  position: absolute;
-  left: 40px;
-  top: 55px;
-  bottom: 55px;
-  width: 2px;
-  background: linear-gradient(var(--gold), #746dff 65%, #ffffff15);
-}
-.league-rival {
-  position: relative;
-  display: grid;
-  grid-template-columns: 80px 126px 1fr;
+  display: flex;
   align-items: center;
-  min-height: 210px;
-  padding: 14px 18px 14px 0;
-  border: 1px solid color-mix(in srgb, var(--rival-a) 38%, #ffffff16);
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 19% 50%, color-mix(in srgb, var(--rival-a) 20%, transparent), transparent 25%),
-    linear-gradient(125deg, #202447e8, #0b0d27e8 70%);
-  box-shadow: 0 15px 42px #0005;
-  overflow: hidden;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
 }
-.league-rival::after {
+.league-head h1 {
+  margin: 0;
+  font-size: clamp(22px, 6.8vw, var(--text-2xl));
+  line-height: var(--leading-tight);
+}
+.league-head .eyebrow {
+  display: block;
+  margin-bottom: 6px;
+}
+.league-head p {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+.league-count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: var(--bg-2);
+  box-shadow: var(--elev-1);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.league-count b {
+  color: var(--ink);
+  font-weight: var(--weight-display);
+}
+
+/* Rival / stage card: the trainer's colours tint an opaque panel; the lead
+   creature stands in the middle on a spotlight. Sprites keep integer scales. */
+.league-card {
+  --rival-a: var(--bg-3);
+  --rival-b: var(--bg-2);
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-l);
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--rival-a) 26%, transparent), transparent 55%),
+    var(--bg-1);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--rival-a) 55%, transparent),
+    var(--elev-2);
+}
+.league-card-head h2 {
+  margin: 2px 0 0;
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+.league-card-team {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 96px;
+  padding-bottom: 6px;
+  background: radial-gradient(ellipse 46% 14px at 50% calc(100% - 26px), #ffffff1c, transparent);
+}
+.league-card-team figure {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+/* The lead (first) stands between its two partners. */
+.league-card-team .lead + figure {
+  order: -1;
+}
+.league-card-team img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+.league-card-team .lead img {
+  width: 128px;
+  height: 128px;
+}
+.league-card-team figcaption {
+  max-width: 104px;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.league-card-team .lead figcaption {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+}
+.league-silhouette {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  color: var(--ink-3);
+  background: var(--bg-2);
+}
+.league-silhouette:first-child {
+  width: 96px;
+  height: 96px;
+}
+.league-silhouette .ico {
+  width: 28px;
+  height: 28px;
+}
+.league-locked-hint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-md);
+  text-align: center;
+}
+.league-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.league-fact {
+  max-width: 100%;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+.league-fact-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.league-fact-label :is(.ico, .affinity-icon) {
+  width: 20px;
+  height: 20px;
+}
+.league-fact-label .ico {
+  color: var(--ink-3);
+}
+.type-fact .affinity-icon {
+  color: var(--chip-color);
+}
+.league-fact small {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+.weather-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.weather-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 28px;
+  padding: 2px 8px 2px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chip-color) 20%, var(--bg-0));
+  white-space: nowrap;
+}
+.weather-chip .affinity-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--chip-color);
+}
+.weather-chip.up b {
+  color: var(--good);
+}
+.weather-chip.down b {
+  color: #ff8c97;
+}
+.weather-chip.calm {
+  padding-inline: 10px;
+  color: var(--ink-2);
+  background: var(--bg-0);
+}
+/* The rival's ace: its name on one line, what it does on the next. */
+.league-ace {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+.league-ace .ico {
+  width: 22px;
+  height: 22px;
+  color: var(--gold);
+}
+.league-ace b {
+  display: block;
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+
+/* One gold call to action pinned to the thumb zone while the page scrolls. */
+.sticky-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: var(--space-4) calc(-1 * var(--shell-pad, 16px)) 0;
+  padding: var(--space-3) var(--shell-pad, 16px);
+  background: var(--bg-0);
+  box-shadow: 0 -1px 0 var(--line);
+}
+.sticky-cta .primary-btn {
+  min-height: 56px;
+}
+.sticky-cta .primary-btn .ico {
+  width: 22px;
+  height: 22px;
+}
+
+/* Badge route: a horizontal track of the 12 rival badges (ctx.badgeArt): won ones in full,
+   the next duel open with a gold rim, the rest locked; the picked one is ringed in cyan. */
+.league-route {
+  margin: 0 calc(-1 * var(--shell-pad, 16px)) var(--space-2);
+  padding: 4px var(--shell-pad, 16px) 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.league-route::-webkit-scrollbar {
+  display: none;
+}
+.league-route ol {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  width: max-content;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+.league-route ol::before,
+.league-route ol::after {
   content: '';
   position: absolute;
-  right: -40px;
-  top: -55px;
-  width: 210px;
-  height: 210px;
-  border: 1px solid color-mix(in srgb, var(--rival-b) 22%, transparent);
-  transform: rotate(45deg);
-  pointer-events: none;
+  left: 28px;
+  top: 26px;
+  height: 6px;
+  border-radius: 3px;
 }
-.league-rival.current {
-  border-color: var(--rival-a);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--rival-b) 55%, transparent),
-    0 20px 55px #0007,
-    0 0 30px color-mix(in srgb, var(--rival-a) 18%, transparent);
+.league-route ol::before {
+  right: 28px;
+  background: var(--bg-2);
 }
-.league-rival.cleared {
-  background:
-    radial-gradient(circle at 19% 50%, color-mix(in srgb, var(--rival-a) 16%, transparent), transparent 24%),
-    linear-gradient(125deg, #1a2540e8, #090b20e8 70%);
+.league-route ol::after {
+  width: calc(min(var(--cleared), 11) * 66px);
+  background: linear-gradient(90deg, var(--gold-2), var(--gold));
 }
-.league-rival.locked {
-  filter: saturate(0.2);
-  border-style: dashed;
-  opacity: 0.58;
-}
-.league-step {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  align-self: stretch;
-}
-.league-step span {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 2px solid #ffffff2d;
-  border-radius: 50%;
-  color: #aeb0c7;
-  background: #0a0c22;
-  font-size: var(--text-xs);
-  font-weight: 1000;
-}
-.league-rival.current .league-step span {
-  border-color: var(--rival-a);
-  color: var(--ink);
-  background: color-mix(in srgb, var(--rival-b) 35%, #0a0c22);
-  box-shadow: 0 0 20px var(--rival-a);
-}
-.league-rival.cleared .league-step span {
-  border-color: #ffe281;
-  color: #19152a;
-  background: #ffe281;
-}
-.league-emblem {
+.league-node {
   position: relative;
   z-index: 1;
   display: grid;
-  place-items: center;
+  justify-items: center;
+  gap: 4px;
+  width: 56px;
+  min-height: 80px;
+  padding: 0;
+  border: 0;
+  color: var(--ink-3);
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
-.league-emblem .emblem {
-  width: 106px;
-}
-.league-emblem .emblem small {
-  display: block;
-  top: 99%;
-  width: 120px;
-}
-.league-dossier {
+.league-node-badge {
   position: relative;
-  z-index: 2;
-  min-width: 0;
+  display: block;
+  width: 52px;
 }
-.league-dossier h2 {
-  margin: 3px 0 5px;
-  font-family: var(--font-display);
-  font-weight: var(--weight-display);
-  font-size: clamp(25px, 4vw, 40px);
-  line-height: 1;
+.league-node.current .badge-rim {
+  stroke: var(--gold);
+  stroke-width: 2.4;
 }
-.league-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+.league-node.selected .badge-rim {
+  stroke: var(--cyan);
+  stroke-width: 3;
 }
-.league-meta span {
-  padding: 4px 7px;
-  border: 1px solid #ffffff15;
+.league-node-lock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.league-node-lock .ico {
+  width: 22px;
+  height: 22px;
+}
+.league-node-check {
+  position: absolute;
+  top: 36px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #062a16;
+  background: var(--good);
+  box-shadow: 0 0 0 2px var(--bg-0);
+}
+.league-node-check .ico {
+  width: 14px;
+  height: 14px;
+  stroke-width: 3;
+}
+.league-node b {
+  min-width: 28px;
+  padding: 0 6px;
   border-radius: 999px;
-  color: #cbcde0;
-  background: #ffffff07;
-  font-size: var(--text-xs);
-  font-weight: 850;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
 }
-.league-dossier > small {
-  color: #9b9db4;
-  font-size: var(--text-xs);
-  font-weight: 1000;
-  letter-spacing: 0.15em;
+.league-node.current b {
+  color: var(--gold);
 }
-.league-team {
-  display: flex;
-  gap: 7px;
-  margin: 4px 0 9px;
+.league-node.cleared b {
+  color: var(--ink-2);
 }
-.league-team > span {
-  display: grid;
-  grid-template-columns: 45px minmax(50px, 1fr);
-  align-items: center;
-  gap: 2px;
-  min-width: 105px;
-  padding: 3px 7px;
-  border: 1px solid #ffffff12;
-  border-radius: 11px;
-  background: #ffffff06;
+.league-node.selected b {
+  color: var(--bg-0);
+  background: var(--cyan);
 }
-.league-team img {
-  width: 45px;
-  height: 45px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.league-team b {
-  font-size: var(--text-xs);
-}
-.league-ace {
-  display: grid;
-  gap: 2px;
-  margin: 6px 0 10px;
-  padding: 8px 10px;
-  border-left: 2px solid var(--rival-a);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--rival-b) 16%, transparent), transparent);
-}
-.league-ace b {
-  color: #ffeaa0;
-  font-size: var(--text-xs);
-}
-.league-ace span {
-  color: #bbbccf;
-  font-size: var(--text-xs);
-  line-height: 1.35;
-}
-.league-dossier > .wide {
-  width: min(240px, 100%);
-}
-.league-hidden {
-  max-width: 410px;
-  color: #85879d;
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-@media (max-width: 700px) {
-  .league-head {
-    align-items: flex-start;
-  }
-  .league-rival {
-    grid-template-columns: 48px 80px 1fr;
-    min-height: 225px;
-    padding: 10px 10px 10px 0;
-  }
-  .league-route::before {
-    left: 24px;
-  }
-  .league-emblem .emblem {
-    width: 72px;
-  }
-  .league-emblem .emblem small {
-    display: none;
-  }
-  .league-team {
-    gap: 3px;
-  }
-  .league-team > span {
-    display: grid;
-    grid-template-columns: 1fr;
-    min-width: 0;
-    flex: 1;
-    padding: 2px;
-    text-align: center;
-  }
-  .league-team img {
-    width: 100%;
-    height: 48px;
-  }
-  .league-team b {
-    font-size: var(--text-xs);
-  }
-  .league-meta span {
-    font-size: var(--text-xs);
-  }
-  .league-ace span {
-    font-size: var(--text-xs);
-  }
-  .league-dossier h2 {
-    font-size: 24px;
-  }
-  .league-step span {
-    width: 34px;
-    height: 34px;
-  }
-  .league-rival::after {
-    display: none;
-  }
+.league-node:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
 }
 
-/* Rival dossiers use the full width: identity | squad and rule | action. */
-.league-rival {
-  grid-template-columns: 174px minmax(0, 1fr) minmax(150px, 190px);
-  gap: var(--space-4);
-  padding: var(--space-4);
-}
-.league-emblem-column {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  align-items: center;
-  align-self: stretch;
-}
-.league-dossier h2 {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-display);
-  line-height: 1.08;
-  letter-spacing: 0.015em;
-}
-.league-team {
-  flex-wrap: wrap;
-}
-.league-ace {
-  border: 1px solid color-mix(in srgb, var(--rival-a) 30%, transparent);
-  border-left-width: 3px;
-  border-radius: 10px;
-}
-.league-cta {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  align-content: center;
-}
-.league-cta button {
-  width: 100%;
-  min-height: 48px;
-}
-@media (max-width: 760px) {
-  .league-rival {
-    grid-template-columns: 105px minmax(0, 1fr);
-    gap: var(--space-3);
-    padding: var(--space-3);
+@media (max-width: 600px) {
+  .league-page,
+  .trials-page,
+  .gauntlet-page,
+  .academy-page,
+  .bestiary-page {
+    --shell-pad: 12px;
   }
-  .league-emblem-column {
-    grid-template-columns: 30px 1fr;
+}
+@media (min-width: 601px) {
+  .league-page,
+  .trials-page,
+  .gauntlet-page,
+  .academy-page,
+  .bestiary-page {
+    --shell-pad: clamp(16px, 3vw, 42px);
   }
-  .league-cta {
-    grid-column: 1 / -1;
+}
+/* Wide or short (landscape) screens: the rival's team beside its facts. */
+@media (min-width: 760px), (orientation: landscape) and (max-height: 480px) {
+  .league-page .league-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: center;
+    column-gap: var(--space-5);
   }
-  .league-dossier h2 {
-    font-size: var(--text-xl);
+  .league-page .league-card > * {
+    grid-column: 2;
+  }
+  .league-page .league-card > .league-card-team {
+    grid-column: 1;
+    grid-row: 1 / span 5;
+  }
+  .league-page .league-card.locked > .league-card-team {
+    grid-row: 1 / span 2;
+  }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  .league-head {
+    margin: 0 0 var(--space-2);
+  }
+  .league-route {
+    padding-bottom: 6px;
   }
 }

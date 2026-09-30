@@ -46,7 +46,7 @@ const {
   affinityIcon,
   escapeHtml,
 } = ctx;
-const { icon } = route;
+const { icon, tutorialAllows, tutorialLesson, tutorialTip, tutorialEnemyAction } = route;
 
 // Creatures fight at a nominal level; Apprentice-tier (rookie) rivals show
 // their ×0.85 stat handicap as a lower "Niv." on the enemy plate, next to the
@@ -71,24 +71,18 @@ function hpState(hp, maxHp) {
   return ratio > 0.5 ? 'high' : ratio >= 0.2 ? 'mid' : 'low';
 }
 
-// Tutorial gating: which player action the current lesson step allows.
-function tutorialAllows(session, action) {
-  if (session.mode !== 'tutorial' || session.tutorialStep >= 4) return true;
-  if (action.type === 'switch' || action.type === 'replace') return session.tutorialStep >= 3;
-  return (
-    (session.tutorialStep === 0 && action.moveId === 'lucid_arc') ||
-    (session.tutorialStep === 1 && action.moveId === 'slowing_riddle') ||
-    (session.tutorialStep === 2 && action.moveId === 'oracle_veil')
-  );
-}
-
 /* ---------------------------------------------------------------- enemy plan */
 
 function plannedEnemyAction() {
   const session = ctx.battleSession,
     state = session?.state;
-  if (!session || !state || state.phase !== 'choice' || session.mode === 'tutorial') return null;
+  if (!session || !state || state.phase !== 'choice') return null;
   if (session.enemyPlanCache?.state === state) return session.enemyPlanCache.action;
+  // The tutorial rival plays its script, announced like any Apprentice plan.
+  if (session.mode === 'tutorial') {
+    session.enemyPlanCache = { state, action: tutorialEnemyAction(session.tutorialStep) };
+    return session.enemyPlanCache.action;
+  }
   // Test-only hook: force one move, or a comma-separated move sequence.
   const forcedMoves = (ctx.params.get('enemyMove') || '').split(',').filter(Boolean),
     forcedIndex = session.forcedEnemyMoveCount || 0,
@@ -116,13 +110,7 @@ function plannedEnemyAction() {
 // The rival's committed action, shown only to Apprentice players at choice time.
 function enemyPlan() {
   const session = ctx.battleSession;
-  if (
-    !session ||
-    ctx.locked ||
-    session.state.phase !== 'choice' ||
-    session.mode === 'tutorial' ||
-    session.difficulty !== 'apprentice'
-  )
+  if (!session || ctx.locked || session.state.phase !== 'choice' || session.difficulty !== 'apprentice')
     return null;
   return plannedEnemyAction();
 }
@@ -176,19 +164,31 @@ function plateHtml(side, view = currentView()) {
 
 const plates = { player: null, enemy: null };
 
+// A plate's second row changes width with the viewport (orientation, desktop resize): its
+// status chips refit their slot.
+const plateRows = new ResizeObserver((entries) => {
+  for (const { target } of entries) {
+    const refs = Object.values(plates).find((plate) => plate?.sub === target);
+    if (refs) fitStatuses(refs);
+  }
+});
+
 function plateRefs(side) {
   const root = screen.querySelector(`#hud-${side} .battle-plate`);
   if (!root) return null;
   let refs = plates[side];
   if (refs?.root === root) return refs;
-  if (refs) stopDrain(refs);
+  if (refs) forgetPlate(refs);
   refs = plates[side] = {
     root,
     name: root.querySelector('.plate-name'),
     level: root.querySelector('.plate-level'),
     type: root.querySelector('.plate-type'),
     typeName: root.querySelector('.plate-type-name'),
+    sub: root.querySelector('.plate-sub'),
     statuses: root.querySelector('.plate-statuses'),
+    statusEntries: [],
+    statusLimit: PLATE_STATUS_LIMIT.simple,
     balls: [...root.querySelectorAll('.team-dot')],
     ballsLabel: root.querySelector('.team-dots-label'),
     bar: root.querySelector('.plate-hp'),
@@ -206,7 +206,13 @@ function plateRefs(side) {
     viewHp: null,
     drain: null,
   };
+  plateRows.observe(refs.sub);
   return refs;
+}
+
+function forgetPlate(refs) {
+  stopDrain(refs);
+  plateRows.unobserve(refs.sub);
 }
 
 // Writes a property only when its value changed since the last patch.
@@ -216,24 +222,37 @@ function put(refs, key, value, apply) {
   apply(value);
 }
 
-function plateStatusHtml(c, expert) {
-  const entries = [
-      ...(c.barrier > 0
-        ? [
-            `<i class="plate-status status-barrier" data-status="barrier">${icon('shield')}<b class="num">${c.barrier}</b><span class="visually-hidden">${escapeHtml(t('battle.barrier', { amount: c.barrier }))}</span></i>`,
-          ]
-        : []),
-      ...sortStatusIds(Object.keys(c.statuses)).map((id) => {
-        const meta = STATUS_DEFINITIONS[id],
-          stacks = c.statuses[id].stacks || 1,
-          polarity = meta.positive ? 'positive' : 'negative';
-        return `<i class="plate-status status-${id} ${polarity}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}">${statusIcon(id)}${stacks > 1 ? `<b class="num">${stacks}</b>` : ''}<span class="visually-hidden">${escapeHtml(`${t(`status.${id}`)}${stacks > 1 ? ` ×${stacks}` : ''}`)}</span></i>`;
-      }),
-    ],
-    limit = PLATE_STATUS_LIMIT[expert ? 'expert' : 'simple'],
-    shown = entries.length > limit ? entries.slice(0, limit - 1) : entries,
-    hidden = entries.length - shown.length;
-  return `${shown.join('')}${hidden ? `<i class="plate-status-more num">+${hidden}</i>` : ''}`;
+function plateStatusEntries(c) {
+  return [
+    ...(c.barrier > 0
+      ? [
+          `<i class="plate-status status-barrier" data-status="barrier">${icon('shield')}<b class="num">${c.barrier}</b><span class="visually-hidden">${escapeHtml(t('battle.barrier', { amount: c.barrier }))}</span></i>`,
+        ]
+      : []),
+    ...sortStatusIds(Object.keys(c.statuses)).map((id) => {
+      const meta = STATUS_DEFINITIONS[id],
+        stacks = c.statuses[id].stacks || 1,
+        polarity = meta.positive ? 'positive' : 'negative';
+      return `<i class="plate-status status-${id} ${polarity}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}">${statusIcon(id)}${stacks > 1 ? `<b class="num">${stacks}</b>` : ''}<span class="visually-hidden">${escapeHtml(`${t(`status.${id}`)}${stacks > 1 ? ` ×${stacks}` : ''}`)}</span></i>`;
+    }),
+  ];
+}
+
+// Status chips have their own slot in the plate's second row, between the level tag and the HP
+// number, and never paint over either: at most the mode's cap of tokens, fewer when the slot is
+// narrower, the rest folded into a "+N" chip (the plate opens the sheet that lists them all).
+function fitStatuses(refs) {
+  const entries = refs.statusEntries,
+    slot = refs.statuses,
+    html = (shown) => {
+      const folded = entries.length - shown;
+      return `${entries.slice(0, shown).join('')}${folded ? `<i class="plate-status-more num">+${folded}</i>` : ''}`;
+    };
+  let shown = entries.length > refs.statusLimit ? refs.statusLimit - 1 : entries.length;
+  slot.innerHTML = html(shown);
+  // A plate not laid out yet (0 px slot) keeps the cap; its row refits once it has a width.
+  while (shown > 0 && slot.clientWidth > 0 && slot.scrollWidth > slot.clientWidth)
+    slot.innerHTML = html(--shown);
 }
 
 function writeHp(refs, hp) {
@@ -282,7 +301,11 @@ function patchPlate(refs, side, view) {
   const statusKey = `${expert}|${c.barrier}|${sortStatusIds(Object.keys(c.statuses))
     .map((id) => `${id}:${c.statuses[id].stacks || 1}`)
     .join(',')}`;
-  put(refs, 'statuses', statusKey, () => (refs.statuses.innerHTML = plateStatusHtml(c, expert)));
+  put(refs, 'statuses', statusKey, () => {
+    refs.statusEntries = plateStatusEntries(c);
+    refs.statusLimit = PLATE_STATUS_LIMIT[expert ? 'expert' : 'simple'];
+    fitStatuses(refs);
+  });
   if (refs.surgeRow) {
     const cost = signatureCostFor(c),
       ready = owner.surge >= cost && c.moves.some((id) => MOVES[id].signature);
@@ -517,7 +540,7 @@ const EMPHASIS_TONES = {
 
 function emphasisTone(emphasis) {
   for (const [tone, key] of Object.entries(EMPHASIS_TONES)) if (t(key) === emphasis) return tone;
-  return emphasis.startsWith('K.O') ? 'ko' : 'neutral';
+  return 'neutral';
 }
 
 function emphasisHtml(emphasis) {
@@ -639,7 +662,8 @@ function moveStatusIds(move) {
   ];
 }
 
-// Expert density: order, hits, declared cooldown and applied statuses.
+// Expert density: order, hits, declared cooldown and applied statuses. The row
+// is there even when empty, so the tile keeps its height from turn to turn.
 function tileDetailHtml(move, order) {
   const parts = [
     ORDER_ICONS[order] ? `<span class="tile-chip">${icon(ORDER_ICONS[order])}</span>` : '',
@@ -648,8 +672,8 @@ function tileDetailHtml(move, order) {
     ...moveStatusIds(move)
       .slice(0, 2)
       .map((id) => `<span class="tile-chip tile-status">${statusBadgeHtml(id, { compact: true })}</span>`),
-  ].filter(Boolean);
-  return parts.length ? `<span class="tile-detail" aria-hidden="true">${parts.join('')}</span>` : '';
+  ];
+  return `<span class="tile-detail" aria-hidden="true">${parts.join('')}</span>`;
 }
 
 function moveTileHtml(moveId, index, info) {
@@ -661,6 +685,7 @@ function moveTileHtml(moveId, index, info) {
     cooldown = c.cooldowns[moveId]?.remaining || 0,
     legal = info.legalMoves.has(moveId),
     allowed = tutorialAllows(session, { type: 'move', moveId }),
+    lesson = tutorialLesson(session),
     enabled = legal && !ctx.locked && allowed,
     damage = move.kind === 'damage',
     preview = damage ? previewMove(state, 'player', moveId) : null,
@@ -671,11 +696,12 @@ function moveTileHtml(moveId, index, info) {
     name = t(`move.${moveId}`),
     label = [name, affinityName(move.affinity)];
   let pill = '';
+  // In the tutorial only the finishing blow announces its K.O.; the other lessons show the type.
   if (preview?.miss) {
     pill = `<span class="move-effectiveness miss">${escapeHtml(t('battle.previewMiss'))}</span>`;
     label.push(t('battle.previewMiss'));
-  } else if (preview?.lethal) {
-    pill = '<span class="move-effectiveness lethal">K.O. !</span>';
+  } else if (preview?.lethal && (!lesson || (lesson.finisher && allowed))) {
+    pill = `<span class="move-effectiveness lethal">${escapeHtml(t('battle.koStamp'))}</span>`;
     label.push('K.O.');
   } else if (mult > 1) {
     pill = `<span class="move-effectiveness effective">${escapeHtml(t('battle.effective'))}</span>`;
@@ -700,10 +726,11 @@ function moveTileHtml(moveId, index, info) {
     label.push(
       sigReady ? t('battle.sigReadyShort') : t('battle.signatureCost', { cost: cost - owner.surge })
     );
-  if (preview?.combo)
-    label.push(t('battle.comboReady', { percent: Math.round((preview.combo.multiplier - 1) * 100) }));
+  // The tutorial teaches one decision per lesson: no COMBO tag on its tiles.
+  const combo = session?.mode === 'tutorial' ? null : preview?.combo;
+  if (combo) label.push(t('battle.comboReady', { percent: Math.round((combo.multiplier - 1) * 100) }));
   if (cooldown) label.push(t('battle.cooldownLeft', { count: cooldown }));
-  const ribbon = preview?.combo
+  const ribbon = combo
       ? `<span class="tile-ribbon move-combo-badge">${escapeHtml(t('battle.comboRibbon'))}</span>`
       : sigReady
         ? `<span class="tile-ribbon tile-ready">${icon('sparkle')}${escapeHtml(t('battle.sigReadyShort'))}</span>`
@@ -716,7 +743,7 @@ function moveTileHtml(moveId, index, info) {
       sigReady ? 'signature-ready' : '',
       move.signature && !legal ? 'signature-locked' : '',
       cooldown ? 'is-cooldown' : '',
-      session.mode === 'tutorial' && session.tutorialStep < 4 && allowed ? 'tutorial-target' : '',
+      lesson && allowed ? 'tutorial-target' : '',
     ].filter(Boolean);
   return `<button type="button" class="${classes.join(' ')}" data-move="${moveId}" style="--move-color:${AFFINITIES[move.affinity].color}" aria-label="${escapeHtml(label.join(' · '))}" aria-keyshortcuts="${index + 1}"${enabled ? '' : ' disabled'}><span class="tile-disc" aria-hidden="true">${move.signature ? icon('sparkle') : affinityIcon(move.affinity)}</span><span class="move-name"><span class="move-label">${escapeHtml(name)}</span></span>${meta}${expert ? tileDetailHtml(move, moveOrder(state, moveId, info.plan)) : ''}${move.signature ? `<span class="tile-sig-fill" aria-hidden="true"><i style="transform:${scaleX(ratioOf(owner.surge, cost))}"></i></span>` : ''}${ribbon}${cooldown ? `<span class="tile-cooldown" aria-hidden="true">${icon('clock')}<b class="num">${cooldown}</b></span>` : ''}<kbd class="move-key" aria-hidden="true">${index + 1}</kbd></button>`;
 }
@@ -725,18 +752,49 @@ function switchTileHtml(info) {
   const { state, session } = info,
     owner = state.sides.player,
     enabled = info.canSwitch && !ctx.locked && tutorialAllows(session, { type: 'switch' }),
+    target = enabled && tutorialLesson(session)?.type === 'switch',
     bench = owner.team.filter((_, index) => index !== owner.active);
-  return `<button type="button" class="move-tile switch-tile" data-action="open-switch" aria-keyshortcuts="C"${enabled ? '' : ' disabled'}><span class="bench" aria-hidden="true">${bench.map((c) => `<span class="bench-mon" data-hp-state="${c.hp > 0 ? hpState(c.hp, c.maxHp) : 'ko'}"><img src="${sprite(c.id)}" alt="" decoding="async"></span>`).join('')}</span><span class="switch-label">${icon('swap')}<b>${escapeHtml(t('battle.switch'))}</b></span><kbd class="move-key" aria-hidden="true">C</kbd></button>`;
+  return `<button type="button" class="move-tile switch-tile${target ? ' tutorial-target' : ''}" data-action="open-switch" aria-keyshortcuts="C"${enabled ? '' : ' disabled'}><span class="bench" aria-hidden="true">${bench.map((c) => `<span class="bench-mon" data-hp-state="${c.hp > 0 ? hpState(c.hp, c.maxHp) : 'ko'}"><img src="${sprite(c.id)}" alt="" decoding="async"></span>`).join('')}</span><span class="switch-label">${icon('swap')}<b>${escapeHtml(t('battle.switch'))}</b></span><kbd class="move-key" aria-hidden="true">C</kbd></button>`;
 }
 
+// Marqué's first real appearance (GAME-04): until a Marqué-boosted hit of the player's is on
+// record, the first choice of a battle with a Marqué creature on the field names the bonus.
+function markedTip(session, state) {
+  if (!session || session.mode === 'tutorial') return null;
+  if (session.markedTip === undefined) {
+    const marked = ['enemy', 'player']
+      .map((side) => activeOf(state, side))
+      .find((creature) => creature.statuses.marked);
+    if (!marked) return null;
+    const known = Object.values(ctx.save.records).some((record) => record.combos > 0);
+    session.markedTip = known ? null : { turn: state.turn, name: creatureName(marked.id) };
+  }
+  return session.markedTip?.turn === state.turn
+    ? t('tutorial.marked', { name: session.markedTip.name })
+    : null;
+}
+
+// The choice prompt. In the tutorial it carries the lesson (the targeted tile glows); in a
+// battle, one choice may carry the Marqué tip.
 function renderPrompt(state) {
   const line = screen.querySelector('#action-line');
   if (!line) return;
   resetNarration();
-  const replacement = state.sides.player.pendingReplacement,
-    text = replacement
-      ? t('battle.chooseReplacement')
-      : t('battle.promptTurn', { name: creatureName(activeOf(state, 'player').id) });
+  const session = ctx.battleSession,
+    replacement = state.sides.player.pendingReplacement,
+    lesson = replacement ? null : tutorialTip(session),
+    tip = replacement || lesson ? null : markedTip(session, state);
+  if (lesson) {
+    line.innerHTML = `<span class="prompt-main prompt-lesson"><small class="lesson-step">${icon('school')}${escapeHtml(lesson.lesson)}</small><span class="lesson-text">${highlightNames(lesson.text)}</span></span>`;
+    return;
+  }
+  if (tip) {
+    line.innerHTML = `<span class="prompt-main prompt-tip">${statusBadgeHtml('marked', { compact: true })}<span>${highlightNames(tip)}</span></span>`;
+    return;
+  }
+  const text = replacement
+    ? t('battle.chooseReplacement')
+    : t('battle.promptTurn', { name: creatureName(activeOf(state, 'player').id) });
   line.innerHTML = `<span class="prompt-main">${escapeHtml(text)}</span>${replacement ? '' : `<small class="prompt-hint">${escapeHtml(t(coarsePointer.matches ? 'battle.hintTouch' : 'battle.hintPointer'))}</small>`}`;
 }
 
@@ -757,12 +815,22 @@ dockIntentQuery.addEventListener('change', () => {
 });
 
 // The coach chip exists only while Coup de pouce is usable; it sits in the dock
-// head beside the prompt, never on the stage over the player creature.
+// head beside the prompt, never on the stage over the player creature. The
+// tutorial has no Coup de pouce: its slot holds the skip chip during the lessons.
 function renderCoach(state) {
   const slot = screen.querySelector('#dock-head');
   if (!slot) return;
-  const usable = !ctx.locked && canUseTrainerCommand(state, 'player'),
-    chip = slot.querySelector('.coach-chip');
+  const session = ctx.battleSession,
+    lesson = !ctx.locked && Boolean(tutorialLesson(session)),
+    usable = !ctx.locked && session?.mode !== 'tutorial' && canUseTrainerCommand(state, 'player'),
+    chip = slot.querySelector('.coach-chip'),
+    skip = slot.querySelector('.skip-chip');
+  if (!lesson) skip?.remove();
+  else if (!skip)
+    slot.insertAdjacentHTML(
+      'beforeend',
+      `<button type="button" class="skip-chip" data-action="skip-tutorial" aria-label="${escapeHtml(t('app.skip'))}">${escapeHtml(t('tutorial.skip'))}</button>`
+    );
   if (!usable) chip?.remove();
   else if (!chip)
     slot.insertAdjacentHTML(
@@ -861,7 +929,9 @@ function moveInfoHtml(moveId) {
       ),
       factHtml(
         t('battle.infoDamage'),
-        preview.miss ? t('battle.previewMiss') : `≈ ${preview.damage}${preview.lethal ? ' · K.O. !' : ''}`,
+        preview.miss
+          ? t('battle.previewMiss')
+          : `≈ ${preview.damage}${preview.lethal ? ` · ${t('battle.koStamp')}` : ''}`,
         preview.lethal ? 'gold' : ''
       )
     );
@@ -907,7 +977,7 @@ function moveInfoHtml(moveId) {
       : '',
     expert && plan && damage !== null ? exchangeForecastHtml(moveId, plan) : '',
   ].join('');
-  return `<div class="move-info" style="--move-color:${AFFINITIES[move.affinity].color}"><div class="move-info-head"><span class="tile-disc" aria-hidden="true">${affinityIcon(move.affinity)}</span><b>${escapeHtml(affinityName(move.affinity))}</b>${move.signature ? `<span class="move-info-signature">${icon('sparkle')}${escapeHtml(t('battle.sigGauge'))}</span>` : ''}</div><p class="move-info-effect">${escapeHtml(t(`move.effect.${moveId}`))}</p><div class="move-facts">${facts.join('')}</div>${notes}</div>`;
+  return `<div class="move-info" style="--move-color:${AFFINITIES[move.affinity].color}"><div class="move-info-head"><span class="tile-disc" aria-hidden="true">${affinityIcon(move.affinity)}</span><b>${escapeHtml(affinityName(move.affinity))}</b>${move.signature ? `<span class="move-info-signature">${icon('sparkle')}${escapeHtml(t('battle.sigGauge'))}</span>` : ''}</div><p class="move-info-effect">${escapeHtml(t(`${expert ? 'move.effectDetail' : 'move.effect'}.${moveId}`))}</p><div class="move-facts">${facts.join('')}</div>${notes}</div>`;
 }
 
 /* Switch / replacement / relay rows: HP bar, class, and a defensive verdict
@@ -993,11 +1063,17 @@ function switchSheetHtml(relayMoveId = null) {
       return `<button type="button" class="${classes.join(' ')}" data-switch-index="${index}">${index === recommended ? `<span class="switch-recommended">${icon('star')}${escapeHtml(t('battle.switchRecommended'))}</span>` : ''}<span class="switch-portrait" style="--switch-color:${AFFINITIES[c.affinity].color}"><img src="${sprite(c.id)}" alt=""></span><span class="switch-info"><span class="switch-name"><strong>${escapeHtml(creatureName(c.id))}</strong><i class="plate-type" style="--plate-type:${AFFINITIES[c.affinity].color}">${affinityIcon(c.affinity, { title: affinityName(c.affinity) })}</i></span><span class="plate-hp switch-hp" data-hp-state="${hpState(c.hp, c.maxHp)}"><i class="plate-hp-fill" style="transform:${scaleX(ratioOf(c.hp, c.maxHp))}"></i>${c.barrier ? `<i class="plate-barrier" style="transform:${scaleX(ratioOf(c.barrier, c.maxHp))}"></i>` : ''}</span><span class="switch-meta"><span class="num">${c.hp}/${c.maxHp} ${escapeHtml(t('battle.hpUnit'))}</span><span class="switch-class" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)}${escapeHtml(className(c.classId))}</span></span>${forecast && (expert || relayMoveId) ? `<em class="switch-incoming${forecast.lethal ? ' lethal' : ''}">${escapeHtml(forecast.text)}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">${icon('refresh')}${escapeHtml(t('battle.switchRead'))}</em>` : ''}${expert ? `<small class="switch-passive">${icon('sparkle')}${escapeHtml(t(`passive.${c.passive}`))}</small>` : ''}${statusIds.length ? `<span class="switch-statuses">${statusIds.map((id) => statusBadgeHtml(id, { compact: true, label: escapeHtml(t(`status.${id}`)) })).join('')}</span>` : ''}</span><span class="switch-verdict ${verdict}">${icon(verdict === 'bad' ? 'warning' : 'shield')}<b>${escapeHtml(verdictText)}</b></span></button>`;
     })
     .join('');
-  const lead = relayMoveId
+  // The tutorial's switch lesson leads with the lesson itself: the one ✦ number it shows is the
+  // good switch's (on the resisting ally's row), not the generic switch bonus as well.
+  const lesson = !relayMoveId && !replacement ? tutorialTip(session) : null,
+    bonus = !relayMoveId && !replacement && !lesson,
+    lead = relayMoveId
       ? t('battle.relayHint')
       : replacement
         ? t('battle.replacementHint')
-        : t(state.modifiers?.includes('relay_fever') ? 'battle.switchBonusFever' : 'battle.switchBonus'),
+        : lesson
+          ? lesson.text
+          : t(state.modifiers?.includes('relay_fever') ? 'battle.switchBonusFever' : 'battle.switchBonus'),
     title = relayMoveId
       ? t('battle.relayChoose')
       : replacement
@@ -1006,7 +1082,7 @@ function switchSheetHtml(relayMoveId = null) {
   return {
     title,
     count: scouted.length,
-    html: `<p class="sheet-lead${!relayMoveId && !replacement ? ' switch-bonus' : ''}">${!relayMoveId && !replacement ? icon('sparkle') : ''}${escapeHtml(lead)}</p><div class="switch-options${relayMoveId ? ' signature-relay' : ''}">${rows}</div>`,
+    html: `<p class="sheet-lead${bonus ? ' switch-bonus' : ''}">${bonus ? icon('sparkle') : ''}${escapeHtml(lead)}</p><div class="switch-options${relayMoveId ? ' signature-relay' : ''}">${rows}</div>`,
   };
 }
 
@@ -1149,7 +1225,12 @@ function codexHtml(session) {
           .join(' · ') || t('arena.rule.crystal')
       )}</p>`
     ),
-    article('codex-surge', 'sparkle', t('battle.surge'), `<p>${escapeHtml(t('academy.surge'))}</p>`),
+    article(
+      'codex-surge',
+      'sparkle',
+      t('battle.surge'),
+      `<p>${escapeHtml(t('academy.surge'))}</p>${ctx.save.expertMode ? `<p>${escapeHtml(t('academy.surgeDetail'))}</p>` : ''}`
+    ),
     article(
       'codex-wide',
       'swap',
@@ -1179,6 +1260,9 @@ function codexHtml(session) {
   ].join('')}</div>`;
 }
 
+// The battle journal (§6.3): newest first, one row per semantic event. The entry's sentence names
+// its creatures with their side (bold, director.js journalEntry); a hit's qualifiers sit on a
+// sub-line under it.
 function battleLogHtml(session) {
   const entries = [...(session.timeline || [])].reverse();
   return `<p class="sheet-lead">${escapeHtml(t('battle.logHint'))}</p><ol class="battle-log">${
@@ -1187,13 +1271,10 @@ function battleLogHtml(session) {
           .map((entry, index) => {
             const turn = entry.turn || 1,
               turnStart = index === 0 || entries[index - 1].turn !== turn,
-              sideCreature =
-                entry.creatureId || (entry.side ? activeOf(session.state, entry.side)?.id : null),
-              sideLabel =
-                entry.side && sideCreature
-                  ? t(`battle.logSide.${entry.side}`, { name: creatureName(sideCreature) })
-                  : '';
-            return `<li class="log-${entry.side || 'field'}${index === 0 ? ' latest' : ''}${turnStart ? ' turn-start' : ''}" data-turn="${escapeHtml(t('battle.turn', { turn }))}"><i aria-hidden="true"></i><span><small>${escapeHtml(t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`))}</small>${sideLabel ? `<b class="log-side-label">${escapeHtml(sideLabel)}</b> ` : ''}${escapeHtml(entry.text)}</span></li>`;
+              notes = entry.notes.length
+                ? `<em class="log-notes">${escapeHtml(entry.notes.join(' · '))}</em>`
+                : '';
+            return `<li class="log-${entry.side || 'field'}${index === 0 ? ' latest' : ''}${turnStart ? ' turn-start' : ''}" data-turn="${escapeHtml(t('battle.turn', { turn }))}"><i aria-hidden="true"></i><span><small>${escapeHtml(t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`))}</small>${entry.html}${notes}</span></li>`;
           })
           .join('')
       : `<li class="empty">${escapeHtml(t('battle.logEmpty'))}</li>`
@@ -1203,7 +1284,7 @@ function battleLogHtml(session) {
 // Fresh battle screen: forget per-screen plate, mood and narration state.
 function resetHud() {
   for (const side of ['player', 'enemy']) {
-    if (plates[side]) stopDrain(plates[side]);
+    if (plates[side]) forgetPlate(plates[side]);
     plates[side] = null;
   }
   mood.arena = '';
@@ -1215,7 +1296,6 @@ function resetHud() {
 registerRoutes({
   plannedEnemyAction,
   enemyPlan,
-  tutorialAllows,
   plateHtml,
   topRowHtml,
   patchHud,

@@ -6,32 +6,35 @@ const {
   CREATURES,
   CREATURE_IDS,
   MOVES,
-  PASSIVES,
-  masteryRank,
   createDraft,
   dailyDraftSeed,
   bestLeadIndex,
   normalizeSeed,
   randomIndex,
   params,
-  TRAINERS,
   t,
   screen,
   sound,
   sprite,
   creatureName,
-  affinity,
   affinityName,
-  affinityIcon,
   classIcon,
   className,
-  actionButton,
   persist,
+  escapeHtml,
   disposeArena,
   topbar,
-  draftInsightHtml,
 } = ctx;
-const { bindCommon, teamProfileHtml, startBattle, rerenderPreservingFocus } = route;
+const {
+  bindCommon,
+  startBattle,
+  openSheet,
+  icon,
+  creatureMatchup,
+  matchupMark,
+  creatureSheetHtml,
+  weatherRows,
+} = route;
 
 function randomDistinct(count, seed) {
   const pool = [...CREATURE_IDS],
@@ -51,17 +54,57 @@ function startDraft() {
   renderDraft();
 }
 
-function candidateDraftInsight(id) {
-  const generic = draftInsightHtml(id);
-  if (!generic.includes(t('draft.flexPick'))) return generic;
+const typeDot = (affinityId) => `<i class="type-dot" data-type="${affinityId}" aria-hidden="true"></i>`;
+
+// One line on what the candidate brings: a type the trio lacks, else its role.
+function offerInsight(id) {
   const creature = CREATURES[id],
-    moves = creature.moves.map((moveId) => MOVES[moveId]),
+    team = ctx.draftRun.team;
+  if (team.length && !team.some((member) => CREATURES[member].affinity === creature.affinity))
+    return `<span class="draft-offer-insight is-new-type">${typeDot(creature.affinity)}${escapeHtml(t('draft.newAffinity', { affinity: affinityName(creature.affinity) }))}</span>`;
+  const moves = creature.moves.map((moveId) => MOVES[moveId]),
     supportWeight = moves.filter((move) => move.kind === 'support' || move.kind === 'heal').length,
     controlWeight = moves.filter(
       (move) => move.targetStatuses?.length || move.selfStatuses?.length || move.kind === 'support'
     ).length,
     archetype = supportWeight >= 2 ? 'support' : controlWeight >= 2 ? 'control' : 'burst';
-  return `<div class="draft-insight"><b>${t('draft.insight')}</b><small>${t('draft.kitInsight', { archetype: t(`draft.archetype.${archetype}`), talent: t(`passive.effect.${creature.passive}`) })}</small></div>`;
+  return `<span class="draft-offer-insight">${escapeHtml(t('draft.kitInsight', { archetype: t(`draft.archetype.${archetype}`) }))}</span>`;
+}
+
+function slotHtml(index, complete, suggested) {
+  const run = ctx.draftRun,
+    id = run.team[index];
+  if (!id)
+    return `<div class="draft-slot"><span class="draft-slot-empty">${index + 1}</span><b>${escapeHtml(t('draft.empty'))}</b></div>`;
+  const creature = CREATURES[id],
+    lead = complete && run.lead === index,
+    label = `<img src="${sprite(id)}" alt="" width="64" height="64"><b>${escapeHtml(creatureName(id))}</b>${typeDot(creature.affinity)}`;
+  if (!complete)
+    return `<div class="draft-slot filled" style="--type-color:${AFFINITIES[creature.affinity].color}">${label}</div>`;
+  const matchup = creatureMatchup(id, run.enemyTeam),
+    direction = matchup.edge > 0 ? 'up' : matchup.edge < 0 ? 'down' : 'even',
+    crown = lead ? t('select.lead') : index === suggested ? t('select.suggested') : '';
+  return `<button type="button" class="draft-slot filled${lead ? ' lead' : ''}${index === suggested ? ' recommended' : ''}" data-draft-lead="${index}" data-focus-key="draft-lead-${index}" data-matchup="${direction}" aria-pressed="${lead}" style="--type-color:${AFFINITIES[creature.affinity].color}" aria-label="${escapeHtml(`${creatureName(id)}, ${lead ? t('select.lead') : t('select.chooseLead')}`)}">${label}${matchupMark()}<span class="draft-crown" aria-hidden="true">${icon('crown')}${crown ? `<span>${escapeHtml(crown)}</span>` : ''}</span></button>`;
+}
+
+function offerHtml(id) {
+  const creature = CREATURES[id];
+  return `<article class="draft-offer" style="--type-color:${AFFINITIES[creature.affinity].color}"><button type="button" class="draft-offer-pick" data-draft-pick="${id}" aria-label="${escapeHtml(t('draft.take', { name: creatureName(id) }))}"><span class="draft-offer-portrait"><img src="${sprite(id)}" alt="" width="128" height="128" decoding="async"></span><span class="draft-offer-text"><b class="draft-offer-name">${escapeHtml(creatureName(id))}</b><span class="draft-offer-chips"><span class="sheet-chip">${typeDot(creature.affinity)}${escapeHtml(affinityName(creature.affinity))}</span><span class="sheet-chip" style="--class-color:${CLASSES[creature.classId].color}">${classIcon(creature.classId)}${escapeHtml(className(creature.classId))}</span></span>${offerInsight(id)}</span></button><button type="button" class="icon-btn draft-offer-info" data-draft-info="${id}" aria-label="${escapeHtml(t('select.info', { name: creatureName(id) }))}">${icon('info')}</button></article>`;
+}
+
+/* Reveal: the rival trio as rows (portrait, name, type and class; its lead
+   marked), then the arena and its weather. Rivals never show a Chromatique. */
+function revealHtml() {
+  const run = ctx.draftRun,
+    weather = weatherRows(run.arena, []),
+    boosted = weather.find((row) => row.up);
+  const rivals = run.enemyTeam
+    .map((id, index) => {
+      const creature = CREATURES[id];
+      return `<li class="draft-rival${index === 0 ? ' is-lead' : ''}" style="--type-color:${AFFINITIES[creature.affinity].color}"><img src="${sprite(id, 'normal')}" alt="" width="64" height="64"><span class="draft-rival-text"><b>${escapeHtml(creatureName(id))}</b><small>${typeDot(creature.affinity)}<span>${escapeHtml(`${affinityName(creature.affinity)} · ${className(creature.classId)}`)}</span></small>${index === 0 ? `<span class="draft-rival-lead">${icon('crown')}<span>${escapeHtml(t('select.lead'))}</span></span>` : ''}</span></li>`;
+    })
+    .join('');
+  return `<section class="draft-final" aria-labelledby="draft-rival-title"><h2 id="draft-rival-title">${escapeHtml(t('draft.rival'))}</h2><ul class="draft-rival-team">${rivals}</ul><div class="draft-arena"><span class="ts-chip">${icon('map')}${escapeHtml(t(`arena.${run.arena}`))}</span>${boosted ? `<span class="ts-chip ts-weather"><span aria-hidden="true">${escapeHtml(t('select.weather'))}</span>${typeDot(boosted.affinity)}<b class="num" aria-hidden="true">${escapeHtml(t('battle.weatherBadge', { percent: boosted.percent }))}</b><span class="visually-hidden">${escapeHtml(`${t('arena.ruleTitle')}. ${weather.map((row) => row.text).join(', ')}`)}</span></span>` : ''}</div></section>`;
 }
 
 function renderDraft() {
@@ -74,86 +117,73 @@ function renderDraft() {
   ctx.previousScreen = 'title';
   screen.dataset.page = 'draft';
   screen.className = 'screen';
-  const complete = ctx.draftRun.round >= ctx.draftRun.offers.length,
-    offer = complete ? [] : ctx.draftRun.offers[ctx.draftRun.round];
-  const scoutedDraftLead = complete ? bestLeadIndex(ctx.draftRun.team, ctx.draftRun.enemyTeam) : -1,
-    lineup = Array.from({ length: 3 }, (_, index) => {
-      const id = ctx.draftRun.team[index];
-      return id
-        ? `<button type="button" class="draft-slot filled ${ctx.draftRun.lead === index ? 'lead' : ''} ${scoutedDraftLead === index ? 'recommended' : ''}" data-draft-lead="${index}" data-focus-key="draft-lead-${index}" aria-pressed="${ctx.draftRun.lead === index}"><span>${ctx.draftRun.lead === index ? '★' : index + 1}</span><img src="${sprite(id)}" alt=""><b>${creatureName(id)}${complete && scoutedDraftLead === index ? `<small>◎ ${t('select.recommendedLead')}</small>` : ''}</b></button>`
-        : `<div class="draft-slot"><span>${index + 1}</span><i>?</i><b>${t('draft.empty')}</b></div>`;
-    }).join('');
-  const offers = offer
-    .map((id, offerIndex) => {
-      const c = CREATURES[id],
-        a = AFFINITIES[c.affinity],
-        passive = PASSIVES[c.passive],
-        rank = masteryRank(ctx.save.mastery[id] || 0);
-      return `<button type="button" class="draft-card mastery-card-${rank} ${offerIndex === (ctx.draftRun.offerIndex || 0) ? 'mobile-active' : ''}" data-draft-pick="${id}" data-focus-key="draft-pick-${offerIndex}" data-offer-index="${offerIndex}" style="--draft-color:${a.color}">${rank ? `<em>${'★'.repeat(rank)}</em>` : ''}<div class="draft-portrait"><img src="${sprite(id)}" alt=""><i>${affinityIcon(c.affinity)}</i></div><span class="eyebrow">${affinityName(c.affinity)}</span><span class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</span><h2>${creatureName(id)}</h2><div class="draft-talent"><b>${passive.icon} ${t(`passive.${c.passive}`)}</b><small>${t(`passive.effect.${c.passive}`)}</small></div><ul>${c.moves.map((moveId) => `<li>${MOVES[moveId].signature ? '✦ ' : ''}${t(`move.${moveId}`)}</li>`).join('')}</ul>${candidateDraftInsight(id)}</button>`;
-    })
-    .join('');
-  const reveal = complete
-    ? `<section class="draft-final"><div><span class="eyebrow">${t('draft.rival')}</span><h2>${t(TRAINERS[ctx.draftRun.trainerIndex].nameKey)}</h2><div class="draft-rival-team">${ctx.draftRun.enemyTeam.map((id) => `<span><img src="${sprite(id)}" alt=""><b>${creatureName(id)}</b></span>`).join('')}</div><div class="arena-rule"><b>${t('arena.ruleTitle')} · ${t(`arena.${ctx.draftRun.arena}`)}</b><span>${t(`arena.rule.${ctx.draftRun.arena}`)}</span></div></div><aside>${teamProfileHtml(ctx.draftRun.team)}${actionButton(t('draft.enter'), 'draft-battle', 'primary-btn wide')}</aside></section>`
-    : '';
-  const carousel = complete
-    ? ''
-    : `<nav class="draft-carousel" aria-label="${t('draft.offers')}"><button type="button" data-draft-nav="prev" aria-label="${t('draft.previous')}">‹</button><div class="draft-dots">${offer.map((_, index) => `<button type="button" data-draft-dot="${index}" class="${index === (ctx.draftRun.offerIndex || 0) ? 'active' : ''}" aria-label="${t('draft.position', { position: index + 1, total: offer.length })}" aria-pressed="${index === (ctx.draftRun.offerIndex || 0)}"></button>`).join('')}</div><button type="button" data-draft-nav="next" aria-label="${t('draft.next')}">›</button></nav>`;
-  screen.innerHTML = `<div class="shell draft-page">${topbar()}<div class="draft-head"><span class="eyebrow">${t('draft.daily')} · #${ctx.draftRun.seed}</span><h1>${t('draft.title')}</h1><p>${complete ? t('draft.ready') : t('draft.pick', { round: ctx.draftRun.round + 1, total: ctx.draftRun.offers.length })}</p><div class="draft-progress">${ctx.draftRun.offers.map((_, index) => `<i class="${index < ctx.draftRun.round ? 'done' : index === ctx.draftRun.round && !complete ? 'active' : ''}"></i>`).join('')}</div></div><div class="draft-lineup">${lineup}</div>${complete ? reveal : `<div class="draft-offers">${offers}</div>${carousel}`}</div>`;
+  const run = ctx.draftRun,
+    complete = run.round >= run.offers.length,
+    suggested = complete ? bestLeadIndex(run.team, run.enemyTeam) : -1;
+  const lineup = [0, 1, 2].map((index) => slotHtml(index, complete, suggested)).join('');
+  screen.innerHTML = `<div class="draft${complete ? ' is-complete' : ''}">${topbar(t('draft.title'))}<p class="draft-lede">${escapeHtml(complete ? t('draft.ready') : t('draft.pick', { round: run.round + 1, total: run.offers.length }))}</p><div class="draft-lineup">${lineup}</div>${
+    complete
+      ? `${revealHtml()}<div class="ts-bar draft-bar"><button type="button" class="primary-btn ts-fight" data-action="draft-battle">${escapeHtml(t('select.ready'))}</button></div>`
+      : `<div class="draft-offers" role="group" aria-label="${escapeHtml(t('draft.offers'))}">${run.offers[run.round].map(offerHtml).join('')}</div>`
+  }</div>`;
   bindCommon();
-  screen.querySelectorAll('[data-draft-pick]').forEach((button) =>
-    button.addEventListener('click', () => {
-      const leadIndex = ctx.draftRun.team.length;
-      ctx.draftRun.team.push(button.dataset.draftPick);
-      ctx.draftRun.round++;
-      sound.ui();
-      rerenderPreservingFocus(() => renderDraft());
-      if (ctx.draftRun.round >= ctx.draftRun.offers.length)
-        screen.querySelector(`[data-focus-key="draft-lead-${leadIndex}"]`)?.focus({ preventScroll: true });
-    })
-  );
-  const showOffer = (index) => {
-    ctx.draftRun.offerIndex = (index + offer.length) % offer.length;
-    screen
-      .querySelectorAll('[data-offer-index]')
-      .forEach((card) =>
-        card.classList.toggle('mobile-active', Number(card.dataset.offerIndex) === ctx.draftRun.offerIndex)
-      );
-    screen.querySelectorAll('[data-draft-dot]').forEach((dot) => {
-      const active = Number(dot.dataset.draftDot) === ctx.draftRun.offerIndex;
-      dot.classList.toggle('active', active);
-      dot.setAttribute('aria-pressed', String(active));
-    });
+  const root = screen.querySelector('.draft');
+  const take = (id) => {
+    const index = run.team.length;
+    run.team.push(id);
+    run.round++;
+    sound.call(id);
+    renderDraft();
+    const focus =
+      run.round >= run.offers.length
+        ? screen.querySelector(`[data-focus-key="draft-lead-${index}"]`)
+        : screen.querySelector('[data-draft-pick]');
+    focus?.focus({ preventScroll: true });
   };
-  screen
-    .querySelectorAll('[data-draft-nav]')
-    .forEach((button) =>
-      button.addEventListener('click', () =>
-        showOffer((ctx.draftRun.offerIndex || 0) + (button.dataset.draftNav === 'next' ? 1 : -1))
-      )
-    );
-  screen
-    .querySelectorAll('[data-draft-dot]')
-    .forEach((button) => button.addEventListener('click', () => showOffer(Number(button.dataset.draftDot))));
-  screen.querySelectorAll('[data-draft-lead]').forEach((button) =>
-    button.addEventListener('click', () => {
-      ctx.draftRun.lead = Number(button.dataset.draftLead);
-      sound.ui();
-      rerenderPreservingFocus(() => renderDraft());
-    })
-  );
-  screen.querySelector('[data-action="draft-battle"]')?.addEventListener('click', () => {
-    ctx.save.lastTeam = [...ctx.draftRun.team];
+  root.querySelector('.draft-offers')?.addEventListener('click', (event) => {
+    const info = event.target.closest('[data-draft-info]');
+    if (info) {
+      const id = info.dataset.draftInfo;
+      openSheet({
+        title: creatureName(id),
+        body: creatureSheetHtml(id),
+        actions: [
+          {
+            label: t('draft.take', { name: creatureName(id) }),
+            variant: 'primary',
+            action: 'sheet-take',
+            onSelect: () => take(id),
+          },
+        ],
+      });
+      return;
+    }
+    const pick = event.target.closest('[data-draft-pick]');
+    if (pick) take(pick.dataset.draftPick);
+  });
+  root.querySelector('.draft-lineup').addEventListener('click', (event) => {
+    const slot = event.target.closest('[data-draft-lead]');
+    if (!slot) return;
+    run.lead = Number(slot.dataset.draftLead);
+    sound.ui();
+    root.querySelector('.draft-lineup').innerHTML = [0, 1, 2]
+      .map((index) => slotHtml(index, true, suggested))
+      .join('');
+    root.querySelector(`[data-draft-lead="${run.lead}"]`)?.focus({ preventScroll: true });
+  });
+  root.querySelector('[data-action="draft-battle"]')?.addEventListener('click', () => {
+    ctx.save.lastTeam = [run.team[run.lead], ...run.team.filter((_, index) => index !== run.lead)];
     persist();
     startBattle({
-      playerTeam: [...ctx.draftRun.team],
-      enemyTeam: [...ctx.draftRun.enemyTeam],
-      playerLead: ctx.draftRun.lead,
+      playerTeam: [...run.team],
+      enemyTeam: [...run.enemyTeam],
+      playerLead: run.lead,
       enemyLead: 0,
       mode: 'draft',
-      arena: ctx.draftRun.arena,
-      difficulty: ctx.draftRun.difficulty || 'standard',
-      trainerIndex: ctx.draftRun.trainerIndex,
-      draftSeed: ctx.draftRun.seed,
+      arena: run.arena,
+      difficulty: run.difficulty || 'standard',
+      trainerIndex: run.trainerIndex,
+      draftSeed: run.seed,
     });
   });
 }

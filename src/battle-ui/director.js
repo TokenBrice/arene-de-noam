@@ -6,6 +6,7 @@
 // randomness comes from fxSeed. One code path serves ×1, ×2, hurry, reduced motion and
 // ?animations=0; each sink knows what it does in each mode (§13).
 import { ctx, route } from '../app/context.js';
+import { attachHaptics } from '../app/haptics.js';
 import { icon } from '../app/icons.js';
 import {
   BEAT_TIMELINES,
@@ -20,7 +21,7 @@ import { SPRITE_METRICS } from '../data/sprite-metrics.js';
 import { showBanner } from './banners.js';
 import { BEAT_BUDGET_MS, beatBudgetMs, fxSeed, groupBeats } from './beats.js';
 import { CueBus } from './cues.js';
-import { FxClock, READOUT_MIN_REAL_MS } from './fx-clock.js';
+import { FxClock, READOUT_FLOOR_MS } from './fx-clock.js';
 
 const {
   AFFINITIES,
@@ -46,8 +47,10 @@ const SIDES = ['player', 'enemy'];
 const QUALITY_QUADS = { low: 0.6, mid: 1, high: 1.4 };
 const LOW_SHAKE = 0.6;
 const TIMELINE_CAP = 40;
-// A lethal multi-hit that has to be compressed still lands its last contact this early.
-const LETHAL_CONTACT_MARGIN = 80;
+// A lethal action ends this long (virtual ms) after its last contact, never after its budget: the
+// K.O. beat takes over the readout (§3.4). A lethal multi-hit that has to be compressed lands its
+// last contact this early too.
+const LETHAL_CONTACT_MARGIN = 40;
 const MIN_HIT_SPACING = 60;
 // Trailing readouts (drain heals, recoil) land just after the contact readout.
 const TRAILING_READOUT_DELAY = 150;
@@ -57,13 +60,12 @@ const DEVELOPMENT = typeof __DIST__ !== 'boolean';
 
 const other = (side) => (side === 'player' ? 'enemy' : 'player');
 
+// A battle session is alive while it is the current battle on the battle screen; a Move Theater
+// session (bestiary, §8.5) carries its own `alive` predicate.
 function sessionAlive(session) {
-  return Boolean(
-    session &&
-    ctx.battleSession === session &&
-    !session.cancelled &&
-    screen.classList.contains('battle-screen')
-  );
+  if (!session || session.cancelled) return false;
+  if (session.alive) return session.alive();
+  return ctx.battleSession === session && screen.classList.contains('battle-screen');
 }
 
 function viewOf(session) {
@@ -100,13 +102,16 @@ export function ensurePresentation(session) {
   });
   session.cues = new CueBus();
   session.cues.on('*', (payload, name) => ctx.sound.cue(name, payload));
+  attachHaptics(session, () => sessionAlive(session));
   session.beatSerial = 0;
   session.signatureReadyShown = new Set();
   session.statusLoops = new Map();
   session.tints = { player: undefined, enemy: undefined };
   session.banners = new Set();
   session.pendingCut = false;
-  session.lastReadoutReal = -Infinity;
+  session.beatCursor = null;
+  // Floor time (§4) at which the last readout appeared: a beat ends no earlier than its floor.
+  session.lastReadoutAt = -Infinity;
   ctx.arenaScene?.setClock(session.clock);
   if (params.get('fxdebug') === '1') installFxDebug(session);
   return session;
@@ -141,11 +146,12 @@ function installFxDebug(session) {
 // #fx-text readouts (§11.3): pooled nodes animated with WAAPI (transform/opacity only). A readout
 // pops in at its presented moment beside the creature's visible outline (its opaque sprite box at
 // rest), clear of both creatures, the attack's path, the plates and the other showing readouts,
-// then holds until the director retires it as the next beat starts (after ≥ READOUT_MIN_REAL_MS on
-// screen), so the stage never shows the previous action's text under the next action's line.
+// then holds until its beat's tail retires it (after ≥ READOUT_FLOOR_MS of floor time on screen),
+// so the stage never shows the previous action's text under the next action's line; a lethal
+// action's readouts hand over to the K.O. beat instead.
 // Pool (≤ 9 nodes): per side three readout blocks and a K.O. stamp, plus one bench-ally chip. A
 // block is one readout: the beat's single stamp pill over its number and chain counter ("−31 ×3"),
-// with the small tags (combo, weather, absorbed, cause) underneath; a multi-hit bumps one running
+// with the small tags (critical, combo, weather, absorbed, cause) underneath; a multi-hit bumps one running
 // total.
 
 const EDGE = 8;
@@ -155,11 +161,19 @@ const NUMBER_SLOTS = 3;
 // covering ~125 px² of its creature, so full size wins whenever it fits.
 const FIT_SCALE = 0.84;
 const SHRINK_COST = 1500;
-// Pop-in, re-pop and exit: virtual ms at ×1 and real-ms floors. Reduced motion fades in place.
+// Pop-in, re-pop and exit: virtual ms at ×1 and floor ms (§4: real ms, ÷ HURRY_RATE while held).
+// Reduced motion fades in place.
 const ENTRY = [240, 110];
 const BUMP = [180, 90];
 const EXIT = [120, 80];
 const REDUCED_FADE_MS = 120;
+// Real ms a readout's pop or exit takes: its virtual length at the clock rate, never under its floor.
+const popRealMs = (run, [virtualMs, floorMs]) =>
+  run.reduced
+    ? run.clock.realFloorMs(REDUCED_FADE_MS)
+    : Math.max(run.clock.realMs(virtualMs), run.clock.realFloorMs(floorMs));
+// The exit in floor ms: a readout's READOUT_FLOOR_MS on screen includes it.
+const exitFloorMs = (run) => popRealMs(run, EXIT) * run.clock.floorRate;
 // A pop overshoots its box (≤ 1.18 for a critical, which also tilts): placement keeps this much
 // room around it inside the stage.
 const POP_ROOM = 1.2;
@@ -168,6 +182,12 @@ const POP_ROOM = 1.2;
 const COVER = { target: 12, rival: 6, keepOut: 8, readout: 10 };
 const PATH_POINT = 600;
 const DISTANCE = 30;
+// Attribution: a block's centre must sit at least twice as close to its own creature's outline as
+// to the other's (plus ATTRIBUTION_MARGIN px); each px short costs as much as covering ~33 px² of
+// its own creature, so the portrait court's shared middle band (the player's head level with the
+// enemy's feet, the space between them) never takes a number that belongs to one side.
+const ATTRIBUTION = 800;
+const ATTRIBUTION_MARGIN = 12;
 
 const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
 
@@ -207,7 +227,7 @@ class ReadoutLayer {
       return div;
     };
     const numberHtml =
-      '<span class="fx-stamp-pill" hidden></span><span class="fx-row"><b class="fx-value"></b><span class="fx-chain" hidden></span></span><span class="fx-tags"><small class="fx-tag combo" hidden></small><small class="fx-tag assist" hidden></small><small class="fx-tag weather" hidden></small><small class="fx-tag absorbed" hidden></small><small class="fx-tag cause" hidden></small></span>';
+      '<span class="fx-stamp-pill" hidden></span><span class="fx-row"><b class="fx-value"></b><span class="fx-chain" hidden></span></span><span class="fx-tags"><small class="fx-tag crit" hidden></small><small class="fx-tag combo" hidden></small><small class="fx-tag assist" hidden></small><small class="fx-tag weather" hidden></small><small class="fx-tag absorbed" hidden></small><small class="fx-tag cause" hidden></small></span>';
     this.sides = {};
     const fragment = document.createDocumentFragment();
     for (const side of SIDES) {
@@ -257,11 +277,12 @@ class ReadoutLayer {
 
   // The plates and the top row sit above the stage and overlap its edges (§11.2): a readout under
   // them would be hidden. Their boxes (stage coordinates, 4 px margin) are measured once per turn;
-  // the stage never re-fits mid-turn.
+  // the stage never re-fits mid-turn. The rival's intent tab under its plate is hidden while a
+  // turn plays, so it keeps nothing out.
   measureKeepOut() {
     const stage = this.stage.getBoundingClientRect(),
       screenRoot = this.stage.closest('.battle-screen');
-    this.keepOut = [...(screenRoot?.querySelectorAll('.battle-top, .battle-plate-slot') ?? [])]
+    this.keepOut = [...(screenRoot?.querySelectorAll('.battle-top, .battle-plate') ?? [])]
       .map((item) => item.getBoundingClientRect())
       .filter((box) => box.width > 0 && box.height > 0)
       .map((box) => ({
@@ -302,8 +323,9 @@ class ReadoutLayer {
   // Centre and fit scale of a w×h readout beside `side`'s outline: spots on its inner flank (toward
   // the stage centre), over its head, under its feet and on its outer flank, each clamped inside
   // the stage and costed by what it would cover — the creature, the other creature, the attack's
-  // path between them, the plates, the readouts already showing — and by its distance from the
-  // outline. A block too wide for every free spot shrinks (FIT_SCALE) rather than cover its creature.
+  // path between them, the plates, the readouts already showing — by its distance from the
+  // outline and by how clearly it reads as this creature's (ATTRIBUTION). A block too wide for
+  // every free spot shrinks (FIT_SCALE) rather than cover its creature.
   besideOutline(side, width, height, self) {
     const target = this.outline(side),
       rival = this.outline(other(side)),
@@ -317,6 +339,13 @@ class ReadoutLayer {
         from[0] + (to[0] - from[0]) * u,
         from[1] + (to[1] - from[1]) * u,
       ]),
+      // The rival's band: its outline stretched across the stage along the axis the two creatures
+      // are stacked on (portrait: the rows of the court), so a number level with the other
+      // creature reads as its, however far aside it sits.
+      stacked = Math.abs(to[1] - from[1]) > Math.abs(to[0] - from[0]),
+      rivalBand = stacked
+        ? { left: 0, right: this.size.width, top: rival.top, bottom: rival.bottom }
+        : { left: rival.left, right: rival.right, top: 0, bottom: this.size.height },
       showing = [...this.live]
         .filter(([node, entry]) => node !== self && !entry.retiring)
         .map(([, entry]) => entry.box);
@@ -342,6 +371,13 @@ class ReadoutLayer {
           COVER.target * overlap(box, target) +
           COVER.rival * overlap(box, rival) +
           DISTANCE * distanceBetween(box, target);
+        const centre = { left: left + bw / 2, right: left + bw / 2, top: top + bh / 2, bottom: top + bh / 2 };
+        cost +=
+          ATTRIBUTION *
+          Math.max(
+            0,
+            2 * distanceBetween(centre, target) + ATTRIBUTION_MARGIN - distanceBetween(centre, rivalBand)
+          );
         for (const zone of this.keepOut) cost += COVER.keepOut * overlap(box, zone);
         for (const readout of showing) cost += COVER.readout * overlap(box, readout);
         for (const [px, py] of path)
@@ -383,11 +419,10 @@ class ReadoutLayer {
               { opacity: 0, transform: at(10, from), easing: 'cubic-bezier(.2,.9,.3,1.3)' },
               { offset: 0.45, opacity: 1, transform: at(-3, pop), easing: 'ease-out' },
               { opacity: 1, transform: at(0, 1) },
-            ],
-      [virtualMs, floorMs] = bump ? BUMP : ENTRY;
+            ];
     this.live.get(node)?.animation.cancel();
     const animation = node.animate(frames, {
-      duration: run.reduced ? REDUCED_FADE_MS : Math.max(run.clock.realMs(virtualMs), floorMs),
+      duration: popRealMs(run, bump ? BUMP : ENTRY),
       fill: 'forwards',
     });
     node.classList.add('showing');
@@ -401,7 +436,7 @@ class ReadoutLayer {
       },
       fit,
       animation,
-      shownAt: performance.now(),
+      shownAt: run.clock.floorNow(),
       retiring: null,
     });
   }
@@ -494,8 +529,10 @@ class ReadoutLayer {
     this.show(run, node, left + width / 2, top + height / 2, width, height, { pop: 1.08 });
   }
 
-  // Retires readouts (default: every one showing): each keeps ≥ READOUT_MIN_REAL_MS on screen,
-  // then drifts up and fades. Resolves once every exit has finished (or was superseded).
+  // Retires readouts (default: every one showing): each keeps ≥ READOUT_FLOOR_MS of floor time on
+  // screen, its exit included, then drifts up and fades. The wait for the floor runs on the clock,
+  // so a hold that starts meanwhile shortens it. Resolves once every exit has finished (or was
+  // superseded).
   retire(run, nodes = [...this.live.keys()]) {
     return Promise.all(nodes.map((node) => this.retireNode(run, node)));
   }
@@ -504,36 +541,44 @@ class ReadoutLayer {
     const entry = this.live.get(node);
     if (!entry) return Promise.resolve();
     if (entry.retiring) return entry.retiring;
-    const at = entry.at,
-      animation = node.animate(
-        run.reduced
-          ? [
-              { opacity: 1, transform: at(0, 1) },
-              { opacity: 0, transform: at(0, 1) },
-            ]
-          : [
-              { opacity: 1, transform: at(0, 1) },
-              { opacity: 0, transform: at(-10, 0.94) },
-            ],
-        {
-          delay: Math.max(0, entry.shownAt + READOUT_MIN_REAL_MS - performance.now()),
-          duration: run.reduced ? REDUCED_FADE_MS : Math.max(run.clock.realMs(EXIT[0]), EXIT[1]),
-          easing: 'ease-in',
-          fill: 'both',
-        }
+    const clock = run.clock,
+      left = entry.shownAt + READOUT_FLOOR_MS - exitFloorMs(run) - clock.floorNow();
+    entry.retiring = clock.wait(0, { floorMs: Math.max(0, left) }).then((alive) => {
+      // Re-shown (a new readout took the node) or cleared meanwhile.
+      if (this.live.get(node) !== entry) return undefined;
+      if (!alive) {
+        this.drop(node);
+        return undefined;
+      }
+      const at = entry.at,
+        animation = node.animate(
+          run.reduced
+            ? [
+                { opacity: 1, transform: at(0, 1) },
+                { opacity: 0, transform: at(0, 1) },
+              ]
+            : [
+                { opacity: 1, transform: at(0, 1) },
+                { opacity: 0, transform: at(-10, 0.94) },
+              ],
+          { duration: popRealMs(run, EXIT), easing: 'ease-in', fill: 'both' }
+        );
+      entry.animation.cancel();
+      entry.animation = animation;
+      return animation.finished.then(
+        () => {
+          if (this.live.get(node)?.animation === animation) this.drop(node);
+        },
+        () => {}
       );
-    entry.animation.cancel();
-    entry.animation = animation;
-    entry.retiring = animation.finished.then(
-      () => {
-        if (this.live.get(node)?.animation !== animation) return;
-        animation.cancel();
-        this.live.delete(node);
-        node.classList.remove('showing');
-      },
-      () => {}
-    );
+    });
     return entry.retiring;
+  }
+
+  drop(node) {
+    this.live.get(node)?.animation.cancel();
+    this.live.delete(node);
+    node.classList.remove('showing');
   }
 
   clear() {
@@ -551,7 +596,7 @@ const STAMP_TEXT = {
   resisted: () => t('battle.hitWeak'),
   miss: () => t('battle.missCallout'),
   blocked: () => t('battle.blocked'),
-  ko: () => 'K.O. !',
+  ko: () => t('battle.koStamp'),
 };
 const STAMP_ICON = { critical: 'star', blocked: 'shield' };
 const STAMP_CUES = new Set(['critical', 'effective', 'resisted', 'miss', 'blocked']);
@@ -580,12 +625,16 @@ function readoutLayer() {
   return currentLayer;
 }
 
-// Drops every in-flight readout, banner and FX quad of the battle presentation (clearBattleFx).
-// Status loops die with the FX layer, so the session forgets them and re-syncs later.
-export function clearPresentation() {
+// Drops every in-flight readout, banner and FX quad of a presentation session (the battle's by
+// default; clearBattleFx). A readout layer whose #fx-text left the DOM (a closed Move Theater) is
+// disposed. Status loops die with the FX layer, so the session forgets them and re-syncs later.
+export function clearPresentation(session = ctx.battleSession) {
+  if (currentLayer && !currentLayer.element.isConnected) {
+    currentLayer.dispose();
+    currentLayer = null;
+  }
   currentLayer?.clear();
   ctx.arenaScene?.fx?.clear();
-  const session = ctx.battleSession;
   if (session?.banners) {
     for (const banner of session.banners) banner.remove();
     session.banners.clear();
@@ -604,12 +653,13 @@ function numberFormat() {
 // ---------------------------------------------------------------------------------------------
 // Beat runs
 
-// A beat starts where the previous one was due to end (within one late frame), else now.
+// A beat starts where the previous one was due to end (within one late frame, real ms, at any
+// rate), else now.
 const CURSOR_SLACK_MS = 40;
 function beatStart(session, clock) {
   const now = clock.now(),
     cursor = session.beatCursor;
-  return cursor != null && now >= cursor && now - cursor <= CURSOR_SLACK_MS ? cursor : now;
+  return cursor != null && now >= cursor && now - cursor <= CURSOR_SLACK_MS * clock.rate ? cursor : now;
 }
 
 function createRun(session, beat, beats, budget) {
@@ -653,7 +703,7 @@ function emitCue(run, name, fields = {}) {
 }
 
 function markReadout(run) {
-  run.session.lastReadoutReal = performance.now();
+  run.session.lastReadoutAt = run.clock.floorNow();
 }
 
 function text(run) {
@@ -1094,7 +1144,9 @@ function execOp(run, cue, scope) {
 async function runSchedule(run, items) {
   items.sort((a, b) => a.time - b.time || a.order - b.order);
   for (const item of items) {
-    const deadline = run.start + item.time;
+    // Nothing outlives the beat: an item authored past its end (a lethal action's tail, a
+    // compressed beat's add-on) plays at the end.
+    const deadline = run.start + Math.min(item.time, run.end ?? Infinity);
     if (run.clock.now() < deadline && !(await run.clock.waitUntil(deadline))) return false;
     if (!sessionAlive(run.session)) return false;
     const result = item.exec();
@@ -1152,10 +1204,14 @@ function actionPlan(run) {
     authoredEnd = reduced
       ? Math.max(0, landed - 1) * spacing
       : cutIn + s * endAt + Math.max(0, landed - 1) * spacing,
-    // The beat ends with its choreography (authored end + chip add-on), never after its budget.
-    // Readouts outlive it on their own WAAPI clocks, overlapping the next beat.
-    end =
-      reduced || beat.lethal ? virtualBudget : Math.min(virtualBudget, authoredEnd + (perHit ? addOn : 0));
+    lastContact = landed ? hitTime(landed - 1, contactAt) : 0,
+    // The beat ends with its choreography (authored end + chip add-on), never after its budget;
+    // a lethal one LETHAL_CONTACT_MARGIN after its last contact (the K.O. beat takes over).
+    end = reduced
+      ? virtualBudget
+      : beat.lethal && landed
+        ? Math.min(virtualBudget, lastContact + LETHAL_CONTACT_MARGIN)
+        : Math.min(virtualBudget, authoredEnd + (perHit ? addOn : 0));
   return { timeline, perHit, s, cutIn, hitStops, end, time, hitTime, contactAt, authoredEnd };
 }
 
@@ -1283,6 +1339,12 @@ function contact(run, hit, index, hitStop) {
     }
     const tags = { ...tally.tags },
       critical = tally.critical && !blocked;
+    // A critical behind an effectiveness stamp keeps its gold number and says so in a gold
+    // "★ Coup critique !" tag right under it (the stamp is the matchup lesson).
+    if (critical && stamp !== 'critical') {
+      const label = t('battle.critical');
+      tags.crit = { html: `${icon('star')}${escapeHtml(label)}`, text: label, icon: true };
+    }
     if (tally.absorbed > 0 && !blocked)
       tags.absorbed = {
         html: `${icon('shield')}${tally.absorbed}`,
@@ -1291,10 +1353,7 @@ function contact(run, hit, index, hitStop) {
       };
     tally.slot = layer.number(run, target, {
       kind: blocked ? 'blocked' : 'damage',
-      // A critical behind an effectiveness stamp keeps its star on the number.
-      text: blocked
-        ? `${icon('shield')}${tally.absorbed}`
-        : `${critical && stamp !== 'critical' ? icon('star') : ''}−${tally.dealt}`,
+      text: blocked ? `${icon('shield')}${tally.absorbed}` : `−${tally.dealt}`,
       critical,
       effect: blocked ? 1 : damage.affinity,
       stamp,
@@ -1419,20 +1478,36 @@ function beatScope(run, roles, extra) {
   };
 }
 
-// Schedules a BEAT_TIMELINES entry. Under reduced motion its cosmetic time folds into the 450 ms
-// readout beat: authored times scale so `end` lands on the budget.
-function scheduleTimeline(queue, run, timeline, scope, offset = 0) {
-  const end = timeline.cues.find((cue) => cue.op === 'end')?.at ?? 0,
-    scale = run.reduced && end > run.budget ? run.budget / end : 1;
+// Chip add-on window of a non-action beat (§3.4).
+function addOnMs(beat) {
+  return beat.chips?.length || beat.talents?.length ? BEAT_BUDGET_MS.addOn : 0;
+}
+
+// A non-action beat never runs past its budget: its authored timeline (`authored` virtual ms,
+// which fits the ×1 budget, §3.4) is time-scaled into the budget less the chip add-on window when
+// it is longer (reduced motion's 450 ms readout beat).
+function fitScale(run, authored) {
+  const room = run.budget - (run.reduced ? 0 : addOnMs(run.beat));
+  return authored > room && authored > 0 ? Math.max(0, room) / authored : 1;
+}
+
+// Schedules a BEAT_TIMELINES entry from `offset` (authored ms), its times scaled by `scale`.
+function scheduleTimeline(queue, run, timeline, scope, { offset = 0, scale = 1 } = {}) {
   for (const cue of timeline.cues)
-    if (cue.op !== 'end') queue.add(offset + cue.at * scale, () => execOp(run, cue, scope));
-  return offset + end * scale;
+    if (cue.op !== 'end') queue.add((offset + cue.at) * scale, () => execOp(run, cue, scope));
+  return (offset + timelineEnd(timeline)) * scale;
 }
 
 async function playKo(run) {
   const beat = run.beat,
     queue = scheduler(),
-    stamps = [];
+    stamps = [],
+    scale = fitScale(
+      run,
+      (run.reduced ? 0 : (beat.kos.length - 1) * BEAT_BUDGET_MS.extraKo) + timelineEnd(BEAT_TIMELINES.ko)
+    );
+  // A lethal action's readouts were handed over (§3.4): they bow out now, once their floor is over.
+  text(run)?.retire(run);
   presentAll(run, beat.skips);
   let end = 0;
   beat.kos.forEach(({ side, creatureId }, index) => {
@@ -1447,7 +1522,6 @@ async function playKo(run) {
             presentAll(run, [event]);
             const stamp = text(run)?.koStamp(run, side);
             if (stamp) stamps.push(stamp);
-            emphasize(run, 'ko');
             markReadout(run);
           },
           cue: (name) => emitCue(run, name, { side, creatureId }),
@@ -1460,7 +1534,10 @@ async function playKo(run) {
       );
     end = Math.max(
       end,
-      scheduleTimeline(queue, run, BEAT_TIMELINES.ko, scope, run.reduced ? 0 : index * BEAT_BUDGET_MS.extraKo)
+      scheduleTimeline(queue, run, BEAT_TIMELINES.ko, scope, {
+        offset: run.reduced ? 0 : index * BEAT_BUDGET_MS.extraKo,
+        scale,
+      })
     );
   });
   // The stamp bows out before the beat hands over: a replacement never drops under "K.O. !".
@@ -1506,7 +1583,7 @@ async function playSwitch(run) {
         },
       }
     ),
-    end = scheduleTimeline(queue, run, timeline, scope);
+    end = scheduleTimeline(queue, run, timeline, scope, { scale: fitScale(run, timelineEnd(timeline)) });
   queue.add(end, () => {
     presentSurges(run);
     presentReadouts(run);
@@ -1554,7 +1631,8 @@ async function playCutIn(run) {
         cue: (name) => emitCue(run, name, { side: beat.side, creatureId: beat.creatureId }),
       }
     ),
-    end = scheduleTimeline(queue, run, BEAT_TIMELINES[beat.cutIn], scope);
+    timeline = BEAT_TIMELINES[beat.cutIn],
+    end = scheduleTimeline(queue, run, timeline, scope, { scale: fitScale(run, timelineEnd(timeline)) });
   queue.add(end, () => {
     presentAll(run, [beat.start]);
     presentSurges(run);
@@ -1596,7 +1674,12 @@ async function playChip(run) {
             cue: (name) => emitCue(run, name, { side, creatureId: ticks[0].creatureId }),
           }
         );
-      end = Math.max(end, scheduleTimeline(queue, run, BEAT_TIMELINES.tick, scope));
+      end = Math.max(
+        end,
+        scheduleTimeline(queue, run, BEAT_TIMELINES.tick, scope, {
+          scale: fitScale(run, timelineEnd(BEAT_TIMELINES.tick)),
+        })
+      );
     }
     queue.add(end, () => {
       presentSurges(run);
@@ -1615,29 +1698,12 @@ async function playChip(run) {
 // ---------------------------------------------------------------------------------------------
 // Narration and battle log (§6.3)
 
-function damageLine(event) {
-  const blocked = event.amount === 0 && event.absorbed > 0,
-    affinityNote = blocked
-      ? ''
-      : event.affinity > 1
-        ? `↑ ${t('battle.effective')} · `
-        : event.affinity < 1
-          ? `↓ ${t('battle.resisted')} · `
-          : '',
-    criticalNote = event.critical && !blocked ? `${t('battle.critical')} · ` : '',
-    comboNote = event.combo
-      ? `${t('battle.combo', { percent: Math.round((event.combo.multiplier - 1) * 100) })} · `
-      : '',
-    body = blocked
-      ? t('battle.action.blocked', { target: creatureName(event.creatureId) })
-      : t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount }),
-    hitNote = event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : '';
-  return `${criticalNote}${affinityNote}${comboNote}${body}${hitNote}`;
-}
+const plainName = (side, creatureId) => creatureName(creatureId);
 
-// Per-event battle-log text (the chronicle keeps one entry per semantic event).
-function eventLine(event) {
-  const actor = event.creatureId ? creatureName(event.creatureId) : '';
+// Per-event battle-log text. `name(side, creatureId)` names each creature: plain in the narration
+// box, with its side in the journal.
+function eventLine(event, name = plainName) {
+  const actor = event.creatureId ? name(event.side, event.creatureId) : '';
   switch (event.type) {
     case 'move-start':
       return t('battle.action.move', { actor, move: t(`move.${event.moveId}`) });
@@ -1646,12 +1712,21 @@ function eventLine(event) {
     case 'perfect-relay':
       return t('battle.perfectRelay', { actor });
     case 'damage':
-      return damageLine(event);
+      return event.amount === 0 && event.absorbed > 0
+        ? t('battle.action.blocked', { target: actor })
+        : t('battle.action.damage', { target: actor, amount: event.amount });
     case 'heal':
       return t('battle.action.heal', { actor, amount: event.amount });
     case 'status': {
       const status = t(`status.${event.status}`);
-      if (event.consumed) return t('battle.action.consumed', { actor, status });
+      // A used-up bonus kicks in; a used-up malus (Marqué spent by a combo) fades.
+      if (event.consumed)
+        return t(
+          STATUS_DEFINITIONS[event.status]?.positive
+            ? 'battle.action.consumed'
+            : 'battle.action.consumedMalus',
+          { actor, status }
+        );
       return event.applied
         ? t('battle.action.status', { actor, status })
         : t('battle.action.cleanse', { actor, status });
@@ -1659,7 +1734,7 @@ function eventLine(event) {
     case 'barrier':
       return t('battle.action.barrier', { actor, amount: event.amount });
     case 'barrier-hit':
-      return t('battle.action.absorb', { amount: event.amount });
+      return t('battle.action.absorbed', { actor, amount: event.amount });
     case 'barrier-break':
       return t('battle.action.barrierBreak', { actor, amount: event.amount });
     case 'miss':
@@ -1686,6 +1761,50 @@ function eventLine(event) {
   }
 }
 
+// A landed hit's qualifiers in the words its stage readout used (stamp, tags): the journal's
+// sub-line under "X perd N PV.".
+function damageNotes(event) {
+  if (event.amount === 0 && event.absorbed > 0) return [];
+  const notes = [];
+  if (event.critical) notes.push(t('battle.critical'));
+  if (event.affinity > 1) notes.push(t('battle.hitEffective'));
+  else if (event.affinity < 1) notes.push(t('battle.hitWeak'));
+  if (event.combo)
+    notes.push(t('battle.comboTag', { multiplier: numberFormat().format(event.combo.multiplier) }));
+  if (event.hits > 1) notes.push(t('battle.hit', { hit: event.hit, hits: event.hits }));
+  return notes;
+}
+
+const capitalized = (text) =>
+  text.replace(/^((?:<[^>]*>)*)(\p{Ll})/u, (_, tags, letter) => `${tags}${letter.toUpperCase()}`);
+
+// One journal entry per semantic event (§6.3). Each creature is named with its side, in bold,
+// inside the sentence ("Ton Orakyn utilise…", "L’effet Marqué sur Nymbloom rival s’efface."), so
+// no row repeats a name; a hit's qualifiers go on a sub-line (`notes`) under its sentence.
+function journalEntry(event, turn) {
+  const names = new Set(),
+    line = eventLine(event, (side, creatureId) => {
+      const label = t(`battle.logSide.${side}`, { name: creatureName(creatureId) });
+      names.add(escapeHtml(label));
+      return label;
+    }),
+    bold = names.size
+      ? new RegExp([...names].map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
+      : null,
+    html = bold
+      ? escapeHtml(line).replace(bold, (label) => `<b class="log-side-label">${label}</b>`)
+      : escapeHtml(line);
+  return {
+    type: event.type === 'damage' && event.combo ? 'combo' : event.type,
+    side: event.side,
+    creatureId: event.creatureId ?? null,
+    turn,
+    text: capitalized(line),
+    html: capitalized(html),
+    notes: event.type === 'damage' ? damageNotes(event) : [],
+  };
+}
+
 function endLine(event) {
   return event.reason === 'turn-cap'
     ? t('battle.logEnd.cap')
@@ -1694,7 +1813,8 @@ function endLine(event) {
       : t('battle.logEnd.loss');
 }
 
-// One line per beat that carries news. Its emphasis (the stamp, or "K.O. !") joins it at contact.
+// One line per beat that carries news. Its emphasis (the stage stamp) joins it at contact; a KoBeat's
+// line already reads "X est K.O. !", so its stamp stays on the stage only.
 function beatLine(beat) {
   switch (beat.kind) {
     case 'action':
@@ -1704,7 +1824,7 @@ function beatLine(beat) {
     case 'ko':
       return beat.kos.map(({ creatureId }) => t('battle.ko', { name: creatureName(creatureId) })).join(' ');
     case 'chip':
-      return beat.chip === 'tick' ? beat.ticks.map(eventLine).join(' ') : null;
+      return beat.chip === 'tick' ? beat.ticks.map((tick) => eventLine(tick)).join(' ') : null;
     case 'end':
       return endLine(beat);
     default:
@@ -1712,25 +1832,21 @@ function beatLine(beat) {
   }
 }
 
-// The line holds the box for its beat, but never longer than READOUT_MIN_REAL_MS once the next
+// The line holds the box for its beat, but never longer than a readout's floor once the next
 // beat's line arrives (hurry), so the text follows the stage instead of falling behind it.
 function narrateBeat(run, wallMs) {
   const session = run.session,
     line = beatLine(run.beat);
   if (line) {
-    run.line = route.narrate(line, { minMs: Math.min(run.clock.realMs(wallMs), READOUT_MIN_REAL_MS) });
+    run.line = route.narrate(line, {
+      minMs: Math.min(run.clock.realMs(wallMs), run.clock.realFloorMs(READOUT_FLOOR_MS)),
+    });
     run.lineText = line;
     session.lastLine = line;
   }
   for (const event of run.beat.events ?? []) {
     if (!LOG_EVENT_TYPES.has(event.type) || event.type === 'move-skip') continue;
-    session.timeline.push({
-      type: event.type === 'damage' && event.combo ? 'combo' : event.type,
-      side: event.side,
-      creatureId: event.creatureId ?? null,
-      turn: event.turn || session.state.turn,
-      text: eventLine(event),
-    });
+    session.timeline.push(journalEntry(event, event.turn || session.state.turn));
     if (session.timeline.length > TIMELINE_CAP) session.timeline.shift();
   }
 }
@@ -1742,10 +1858,11 @@ function timelineEnd(timeline) {
   return timeline.cues.find((cue) => cue.op === 'end')?.at ?? 0;
 }
 
-// Virtual length of a non-action beat: its timeline (plus the chip add-on) within its budget.
+// Virtual length of a non-action beat: its timeline (plus the chip add-on) within its budget
+// (fitScale time-scales a longer timeline to fit).
 function beatEnd(run) {
   const beat = run.beat,
-    addOn = beat.chips?.length || beat.talents?.length ? BEAT_BUDGET_MS.addOn : 0;
+    addOn = addOnMs(beat);
   if (run.reduced) return run.budget;
   const authored =
     beat.kind === 'ko'
@@ -1765,10 +1882,12 @@ async function playBeat(session, beat, beats) {
     run = createRun(session, beat, beats, budget),
     plan = beat.kind === 'action' ? actionPlan(run) : null,
     end = plan ? plan.end : beatEnd(run),
-    stops = plan ? plan.hitStops.reduce((sum, ms) => sum + ms, 0) : 0;
+    stops = plan ? plan.hitStops.reduce((sum, ms) => sum + ms, 0) : 0,
+    clock = session.clock,
+    // A lethal action hands its readouts to the K.O. beat that follows (§3.4).
+    handOff = beat.kind === 'action' && beat.lethal && beats[beats.indexOf(beat) + 1]?.kind === 'ko';
+  run.end = end;
   ctx.currentFxMove = beat;
-  // The previous beat's readouts bow out as this one starts (they had their floor, below).
-  if (!run.instant) currentLayer?.retire(run);
   if (session.pendingCut && beat.kind !== 'ko') {
     session.pendingCut = false;
     if (!run.instant) void run.arena?.shot('cut');
@@ -1791,12 +1910,21 @@ async function playBeat(session, beat, beats) {
   presentAll(run, beat.events ?? []);
   patch(run, ...SIDES);
   syncStatusLoops(run);
-  // Readouts hold until the next beat retires them: the beat ends once the last one has been on
-  // screen ≥ READOUT_MIN_REAL_MS (hurry and ×2 compress the beats, never the readouts).
-  const minRealMs = run.instant
-    ? 0
-    : Math.max(0, session.lastReadoutReal + READOUT_MIN_REAL_MS - performance.now());
-  const done = await session.clock.waitUntil(run.start + end, { minRealMs });
+  // Readouts bow out in their own beat's tail: their exit starts EXIT[0] before the deadline (and
+  // no earlier than their READOUT_FLOOR_MS floor, the exit included), so at ×1 it ends as the
+  // next beat's line arrives. The beat still ends once the last readout has had its floor (×2
+  // compresses the beats, never the readouts; holding compresses both); the exit never lengthens
+  // it. A hand-off skips both: the K.O. beat retires the readouts once their floor is over.
+  const floorLeft = () => Math.max(0, session.lastReadoutAt + READOUT_FLOOR_MS - clock.floorNow()),
+    floored = !run.instant && !handOff;
+  let done = true;
+  if (floored) {
+    done = await clock.waitUntil(run.start + end - EXIT[0], {
+      floorMs: Math.max(0, floorLeft() - exitFloorMs(run)),
+    });
+    if (done) currentLayer?.retire(run);
+  }
+  done = done && (await clock.waitUntil(run.start + end, { floorMs: floored ? floorLeft() : 0 }));
   // The next beat starts on this deadline, not on the frame that noticed it: no frame lag
   // accumulates across a turn.
   session.beatCursor = run.start + end;
@@ -1857,7 +1985,8 @@ function bindHurry(session) {
 export async function playBeats(session, events) {
   ensurePresentation(session);
   session.clock.setSpeed(ctx.save.battleSpeed);
-  session.beatCursor = null;
+  // No cursor reset: the enemy's replacement right after a turn continues on the turn's last
+  // deadline, and beatStart drops a cursor older than one late frame (a new turn starts now).
   if (!session.clock.instant) readoutLayer()?.measureKeepOut();
   const beats = groupBeats(events),
     unbind = bindHurry(session);
@@ -1867,7 +1996,7 @@ export async function playBeats(session, events) {
   } finally {
     unbind();
     ctx.currentFxMove = null;
-    // The turn's last readouts (already past their floor) bow out as the dock returns.
+    // A turn cut short leaves readouts showing: they bow out as the dock returns.
     if (sessionAlive(session))
       currentLayer?.retire({ clock: session.clock, reduced: Boolean(ctx.save.reducedMotion) });
     else session.cues.dispose();
@@ -1888,12 +2017,26 @@ function rivalIntro(session) {
   };
 }
 
+// Holding the stage hurries the intro and the outro as well as the turns (§6.5).
+async function hurried(session, play) {
+  const unbind = bindHurry(session);
+  try {
+    return await play();
+  } finally {
+    unbind();
+  }
+}
+
 export async function playIntro(session) {
   if (!sessionAlive(session)) return false;
   ensurePresentation(session);
-  const clock = session.clock;
-  if (clock.instant) return true;
-  const state = session.state,
+  if (session.clock.instant) return true;
+  return hurried(session, () => introTimeline(session));
+}
+
+async function introTimeline(session) {
+  const clock = session.clock,
+    state = session.state,
     leads = { player: activeOf(state, 'player').id, enemy: activeOf(state, 'enemy').id },
     // Team ids, lead first, for the portrait VS stack.
     teams = Object.fromEntries(
@@ -1951,8 +2094,13 @@ export async function playOutro(state) {
   const session = ctx.battleSession;
   if (!sessionAlive(session)) return;
   ensurePresentation(session);
+  if (session.clock.instant) return;
+  await hurried(session, () => outroTimeline(session, state));
+  if (!sessionAlive(session)) session.cues.dispose();
+}
+
+async function outroTimeline(session, state) {
   const clock = session.clock;
-  if (clock.instant) return;
   screen.classList.add('battle-outro');
   const winner = state.winner === 'enemy' ? 'enemy' : 'player',
     kind = winner === 'player' ? 'victory' : 'defeat',
@@ -1975,12 +2123,14 @@ export async function playOutro(state) {
     );
   scheduleTimeline(queue, run, timeline, scope);
   const reduced = run.reduced;
-  if (!(await runSchedule(run, queue.items)) || !(await clock.waitUntil(run.start + end))) {
-    if (!sessionAlive(session)) session.cues.dispose();
-    return;
-  }
+  if (!(await runSchedule(run, queue.items)) || !(await clock.waitUntil(run.start + end))) return;
+  // A quick clean fade (battle-fx.css: 180 ms, 150 ms reduced; floor time, so a hold shortens
+  // it with the rest) hands over to the results: the results screen replaces the layout only
+  // once it is fully faded, at any speed.
+  const exitMs = reduced ? 150 : 180,
+    layout = screen.querySelector('.battle-layout');
+  if (layout) layout.style.transitionDuration = `${clock.realFloorMs(exitMs)}ms`;
   screen.classList.add('battle-exit');
   ctx.arenaScene?.setPaused(true);
-  await clock.wait(reduced ? 150 : 420);
-  if (!sessionAlive(session)) session.cues.dispose();
+  await clock.wait(0, { floorMs: exitMs });
 }

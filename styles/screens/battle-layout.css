@@ -379,11 +379,14 @@
   white-space: nowrap;
 }
 /* With statuses to show, they take the type word's place (the type badge
-   stays in the name row). */
-.battle-plate:has(.plate-status, .plate-status-more) .plate-type-name {
+   stays in the name row), and on the player plate the level tag's too: the
+   rival's "Niv." stays, since its gap is the rookie handicap. */
+.battle-plate:has(.plate-status, .plate-status-more) .plate-type-name,
+.battle-plate.player:has(.plate-status, .plate-status-more) .plate-level {
   display: none;
 }
 .plate-hp-value {
+  flex: none;
   display: inline-flex;
   align-items: baseline;
   gap: 3px;
@@ -401,12 +404,18 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-display);
 }
+/* The chips' own slot between the level tag and the HP number: it shrinks,
+   never the number, and hud.js folds what does not fit into "+N" (the 2 px
+   padding keeps the high-contrast outlines inside the clip). */
 .battle-screen .plate-statuses {
+  flex: 0 1 auto;
   display: flex;
   flex-wrap: nowrap;
   gap: 4px;
   min-width: 0;
-  margin: 0;
+  margin: -2px;
+  padding: 2px;
+  overflow: hidden;
 }
 .battle-screen .plate-status,
 .battle-screen .plate-status-more {
@@ -659,7 +668,9 @@
   display: none;
 }
 /* During a turn #action-line becomes the narration box and covers the dock
-   (same box, so the stage never re-fits); the head row keeps its height. */
+   (same box, so the stage never re-fits); the head row keeps its height. It
+   is a raised indigo panel like the plates: 20 px ink, names in bold, moves
+   in cyan, the stamp's emphasis in its tone. */
 .battle-screen.locked .action-line {
   position: absolute;
   top: 8px;
@@ -669,16 +680,17 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   height: auto;
-  padding: 22px 22px 16px;
+  padding: 18px 20px 16px;
   border-radius: var(--radius-l);
-  color: #1a1840;
-  background: #f8f6ff;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
   box-shadow:
-    inset 0 0 0 3px #d8d4ff,
-    0 4px 0 #8f8cc0;
-  font-size: 21px;
+    inset 0 0 0 1px #ffffff17,
+    inset 0 1px 0 #ffffff26,
+    0 4px 0 var(--ledge);
+  font-size: 20px;
   line-height: 1.3;
   white-space: normal;
   animation: narrationBoxIn var(--dur-med) var(--ease-out);
@@ -690,37 +702,34 @@
   font-style: normal;
 }
 .narration-line .nw-move {
-  color: #3a2fd1;
+  color: var(--cyan);
 }
 .narration-line .nw-creature {
-  color: #0f0d33;
+  color: var(--ink);
   font-weight: 900;
 }
 .narration-emphasis {
   display: block;
-  color: #1a1840;
+  color: var(--ink);
   font-family: var(--font-display);
   font-size: 26px;
   font-weight: var(--weight-display);
   line-height: 1.05;
 }
 .narration-emphasis[data-tone='good'] {
-  color: #0b8043;
+  color: var(--good);
 }
 .narration-emphasis[data-tone='weak'] {
-  color: #56597e;
+  color: var(--ink-3);
 }
 .narration-emphasis[data-tone='crit'] {
-  color: #c2410c;
+  color: var(--gold);
 }
 .narration-emphasis[data-tone='miss'] {
-  color: #2658c4;
+  color: var(--cyan);
 }
 .narration-emphasis[data-tone='block'] {
-  color: #0b7285;
-}
-.narration-emphasis[data-tone='ko'] {
-  color: #c01a3c;
+  color: #9ef6ff;
 }
 @keyframes narrationBoxIn {
   from {
@@ -742,44 +751,84 @@
   pointer-events: none;
   transition: visibility 0s linear var(--dur-med);
 }
-.battle-screen.locked #tutorial-root {
-  visibility: hidden;
+/* Tutorial (GAME-04): the lesson lives in the prompt line, so the stage stays
+   clear; the head row is taller for the whole tutorial (the stage fits once). */
+.battle-screen.tutorial-mode {
+  --dock-head: 76px;
 }
-.battle-screen #tutorial-root:empty {
-  display: none;
-}
-.battle-screen .tutorial-tip {
-  position: static;
+.battle-screen .prompt-lesson {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: none;
-  margin: 0;
-  padding: 8px 8px 8px 12px;
-  border: 0;
-  border-radius: var(--radius-m);
-  color: var(--ink);
-  background: #13305a;
-  box-shadow:
-    inset 0 0 0 1px #65e9ff4d,
-    0 2px 0 var(--ledge);
-  font-size: var(--text-sm);
-  line-height: 1.3;
-  transform: none;
+  flex-direction: column;
+  gap: 3px;
 }
-.battle-screen .tutorial-tip > .ico {
-  width: 24px;
-  height: 24px;
+.battle-screen .lesson-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold-bright);
+  font-family: var(--font-text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.battle-screen .lesson-step .ico {
+  width: 18px;
+  height: 18px;
+}
+.battle-screen .lesson-text {
+  font-size: 17px;
+  line-height: 1.15;
+}
+.battle-screen :is(.lesson-text, .prompt-tip) em {
+  font-style: normal;
+}
+.battle-screen :is(.lesson-text, .prompt-tip) .nw-move {
   color: var(--cyan);
 }
-.battle-screen .tutorial-tip p {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
+/* Marqué's one-line tip: the status token, then the sentence. */
+.battle-screen .prompt-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
 }
-.battle-screen .tutorial-tip .subtle-btn {
+.battle-screen .prompt-tip > .status-badge {
   flex: none;
-  font-size: var(--text-xs);
+}
+/* Skip the tutorial: a quiet pill in the coach chip's place, a full 48 px target. */
+.battle-screen .skip-chip {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  order: 2;
+  height: var(--hit);
+  min-width: var(--hit);
+  padding: 0 14px;
+  border: 0;
+  color: var(--ink-2);
+  background: none;
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+.battle-screen .skip-chip::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 6px 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px #ffffff33;
+}
+.battle-screen.locked .skip-chip {
+  visibility: hidden;
+}
+body.high-contrast .battle-screen .skip-chip {
+  color: #fff;
+}
+body.high-contrast .battle-screen .skip-chip::before {
+  box-shadow: inset 0 0 0 2px #fff;
 }
 
 /* ------------------------------------------------------- sheets over battle */
@@ -1195,14 +1244,13 @@ body.high-contrast .battle-screen .plate-surge-number {
   color: #fff;
 }
 body.high-contrast .battle-screen.locked .action-line {
-  color: #000;
-  background: #fff;
+  color: #fff;
+  background: #000;
   box-shadow:
-    inset 0 0 0 4px #000,
-    0 4px 0 #fff;
+    inset 0 0 0 3px #fff,
+    0 4px 0 #000;
 }
 body.high-contrast .battle-screen .narration-line .nw-move {
-  color: #1c1199;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -1276,9 +1324,6 @@ body.high-contrast .battle-screen .prompt-hint {
     grid-template-rows: auto minmax(0, 1fr);
     padding-left: var(--battle-edge);
     box-shadow: -1px 0 0 #ffffff14;
-  }
-  .battle-screen .battle-command-dock:has(#tutorial-root:not(:empty)) {
-    grid-template-rows: auto auto minmax(0, 1fr);
   }
   .battle-screen .battle-controls {
     min-height: 0;
@@ -1358,6 +1403,16 @@ body.high-contrast .battle-screen .prompt-hint {
   .battle-screen .dock-head > .intent-read {
     order: 1;
     flex: 1 1 0;
+  }
+  /* The tutorial's lesson keeps the head row; the rival's plan gives way. */
+  .battle-screen.tutorial-mode .dock-head > .intent-read {
+    display: none;
+  }
+  .battle-screen.tutorial-mode .dock-head:has(> .intent-read) > .action-line {
+    flex: 1 1 auto;
+  }
+  .battle-screen.tutorial-mode .dock-head .prompt-lesson {
+    display: flex;
   }
   .battle-screen.locked .action-line {
     top: 4px;

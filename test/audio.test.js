@@ -76,9 +76,9 @@ test('mixer settings clamp independently and mute only the master', () => {
   assert.equal(calculateTension({ playerHpRatio: 0, enemyHpRatio: 0, turn: 99 }), 0.82);
 });
 
-test('the explicit migration chain advances every historical version to v17', () => {
-  assert.equal(SAVE_VERSION, 17);
-  assert.equal(SAVE_MIGRATIONS.length, 16);
+test('the explicit migration chain advances every historical version to v18', () => {
+  assert.equal(SAVE_VERSION, 18);
+  assert.equal(SAVE_MIGRATIONS.length, 17);
   let save = { version: 1 };
   for (let index = 0; index < SAVE_MIGRATIONS.length; index++) {
     save = SAVE_MIGRATIONS[index](save);
@@ -87,8 +87,8 @@ test('the explicit migration chain advances every historical version to v17', ()
   assert.equal(save.musicVolume, 0.45);
   assert.equal(save.sfxVolume, 0.8);
   assert.equal(save.expertMode, false);
-  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 17);
-  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 17);
+  assert.deepEqual(migrateSave({ version: 12, musicVolume: 0.2 }).version, 18);
+  assert.equal(validateSave({ ...DEFAULT_SAVE, version: 13 }).version, 18);
   assert.deepEqual(
     migrateSave({
       version: 14,
@@ -412,7 +412,16 @@ test('leaving a screen stops its queued cues while the results sting plays once 
   const lastStop = (source) => source.stopped.at(-1);
   sound.setScreen('selection');
   sound.setScreen('battle:crystal');
-  const battleCues = sourcesCreatedBy(sound, () => sound.move(signature));
+  const battleCues = sourcesCreatedBy(sound, () =>
+    sound.cue('signature-cutin', {
+      beat: 1,
+      speed: 1,
+      side: 'player',
+      creatureId: signature.owner,
+      moveId: signature.id,
+      clash: false,
+    })
+  );
   assert.ok(
     battleCues.some((source) => source.started[0] > ctx.currentTime),
     'layers are queued ahead'
@@ -469,7 +478,7 @@ test('leaving a screen stops its queued cues while the results sting plays once 
 test('hiding the page stops SFX and music so nothing resumes mid-attack', () => {
   const sound = soundWithGraph();
   const cues = sourcesCreatedBy(sound, () => {
-    sound.heal();
+    sound.cue('heal', { beat: 1, speed: 1, side: 'player', creatureId: 'virelia', amount: 12, team: false });
     sound.musicNote(440, 1, 1, { gain: 0.02, wave: 'sine', filter: 1500, attack: 0.01, reverb: 0.4 });
   });
   sound.handleVisibility(true);

@@ -47,7 +47,9 @@ const {
   codexHtml,
   battleLogHtml,
   resetHud,
-  tutorialEnemyAction,
+  prepareTutorial,
+  advanceTutorial,
+  tutorialAfterTurn,
   clearBattleFx,
   playEvents,
   playIntro,
@@ -138,10 +140,14 @@ function openBattleSheet({ title, body, actions = [], variant, onClose }) {
   return close;
 }
 
+// Only the player's own creatures show their Chromatique; the rival's copy of a
+// creature always keeps its normal look.
+const fighterVariant = (side, id) => (side === 'player' ? ctx.spriteVariant(id) : 'normal');
+
 // Visually hidden stand-ins for the WebGL fighters: names for assistive tech and
 // e2e hooks (docs/battle-presentation.md §8.3). FighterLayer writes data-phase.
 function fighterProxyHtml(side, creature) {
-  return `<div class="fighter-proxy visually-hidden ${side}" id="fighter-${side}" data-creature="${creature.id}" data-affinity="${creature.affinity}" data-phase="idle"><img src="${sprite(creature.id)}" alt="${escapeHtml(creatureName(creature.id))}" width="128" height="128"></div>`;
+  return `<div class="fighter-proxy visually-hidden ${side}" id="fighter-${side}" data-creature="${creature.id}" data-affinity="${creature.affinity}" data-phase="idle"><img src="${sprite(creature.id, fighterVariant(side, creature.id))}" alt="${escapeHtml(creatureName(creature.id))}" width="128" height="128"></div>`;
 }
 // Idempotent sync of both fighters to `view` (§8.4): the proxy is written at the
 // swap, then the scene places the sprite. A K.O.'d active creature is shown
@@ -152,16 +158,17 @@ async function patchFighters(view) {
   await Promise.all(
     ['player', 'enemy'].map(async (side) => {
       const creature = activeOf(view, side),
+        variant = fighterVariant(side, creature.id),
         proxy = screen.querySelector(`#fighter-${side}`),
         img = proxy?.querySelector('img');
       if (!img) return;
       if (proxy.dataset.creature !== creature.id) {
         proxy.dataset.creature = creature.id;
         proxy.dataset.affinity = creature.affinity;
-        img.src = sprite(creature.id);
+        img.src = sprite(creature.id, variant);
       }
       img.alt = creatureName(creature.id);
-      if (!fighters || !(await fighters.setCreature(side, creature.id))) return;
+      if (!fighters || !(await fighters.setCreature(side, creature.id, { variant }))) return;
       const phase = fighters.phase(side);
       if (creature.hp <= 0) {
         if (phase !== 'fainted') await fighters.react(side, 'faint', { instant: true });
@@ -188,6 +195,7 @@ function startBattle(config) {
       ? TRAINERS[config.trainerIndex]?.ace
       : null,
   });
+  if (config.mode === 'tutorial') prepareTutorial(state);
   if (config.playerCondition)
     state.sides.player.team.forEach((creature) => {
       const ratio = config.playerCondition[creature.id];
@@ -262,8 +270,8 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
   commandFocusKey = null;
   const state = session.state;
   screen.dataset.page = 'battle';
-  screen.className = `screen battle-screen ${ctx.save.expertMode ? 'expert-mode' : 'simple-mode'}`;
-  screen.innerHTML = `<div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info">${topRowHtml(state)}<div class="battle-plate-slot enemy" id="hud-enemy">${plateHtml('enemy', state)}</div><div class="battle-plate-slot player" id="hud-player">${plateHtml('player', state)}</div></section><section class="battle-stage" data-battle-zone="stage"><canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas>${fighterProxyHtml('enemy', activeOf(state, 'enemy'))}${fighterProxyHtml('player', activeOf(state, 'player'))}<div id="fx-text" class="fx-text" aria-hidden="true"></div></section><section class="battle-command-dock" data-battle-zone="controls"><div class="dock-head" id="dock-head"><div class="action-line" id="action-line" role="status" aria-live="polite"></div></div><div id="tutorial-root"></div><div class="battle-controls"><div class="move-grid" id="moves"></div></div></section></div><div id="replacement-root"></div>`;
+  screen.className = `screen battle-screen ${ctx.save.expertMode ? 'expert-mode' : 'simple-mode'}${session.mode === 'tutorial' ? ' tutorial-mode' : ''}`;
+  screen.innerHTML = `<div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info">${topRowHtml(state)}<div class="battle-plate-slot enemy" id="hud-enemy">${plateHtml('enemy', state)}</div><div class="battle-plate-slot player" id="hud-player">${plateHtml('player', state)}</div></section><section class="battle-stage" data-battle-zone="stage"><canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas>${fighterProxyHtml('enemy', activeOf(state, 'enemy'))}${fighterProxyHtml('player', activeOf(state, 'player'))}<div id="fx-text" class="fx-text" aria-hidden="true"></div></section><section class="battle-command-dock" data-battle-zone="controls"><div class="dock-head" id="dock-head"><div class="action-line" id="action-line" role="status" aria-live="polite"></div></div><div class="battle-controls"><div class="move-grid" id="moves"></div></div></section></div><div id="replacement-root"></div>`;
   try {
     if (!arena) throw new Error('ARENA_LOAD_FAILED');
     if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
@@ -418,6 +426,29 @@ function openWeatherSheet() {
   openBattleSheet({ title: t('arena.ruleTitle'), body: weatherSheetHtml(session.state), variant: 'weather' });
 }
 
+// The tutorial's skip chip asks first (the arena and the turn hold meanwhile):
+// a stray tap must not end the lessons.
+function confirmSkipTutorial() {
+  if (screen.querySelector('#replacement-root .battle-sheet-skip')) return;
+  openBattleSheet({
+    title: t('tutorial.skipTitle'),
+    body: `<p class="sheet-lead">${escapeHtml(t('tutorial.skipBody'))}</p>`,
+    variant: 'skip',
+    actions: [
+      { label: t('tutorial.skipCancel'), variant: 'subtle', action: 'skip-cancel' },
+      {
+        label: t('tutorial.skip'),
+        variant: 'danger',
+        action: 'skip-confirm',
+        onSelect: (close) => {
+          close();
+          completeTutorial();
+        },
+      },
+    ],
+  });
+}
+
 function moveIsLaunchable(session, moveId) {
   return (
     !ctx.locked &&
@@ -544,10 +575,12 @@ function bindCommandDock(session) {
       clearTimeout(pressTimer);
       pressTimer = 0;
     };
-  // The coach chip lives in the dock's head row, next to the prompt.
+  // The coach chip (or, in the tutorial, the skip chip) lives in the dock's head row, next to the prompt.
   screen.querySelector('#dock-head').addEventListener('click', (event) => {
     const button = event.target instanceof Element ? event.target.closest('button') : null;
-    if (button?.dataset.action === 'trainer-command' && sessionIsActive(session)) handleTrainerCommand();
+    if (!button || !sessionIsActive(session)) return;
+    if (button.dataset.action === 'trainer-command') handleTrainerCommand();
+    else if (button.dataset.action === 'skip-tutorial') confirmSkipTutorial();
   });
   grid.addEventListener('pointerdown', (event) => {
     const tile = tileFor(event.target);
@@ -638,20 +671,7 @@ function refreshBattle() {
   }
   void patchFighters(view);
   renderCommands();
-  renderTutorialTip();
   restoreCommandFocus();
-}
-
-function renderTutorialTip() {
-  const root = screen.querySelector('#tutorial-root');
-  if (!root) return;
-  if (ctx.battleSession.mode !== 'tutorial') {
-    root.replaceChildren();
-    return;
-  }
-  const step = Math.min(4, ctx.battleSession.tutorialStep);
-  root.innerHTML = `<div class="tutorial-tip">${icon('school')}<p><strong>${escapeHtml(t('tutorial.title'))}</strong> ${escapeHtml(t(`tutorial.${step + 1}`))}</p>${step < 4 ? `<button type="button" class="subtle-btn" data-action="skip-tutorial">${escapeHtml(t('app.skip'))}</button>` : ''}</div>`;
-  root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
 }
 
 /* ------------------------------------------------------------------- turns */
@@ -694,15 +714,8 @@ async function handlePlayerAction(action, sheetClosed = null) {
     await Promise.all([sound.unlock(), sheetClosed]);
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
-      tutorialStep = session.tutorialStep;
-    const enemyAction =
-      session.mode === 'tutorial' ? tutorialEnemyAction(tutorialStep) : plannedEnemyAction();
-    if (session.mode === 'tutorial') {
-      if (tutorialStep === 0 && action.moveId === 'lucid_arc') session.tutorialStep = 1;
-      else if (tutorialStep === 1 && action.moveId === 'slowing_riddle') session.tutorialStep = 2;
-      else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
-      else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
-    }
+      enemyAction = plannedEnemyAction();
+    advanceTutorial(session, action);
     const result = resolveTurn(session.state, action, enemyAction);
     session.state = result.state;
     beginPresentation(session, preTurnState);
@@ -714,6 +727,7 @@ async function handlePlayerAction(action, sheetClosed = null) {
       finishBattle();
       return;
     }
+    tutorialAfterTurn(session);
     await resolvePendingReplacements(session);
     if (!sessionIsActive(session)) return;
     if (session.state.phase !== 'ended') refreshBattle();
@@ -778,7 +792,6 @@ registerRoutes({
   battleEntrance,
   refreshBattle,
   patchFighters,
-  renderTutorialTip,
   openSwitch,
   handleTrainerCommand,
   handlePlayerAction,

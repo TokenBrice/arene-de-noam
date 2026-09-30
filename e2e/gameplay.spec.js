@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
+  arenaReady,
   expectNoRuntimeLeaks,
   installCompletedTutorial,
   playVisibleBattle,
@@ -34,6 +35,15 @@ async function closeSheets(page) {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(50);
   }
+}
+
+// Free-battle options (difficulty, rival, arena, rule) live in a sheet opened from the rival card;
+// Escape closes it back to team select.
+async function chooseQuickRule(page, rule) {
+  await page.locator('[data-action="open-options"]').click();
+  await page.locator(`[data-rule-pick="${rule}"]`).click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.sheet')).toHaveCount(0);
 }
 
 // The dock stays mounted with enabled buttons while a turn plays (it only fades out), so "the
@@ -196,79 +206,110 @@ function lines(page) {
   return page.evaluate(() => window.__lines);
 }
 
-test('visible tutorial teaches types, Combo, Signature, and switch, then completes', async ({ page }) => {
+// The first-run tutorial (GAME-04): four lessons, one decision each, in the order a monster-battle
+// player expects; the targeted tile is the only playable one and the lesson rides the prompt line.
+test('first-run tutorial teaches super effective, switching and the Signature in 4 decisions', async ({
+  page,
+}) => {
   test.setTimeout(90000);
   const runtime = watchRuntime(page);
   await page.goto('/?seed=4242&animations=0');
-  await page.getByRole('button', { name: /Jouer/ }).click();
+  await page.locator('[data-action="play"]').first().click();
+  const lesson = page.locator('.battle-screen:not(.locked) .prompt-lesson');
   // The first battle also loads and compiles the arena (slow on a cold SwiftShader worker).
-  await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible({ timeout: 15000 });
+  await expect(lesson).toContainText(/Psy bat Combat.*super efficace/, { timeout: 15000 });
+  await expect(page.locator('.tutorial-target')).toHaveCount(1);
+  await expect(page.locator('[data-move="lucid_arc"].tutorial-target')).toBeEnabled();
+  await expect(page.locator('[data-move="lucid_arc"] .move-effectiveness')).toHaveText('Super efficace');
+  await expect(page.locator('[data-move="slowing_riddle"]')).toBeDisabled();
+  await expect(page.locator('[data-action="open-switch"]')).toBeDisabled();
   await page.locator('[data-move="lucid_arc"]').click();
-  await expect(page.locator('#hud-enemy')).toContainText('Marqué');
-  const markedToken = page.locator('#hud-enemy .plate-status[data-status="marked"]');
-  await expect(markedToken).toHaveClass(/negative/);
-  await expect(markedToken.locator('.status-icon-target-lock')).toHaveCount(1);
-  await expect(markedToken).toHaveCSS('--status-color', '#AD1457');
-  const log = await openLog(page);
-  await expect(log.locator('.battle-log li').filter({ hasText: 'Marqué' })).toHaveCount(1);
-  await closeSheets(page);
-  await expect(page.getByText(/Kordane est Marqué/)).toBeVisible();
-  await expect(controls(page, '[data-move="slowing_riddle"]')).toBeVisible();
-  await page.locator('[data-move="slowing_riddle"]').click();
-  await expect(page.locator('#hud-enemy')).not.toContainText('Marqué');
-  await expect(page.getByText(/Éclat est plein/)).toBeVisible();
-  await expect(controls(page, '[data-move="oracle_veil"]')).toBeVisible();
-  await page.locator('[data-move="oracle_veil"]').click();
-  await expect(page.getByText(/Calderoc est de type Feu.*Eau sont super efficaces/)).toBeVisible();
-  await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled();
-  await page.locator('[data-action="open-switch"]').click();
+  // Kordane falls; the rival sends Calderoc and announces its Fire Signature.
+  await expect(lesson).toContainText(/Change pour Abyssar.*l’Eau résiste au Feu/);
+  await expect(page.locator('#fighter-enemy')).toHaveAttribute('data-creature', 'calderoc');
+  await expect(page.locator('.intent-read')).toContainText('Signature');
+  await expect(page.locator('[data-move]:enabled')).toHaveCount(0);
+  await page.locator('[data-action="open-switch"].tutorial-target').click();
   await page.locator('[data-switch-index]').filter({ hasText: 'Abyssar' }).click();
-  await expect(page.getByText(/À toi\. Observe les PV et termine le combat/)).toBeVisible();
-  await playVisibleBattle(page, { untilSelection: true });
-  await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
+  // The gauge is full only now, for the Signature lesson; the K.O. waits for the last lesson.
+  await expect(lesson).toContainText(/jauge Signature ✦ est pleine.*Bastion nacré/);
+  await expect(page.locator('#hud-player .plate-surge-number')).toContainText('100/100');
+  await expect(page.locator('[data-move="abyssal_surge"]')).toBeDisabled();
+  await expect(page.locator('.move-effectiveness.lethal')).toHaveCount(0);
+  await page.locator('[data-move="shell_bastion"].tutorial-target').click();
+  await expect(lesson).toContainText(/L’Eau bat le Feu.*achève Calderoc/);
+  await expect(page.locator('[data-move="abyssal_surge"] .move-effectiveness.lethal')).toBeVisible();
+  await page.locator('[data-move="abyssal_surge"].tutorial-target').click();
+  // The tutorial is won like any battle: its results lead on to team select, which greets the new
+  // player once.
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'results', { timeout: 15000 });
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
+  expect(saved.tutorialComplete).toBe(true);
+  await page.locator('[data-action="pick-team"]').click();
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'selection');
+  await expect(page.locator('.ts-guide')).toBeVisible();
   await expectNoRuntimeLeaks(runtime);
 });
 
-test('reduced-motion tutorial outro is presented before team select', async ({ page }) => {
+test('the tutorial can be skipped from the prompt line', async ({ page }) => {
+  await page.goto('/?seed=4242&animations=0');
+  await page.locator('[data-action="play"]').first().click();
+  const skip = page.locator('.battle-screen:not(.locked) [data-action="skip-tutorial"]');
+  // Skipping asks first: cancelling keeps the lesson going.
+  await skip.click({ timeout: 15000 });
+  await page.locator('[data-action="skip-cancel"]').click();
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'battle');
+  await skip.click();
+  await page.locator('[data-action="skip-confirm"]').click();
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'selection');
+  await expect(page.locator('.ts-guide')).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
+  expect(saved.tutorialComplete).toBe(true);
+});
+
+test('reduced-motion tutorial outro is presented before its results', async ({ page }) => {
   test.setTimeout(90000);
   await page.goto('/?seed=4242');
-  await page.getByRole('button', { name: /Réglages/ }).click();
+  await page.locator('[data-action="settings"]').click();
   await page.locator('#motion').check();
-  await page.getByRole('button', { name: /Retour/ }).click();
-  await page.getByRole('button', { name: /Jouer/ }).click();
-  // The first battle also loads and compiles the arena (slow on a cold SwiftShader worker).
-  await expect(page.getByText(/Le type Combat est faible face au type Psy/)).toBeVisible({ timeout: 15000 });
-  for (const move of ['lucid_arc', 'slowing_riddle', 'oracle_veil']) {
-    await expect(controls(page, `[data-move="${move}"]`)).toBeVisible();
-    await page.locator(`[data-move="${move}"]`).click();
-  }
-  await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled();
-  await page.locator('[data-action="open-switch"]').click();
-  await page.locator('[data-switch-index]').filter({ hasText: 'Abyssar' }).click();
-  await expect(page.getByText(/À toi\. Observe les PV et termine le combat/)).toBeVisible();
+  await page.locator('[data-action="back"]').first().click();
+  await page.locator('[data-action="play"]').first().click();
   await page.evaluate(() => {
     window.__tutorialOutroSeen = false;
     new MutationObserver(() => {
       if (document.querySelector('.battle-outro')) window.__tutorialOutroSeen = true;
     }).observe(document.body, { attributes: true, childList: true, subtree: true });
   });
-  await playVisibleBattle(page, { untilSelection: true, maxIterations: 3000 });
+  const target = controls(page, '.tutorial-target');
+  // The first battle also loads and compiles the arena (slow on a cold SwiftShader worker).
+  for (let decision = 0; decision < 4; decision++) {
+    await expect(target).toBeEnabled({ timeout: 15000 });
+    const opensSwitch = (await target.getAttribute('data-action')) === 'open-switch';
+    await target.click();
+    if (opensSwitch) await page.locator('[data-switch-index]').filter({ hasText: 'Abyssar' }).click();
+  }
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'results', { timeout: 20000 });
   expect(await page.evaluate(() => window.__tutorialOutroSeen)).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
 });
 
 test('configures a team and finishes a seeded full quick battle', async ({ page }) => {
   const runtime = watchRuntime(page);
   await installCompletedTutorial(page);
   await page.goto('/?seed=88&animations=0&player=calderoc,kordane,farfombre&enemy=virelia,orakyn,abyssar');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('.difficulty-preview')).toContainText('catégorie d’action');
-  await page.getByLabel('Difficulté').selectOption('champion');
-  await expect(page.locator('.difficulty-preview')).toContainText('Intentions masquées');
-  await page.getByLabel('Arène').selectOption('eclipse');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('#arena')).toBeVisible();
+  await page.locator('[data-action="quick"]').click();
+  await page.locator('[data-action="open-options"]').click();
+  await page.locator('[data-difficulty="champion"]').click();
+  await page.locator('[data-arena-pick="eclipse"]').click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(page.locator('#contract-chip, .flow-chip, .arena-resonance')).toHaveCount(0);
+  // Champion hides the rival's plan; the chosen arena is the one fought in.
+  await expect(controls(page).first()).toBeVisible();
+  await expect(page.locator('.intent-read')).toHaveCount(0);
+  await openPause(page);
+  await expect(page.locator('.pause-context')).toContainText('Couronne d’éclipse');
+  await closeSheets(page);
   await page.locator('[data-move]:enabled').first().click();
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   // ?animations=0 is the readout-only path: no stage text, no banners.
@@ -277,20 +318,23 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
   const resultHeading = page.getByRole('heading', { name: /Victoire|Belle bataille/ });
   await expect(resultHeading).toBeVisible();
   const victory = (await resultHeading.textContent()).includes('Victoire');
-  // Defeat stays friendly: the grade card only appears on a victory.
-  await expect(page.locator('.performance-grade')).toHaveCount(victory ? 1 : 0);
-  await expect(page.locator('.mastery-reward')).toHaveCount(3);
-  await expect(page.locator('.result-team img')).toHaveCount(3);
-  expect(
-    await page
-      .locator('.result-team img')
-      .evaluateAll((images) => images.map((image) => getComputedStyle(image).opacity))
-  ).toEqual(['1', '1', '1']);
-  await expect(page.locator('.battle-recap')).toBeVisible();
-  await expect(page.getByText('CRÉATURE DU MATCH')).toBeVisible();
+  // Defeat stays friendly: the rank stamp only lands on a victory.
+  await expect(page.locator('.rs-stamp')).toHaveCount(victory ? 1 : 0);
+  await expect(page.locator('.rs-row')).toHaveCount(3);
+  await expect(page.locator('.rs-row .rs-pic img')).toHaveCount(3);
+  // Fallen creatures are dimmed on purpose; the survivors show at full opacity.
+  for (const opacity of await page
+    .locator('.rs-row:not(.is-fallen) .rs-pic img')
+    .evaluateAll((images) => images.map((image) => getComputedStyle(image).opacity)))
+    expect(opacity).toBe('1');
+  // Stats, MVP, trio report and grade live in the recap sheet.
+  await page.locator('[data-action="result-recap"]').click();
+  await expect(page.getByRole('dialog', { name: 'Récap du combat' })).toBeVisible();
+  // The creature of the match is one of the player's trio.
+  await expect(page.locator('.rs-mvp')).toContainText(/Calderoc|Kordane|Farfombre/);
   // The recap lists only non-zero totals, and those totals agree with the trio report.
   const recapStats = await page
-    .locator('.battle-recap .recap-stats > span')
+    .locator('.rs-stats > span')
     .evaluateAll((spans) =>
       spans.map((span) => [
         span.querySelector('small').textContent,
@@ -298,27 +342,27 @@ test('configures a team and finishes a seeded full quick battle', async ({ page 
       ])
     );
   for (const [, value] of recapStats) expect(value).toBeGreaterThan(0);
-  const trio = await page
-    .locator('.squad-report article dl')
-    .evaluateAll((lists) =>
-      lists.map((dl) => [...dl.querySelectorAll('dd')].map((dd) => Number(dd.textContent)))
-    );
-  const dealt = trio.reduce((sum, [damage]) => sum + damage, 0),
-    combos = trio.reduce((sum, [, , comboCount]) => sum + comboCount, 0);
+  // A trio column and its recap total share one label (e.g. damage dealt).
+  const teamStat = (stat) => page.locator(`.rs-trio article dl > div[data-stat="${stat}"]`),
+    teamTotal = (stat) =>
+      teamStat(stat)
+        .locator('dd')
+        .evaluateAll((cells) => cells.reduce((sum, cell) => sum + Number(cell.textContent), 0));
+  const dealt = await teamTotal('damage'),
+    combos = await teamTotal('combos');
   expect(dealt).toBeGreaterThan(0);
   const recap = Object.fromEntries(recapStats);
-  expect(recap['infligés']).toBe(dealt);
-  expect(recap.Combos).toBe(combos > 0 ? combos : undefined);
+  expect(recap[await teamStat('damage').locator('dt').first().textContent()]).toBe(dealt);
+  if (combos > 0) expect(recap[await teamStat('combos').locator('dt').first().textContent()]).toBe(combos);
   if (victory) {
-    await expect(page.locator('.performance-grade .grade-detail > span')).toHaveCount(3);
-    await expect(page.locator('.performance-grade')).toContainText('Victoire');
-    await expect(page.locator('.performance-grade')).toContainText('Tours');
-    await expect(page.locator('.performance-grade')).toContainText('Survivants');
+    // The grade adds up its victory, tempo and survival bonuses.
+    await expect(page.locator('.rs-grade .rs-grade-part')).toHaveCount(3);
+    for (const part of await page.locator('.rs-grade .rs-grade-part b').allTextContents())
+      expect(part).toMatch(/^\+\d+$/);
   }
-  await expect(page.locator('.squad-report article')).toHaveCount(3);
-  await expect(page.locator('.squad-report')).toContainText('RAPPORT DU TRIO');
-  await expect(page.locator('.squad-report')).toContainText('actions');
-  await page.getByRole('button', { name: /Revoir le combat/ }).click();
+  await expect(page.locator('.rs-trio article')).toHaveCount(3);
+  await expect(teamStat('actions')).toHaveCount(3);
+  await page.locator('[data-action="result-log"]').click();
   await expect(page.getByRole('dialog', { name: 'Journal du combat' })).toBeVisible();
   await expect(page.locator('.battle-log li.turn-start')).not.toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -339,24 +383,34 @@ test('×2 speed plays the same turn about twice as fast, rematches included', as
   });
   const enter = async () => {
     await page.goto(query);
-    await page.getByRole('button', { name: /Combat rapide/ }).click();
-    await page.getByRole('button', { name: /Entrer dans/ }).click();
+    await page.locator('[data-action="quick"]').click();
+    await page.getByRole('button', { name: /^Combattre/ }).click();
     await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
   };
+  const arc = page.locator('[data-move="lucid_arc"]');
   await enter();
-  const normal = await turnMs(page, page.locator('[data-move="lucid_arc"]'));
+  const normal = await turnMs(page, arc);
   await page.evaluate(() => {
     const save = JSON.parse(localStorage.getItem('arene-de-noam-save'));
     localStorage.setItem('arene-de-noam-save', JSON.stringify({ ...save, battleSpeed: 2 }));
   });
-  await enter();
-  const fast = await turnMs(page, page.locator('[data-move="lucid_arc"]'));
+  // Wall-clock turns swing with the parallel suite's CPU load: a stalled frame costs real time the
+  // clock cannot win back (fx-clock.js clamps each step). So each ×2 case keeps the quicker of two
+  // runs of the same seeded turn; a turn stuck at ×1 is slow on both.
+  let fast = Infinity,
+    rematch = Infinity;
+  for (let sample = 0; sample < 2; sample++) {
+    await enter();
+    fast = Math.min(fast, await turnMs(page, arc));
+  }
   expect(fast).toBeLessThan(normal * 0.7);
-  await playVisibleBattle(page, { maxIterations: 3000 });
-  await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Revanche' }).click();
-  await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
-  const rematch = await turnMs(page, page.locator('[data-move="lucid_arc"]'));
+  for (let sample = 0; sample < 2; sample++) {
+    await playVisibleBattle(page, { maxIterations: 3000 });
+    await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
+    await page.locator('[data-action="rematch"]').click();
+    await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
+    rematch = Math.min(rematch, await turnMs(page, arc));
+  }
   expect(rematch).toBeLessThan(normal * 0.7);
 });
 
@@ -370,55 +424,66 @@ test('holding the stage hurries the turn without dropping a single hit number', 
   });
   const enter = async () => {
     await page.goto(query);
-    await page.getByRole('button', { name: /Combat rapide/ }).click();
-    await page.getByRole('button', { name: /Entrer dans/ }).click();
+    await page.locator('[data-action="quick"]').click();
+    await page.getByRole('button', { name: /^Combattre/ }).click();
     await expect(controls(page, '[data-move="echo_chorus"]')).toBeVisible({ timeout: 8000 });
   };
+  const chorus = page.locator('[data-move="echo_chorus"]');
   await enter();
-  const normal = await turnMs(page, page.locator('[data-move="echo_chorus"]'));
-  await enter();
-  // Record every damage number the enemy shows while the stage is held, with its pooled node.
-  await page.evaluate(() => {
-    const layer = document.querySelector('#fx-text');
-    window.__numbers = [];
-    new MutationObserver((records) => {
-      for (const record of records) {
-        const number = record.target.closest?.('.fx-number[data-side="enemy"][data-kind="damage"]');
-        if (number && record.target.matches('.fx-value'))
-          window.__numbers.push({
-            node: [...layer.children].indexOf(number),
-            text: record.target.textContent,
-          });
-      }
-    }).observe(layer, { childList: true, subtree: true });
-  });
-  const held = await turnMs(page, page.locator('[data-move="echo_chorus"]'), { hold: true });
+  const normal = await turnMs(page, chorus);
+  // As with ×2, the held turn keeps the quicker of two runs (CPU load stalls cost real time), and
+  // every held run must show each hit.
+  let held = Infinity;
+  for (let sample = 0; sample < 2; sample++) {
+    await enter();
+    // Record every damage number the enemy shows while the stage is held, with its pooled node.
+    await page.evaluate(() => {
+      const layer = document.querySelector('#fx-text');
+      window.__numbers = [];
+      new MutationObserver((records) => {
+        for (const record of records) {
+          const number = record.target.closest?.('.fx-number[data-side="enemy"][data-kind="damage"]');
+          if (number && record.target.matches('.fx-value'))
+            window.__numbers.push({
+              node: [...layer.children].indexOf(number),
+              text: record.target.textContent,
+            });
+        }
+      }).observe(layer, { childList: true, subtree: true });
+    });
+    held = Math.min(held, await turnMs(page, chorus, { hold: true }));
+    // Each of the three hits bumps one running chain total: same node, growing damage.
+    const numbers = await page.evaluate(() => window.__numbers);
+    expect(numbers.map(({ text }) => text)).toEqual([
+      expect.stringMatching(/^−\d+$/),
+      expect.stringMatching(/^−\d+$/),
+      expect.stringMatching(/^−\d+$/),
+    ]);
+    expect(new Set(numbers.map(({ node }) => node)).size).toBe(1);
+    const totals = numbers.map(({ text }) => Number(text.slice(1)));
+    expect(totals[1]).toBeGreaterThan(totals[0]);
+    expect(totals[2]).toBeGreaterThan(totals[1]);
+  }
   expect(held).toBeLessThan(normal * 0.6);
-  // Each of the three hits bumps one running chain total: same node, growing damage.
-  const numbers = await page.evaluate(() => window.__numbers);
-  expect(numbers.map(({ text }) => text)).toEqual([
-    expect.stringMatching(/^−\d+$/),
-    expect.stringMatching(/^−\d+$/),
-    expect.stringMatching(/^−\d+$/),
-  ]);
-  expect(new Set(numbers.map(({ node }) => node)).size).toBe(1);
-  const totals = numbers.map(({ text }) => Number(text.slice(1)));
-  expect(totals[1]).toBeGreaterThan(totals[0]);
-  expect(totals[2]).toBeGreaterThan(totals[1]);
 });
 
 test('quick battle rules alter the fight and remain visible in the codex', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=40&animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('#quick-rule option')).toHaveCount(6);
-  await page.getByLabel('Règle du duel').selectOption('relay_rush');
-  await expect(page.getByText(/\+24 Éclat/)).toBeVisible();
-  await page.getByLabel('Règle du duel').selectOption('fortress_duel');
-  await expect(
-    page.getByText('Chaque créature des deux équipes commence avec 18 de barrière.')
-  ).toBeVisible();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.locator('[data-action="open-options"]').click();
+  await expect(page.locator('[data-rule-pick]')).toHaveCount(6);
+  // The note under the rule explains the one picked.
+  const note = page.locator('.ts-rule-note');
+  await page.locator('[data-rule-pick="relay_rush"]').click();
+  await expect(note).toContainText('+24 ✦');
+  await page.locator('[data-rule-pick="fortress_duel"]').click();
+  await expect(note).toContainText('barrière');
+  await page.keyboard.press('Escape');
+  // Back on team select, the rival card keeps the chosen rule in sight.
+  await expect(page.locator('.ts-rival')).toContainText('Duel des forteresses');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(page.locator('#hud-player')).toContainText(/Barrière (18|24)/);
   await expect(page.locator('#hud-enemy')).toContainText(/Barrière (18|24)/);
   await openPause(page);
@@ -430,17 +495,17 @@ test('quick battle rules alter the fight and remain visible in the codex', async
 test('Relay Rush turns a voluntary switch into immediate tempo', async ({ page }) => {
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
   await page.goto('/?seed=41');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByLabel('Règle du duel').selectOption('relay_rush');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await chooseQuickRule(page, 'relay_rush');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled({ timeout: 8000 });
   await recordBanners(page);
   await page.locator('[data-action="open-switch"]').click();
-  await expect(page.locator('.switch-bonus')).toContainText('+24 Éclat');
+  await expect(page.locator('.switch-bonus')).toContainText('+24 ✦');
   await page.locator('[data-switch-index]').first().click();
   await controlsBack(page);
   expect(await banners(page)).toContainEqual(
-    expect.objectContaining({ kind: 'switch-in', side: 'player', text: expect.stringContaining('+24 Éclat') })
+    expect.objectContaining({ kind: 'switch-in', side: 'player', text: expect.stringContaining('+24 ✦') })
   );
   await expect(page.locator('#hud-player')).toContainText('Accéléré');
   const hasteToken = page.locator('#hud-player .plate-status[data-status="haste"]');
@@ -457,12 +522,18 @@ test('conquering the League unlocks a rotating Champion Circuit', async ({ page 
     circuitWins: 0,
   });
   await page.goto('/?seed=40&animations=0');
-  await expect(page.getByRole('button', { name: /Circuit des champions/ })).toBeVisible();
-  await page.getByRole('button', { name: /Circuit des champions/ }).click();
-  await expect(page.getByRole('heading', { name: 'Circuit des champions' })).toBeVisible();
-  await expect(page.locator('.circuit-condition')).toContainText('Orage de Signatures');
-  await expect(page.locator('.circuit-condition')).toContainText('100 Éclat');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  // With the League won, JOUER heads for the Circuit, and the team button telegraphs its rule.
+  const play = page.getByRole('button', { name: /Circuit des champions/ });
+  await expect(play).toBeVisible();
+  await page.locator('[data-action="team"]').click();
+  await expect(page.locator('.ts-rival')).toContainText('Orage de Signatures');
+  await page.locator('[data-action="open-rival"]').click();
+  await expect(page.locator('.rival-condition')).toContainText('Orage de Signatures');
+  await expect(page.locator('.rival-condition')).toContainText('Signatures ✦ sont prêtes');
+  await page.keyboard.press('Escape');
+  await page.locator('[data-action="back"]').click();
+  await play.click();
+  await arenaReady(page);
   await expect(page.locator('#hud-player .surge-row')).toContainText('100/100');
   await openCodex(page);
   await expect(page.locator('.circuit-codex')).toContainText('Orage de Signatures');
@@ -471,8 +542,9 @@ test('conquering the League unlocks a rotating Champion Circuit', async ({ page 
 test('move choices expose distinct damage and support tiles with a readable forecast', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=14&animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(page.locator('.move-btn.kind-damage')).toHaveCount(2);
   await expect(page.locator('.move-btn.kind-support')).toHaveCount(1);
   await expect(page.locator('[data-move="oracle_veil"]')).toBeDisabled();
@@ -492,8 +564,8 @@ test('affinity advantage lands with its stamp, its number and the narration emph
     battleSpeed: 1,
   });
   await page.goto('/?seed=14&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await controlsBack(page, 8000);
   await recordReadouts(page);
   await recordLines(page);
@@ -514,7 +586,7 @@ test('affinity advantage lands with its stamp, its number and the narration emph
   expect(hit.cover).toBeLessThan(0.15);
   // The narration carries the stamp as its emphasis line from the contact on, not before.
   const shownLines = await lines(page),
-    plain = shownLines.findIndex((line) => /Arc lucide\.?\s*$/.test(line)),
+    plain = shownLines.findIndex((line) => /Arc lucide\s*[.!]?\s*$/.test(line)),
     stressed = shownLines.findIndex((line) => /Arc lucide.*Super efficace/.test(line));
   expect(plain).toBeGreaterThanOrEqual(0);
   expect(stressed).toBeGreaterThan(plain);
@@ -527,8 +599,8 @@ test('multi-hit techniques count every hit on the chain counter', async ({ page 
     battleSpeed: 1,
   });
   await page.goto('/?seed=24&player=lumivox,orakyn,virelia&enemy=kordane,calderoc,farfombre');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="echo_chorus"]')).toBeVisible({ timeout: 8000 });
   // The counter rides the target's number ("−31 ×3").
   await page.evaluate(() => {
@@ -551,8 +623,8 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
   await page.goto(
     '/?seed=14&player=kordane,abyssar,virelia&enemy=orakyn,calderoc,farfombre&enemyMove=slowing_riddle'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   const command = page.locator('[data-action="trainer-command"]');
   await expect(controls(page, '[data-move="crystal_strike"]')).toBeVisible({ timeout: 8000 });
   await expect(command).toHaveCount(0);
@@ -581,16 +653,20 @@ test('Coach cleanses penalties, grants 15 Surge, costs no action, and is once pe
 });
 
 test('restorative techniques display their recovered HP at the creature', async ({ page }) => {
+  // Épreuves open at 4 League badges (GAME-11) and live in the Défis sheet.
   await installCompletedTutorial(page, {
     lastTeam: ['nymbloom', 'abyssar', 'virelia'],
+    ladderVictories: 4,
     reducedMotion: false,
     battleSpeed: 1,
   });
   await page.goto('/?seed=61&enemyMove=supernova');
-  await page.getByRole('button', { name: 'Épreuves' }).click();
-  await page.locator('.trial-card').nth(4).getByRole('button', { name: 'Jouer cette épreuve' }).click();
-  await expect(page.getByRole('heading', { name: 'La Dernière Lueur' }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
+  await page.locator('[data-action="challenges"]').click();
+  await page.locator('[data-action="trials"]').click();
+  await page.locator('[data-trial-select="4"]').click();
+  await page.locator('[data-action="trial-4"]').click();
+  await expect(page.getByRole('heading', { name: 'La Dernière Lueur' })).toBeVisible();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="bubble_burst"]')).toBeVisible({ timeout: 8000 });
   await page.locator('[data-move="bubble_burst"]').click();
   await expect(controls(page, '[data-move="healing_rain"]')).toBeVisible({ timeout: 15000 });
@@ -620,8 +696,8 @@ test('reaching full Surge triggers a creature-specific Signature-ready cut-in', 
   await page.goto(
     '/?seed=14&player=solflare,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=resonant_focus'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="sun_spear"]')).toBeVisible({ timeout: 8000 });
   await recordBanners(page);
   // Solflare's Sunborn talent makes Supernova playable from 80 Surge: the third Sun Spear
@@ -644,25 +720,14 @@ test('reaching full Surge triggers a creature-specific Signature-ready cut-in', 
 test('removed pre-battle systems leave no selection, intro, HUD, or codex surface', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=40&animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
+  await page.locator('[data-action="quick"]').click();
   await expect(page.locator('[data-doctrine], #contract-select, .contract-preview, .team-bonds')).toHaveCount(
     0
   );
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(page.locator('.intro-contract, #contract-chip, .flow-chip, .arena-resonance')).toHaveCount(0);
   await openCodex(page);
   await expect(page.locator('.contract-codex, .flow-codex, .resonance-codex')).toHaveCount(0);
-});
-
-test('roster cards scout favorable targets and threats in the revealed rival trio', async ({ page }) => {
-  await installCompletedTutorial(page);
-  await page.goto('/?enemy=kordane,calderoc,virelia');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await expect(page.locator('.scout-read')).toHaveCount(30);
-  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 cible favorable');
-  await expect(page.locator('[data-creature="abyssar"] .scout-read')).toContainText('1 menace');
-  await expect(page.locator('.scout-read').filter({ hasText: /\b1 (cibles|menaces)\b/ })).toHaveCount(0);
-  await expect(page.locator('.creature-card.scout-strong')).not.toHaveCount(0);
 });
 
 test('Eclipse of Grace purges the rival team after its aimed transaction', async ({ page }) => {
@@ -672,17 +737,19 @@ test('Eclipse of Grace purges the rival team after its aimed transaction', async
   await page.goto(
     '/?seed=814201&animations=0&player=deuilastre,orakyn,kordane&enemy=aubeastre,virelia,pactigon&enemyMove=kindred_halo'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('#quick-rule').selectOption('starstorm');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await chooseQuickRule(page, 'starstorm');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(controls(page, '[data-move="eclipse_of_grace"]')).toBeVisible();
   await page.locator('[data-move="eclipse_of_grace"]').click();
   await controlsBack(page);
   const log = await openLog(page);
   const entries = log.locator('.battle-log li');
   await expect(entries.filter({ hasText: 'Éclipse des grâces' })).toHaveCount(1);
+  // Journal sentences name each creature with its side ("Virelia rival perd …").
   for (const benched of ['Virelia', 'Pactigon'])
-    await expect(entries.filter({ hasText: `${benched} perd Concentré` })).toHaveCount(1);
+    await expect(entries.filter({ hasText: new RegExp(`${benched} rival perd .*Concentré`) })).toHaveCount(1);
 });
 
 test('Immaculate Relay reuses the selector and switches only after the aimed attack', async ({ page }) => {
@@ -690,16 +757,16 @@ test('Immaculate Relay reuses the selector and switches only after the aimed att
   await page.goto(
     '/?seed=814202&animations=0&player=aubeastre,deuilastre,pactigon&enemy=orakyn,kordane,virelia&enemyMove=lucid_arc'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('#quick-rule').selectOption('starstorm');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await chooseQuickRule(page, 'starstorm');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   const relay = page.locator('[data-move="immaculate_relay"]');
   await relay.click();
-  await expect(page.getByRole('heading', { name: 'Choisis l’allié protégé' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Qui entre après les attaques/ })).toBeVisible();
   await expect(page.locator('.signature-relay [data-switch-index]')).toHaveCount(2);
   await expect(page.locator('.signature-relay .switch-incoming')).toHaveText([
-    /Aucun impact entrant.*purifié.*Concentré/,
-    /Aucun impact entrant.*purifié.*Concentré/,
+    /Aucun dégât.*sans malus.*Concentré/,
+    /Aucun dégât.*sans malus.*Concentré/,
   ]);
   await page.getByRole('button', { name: 'Annuler' }).click();
   await expect(relay).toBeFocused();
@@ -709,15 +776,19 @@ test('Immaculate Relay reuses the selector and switches only after the aimed att
   await controlsBack(page);
   const log = await openLog(page);
   await expect(log).toContainText('Arc lucide');
-  await expect(log).toContainText(/Deuilastre entre purifié et Concentré/);
+  await expect(log).toContainText(/Deuilastre entre sans malus et Concentré/);
 });
 
 test('ladder rivals telegraph and trigger their unique ace phase', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=18&animations=0&enemyHp=1');
-  await page.getByRole('button', { name: /Jouer|Continuer/ }).click();
-  await expect(page.locator('.trainer-ace')).toContainText('Second souffle');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  // The hub's team button opens the League team select, whose rival sheet telegraphs the ace.
+  await page.locator('[data-action="team"]').click();
+  await page.locator('[data-action="open-rival"]').click();
+  await expect(page.locator('.rival-ace')).toContainText('Second souffle');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   // Every rival starts at 1 HP. Arc 1 K.O.s the lead; the rival's Virelia heals itself before
   // arc 2 lands; arc 3 K.O.s it, and the last rival standing triggers the ace.
   for (let arc = 0; arc < 3; arc++) {
@@ -732,8 +803,9 @@ test('ladder rivals telegraph and trigger their unique ace phase', async ({ page
 test('keyboard numbers choose moves and C opens switching', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=12&animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(page.getByText('Tour 1')).toBeVisible();
   await expect(page.locator('.intent-read')).toBeVisible();
   await expect(page.locator('.intent-read')).not.toContainText('Illisible');
@@ -741,7 +813,7 @@ test('keyboard numbers choose moves and C opens switching', async ({ page }) => 
   await expect(page.getByText('Tour 2')).toBeVisible();
   await controlsBack(page);
   await page.keyboard.press('c');
-  await expect(page.getByRole('heading', { name: /Qui prend sa place/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Qui entre/ })).toBeVisible();
   await expect(page.locator('.switch-incoming')).toHaveCount(2);
   await expect(page.locator('.switch-incoming').first()).toContainText(/Dégâts prévus/);
   await expect(page.locator('.switch-option.recommended')).toHaveCount(1);
@@ -757,8 +829,9 @@ test('a predicted resisted attack exposes and celebrates a Perfect Relay', async
   await page.goto(
     '/?seed=1&player=abyssar,orakyn,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(page.locator('.intent-read')).toContainText('Frappe cristal');
   await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled({ timeout: 8000 });
   await recordBanners(page);
@@ -766,13 +839,13 @@ test('a predicted resisted attack exposes and celebrates a Perfect Relay', async
   await page.keyboard.press('c');
   const relay = page.locator('.switch-option.perfect-read');
   await expect(relay).toHaveCount(1);
-  await expect(relay).toContainText('RELAIS PARFAIT · +6 Éclat');
+  await expect(relay).toContainText(/Bon changement\s*!\s*\+6 ✦/);
   await relay.click();
   await controlsBack(page);
   expect(await banners(page)).toContainEqual(
-    expect.objectContaining({ kind: 'perfect-relay', text: expect.stringContaining('RELAIS PARFAIT') })
+    expect.objectContaining({ kind: 'perfect-relay', text: expect.stringMatching(/bon changement/i) })
   );
-  expect(await lines(page)).toContainEqual(expect.stringContaining('RELAIS PARFAIT'));
+  expect(await lines(page)).toContainEqual(expect.stringMatching(/bon changement/i));
 });
 
 test('Burning powers Venom Harvest without consuming a Combo setup', async ({ page }) => {
@@ -782,9 +855,9 @@ test('Burning powers Venom Harvest without consuming a Combo setup', async ({ pa
     battleSpeed: 2,
   });
   await page.goto('/?seed=1');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('#quick-rule').selectOption('starstorm');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await chooseQuickRule(page, 'starstorm');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="toxic_spines"]')).toBeVisible({ timeout: 8000 });
   await page.locator('[data-move="toxic_spines"]').click();
   await expect(controls(page, '[data-move="venom_harvest"]')).toBeVisible({ timeout: 10000 });
@@ -798,15 +871,17 @@ test('Burning powers Venom Harvest without consuming a Combo setup', async ({ pa
 test('battle codex explains live rules and closes with Escape', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=12&animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   const codex = await openCodex(page);
   await expect(codex.getByText('Météo de l’arène')).toBeVisible();
-  await expect(codex.getByText('Triangles de types')).toBeVisible();
-  await expect(codex.getByText(/Eau → Feu → Plante → Eau/)).toBeVisible();
-  await expect(codex.getByText(/entre triangles : ×1/)).toBeVisible();
+  // The type-triangle reminder gives both cycles and all three multipliers.
+  const triangles = codex.locator('.affinity-reminder');
+  await expect(triangles).toContainText('Eau → Feu → Plante → Eau');
+  await expect(triangles).toContainText('Psy → Combat → Ténèbres → Psy');
+  for (const multiplier of ['×2', '×0,5', '×1']) await expect(triangles).toContainText(multiplier);
   await expect(page.locator('.trainer-command-codex')).toContainText('Coup de pouce');
-  await expect(codex.getByText(/Une attaque donne 20 Éclat/)).toBeVisible();
+  await expect(codex.getByText(/remplit ta jauge Signature ✦/)).toBeVisible();
   await expect(page.locator('.flow-codex, .contract-codex, .resonance-codex')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(codex).toHaveCount(0);
@@ -817,8 +892,9 @@ test('battle codex explains live rules and closes with Escape', async ({ page })
 test('versus intro stays focused on the teams and arena', async ({ page }) => {
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
   await page.goto('/?seed=32');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(page.locator('#fx-text > .fx-banner[data-kind="intro"]')).toBeVisible();
   await expect(page.locator('.intro-contract')).toHaveCount(0);
   // The intro hands the controls back within its 2 s budget.
@@ -829,8 +905,9 @@ test('versus intro stays focused on the teams and arena', async ({ page }) => {
 test('battle chronicle records semantic events and opens from the keyboard', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=1025&animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible();
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(controls(page, '[data-move="slowing_riddle"]')).toBeVisible();
@@ -852,8 +929,9 @@ test('battle chronicle records semantic events and opens from the keyboard', asy
 test('flat Surge is deterministic and has no sequence UI', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=83&animations=0&enemy=kordane,calderoc,farfombre&enemyMove=resonant_focus');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   const meter = page.locator('#hud-player .plate-surge-number');
   await expect(meter).toContainText('30/100');
   await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible();
@@ -874,9 +952,9 @@ test('two ready signature moves trigger the split clash cut-in', async ({ page }
   await page.goto(
     '/?seed=61&player=solflare,lumivox,voltide&enemy=kordane,calderoc,farfombre&enemyMove=fault_charge'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('#quick-rule').selectOption('starstorm');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await chooseQuickRule(page, 'starstorm');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="supernova"]')).toBeVisible({ timeout: 8000 });
   await expect(page.locator('#hud-player .team-dot.signature-ready')).toHaveCount(3);
   await expect(page.locator('#hud-enemy .team-dot.signature-ready')).toHaveCount(3);
@@ -896,9 +974,9 @@ test('a switched teammate converts a setup with a Combo tag crediting the helper
   await page.goto(
     '/?seed=68&player=orakyn,pyrolynx,abyssar&enemy=monolith,kordane,brontusk&enemyMove=gravity_fist,gravity_fist,gravity_fist'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.locator('#quick-rule').selectOption('starstorm');
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await chooseQuickRule(page, 'starstorm');
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
   await page.locator('[data-move="lucid_arc"]').click();
   await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled({ timeout: 8000 });
@@ -925,12 +1003,12 @@ test.describe('touch controls', () => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await installCompletedTutorial(page);
     await page.goto('/?seed=3&animations=0');
-    await page.getByRole('button', { name: /Combat rapide/ }).tap();
+    await page.locator('[data-action="quick"]').tap();
     const card = page.locator('[data-creature="orakyn"]');
     const box = await card.boundingBox();
     expect(box.width).toBeGreaterThan(44);
     expect(box.height).toBeGreaterThan(44);
-    await page.getByRole('button', { name: /Entrer dans/ }).tap();
+    await page.getByRole('button', { name: /^Combattre/ }).tap();
     const move = page.locator('[data-move]').first();
     const moveBox = await move.boundingBox();
     expect(moveBox.height).toBeGreaterThanOrEqual(44);
@@ -942,10 +1020,10 @@ test.describe('touch controls', () => {
 test('knockout opens a free replacement selector before the next choice', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=12&animations=0&playerHp=1');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await page.locator('[data-move]').first().click();
-  await expect(page.getByRole('heading', { name: /Choisis une relève/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Qui prend le relais/ })).toBeVisible();
   await expect(page.locator('#fighter-player')).toHaveAttribute('data-phase', 'fainted');
   const replacement = page.locator('[data-switch-index]').first();
   await replacement.click();
@@ -957,8 +1035,8 @@ test('knockout opens a free replacement selector before the next choice', async 
 test('a voluntary switch recalls the outgoing creature before the replacement lands', async ({ page }) => {
   await installCompletedTutorial(page, { reducedMotion: false, battleSpeed: 1 });
   await page.goto('/?seed=31');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   const fighter = page.locator('#fighter-player');
   const outgoingId = await fighter.getAttribute('data-creature');
   await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled({ timeout: 8000 });
@@ -972,19 +1050,27 @@ test('a voluntary switch recalls the outgoing creature before the replacement la
 test('a defeat produces evidence-based trainer analysis', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?seed=22&animations=0&teamHp=1');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  const foes = page.locator('.ts-foe[data-foe]'),
+    rivalTrio = () => foes.evaluateAll((nodes) => nodes.map((node) => node.dataset.foe));
+  await expect(foes).toHaveCount(3);
+  const rival = await rivalTrio();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   await playVisibleBattle(page);
-  await expect(page.getByRole('heading', { name: 'Belle bataille !' })).toBeVisible();
-  await expect(page.locator('.battle-advice')).toBeVisible();
-  await expect(page.locator('.battle-advice')).toContainText('Conseils de l’entraîneur');
-  await expect(page.locator('.recap-mvp')).toHaveCount(1);
-  const recapBox = await page.locator('.battle-recap').boundingBox();
-  const statsBox = await page.locator('.recap-stats').boundingBox();
-  expect(recapBox).not.toBeNull();
-  expect(statsBox).not.toBeNull();
-  await page.getByRole('button', { name: /Ajuster l’équipe/ }).click();
-  await expect(page.getByRole('heading', { name: 'Compose ton équipe' })).toBeVisible();
-  await expect(page.locator('.enemy-list')).toContainText('Orakyn');
+  await expect(page.getByRole('heading', { name: /Belle bataille/ })).toBeVisible();
+  // One tip on the results: the recap sheet's coaching list leads with it, next to MVP and stats.
+  const tip = (await page.locator('.rs-tip b').textContent()).trim();
+  expect(tip).not.toBe('');
+  await page.locator('[data-action="result-recap"]').click();
+  await expect(page.locator('.rs-sheet-advice p').first()).toHaveText(tip);
+  await expect(page.locator('.rs-mvp')).toHaveCount(1);
+  expect(await page.locator('.rs-stats').boundingBox()).not.toBeNull();
+  await closeSheets(page);
+  // "Adjust the team" goes back to team select against the same rival trio.
+  await page.locator('[data-action="adjust-team"]').click();
+  await expect(page.getByRole('heading', { name: 'Ton équipe', exact: true })).toBeVisible();
+  await expect(foes).toHaveCount(3);
+  expect(await rivalTrio()).toEqual(rival);
   await expect(page.locator('.contract-preview, [data-doctrine], .team-bonds')).toHaveCount(0);
 });

@@ -307,11 +307,11 @@ const impactKit = (at, { sparks: count = 10, size = 1.1, ring = 0.7, decal = 0.5
 ];
 
 // Signature payoff (`sig: true` cues play on Signature beats only; `once: true` perHit cues on
-// the first landed hit only). The wind-up fills the time after the cut-in band: the camera leans
-// on the caster while a type-coloured aura swells, a ring and sparks converge on it and its glyph
-// rises from the court, until `until`.
+// the first landed hit only). The wind-up fills the time after the cut-in band: the camera slowly
+// leans in between caster and target while a type-coloured aura swells, a ring and sparks
+// converge on the caster and its glyph rises from the court, until `until`.
 const signatureWindup = (until) => [
-  op(0, 'shot', { name: 'attack', who: 'actor', ms: until + 260, sig: true }),
+  op(0, 'shot', { name: 'lean', who: 'actor', ms: until + 260, sig: true }),
   glow(0, ACTOR, 1.3, until + 160, {
     grow: 1.15,
     alpha: 0.7,
@@ -449,7 +449,8 @@ export const TIMELINES = freezeDeep({
     },
   },
 
-  // A short hop-in per hit; a wide blade arc cuts diagonally through the target and swings on.
+  // A short hop-in per hit; a thin blade arc cuts diagonally across the target and is gone within
+  // ~100 ms at full strength, so the target's hit reaction shows through the swing.
   SLASH: {
     cues: [fighter(0, 'actor', 'windup', { ms: 60, squash: 0.08 }), ...signatureWindup(60), op(520, 'end')],
     perHit: {
@@ -467,12 +468,13 @@ export const TIMELINES = freezeDeep({
           alpha: 0.5,
         }),
         op(100, 'contact'),
-        stamp(100, TARGET, 'slash', 1.6, 250, {
+        stamp(100, TARGET, 'slash', 1.3, 130, {
           face: 'away',
-          grow: 1.12,
+          grow: 1.2,
           rotJitter: 0.8,
-          spin: -0.0018,
-          fade: 0.5,
+          spin: -0.0032,
+          fade: 0.7,
+          additive: 0.35,
           hot: 0.75,
           front: true,
         }),
@@ -497,8 +499,8 @@ export const TIMELINES = freezeDeep({
   },
 
   // A stomp shakes the court and glowing cracks race along the floor; the ground breaks open under
-  // the target (a wide glowing crack, rock chunks, dust) and rock spires tower up on both sides
-  // of it. The Signature leaps before the stomp.
+  // the target (a wide glowing crack, rock chunks, dust) and rock spires tower up behind it on both
+  // sides, framing its hit reaction. The Signature leaps before the stomp.
   QUAKE: {
     cues: [
       fighter(0, 'actor', 'windup', { ms: 140, squash: 0.16 }),
@@ -536,7 +538,7 @@ export const TIMELINES = freezeDeep({
           additive: 0.15,
           hot: 0.7,
         }),
-        ...[-0.42, 0.42].map((shift) =>
+        ...[-0.55, 0.55].map((shift) =>
           emit(0, 'pillar', anchor('target', 'feet'), {
             cell: 'spike',
             q: 2,
@@ -548,21 +550,24 @@ export const TIMELINES = freezeDeep({
             life: 540,
             additive: 0,
             hot: 0.5,
+            back: true,
           })
         ),
         op(30, 'contact'),
         flare(30, anchor('target', 'feet'), 1, { life: 200 }),
+        // Rock chunks are thrown wide to both sides and gone within ~0.4 s, so they never pile
+        // up over the target's body.
         emit(30, 'burst', anchor('target', 'feet'), {
           cell: 'chunk',
-          q: 5,
-          speed: 2.8,
-          spread: 1.1,
+          q: 4,
+          speed: 3,
+          spread: 2.3,
           drag: 0.92,
           gravity: 4.2,
-          life: 640,
-          size: 0.28,
+          life: 440,
+          size: 0.26,
           additive: false,
-          fade: 0.3,
+          fade: 0.35,
           grow: 0.85,
         }),
         dust(30, 'target', 3, { speed: 0.9, spread: 2.4, size: 0.45, life: 560 }),
@@ -754,15 +759,17 @@ export const TIMELINES = freezeDeep({
       at: 240,
       cues: [
         op(0, 'contact'),
-        // The lobbed glyph lands and bursts into a large copy of itself.
-        stamp(0, TARGET, 'motif', 1.15, 280, {
-          grow: 1.45,
+        // The lobbed glyph lands on the head and splashes: a large copy of it blooms behind the
+        // head (framing it, never over the face), then a hollow splash ring and a crown of drops.
+        stamp(0, anchor('target', 'head'), 'motif', 0.8, 300, {
+          back: true,
+          grow: 1.6,
           fade: 0.7,
           rotJitter: 0.5,
-          additive: 0.2,
+          additive: 0.25,
           hot: 0.5,
         }),
-        flare(0, anchor('target', 'head'), 0.95),
+        flare(0, anchor('target', 'head'), 0.7, { life: 160 }),
         emit(0, 'burst', anchor('target', 'head'), {
           cell: 'motif',
           q: 5,
@@ -786,7 +793,7 @@ export const TIMELINES = freezeDeep({
           additive: 0.15,
           hot: 0.4,
         }),
-        shockwave(0, anchor('target', 'head'), 0.7, 240),
+        shockwave(0, anchor('target', 'head'), 0.85, 260),
         courtRing(0, 'target', 1, 380, { alpha: 1 }),
         emit(0, 'groundDecal', anchor('target', 'feet'), {
           cell: 'glow',
@@ -877,8 +884,9 @@ export const TIMELINES = freezeDeep({
     },
   },
 
-  // Water gathers at the attacker's feet, a wave crest rolls along the floor and crashes over the
-  // target, a crest as tall as it breaking into a column of spray.
+  // Water gathers at the attacker's feet, a wave crest rolls along the floor and breaks on the
+  // target: a crest taller than it rears up behind it, framing its hit reaction, and a column of
+  // spray bursts.
   WAVE: {
     cues: [
       fighter(0, 'actor', 'windup', { ms: 100, squash: 0.1 }),
@@ -895,7 +903,7 @@ export const TIMELINES = freezeDeep({
         size: 1.05,
         grow: 1.25,
         travelMs: 150,
-        life: 60,
+        life: 35,
         additive: 0,
         hot: 0.6,
       }),
@@ -927,7 +935,13 @@ export const TIMELINES = freezeDeep({
       at: 240,
       cues: [
         op(0, 'contact'),
-        stamp(0, TARGET, 'crest', 1.45, 320, { face: 'away', grow: 1.08, fade: 0.55, additive: 0 }),
+        stamp(0, TARGET, 'crest', 1.6, 320, {
+          face: 'away',
+          grow: 1.08,
+          fade: 0.55,
+          additive: 0,
+          back: true,
+        }),
         emit(0, 'pillar', anchor('target', 'feet'), {
           cell: 'glow',
           q: 1,
@@ -939,6 +953,7 @@ export const TIMELINES = freezeDeep({
           alpha: 0.6,
           additive: 0.3,
           hot: 0.4,
+          back: true,
         }),
         emit(0, 'burst', TARGET, {
           cell: 'drop',
@@ -1081,7 +1096,7 @@ export const TIMELINES = freezeDeep({
     },
   },
 
-  // A rune circle opens under the target and glyphs circle it; a curse seal is stamped on it and
+  // A crystal circle opens under the target and glyphs circle it; a lock seal closes behind it and
   // chains cross over it. The curse lives in the main cues so the two ranged debuff supports on
   // HEX (no landed hit) still read; their chips play in the add-on window after `end`.
   HEX: {
@@ -1119,22 +1134,31 @@ export const TIMELINES = freezeDeep({
         life: 420,
         hot: 0.4,
       }),
-      // Chains first, the seal stamped over them, so the glyph stays on top of the binding.
-      stamp(150, TARGET, 'chain', 1.2, 420, {
+      // Two thin chains snap across the target around the contact and are gone ~100 ms after it
+      // at full strength; a lock seal closes behind it, framing its hit reaction.
+      stamp(180, TARGET, 'chain', 1.2, 190, {
         offset: 0.04,
         rot: 0.7,
         rotJitter: 0.2,
-        fade: 0.45,
+        fade: 0.6,
+        alpha: 0.85,
         additive: 0,
       }),
-      stamp(160, TARGET, 'chain', 1.2, 410, {
+      stamp(190, TARGET, 'chain', 1.2, 180, {
         offset: 0.04,
         rot: -0.7,
         rotJitter: 0.2,
-        fade: 0.45,
+        fade: 0.6,
+        alpha: 0.85,
         additive: 0,
       }),
-      stamp(175, TARGET, 'sigil', 1.3, 440, { grow: 0.85, fade: 0.45, rotJitter: 0.3, hot: 0.65 }),
+      stamp(175, TARGET, 'sigil', 1.55, 440, {
+        grow: 0.85,
+        fade: 0.45,
+        rotJitter: 0.3,
+        hot: 0.65,
+        back: true,
+      }),
       emit(220, 'burst', TARGET, {
         cell: 'motif',
         q: 4,
@@ -1385,10 +1409,10 @@ export const TIMELINES = freezeDeep({
 // the ticking status colour). Chip rows are never authored here: the director plays them in the
 // add-on window after `end`.
 export const BEAT_TIMELINES = freezeDeep({
-  // The K.O. flash and stamp land at once; the dissolve (620 ms) starts as the stamp settles and
-  // the beat hands over 40 ms after it, well inside the 1200 budget: K.O. turns are the long
-  // tail of turn pacing (§3.4, p90 ≤ 3.5 s). Everything here is over by `end`, and the director
-  // clears the stamp there, so a replacement always drops onto a clean pad.
+  // The K.O. flash and stamp land at once; the dissolve (420 ms) starts as the stamp settles and
+  // the beat hands over 10 ms after it, inside the 600 budget: K.O. turns are the long tail of
+  // turn pacing (§3.4, p90 ≤ 3.5 s). Everything here is over by `end`, and the director clears
+  // the stamp there, so a replacement always drops onto a clean pad.
   ko: {
     cues: [
       fighter(0, 'target', 'ko'),
@@ -1406,22 +1430,22 @@ export const BEAT_TIMELINES = freezeDeep({
         stretch: 40,
         color: WHITE,
       }),
-      op(80, 'cheer'),
-      op(120, 'readout'),
-      fighter(240, 'target', 'faint', { ms: 620 }),
-      cue(240, 'faint-cry'),
-      emit(260, 'burst', TARGET, {
+      op(60, 'cheer'),
+      op(90, 'readout'),
+      fighter(170, 'target', 'faint', { ms: 420 }),
+      cue(170, 'faint-cry'),
+      emit(190, 'burst', TARGET, {
         cell: 'spark',
         q: 10,
         speed: 0.6,
         spread: 1.2,
         drag: 0.95,
         gravity: -0.5,
-        life: 560,
+        life: 400,
         size: 0.07,
         hot: 0.4,
       }),
-      op(900, 'end'),
+      op(600, 'end'),
     ],
   },
   switch: {
@@ -1464,9 +1488,10 @@ export const BEAT_TIMELINES = freezeDeep({
       op(0, 'swap'),
       fighter(0, 'actor', 'enter'),
       op(0, 'banner', { kind: 'switch-in' }),
-      cue(190, 'switch-in'),
-      emit(190, 'groundDecal', anchor('actor', 'feet'), { cell: 'ring', q: 1, radius: 0.7, life: 320 }),
-      emit(190, 'burst', anchor('actor', 'feet'), {
+      // The drop lands at 45 % of the 360 ms enter: the cry, dust and HUD follow it.
+      cue(165, 'switch-in'),
+      emit(165, 'groundDecal', anchor('actor', 'feet'), { cell: 'ring', q: 1, radius: 0.7, life: 320 }),
+      emit(165, 'burst', anchor('actor', 'feet'), {
         cell: 'dust',
         q: 8,
         speed: 0.9,
@@ -1477,7 +1502,7 @@ export const BEAT_TIMELINES = freezeDeep({
         additive: false,
         color: DUST,
       }),
-      op(450, 'end'),
+      op(400, 'end'),
     ],
   },
   'perfect-relay': {
@@ -1563,6 +1588,9 @@ export const BEAT_TIMELINES = freezeDeep({
       op(450, 'end'),
     ],
   },
+  // The VS stack (BANNER_MS.intro) ends exactly where the weather band starts: the plates only
+  // slide in once the VS cards are gone (Crystal hands over at the weather slot), and the solid
+  // weather pill slides over the top row after them, so no two layers ever cross-fade in place.
   intro: {
     cues: [
       op(0, 'shot', { name: 'intro' }),
@@ -1580,56 +1608,100 @@ export const BEAT_TIMELINES = freezeDeep({
         size: 0.08,
         hot: 0.6,
       }),
-      op(900, 'banner', { kind: 'weather' }),
-      op(1700, 'end'),
+      op(850, 'banner', { kind: 'weather' }),
+      op(1550, 'end'),
     ],
   },
+  // The winner's hero moment: the camera turns to it and pushes in, a warm spotlight rises behind
+  // it, it hops three times while confetti fountains out of it and the stands roar twice. The
+  // fountains spawn one quad every `staggerMs`, so their length follows the quality-scaled count
+  // (≈ 0.4 s on Low, ≈ 0.9 s on High). "VICTOIRE !" enters once the plates have faded (200 ms).
   victory: {
     cues: [
       cue(0, 'victory'),
-      op(0, 'banner', { kind: 'victory' }),
       op(0, 'shot', { name: 'victory', who: 'actor' }),
       op(0, 'cheer', { strength: 1.5 }),
-      fighter(100, 'actor', 'victory', { hops: 2, ms: 600 }),
-      emit(120, 'burst', anchor('actor', 'head'), {
-        cell: 'star',
-        q: 14,
-        speed: 2.6,
-        spread: 1.3,
-        drag: 0.92,
-        gravity: 1.3,
+      fighter(0, 'actor', 'flash', { color: '#fff3c4', ms: 160 }),
+      courtRing(0, 'actor', 1.4, 700, { alpha: 1, color: '#ffcb3d' }),
+      emit(60, 'beamQuad', anchor('actor', 'feet'), {
+        to: anchor('actor', 'feet'),
+        sky: 2.4,
+        cell: 'beam',
+        q: 2,
+        max: 2,
+        width: 0.9,
+        scroll: -1.6,
+        life: 1500,
+        fadeIn: 260,
+        grow: 1,
+        alpha: 0.55,
+        additive: 0.7,
+        hot: 0.3,
+        color: '#fff1b8',
+        back: true,
+      }),
+      fighter(120, 'actor', 'victory', { hops: 3, ms: 960 }),
+      op(200, 'banner', { kind: 'victory' }),
+      emit(240, 'burst', anchor('actor', 'head'), {
+        cell: 'petal',
+        q: 12,
+        staggerMs: 55,
+        speed: 2.5,
+        spread: 1.1,
+        drag: 0.94,
+        gravity: 2.2,
         life: 1300,
-        size: 0.1,
+        size: 0.14,
+        additive: false,
+      }),
+      emit(270, 'burst', anchor('actor', 'head'), {
+        cell: 'star',
+        q: 10,
+        staggerMs: 70,
+        speed: 2.7,
+        spread: 0.9,
+        drag: 0.94,
+        gravity: 2.2,
+        life: 1300,
+        size: 0.13,
+        hot: 0.5,
         color: '#ffcb3d',
       }),
-      emit(160, 'burst', anchor('actor', 'head'), {
-        cell: 'petal',
-        q: 14,
+      emit(300, 'burst', anchor('actor', 'head'), {
+        cell: 'shard',
+        q: 8,
+        staggerMs: 85,
         speed: 2.3,
-        spread: 1.5,
-        drag: 0.92,
-        gravity: 1.1,
-        life: 1300,
-        size: 0.1,
+        spread: 1.3,
+        drag: 0.94,
+        gravity: 2.2,
+        life: 1200,
+        size: 0.12,
+        additive: false,
+        color: '#ffffff',
       }),
-      op(1400, 'end'),
+      op(700, 'cheer', { strength: 1.2 }),
+      op(1600, 'end'),
     ],
   },
+  // Dignified: no confetti, no cheer, no shake. The rival gives one small hop and "Défaite… Bien
+  // joué !" enters over the fainted player's pad once the plates have faded.
   defeat: {
     cues: [
       cue(0, 'defeat'),
-      op(0, 'banner', { kind: 'defeat' }),
       fighter(200, 'actor', 'victory', { hops: 1, ms: 500 }),
-      op(1400, 'end'),
+      op(200, 'banner', { kind: 'defeat' }),
+      op(1600, 'end'),
     ],
   },
 });
 
 // §9.5: one persistent emitter recipe per status (≤ 8 quads); `at` is the anchor point, `lift`
 // raises it by that many fighter heights. The director adds side, colour (STATUS_DEFINITIONS) and
-// seed, and stop()s it on removal. Loops stay off the face and body: markers float above the head
-// (Marqué's reticle, Concentré's eye, Sonné's stars), ground effects hug the feet, and the layer
-// caps one creature's loops at 10 quads, phase-staggered, so several statuses stay readable.
+// seed, and stop()s it on removal. Loops stay off the face: Concentré's eye and Sonné's stars
+// float just above the head, Marqué's hollow reticle locks onto the creature's own chest (never
+// drifting toward the other fighter or out of the stage top), ground effects hug the feet, and the
+// layer caps one creature's loops at 10 quads, phase-staggered, so several statuses stay readable.
 export const STATUS_LOOPS = freezeDeep({
   burning: {
     emitter: 'orbit',
@@ -1666,14 +1738,14 @@ export const STATUS_LOOPS = freezeDeep({
   },
   marked: {
     emitter: 'orbit',
-    at: 'head',
+    at: 'center',
     cell: 'reticle',
     q: 1,
     radius: 0,
     periodMs: 3000,
     tilt: 0,
-    size: 0.24,
-    lift: 0.26,
+    size: 0.34,
+    lift: 0.14,
   },
   haste: {
     emitter: 'orbit',
@@ -1728,8 +1800,8 @@ export const BANNER_MS = freezeDeep({
   clash: { ms: BEAT_BUDGET_MS.clashCutIn, reduced: 0 },
   'signature-ready': { ms: 600, reduced: 600 },
   'switch-in': { ms: 900, reduced: 600 },
-  intro: { ms: 1000, reduced: 300 },
-  weather: { ms: 800, reduced: 450 },
+  intro: { ms: 850, reduced: 300 },
+  weather: { ms: 700, reduced: 450 },
   victory: { ms: 1400, reduced: 1000 },
   defeat: { ms: 1400, reduced: 1000 },
   'perfect-relay': { ms: 600, reduced: 450 },

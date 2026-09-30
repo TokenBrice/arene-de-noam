@@ -1,11 +1,12 @@
 // Camera rig: the base (rest) framing from the solver, the shot grammar on the fx-clock, the
-// Phase 1 camera kick and the CSS-px screen shake. Everything here integrates virtual ms, so
-// hit-stops freeze it and ×2 / hurry speed it up.
+// impact punch (a snap push-in) and the CSS-px screen shake. Everything here integrates virtual
+// ms, so hit-stops freeze it and ×2 / hurry speed it up.
 import * as THREE from 'three';
 
 export const SHOTS = Object.freeze({
   intro: { duration: 1200 },
   attack: { duration: 700 },
+  lean: { duration: 700 },
   impact: { duration: 240 },
   ko: { duration: 600, holds: true },
   victory: { duration: 2400, holds: true, loops: true },
@@ -14,15 +15,25 @@ export const SHOTS = Object.freeze({
 
 const ATTACK_PUSH = 0.05;
 const ATTACK_PAN = THREE.MathUtils.degToRad(3);
+// Signature wind-up: a slow push-in on a point between both fighters, LEAN_OTHER of the way from
+// the caster to its target, so the target stays in frame when the impact punch lands on top.
+const LEAN_PUSH = 0.06;
+const LEAN_OTHER = 0.5;
 const IMPACT_PUSH = 0.03;
 const KO_PUSH = 0.08;
 export const KO_SATURATION = 0.6;
-const VICTORY_YAW = THREE.MathUtils.degToRad(10);
-const VICTORY_PUSH = 0.04;
+// Victory: the camera turns toward the winner (VICTORY_AIM of the way) and pushes in, so the
+// winner takes the centre of the frame, then orbits gently around it.
+const VICTORY_YAW = THREE.MathUtils.degToRad(8);
+const VICTORY_AIM = 0.45;
+const VICTORY_PUSH = 0.1;
 const INTRO_YAW = THREE.MathUtils.degToRad(9);
 const SHOWDOWN_PUSH = 0.01;
-// Phase 1 kick amplitudes (world units at its 9.4-unit camera distance), rescaled to this rig.
-const KICK = { x: 0.22, y: 0.09, z: 0.42, distance: 9.4, rate: 10.5 };
+// Impact punch: a snap push-in of `kick × KICK_PUSH` (share of size) aimed at the punch focus, a
+// roll of `kick × KICK_ROLL` toward the attack, both decaying at KICK_RATE per second.
+const KICK_PUSH = 0.05;
+const KICK_ROLL = THREE.MathUtils.degToRad(0.7);
+const KICK_RATE = 10.5;
 
 const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 const easeInOutSine = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
@@ -31,6 +42,7 @@ const smooth = (t) => t * t * (3 - 2 * t);
 const clamp01 = (t) => Math.max(0, Math.min(1, t));
 
 const UP = new THREE.Vector3(0, 1, 0);
+const FORWARD = new THREE.Vector3(0, 0, 1);
 const yawQuat = (angle, out = new THREE.Quaternion()) => out.setFromAxisAngle(UP, angle);
 // Vertical fov that magnifies the image by (1 + amount).
 const zoomFov = (fov, amount) =>
@@ -57,7 +69,8 @@ export class CameraRig {
     this.showdown = 0;
     this.active = null;
     this.held = null;
-    this.kick = new THREE.Vector3();
+    // Punch impulse: push amount, roll (rad) and the world point it pushes toward.
+    this.kick = { push: 0, roll: 0, focus: new THREE.Vector3() };
     this.shake = { px: 0, ms: 0, age: 0 };
     this.grade = { saturation: 1, from: 1, to: 1, ms: 0, age: 0 };
     this.tmp = {
@@ -93,8 +106,9 @@ export class CameraRig {
     camera.fov = this.rest.fov;
   }
 
-  // Starts a shot from the current framing. `target` = { center, feet, sign } of the shot's side
-  // (sign: +1 when that side is right of the screen centre). Returns the shot record.
+  // Starts a shot from the current framing. `target` = { center, feet, sign, other } of the shot's
+  // side (sign: +1 when that side is right of the screen centre; other: the other fighter's
+  // centre). Returns the shot record.
   start(name, duration, target) {
     const shot = { name, duration, target, age: 0, sweeps: 0, from: copyPose(pose(), this.shotPose) };
     if (name === 'intro') shot.blend = 0;
@@ -129,18 +143,21 @@ export class CameraRig {
     if (ms <= 0) g.saturation = to;
   }
 
-  punch(sign, { kick = 1, shakePx = 0, shakeMs = 0 }) {
-    const k = kick * (this.distance / KICK.distance);
-    // Camera-local: slide away from the target side, lift, lean in (−z is forward).
-    this.kick.set(-sign * KICK.x * k, KICK.y * k, -KICK.z * k);
+  // A snap push-in toward `focus` (world point between both fighters, weighted to the target)
+  // with a roll toward the attack (`sign`: +1 when the target is right of centre). A push re-aims
+  // the camera part of the way at the focus and narrows the fov, so the target moves toward the
+  // frame centre, never out of it, and near and far fighters scale alike (a dolly would balloon
+  // the near one past the frame).
+  punch(focus, sign, { kick = 1, shakePx = 0, shakeMs = 0 }) {
+    this.kick.focus.copy(focus);
+    this.kick.push = kick * KICK_PUSH;
+    this.kick.roll = -sign * kick * KICK_ROLL;
     if (shakePx > 0 && shakeMs > 0) Object.assign(this.shake, { px: shakePx, ms: shakeMs, age: 0 });
   }
 
   isActive() {
     const g = this.grade;
-    return Boolean(
-      this.active || this.kick.lengthSq() > 0 || this.shake.ms > 0 || (g.ms > 0 && g.age < g.ms)
-    );
+    return Boolean(this.active || this.kick.push > 0 || this.shake.ms > 0 || (g.ms > 0 && g.age < g.ms));
   }
 
   // Advances shots, kick, shake and the shot grade by `dt` virtual ms. Returns the shot that
@@ -166,9 +183,13 @@ export class CameraRig {
       }
     } else if (this.held) this.evaluate(this.held, this.shotPose);
     else copyPose(this.shotPose, this.rest);
-    const decay = Math.exp((-KICK.rate * dt) / 1000);
-    this.kick.multiplyScalar(decay);
-    if (this.kick.lengthSq() < 1e-7) this.kick.set(0, 0, 0);
+    const k = this.kick;
+    if (k.push > 0) {
+      const decay = Math.exp((-KICK_RATE * dt) / 1000);
+      k.push *= decay;
+      k.roll *= decay;
+      if (k.push < 1e-4) k.push = k.roll = 0;
+    }
     const s = this.shake;
     if (s.ms > 0) {
       s.age += dt;
@@ -206,6 +227,11 @@ export class CameraRig {
         out.quaternion.premultiply(yawQuat(-target.sign * ATTACK_PAN * env, q));
         break;
       }
+      case 'lean': {
+        const env = t < 0.7 ? easeInOutSine(t / 0.7) : 1 - easeOutCubic((t - 0.7) / 0.3);
+        this.push(out, v.copy(target.center).lerp(target.other, LEAN_OTHER), LEAN_PUSH * env);
+        break;
+      }
       case 'impact': {
         const env = t < 0.3 ? easeOutCubic(t / 0.3) : 1 - easeInOutSine((t - 0.3) / 0.7);
         this.push(out, target.center, IMPACT_PUSH * env);
@@ -220,7 +246,7 @@ export class CameraRig {
         yawQuat(angle, q);
         out.position.sub(target.feet).applyQuaternion(q).add(target.feet);
         out.quaternion.premultiply(q);
-        this.push(out, target.center, VICTORY_PUSH * ease);
+        this.push(out, target.center, VICTORY_PUSH * ease, VICTORY_AIM * ease);
         break;
       }
     }
@@ -233,22 +259,25 @@ export class CameraRig {
     return out;
   }
 
-  // Cinematic push-in by `amount` (share of size): aim part of the way at `point` and narrow the
+  // Cinematic push-in by `amount` (share of size): aim `aim` of the way at `point` and narrow the
   // fov, so near and far fighters scale alike (a dolly would balloon the near fighter).
-  push(out, point, amount) {
+  push(out, point, amount, aim = amount * 2.5) {
     if (!(amount > 0)) return;
     this.tmp.m.lookAt(out.position, point, UP);
-    out.quaternion.slerp(this.tmp.aim.setFromRotationMatrix(this.tmp.m), Math.min(1, amount * 2.5));
+    out.quaternion.slerp(this.tmp.aim.setFromRotationMatrix(this.tmp.m), Math.min(1, aim));
     out.fov = zoomFov(out.fov, amount);
   }
 
-  // Writes the live camera: shot pose + kick, and the screen shake as a view offset (CSS px).
+  // Writes the live camera: shot pose + punch, and the screen shake as a view offset (CSS px).
   apply(camera, width, height) {
     camera.position.copy(this.shotPose.position);
     camera.quaternion.copy(this.shotPose.quaternion);
     camera.fov = this.shotPose.fov;
-    if (this.kick.lengthSq() > 0)
-      camera.position.add(this.tmp.v.copy(this.kick).applyQuaternion(camera.quaternion));
+    const k = this.kick;
+    if (k.push > 0) {
+      this.push(camera, k.focus, k.push);
+      camera.quaternion.multiply(this.tmp.q.setFromAxisAngle(FORWARD, k.roll));
+    }
     const s = this.shake;
     if (s.ms > 0) {
       const a = s.px * (1 - s.age / s.ms) ** 2;

@@ -46,6 +46,9 @@ const PAD_REST_LIFT = 1;
 const PAD_DIM_LIFT = 0.35;
 // A standing enemy eases to a new hierarchy cap over this many fx-ms when the player switches.
 const ENEMY_EASE_MS = 250;
+// The impact punch pushes in toward this point between the fighters' centres (0 = the attacker,
+// 1 = the target).
+const PUNCH_TARGET_WEIGHT = 0.85;
 
 // Frame-rate-independent exponential approach that settles exactly on target.
 function approach(value, target, rate) {
@@ -147,6 +150,8 @@ export class ArenaScene {
     this.bulbsUntil = 0;
     this.cheerSerial = 0;
     this.shotRecord = null;
+    this.punchFocus = new THREE.Vector3();
+    this.punchTarget = new THREE.Vector3();
     this.creatures = { player: null, enemy: null };
     this.cachedAnchors = null;
     this.rect = null;
@@ -566,8 +571,9 @@ export class ArenaScene {
   shotTarget(side) {
     const center = this.fighters.restAnchor(side, 'center', new THREE.Vector3()),
       feet = this.fighters.restAnchor(side, 'feet', new THREE.Vector3()),
+      other = this.fighters.restAnchor(side === 'player' ? 'enemy' : 'player', 'center', new THREE.Vector3()),
       sign = (this.cachedAnchors?.[side].center.x ?? 0) > (this.rect?.width ?? 0) / 2 ? 1 : -1;
-    return { center, feet, sign };
+    return { center, feet, sign, other };
   }
 
   settleShot(result) {
@@ -581,10 +587,16 @@ export class ArenaScene {
     for (const side of SIDES) this.pads[side].lift = PAD_REST_LIFT;
   }
 
+  // §7.2: the punch pushes in toward a point between both fighters, weighted to the target, so
+  // the target stays in frame at every kick.
   punch(targetSide, { kick = 1, shakePx = 0, shakeMs = 0 } = {}) {
     if (this.disposed || this.instant || this.reducedMotion) return;
-    const sign = (this.cachedAnchors?.[targetSide].center.x ?? 0) > (this.rect?.width ?? 0) / 2 ? 1 : -1;
-    this.rig.punch(sign, { kick, shakePx, shakeMs });
+    const other = targetSide === 'player' ? 'enemy' : 'player',
+      focus = this.fighters
+        .restAnchor(other, 'center', this.punchFocus)
+        .lerp(this.fighters.restAnchor(targetSide, 'center', this.punchTarget), PUNCH_TARGET_WEIGHT),
+      sign = (this.cachedAnchors?.[targetSide].center.x ?? 0) > (this.rect?.width ?? 0) / 2 ? 1 : -1;
+    this.rig.punch(focus, sign, { kick, shakePx, shakeMs });
     this.wake();
   }
 

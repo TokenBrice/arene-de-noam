@@ -11,7 +11,6 @@ import './screens/trials.js';
 import './screens/tutorial.js';
 import './battle-ui/controller.js';
 import './battle-ui/hud.js';
-import './battle-ui/fx.js';
 import './battle-ui/playback.js';
 import './screens/results.js';
 import './screens/bestiary.js';

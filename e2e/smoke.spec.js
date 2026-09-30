@@ -1,18 +1,22 @@
 import { test, expect } from '@playwright/test';
-import { expectNoRuntimeLeaks, installCompletedTutorial, watchRuntime } from './helpers.js';
+import { TRAINERS } from '../src/data/trainers.js';
+import { arenaReady, expectNoRuntimeLeaks, installCompletedTutorial, watchRuntime } from './helpers.js';
 
 test('boots in French, switches to complete English, and keeps a clean console', async ({ page }) => {
   const runtime = watchRuntime(page);
   await page.goto('/?seed=7');
   await expect(page.getByRole('heading', { name: 'Arène de Noam' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Combat rapide/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Combat libre/ })).toBeVisible();
   await page.goto('/?lang=en&seed=7&enemy=thornox,kordane,calderoc&enemyMove=toxic_spines,toxic_spines');
   await expect(page.getByRole('heading', { name: /Noam.s Arena/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Quick Battle/ })).toBeVisible();
-  await page.getByRole('button', { name: /Quick Battle/ }).click();
-  await expect(page.locator('.mini-stats').first()).toContainText(/HP \d+ · ATK \d+ · GRD \d+ · SPD \d+/);
-  await expect(page.locator('.mini-stats').first()).not.toContainText('PV');
-  await page.getByRole('button', { name: /Enter the/ }).click();
+  await expect(page.getByRole('button', { name: /Free Battle/ })).toBeVisible();
+  await page.getByRole('button', { name: /Free Battle/ }).click();
+  await page.locator('[data-creature="orakyn"]').click({ button: 'right' });
+  await expect(page.locator('.creature-sheet-stats dt')).toHaveText(['HP', 'Attack', 'Defense', 'Speed']);
+  await expect(page.locator('.creature-sheet')).not.toContainText('PV');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Fight!', exact: true }).click();
+  await arenaReady(page);
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
   await page.locator('[data-move]:enabled').first().click();
   await expect(page.locator('[data-move]:enabled').first()).toBeVisible({ timeout: 20000 });
@@ -29,6 +33,17 @@ test('boots in French, switches to complete English, and keeps a clean console',
   await expectNoRuntimeLeaks(runtime);
 });
 
+test('title JOUER starts the next League battle with the saved team in two taps', async ({ page }) => {
+  await installCompletedTutorial(page, { ladderVictories: 1, lastTeam: ['voltide', 'brontusk', 'mossaur'] });
+  await page.goto('/?seed=5&animations=0');
+  await page.getByRole('button', { name: /Jouer/ }).click();
+  await arenaReady(page);
+  await expect(page.locator('#fighter-player')).toHaveAttribute('data-creature', 'voltide');
+  await expect(page.locator('#fighter-enemy')).toHaveAttribute('data-creature', TRAINERS[1].team[0]);
+  await page.locator('[data-move]:enabled').first().click();
+  await expect(page.locator('[data-move]:enabled').first()).toBeVisible({ timeout: 20000 });
+});
+
 test('settings, language, audio, motion, contrast and speed persist after reload', async ({ page }) => {
   await installCompletedTutorial(page, {
     muted: false,
@@ -39,17 +54,17 @@ test('settings, language, audio, motion, contrast and speed persist after reload
   await page.goto('/');
   await page.getByRole('button', { name: 'Réglages' }).click();
   await page.getByRole('button', { name: 'EN' }).click();
-  await page.getByRole('checkbox', { name: 'Mute sound' }).check();
-  await page.getByRole('checkbox', { name: 'Reduced motion' }).check();
-  await page.getByRole('checkbox', { name: 'High contrast' }).check();
+  await page.getByRole('switch', { name: 'Mute sound' }).check();
+  await page.getByRole('switch', { name: 'Reduced motion' }).check();
+  await page.getByRole('switch', { name: 'High contrast' }).check();
   await expect(page.locator('body')).toHaveClass(/high-contrast/);
   await page.getByRole('button', { name: 'Fast ×2' }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings & help' })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Mute sound' })).toBeChecked();
-  await expect(page.getByRole('checkbox', { name: 'Reduced motion' })).toBeChecked();
-  await expect(page.getByRole('checkbox', { name: 'High contrast' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Mute sound' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Reduced motion' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'High contrast' })).toBeChecked();
   await expect(page.locator('body')).toHaveClass(/high-contrast/);
   await expect(page.getByRole('button', { name: 'Fast ×2' })).toHaveClass(/active/);
 });
@@ -64,8 +79,8 @@ test('corrupt save recovers with a friendly notice', async ({ page }) => {
 test('WebGL failure has a friendly nonblank screen', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?failWebgl=1');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.getByRole('button', { name: /Combat libre/ }).click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await expect(page.getByText(/arène ne peut pas s’afficher/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Retour/ })).toBeVisible();
 });
@@ -73,8 +88,8 @@ test('WebGL failure has a friendly nonblank screen', async ({ page }) => {
 test('lost graphics context becomes a friendly recovery screen', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?animations=0');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.getByRole('button', { name: /Combat libre/ }).click();
+  await page.getByRole('button', { name: /^Combattre/ }).click();
   await page.locator('#arena').dispatchEvent('arena-context-lost');
   await expect(page.getByText(/affichage de l’arène s’est arrêté/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Retour/ })).toBeVisible();

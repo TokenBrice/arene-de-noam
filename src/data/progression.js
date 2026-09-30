@@ -18,6 +18,34 @@ export function masteryProgress(xp = 0) {
   };
 }
 
+// Chromatiques (GAME-11): the top mastery rank unlocks a creature's colour variant. The unlock
+// is derived from mastery; only the display preference is stored (`save.chromatiques`, v18).
+export const CHROMATIQUE_RANK = MAX_MASTERY_RANK;
+export function chromatiqueUnlocked(creatureId, save) {
+  return masteryRank(save?.mastery?.[creatureId] ?? 0) >= CHROMATIQUE_RANK;
+}
+export function isChromatiqueShown(creatureId, save) {
+  return save?.chromatiques?.[creatureId] === true && chromatiqueUnlocked(creatureId, save);
+}
+
+// League badges open the side modes (GAME-11). Derived from `ladderVictories`, so no migration:
+// a mode the save has already played (a Gauntlet or Draft win, a cleared Trial) stays open.
+export const MODE_BADGES = Object.freeze({ gauntlet: 2, trials: 4, draft: 6 });
+export function unlockedModes(save) {
+  const badges = Number.isInteger(save?.ladderVictories) ? save.ladderVictories : 0,
+    played = {
+      gauntlet: save?.gauntletWins > 0,
+      trials: Array.isArray(save?.trials) && save.trials.length > 0,
+      draft: save?.draftWins > 0,
+    };
+  return Object.fromEntries(
+    Object.entries(MODE_BADGES).map(([mode, badgesNeeded]) => [
+      mode,
+      { unlocked: badges >= badgesNeeded || played[mode], badgesNeeded },
+    ])
+  );
+}
+
 export const PERFORMANCE_GRADES = Object.freeze(['D', 'C', 'B', 'A', 'S']);
 export function performanceGrade({ win = false, turns = 40, survivors = 0 } = {}) {
   const victory = win ? 50 : 0;

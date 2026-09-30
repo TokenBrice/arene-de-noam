@@ -33,3 +33,27 @@ for (const id of ids) {
     assert.equal(SPRITE_METRICS[id].footRow, y1);
   });
 }
+
+// Chromatiques (GAME-11) are palette swaps: the same silhouette texel for texel (so SPRITE_METRICS
+// serve both files), within the colour budget, and visibly recoloured.
+for (const id of ids) {
+  test(`${id} Chromatique: same mask as the battle sprite, ≤ 100 colours, recoloured`, async () => {
+    const base = decodePng(await readFile(`assets/monsters/${id}/battle.png`));
+    const shiny = decodePng(await readFile(`assets/monsters/${id}/battle-shiny.png`));
+    assert.equal(shiny.width, base.width);
+    assert.equal(shiny.height, base.height);
+    const colours = new Set();
+    let opaque = 0;
+    let changed = 0;
+    for (let i = 0; i < base.width * base.height; i += 1) {
+      const o = i * 4;
+      assert.equal(shiny.rgba[o + 3], base.rgba[o + 3], `pixel ${i} alpha differs`);
+      if (base.rgba[o + 3] === 0) continue;
+      opaque += 1;
+      colours.add((shiny.rgba[o] << 16) | (shiny.rgba[o + 1] << 8) | shiny.rgba[o + 2]);
+      if ([0, 1, 2].some((c) => Math.abs(shiny.rgba[o + c] - base.rgba[o + c]) > 12)) changed += 1;
+    }
+    assert.ok(colours.size <= 100, `${colours.size} colours`);
+    assert.ok(changed / opaque >= 0.2, `only ${Math.round((100 * changed) / opaque)} % of texels recoloured`);
+  });
+}

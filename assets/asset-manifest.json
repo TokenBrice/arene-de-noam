@@ -17,6 +17,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/orakyn.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/orakyn/battle-shiny.png",
+        "from": "assets/monsters/orakyn/battle.png",
+        "bodyHue": 287,
+        "hue": 100,
+        "colors": 98
       }
     },
     {
@@ -31,6 +38,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/kordane.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/kordane/battle-shiny.png",
+        "from": "assets/monsters/kordane/battle.png",
+        "bodyHue": 70,
+        "hue": 250,
+        "colors": 68
       }
     },
     {
@@ -46,6 +60,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/farfombre.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/farfombre/battle-shiny.png",
+        "from": "assets/monsters/farfombre/battle.png",
+        "bodyHue": 289,
+        "hue": 180,
+        "colors": 24
       }
     },
     {
@@ -60,6 +81,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/abyssar.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/abyssar/battle-shiny.png",
+        "from": "assets/monsters/abyssar/battle.png",
+        "bodyHue": 267,
+        "hue": 85,
+        "colors": 68
       }
     },
     {
@@ -74,6 +102,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/calderoc.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/calderoc/battle-shiny.png",
+        "from": "assets/monsters/calderoc/battle.png",
+        "bodyHue": 28,
+        "hue": 235,
+        "colors": 66
       }
     },
     {
@@ -88,6 +123,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/virelia.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/virelia/battle-shiny.png",
+        "from": "assets/monsters/virelia/battle.png",
+        "bodyHue": 141,
+        "hue": 355,
+        "colors": 68
       }
     },
     {
@@ -102,6 +144,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/lumivox.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/lumivox/battle-shiny.png",
+        "from": "assets/monsters/lumivox/battle.png",
+        "bodyHue": 274,
+        "hue": 150,
+        "colors": 68
       }
     },
     {
@@ -116,6 +165,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/mnemora.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/mnemora/battle-shiny.png",
+        "from": "assets/monsters/mnemora/battle.png",
+        "bodyHue": 301,
+        "hue": 55,
+        "colors": 68
       }
     },
     {
@@ -130,6 +186,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/prismage.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/prismage/battle-shiny.png",
+        "from": "assets/monsters/prismage/battle.png",
+        "bodyHue": 294,
+        "hue": 150,
+        "colors": 68
       }
     },
     {
@@ -144,6 +207,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/brontusk.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/brontusk/battle-shiny.png",
+        "from": "assets/monsters/brontusk/battle.png",
+        "bodyHue": 56,
+        "hue": 250,
+        "colors": 68
       }
     },
     {
@@ -158,6 +228,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/ferrax.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/ferrax/battle-shiny.png",
+        "from": "assets/monsters/ferrax/battle.png",
+        "bodyHue": 27,
+        "hue": 85,
+        "colors": 65
       }
     },
     {
@@ -172,6 +249,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/monolith.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/monolith/battle-shiny.png",
+        "from": "assets/monsters/monolith/battle.png",
+        "bodyHue": 291,
+        "hue": 60,
+        "colors": 67
       }
     },
     {
@@ -186,6 +270,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/riptalon.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/riptalon/battle-shiny.png",
+        "from": "assets/monsters/riptalon/battle.png",
+        "bodyHue": 260,
+        "hue": 150,
+        "colors": 68
       }
     },
     {
@@ -200,6 +291,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/nymbloom.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/nymbloom/battle-shiny.png",
+        "from": "assets/monsters/nymbloom/battle.png",
+        "bodyHue": 253,
+        "hue": 160,
+        "colors": 76
       }
     },
     {
@@ -214,6 +312,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/voltide.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/voltide/battle-shiny.png",
+        "from": "assets/monsters/voltide/battle.png",
+        "bodyHue": 268,
+        "hue": 350,
+        "colors": 68
       }
     },
     {
@@ -228,6 +333,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/pyrolynx.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/pyrolynx/battle-shiny.png",
+        "from": "assets/monsters/pyrolynx/battle.png",
+        "bodyHue": 38,
+        "hue": 215,
+        "colors": 66
       }
     },
     {
@@ -242,6 +354,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/magmoth.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/magmoth/battle-shiny.png",
+        "from": "assets/monsters/magmoth/battle.png",
+        "bodyHue": 34,
+        "hue": 200,
+        "colors": 68
       }
     },
     {
@@ -256,6 +375,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/solflare.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/solflare/battle-shiny.png",
+        "from": "assets/monsters/solflare/battle.png",
+        "bodyHue": 43,
+        "hue": 250,
+        "colors": 76
       }
     },
     {
@@ -270,6 +396,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/mossaur.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/mossaur/battle-shiny.png",
+        "from": "assets/monsters/mossaur/battle.png",
+        "bodyHue": 101,
+        "hue": 35,
+        "colors": 68
       }
     },
     {
@@ -284,6 +417,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/florafae.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/florafae/battle-shiny.png",
+        "from": "assets/monsters/florafae/battle.png",
+        "bodyHue": 304,
+        "hue": 70,
+        "colors": 76
       }
     },
     {
@@ -298,6 +438,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/thornox.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/thornox/battle-shiny.png",
+        "from": "assets/monsters/thornox/battle.png",
+        "bodyHue": 316,
+        "hue": 75,
+        "colors": 68
       }
     },
     {
@@ -312,6 +459,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/nocturnyx.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/nocturnyx/battle-shiny.png",
+        "from": "assets/monsters/nocturnyx/battle.png",
+        "bodyHue": 282,
+        "hue": 55,
+        "colors": 68
       }
     },
     {
@@ -326,6 +480,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/umbrawl.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/umbrawl/battle-shiny.png",
+        "from": "assets/monsters/umbrawl/battle.png",
+        "bodyHue": 298,
+        "hue": 195,
+        "colors": 66
       }
     },
     {
@@ -340,6 +501,13 @@
         "outline": true,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/hexalune.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/hexalune/battle-shiny.png",
+        "from": "assets/monsters/hexalune/battle.png",
+        "bodyHue": 283,
+        "hue": 20,
+        "colors": 68
       }
     },
     {
@@ -355,6 +523,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/deuilastre.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/deuilastre/battle-shiny.png",
+        "from": "assets/monsters/deuilastre/battle.png",
+        "bodyHue": 305,
+        "hue": 275,
+        "colors": 31
       }
     },
     {
@@ -370,6 +545,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/aubeastre.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/aubeastre/battle-shiny.png",
+        "from": "assets/monsters/aubeastre/battle.png",
+        "bodyHue": 75,
+        "hue": 340,
+        "colors": 31
       }
     },
     {
@@ -385,6 +567,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/flambelier.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/flambelier/battle-shiny.png",
+        "from": "assets/monsters/flambelier/battle.png",
+        "bodyHue": 31,
+        "hue": 250,
+        "colors": 40
       }
     },
     {
@@ -400,6 +589,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/mareclat.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/mareclat/battle-shiny.png",
+        "from": "assets/monsters/mareclat/battle.png",
+        "bodyHue": 246,
+        "hue": 30,
+        "colors": 31
       }
     },
     {
@@ -415,6 +611,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/xylocorne.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/xylocorne/battle-shiny.png",
+        "from": "assets/monsters/xylocorne/battle.png",
+        "bodyHue": 56,
+        "hue": 300,
+        "colors": 43
       }
     },
     {
@@ -430,6 +633,13 @@
         "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/pactigon.png"
+      },
+      "chromatique": {
+        "final": "assets/monsters/pactigon/battle-shiny.png",
+        "from": "assets/monsters/pactigon/battle.png",
+        "bodyHue": 73,
+        "hue": 270,
+        "colors": 35
       }
     }
   ],

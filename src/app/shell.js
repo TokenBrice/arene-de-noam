@@ -1,30 +1,7 @@
 import { ctx, registerRoutes, route } from './context.js';
 import { icon, installIconSprite } from './icons.js';
 
-const {
-  AFFINITIES,
-  AFFINITY_ORDER,
-  CLASSES,
-  CLASS_ORDER,
-  CREATURES,
-  CREATURE_IDS,
-  CURRENT_FEAT_IDS,
-  previewMove,
-  i18n,
-  t,
-  screen,
-  sound,
-  sprite,
-  creatureName,
-  affinity,
-  affinityName,
-  affinityIcon,
-  classIcon,
-  className,
-  persist,
-  escapeHtml,
-  testAnimationScale,
-} = ctx;
+const { t, screen, sound, persist, escapeHtml, testAnimationScale } = ctx;
 const {
   renderTitle,
   renderAcademy,
@@ -36,7 +13,6 @@ const {
   refreshBattle,
   renderResults,
   closeMoveTheater,
-  openMoveTheater,
   renderBestiary,
   renderSettings,
   openBattlePause,
@@ -52,40 +28,19 @@ function currentMusicScreen() {
   return screen.dataset.page || 'title';
 }
 
+// Shared chrome wiring after every render: music, and the topbar/home buttons
+// every screen shares. Screen-specific DOM belongs to the owning screen.
 function bindCommon() {
   sound.setScreen(currentMusicScreen());
-  screen.querySelectorAll('[data-action="title"]').forEach((b) => b.addEventListener('click', renderTitle));
-  const settingsBackRoutes = {
-    title: renderTitle,
-    selection: () => renderTeamSelect(ctx.selection?.mode),
-    bestiary: renderBestiary,
-    academy: renderAcademy,
-    league: renderLeague,
-    trials: renderTrials,
-    draft: renderDraft,
-    'gauntlet-boon': renderGauntletBoons,
-    results: () => {
-      const session = ctx.settingsBattleSession;
-      ctx.settingsBattleSession = null;
-      if (!session) {
-        renderTitle();
-        return;
-      }
-      ctx.battleSession = session;
-      renderResults(session.state.winner === 'player');
-    },
-  };
-  if (screen.dataset.page === 'settings') {
-    screen.querySelectorAll('.topbar > [data-action]').forEach((button) => {
-      if (!button.classList.contains('subtle-btn') || button.dataset.action === 'title') return;
-      const handler = settingsBackRoutes[button.dataset.action] || renderTitle;
-      button.addEventListener('click', handler);
-    });
-  }
+  screen
+    .querySelectorAll('[data-action="title"]')
+    .forEach((b) => b.addEventListener('click', () => guardedLeave(renderTitle)));
+  screen
+    .querySelectorAll('[data-action="back"]')
+    .forEach((b) => b.addEventListener('click', () => navigateUp()));
   screen.querySelectorAll('[data-action="settings"]').forEach((b) =>
     b.addEventListener('click', () => {
       ctx.settingsReturn = screen.dataset.page || 'title';
-      ctx.settingsBattleSession = ctx.battleSession;
       renderSettings();
     })
   );
@@ -97,166 +52,27 @@ function bindCommon() {
       renderCurrent();
     })
   );
-  if (screen.dataset.page === 'settings' && !screen.querySelector('#high-contrast')) {
-    const motion = screen.querySelector('#motion')?.closest('.toggle-row');
-    motion?.insertAdjacentHTML(
-      'afterend',
-      `<div class="toggle-row contrast-row"><label for="high-contrast"><strong>${t('settings.contrast')}</strong><small>${t('settings.contrastHint')}</small></label><input id="high-contrast" type="checkbox" ${ctx.save.highContrast ? 'checked' : ''}></div>`
-    );
-    screen.querySelector('#high-contrast')?.addEventListener('change', (event) => {
-      ctx.save.highContrast = event.target.checked;
-      persist();
-    });
-  }
-  if (screen.dataset.page === 'bestiary' && screen.querySelector('.feat-hall .eyebrow')) {
-    const visibleFeatIds = [
-        ...CURRENT_FEAT_IDS,
-        ...(ctx.save.feats.includes('team_assist') ? ['team_assist'] : []),
-      ],
-      earnedVisible = visibleFeatIds.filter((id) => ctx.save.feats.includes(id)).length;
-    screen.querySelector('.feat-hall .eyebrow').textContent = `${earnedVisible}/${visibleFeatIds.length}`;
-  }
-  if (screen.dataset.page === 'bestiary') {
-    const emptyRecord = { battles: 0, wins: 0, damage: 0, kos: 0, signatures: 0, combos: 0, assists: 0 },
-      favorite = CREATURE_IDS.map((id) => ({ id, ...emptyRecord, ...(ctx.save.records?.[id] || {}) })).sort(
-        (a, b) =>
-          b.battles - a.battles ||
-          b.damage - a.damage ||
-          CREATURE_IDS.indexOf(a.id) - CREATURE_IDS.indexOf(b.id)
-      )[0],
-      favoriteAffinity = AFFINITIES[CREATURES[favorite.id].affinity],
-      hero = favorite.battles
-        ? `<section class="record-hero" style="--record-color:${favoriteAffinity.color}"><div class="record-creature"><img src="${sprite(favorite.id)}" alt=""><span><small>${t('record.favorite')}</small><h2>${creatureName(favorite.id)}</h2><p>${t('record.subtitle')}</p></span></div><div class="record-hero-stats"><span><b>${favorite.battles}</b><small>${t('record.battles')}</small></span><span><b>${favorite.wins}</b><small>${t('record.wins')}</small></span><span><b>${favorite.damage}</b><small>${t('record.damage')}</small></span><span><b>${favorite.kos}</b><small>${t('record.kos')}</small></span></div></section>`
-        : `<section class="record-hero empty"><div><span class="eyebrow">${t('record.hall')}</span><h2>${t('record.none')}</h2></div></section>`;
-    screen.querySelector('.record-hall-content')?.insertAdjacentHTML('afterbegin', hero);
-    screen.querySelectorAll('.bestiary-card').forEach((card, creatureIndex) => {
-      const id = CREATURE_IDS[creatureIndex],
-        record = { ...emptyRecord, ...(ctx.save.records?.[id] || {}) };
-      card
-        .querySelector('.passive-line')
-        ?.insertAdjacentHTML(
-          'beforebegin',
-          `<div class="creature-record"><span><b>${record.battles}</b>${t('record.battles')}</span><span><b>${record.wins}</b>${t('record.wins')}</span><span><b>${record.damage}</b>${t('record.damage')}</span><span><b>${record.kos}</b>${t('record.kos')}</span><span><b>${record.signatures}</b>${t('record.signatures')}</span><span><b>${record.combos}</b>${t('record.combos')}</span>${record.assists ? `<span class="legacy-record"><b>${record.assists}</b>${t('record.assistsLegacy')}</span>` : ''}</div>`
-        );
-      card.querySelectorAll('[data-preview-move]').forEach((entry) => {
-        const moveId = entry.dataset.previewMove;
-        entry.setAttribute('role', 'button');
-        entry.addEventListener('click', () => openMoveTheater(moveId, entry));
-      });
-    });
-  }
-  if (screen.dataset.page === 'bestiary' && !screen.querySelector('.bestiary-tools'))
-    installBestiaryFilters();
 }
 
-function installBestiaryFilters() {
-  const cards = [...screen.querySelectorAll('.bestiary-card')];
-  cards.forEach((card, index) => {
-    card.dataset.creature = CREATURE_IDS[index];
-    card.dataset.affinity = CREATURES[CREATURE_IDS[index]].affinity;
-    card.dataset.class = CREATURES[CREATURE_IDS[index]].classId;
-  });
-  screen
-    .querySelector('.bestiary-grid')
-    ?.insertAdjacentHTML(
-      'beforebegin',
-      `<section class="bestiary-tools"><div class="bestiary-search-row"><label><span>${icon('search')}</span><input type="search" data-bestiary-search aria-label="${t('bestiary.search')}" placeholder="${t('bestiary.search')}"></label><button type="button" class="bestiary-filter-toggle" data-bestiary-toggle aria-expanded="false" aria-controls="bestiary-filter-chips" aria-label="${t('filter.types')} / ${t('filter.classes')}">${icon('filter')}</button><b data-bestiary-count>${CREATURE_IDS.length} / ${CREATURE_IDS.length}</b></div><div id="bestiary-filter-chips" class="bestiary-filter-chips"><div class="bestiary-filter-row" aria-label="${t('filter.types')}"><b>${t('filter.types')}</b><button type="button" class="active" data-bestiary-affinity="all" aria-pressed="true">${CREATURE_IDS.length}</button>${AFFINITY_ORDER.map((id) => `<button type="button" data-bestiary-affinity="${id}" aria-pressed="false" style="--filter-color:${AFFINITIES[id].color}">${affinityIcon(id)} ${affinityName(id)}</button>`).join('')}</div><div class="bestiary-filter-row class-filter-row" aria-label="${t('filter.classes')}"><b>${t('filter.classes')}</b><button type="button" class="active" data-bestiary-class="all" aria-pressed="true">${CREATURE_IDS.length}</button>${CLASS_ORDER.map((id) => `<button type="button" data-bestiary-class="${id}" aria-pressed="false" style="--class-color:${CLASSES[id].color}">${classIcon(id)} ${className(id)}</button>`).join('')}</div></div></section>`
-    );
-  const input = screen.querySelector('[data-bestiary-search]'),
-    count = screen.querySelector('[data-bestiary-count]'),
-    grid = screen.querySelector('.bestiary-grid'),
-    filterToggle = screen.querySelector('[data-bestiary-toggle]');
-  let activeAffinity = 'all',
-    activeClass = 'all';
-  const apply = () => {
-    const query = input.value.trim().toLocaleLowerCase(i18n.lang),
-      visible = cards.filter((card) => {
-        const show =
-          (activeAffinity === 'all' || card.dataset.affinity === activeAffinity) &&
-          (activeClass === 'all' || card.dataset.class === activeClass) &&
-          creatureName(card.dataset.creature).toLocaleLowerCase(i18n.lang).includes(query);
-        card.hidden = !show;
-        return show;
-      });
-    count.textContent = `${visible.length} / ${CREATURE_IDS.length}`;
-    let empty = grid.querySelector('.bestiary-empty');
-    if (!visible.length && !empty) {
-      grid.insertAdjacentHTML(
-        'beforeend',
-        `<article class="bestiary-empty" role="status"><p>${t('bestiary.noResults')}</p><button type="button" data-bestiary-clear>${t('bestiary.clearFilters')}</button></article>`
-      );
-      empty = grid.querySelector('.bestiary-empty');
-      empty.querySelector('[data-bestiary-clear]').addEventListener('click', () => {
-        input.value = '';
-        activeAffinity = 'all';
-        activeClass = 'all';
-        screen.querySelectorAll('[data-bestiary-affinity]').forEach((item) => {
-          const active = item.dataset.bestiaryAffinity === 'all';
-          item.classList.toggle('active', active);
-          item.setAttribute('aria-pressed', String(active));
-        });
-        screen.querySelectorAll('[data-bestiary-class]').forEach((item) => {
-          const active = item.dataset.bestiaryClass === 'all';
-          item.classList.toggle('active', active);
-          item.setAttribute('aria-pressed', String(active));
-        });
-        apply();
-        input.focus();
-      });
-    }
-    if (empty) empty.hidden = visible.length > 0;
-    if (query && visible.length === 1) {
-      const card = visible[0],
-        summary = card.querySelector('.bestiary-summary'),
-        detail = card.querySelector('.bestiary-detail');
-      summary?.setAttribute('aria-expanded', 'true');
-      card.classList.add('expanded');
-      if (summary?.querySelector('.bestiary-expand'))
-        summary.querySelector('.bestiary-expand').textContent = '−';
-      if (detail) detail.hidden = false;
-    }
-  };
-  filterToggle?.addEventListener('click', () => {
-    const open = filterToggle.getAttribute('aria-expanded') === 'true';
-    filterToggle.setAttribute('aria-expanded', String(!open));
-    screen.querySelector('.bestiary-tools')?.classList.toggle('filters-open', !open);
-  });
-  input.addEventListener('input', apply);
-  screen.querySelectorAll('[data-bestiary-affinity]').forEach((button) =>
-    button.addEventListener('click', () => {
-      activeAffinity = button.dataset.bestiaryAffinity;
-      screen.querySelectorAll('[data-bestiary-affinity]').forEach((item) => {
-        item.classList.toggle('active', item === button);
-        item.setAttribute('aria-pressed', String(item === button));
-      });
-      apply();
-    })
-  );
-  screen.querySelectorAll('[data-bestiary-class]').forEach((button) =>
-    button.addEventListener('click', () => {
-      activeClass = button.dataset.bestiaryClass;
-      screen.querySelectorAll('[data-bestiary-class]').forEach((item) => {
-        item.classList.toggle('active', item === button);
-        item.setAttribute('aria-pressed', String(item === button));
-      });
-      apply();
-    })
-  );
-}
+// Every page that can be re-rendered from app state alone (battle pages
+// cannot: they belong to their session).
+const PAGE_RENDERERS = {
+  title: () => renderTitle(),
+  selection: () => renderTeamSelect(ctx.selection?.mode),
+  league: () => renderLeague(),
+  academy: () => renderAcademy(),
+  bestiary: () => renderBestiary(),
+  trials: () => renderTrials(),
+  draft: () => renderDraft(),
+  'gauntlet-boon': () => renderGauntletBoons(),
+  results: () => renderResults(ctx.battleSession?.state.winner === 'player'),
+  settings: () => renderSettings(),
+};
 
 function renderCurrent() {
   sound.setScreen(currentMusicScreen());
   if (ctx.battleSession && screen.classList.contains('battle-screen')) refreshBattle();
-  else if (screen.dataset.page === 'title') renderTitle();
-  else if (screen.dataset.page === 'selection') renderTeamSelect(ctx.selection.mode);
-  else if (screen.dataset.page === 'league') renderLeague();
-  else if (screen.dataset.page === 'academy') renderAcademy();
-  else if (screen.dataset.page === 'bestiary') renderBestiary();
-  else if (screen.dataset.page === 'trials') renderTrials();
-  else if (screen.dataset.page === 'draft') renderDraft();
-  else if (screen.dataset.page === 'gauntlet-boon') renderGauntletBoons();
-  else if (screen.dataset.page === 'results') renderResults(ctx.battleSession?.state.winner === 'player');
-  else renderSettings();
+  else (PAGE_RENDERERS[screen.dataset.page] ?? renderSettings)();
 }
 
 /* Minimal shared route transition. The new screen renders synchronously and
@@ -373,6 +189,7 @@ function openSheet({ title = '', body = '', actions = [], onClose, labelledBy = 
     }
     if (opener?.isConnected) opener.focus({ preventScroll: true });
     onClose?.(reason);
+    syncHistory();
   };
   const entry = { layer, dismiss };
   const actionRow = layer.querySelector('.sheet-actions');
@@ -395,34 +212,134 @@ function openSheet({ title = '', body = '', actions = [], onClose, labelledBy = 
   openSheets.push(entry);
   root.append(layer);
   sheet.focus({ preventScroll: true });
+  syncHistory();
   return () => dismiss('api');
 }
 
-function handleEscape() {
+/* Navigation. The Android back gesture, the browser's back button and Escape
+   share goBack(): it closes the Move Theater or the top sheet first; in battle
+   it opens the pause sheet; elsewhere it goes one level up (navigateUp, also
+   behind every [data-action="back"] button).
+
+   One level up is the nearest hub the player came through (title, League,
+   Trials, Academy): team select opened from the League returns to the League,
+   the Bestiary opened from the Academy returns to the Academy, results return
+   to the hub their battle started from. Settings return to the screen that
+   opened them. While the page holds a leave guard (ctx.setLeaveGuard, e.g. an
+   Expédition run between stages), going up or home asks in a sheet first.
+
+   History: whenever a screen other than the title shows (or a sheet is open on
+   the title), one "inside" entry sits above the entry the app booted on, so a
+   back gesture pops it instead of leaving the app; goBack() then runs and the
+   entry is re-armed. Returning to the bare title in-app pops the entry again,
+   so back on the title leaves the app as usual. Keeping a single entry means
+   the browser history never drifts from the screen and forward navigation
+   can never replay a battle. */
+const HUB_PAGES = ['title', 'league', 'trials', 'academy'];
+const INSIDE_KEY = 'areneInside';
+let hubTrail = ['title'];
+let rewinding = false;
+
+const onInsideEntry = () => history.state?.[INSIDE_KEY] === true;
+
+function syncHistory() {
+  const page = screen.dataset.page;
+  if (!page || page === 'boot') return;
+  const inside = page !== 'title' || topSheet() !== null;
+  if (inside && !onInsideEntry()) history.pushState({ [INSIDE_KEY]: true }, '');
+  else if (!inside && onInsideEntry() && !rewinding) {
+    rewinding = true;
+    history.back();
+  }
+}
+
+function recordPage(page) {
+  if (!HUB_PAGES.includes(page)) return;
+  const index = hubTrail.indexOf(page);
+  hubTrail = index >= 0 ? hubTrail.slice(0, index + 1) : [...hubTrail, page];
+}
+
+// Asks the page's leave guard (ctx.setLeaveGuard) first, if one is set; otherwise leaves.
+function guardedLeave(leave) {
+  const guard = ctx.leaveGuard;
+  if (!guard || guard.page !== screen.dataset.page) {
+    leave();
+    return;
+  }
+  openSheet({
+    title: guard.message,
+    body: guard.detail ? `<p class="leave-detail">${escapeHtml(guard.detail)}</p>` : '',
+    actions: [
+      { label: guard.cancel, variant: 'subtle', action: 'leave-cancel' },
+      {
+        label: guard.confirm,
+        variant: 'danger',
+        action: 'leave-confirm',
+        onSelect: () => {
+          ctx.leaveGuard = null;
+          guard.onLeave?.();
+          leave();
+        },
+      },
+    ],
+  });
+}
+
+function navigateUp() {
+  const page = screen.dataset.page;
+  if (page === 'settings') {
+    (PAGE_RENDERERS[ctx.settingsReturn] ?? renderTitle)();
+    return;
+  }
+  const index = hubTrail.indexOf(page),
+    target = index >= 0 ? hubTrail[index - 1] : hubTrail.at(-1);
+  if (target) guardedLeave(PAGE_RENDERERS[target]);
+}
+
+function goBack() {
+  if (screen.querySelector('.move-theater')) {
+    closeMoveTheater();
+    return;
+  }
   const sheet = topSheet();
   if (sheet) {
     sheet.dismiss('escape');
     return;
   }
-  const resetDialog = screen.querySelector('.settings-dialog');
-  if (resetDialog) {
-    resetDialog.querySelector('[data-action="reset-cancel"]')?.click();
+  const page = screen.dataset.page;
+  if (page === 'battle') {
+    // A running battle pauses; a battle that failed to start (error card) leaves.
+    if (ctx.battleSession && !ctx.battleSession.cancelled) openBattlePause();
+    else renderTitle();
     return;
   }
-  if (screen.querySelector('.move-theater')) {
-    closeMoveTheater();
-    return;
-  }
-  // Battle with no sheet open: Escape (like the Phase 4 back gesture) pauses.
-  if (screen.dataset.page === 'battle') {
-    openBattlePause();
-    return;
-  }
-  if (screen.dataset.page !== 'title') renderTitle();
+  if (page === 'battle-loading') return;
+  navigateUp();
 }
+
+function installHistoryNavigation() {
+  history.scrollRestoration = 'manual';
+  // A reload keeps the old entry's state; start from a plain entry so the
+  // title does not try to pop into the previous document.
+  if (onInsideEntry()) history.replaceState(null, '');
+  new MutationObserver(() => {
+    recordPage(screen.dataset.page);
+    if (ctx.leaveGuard && ctx.leaveGuard.page !== screen.dataset.page) ctx.leaveGuard = null;
+    syncHistory();
+  }).observe(screen, { attributes: true, attributeFilter: ['data-page'] });
+  addEventListener('popstate', () => {
+    if (rewinding) rewinding = false;
+    else goBack();
+    syncHistory();
+  });
+}
+installHistoryNavigation();
+
 function trapModalTab(event) {
   const dialog =
-    topSheet()?.layer.querySelector('.sheet') ?? screen.querySelector('[role="dialog"][aria-modal="true"]');
+    screen.querySelector('.move-theater') ??
+    topSheet()?.layer.querySelector('.sheet') ??
+    screen.querySelector('[role="dialog"][aria-modal="true"]');
   if (!dialog || event.key !== 'Tab') return false;
   const items = [
     ...dialog.querySelectorAll(
@@ -448,9 +365,9 @@ function trapModalTab(event) {
 }
 registerRoutes({
   bindCommon,
-  installBestiaryFilters,
   renderCurrent,
-  handleEscape,
+  goBack,
+  navigateUp,
   trapModalTab,
   rerenderPreservingFocus,
   openSheet,

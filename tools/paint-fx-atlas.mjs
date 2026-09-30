@@ -4,8 +4,12 @@
 //
 // Two looks, one family: light cells (glow, ring, streak, smoke, speedline, shield) are smooth
 // gradients painted at full resolution; object cells and the 30 creature motifs are pixel art on a
-// 32- or 64-texel grid (upscaled with nearest neighbour), lit from the top left with a bevel and a
-// dark outline, plus an optional soft halo so additive sprites bloom without a post pass.
+// 32-, 64- or 128-texel grid (upscaled with nearest neighbour; cells stamped as large as a fighter
+// use the 128 grid so their texels match the 128-texel creatures), lit from the top left with a
+// bevel and a dark outline, plus an optional soft halo so additive sprites bloom without a post
+// pass. No cell carries a religious, occult or ritual symbol (no pentagram or star in a circle,
+// Latin or Lorraine cross, crescent-and-star, eye-in-triangle; the heal `cross` is a plus sign):
+// glyphs are crystals, locks, gems and nature shapes.
 //
 //   node tools/paint-fx-atlas.mjs [--preview <file.png>]
 //
@@ -116,9 +120,12 @@ function paintAtlas({ cells, size, grid }) {
   }
 
   // Pixel cell: `mask(h)` draws the silhouette in white; `details(h)` repaints texels at chosen
-  // levels (h.level). Bevel lights the top-left edges and shades the bottom-right ones.
+  // levels (h.level). Bevel lights the top-left edges and shades the bottom-right ones. `n` is the
+  // texel grid; shapes are authored in `units` (default n) and scaled to it, so one design paints
+  // at a finer grid where the cell is drawn large.
   function pixelCell({
     n = 32,
+    units = n,
     mask,
     details,
     bevel = true,
@@ -130,6 +137,7 @@ function paintAtlas({ cells, size, grid }) {
   }) {
     const layer = canvas(n),
       g = layer.getContext('2d');
+    g.scale(n / units, n / units);
     g.fillStyle = g.strokeStyle = '#fff';
     mask(helpers(g));
     const maskData = g.getImageData(0, 0, n, n).data,
@@ -150,6 +158,7 @@ function paintAtlas({ cells, size, grid }) {
     if (details) {
       const detail = canvas(n),
         d = detail.getContext('2d');
+      d.scale(n / units, n / units);
       details(helpers(d));
       const data = d.getImageData(0, 0, n, n).data;
       for (let i = 0; i < n * n; i++)
@@ -420,41 +429,38 @@ function paintAtlas({ cells, size, grid }) {
             [10.5, 17.5],
           ]),
       }),
-    rune: () =>
-      pixelCell({
-        n: 64,
+    // A crystal glyph: a gem outline set in a ring studded with eight small diamonds (HEX and
+    // mind-glyph particles, court circles). Pure geometry, no script or symbol.
+    rune: () => {
+      const diamond = (x, y, rx, ry) => [
+        [x, y - ry],
+        [x + rx, y],
+        [x, y + ry],
+        [x - rx, y],
+      ];
+      return pixelCell({
+        n: 128,
+        units: 64,
         halo: 0.35,
         outline: null,
         bevel: false,
         body: 1,
         mask: (h) => {
-          h.ring(32, 32, 26, 2.6);
-          h.ring(32, 32, 20.5, 1.6);
-          for (let i = 0; i < 12; i++) {
-            const a = (i / 12) * TAU,
-              r0 = i % 3 ? 22 : 16,
-              r1 = 24.5;
-            h.line(
-              [
-                [32 + Math.cos(a) * r0, 32 + Math.sin(a) * r0],
-                [32 + Math.cos(a) * r1, 32 + Math.sin(a) * r1],
-              ],
-              1.6
-            );
+          h.ring(32, 32, 25.5, 2.6);
+          h.ring(32, 32, 20.5, 1.4);
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * TAU;
+            h.poly(diamond(32 + Math.cos(a) * 25.5, 32 + Math.sin(a) * 25.5, 2.8, 2.8));
           }
-          const tri = [0, 1, 2].map((i) => {
-            const a = -Math.PI / 2 + (i * TAU) / 3;
-            return [32 + Math.cos(a) * 16, 32 + Math.sin(a) * 16];
-          });
-          h.line([...tri, tri[0]], 2);
-          h.circle(32, 32, 3.4);
-          tri.forEach(([x, y]) => h.circle(x, y, 2.4));
+          h.line([...diamond(32, 32, 11, 15), [32, 17]], 2.2);
+          h.poly(diamond(32, 32, 4.4, 6));
         },
         details: (h) => {
           h.level(0.62);
-          h.ring(32, 32, 20.5, 1.6);
+          h.ring(32, 32, 20.5, 1.4);
         },
-      }),
+      });
+    },
     star: () => pixelCell({ halo: 0.35, mask: (h) => h.star(16, 17, 5, 13, 5.6) }),
     smoke: () => {
       const blobs = Array.from({ length: 13 }, (_, i) => {
@@ -487,8 +493,12 @@ function paintAtlas({ cells, size, grid }) {
           h.ring(29, 35, 24, 1.8, Math.PI * 0.62, Math.PI * 1.88);
         },
       }),
+    // Ember, bubble and spike are also stamped large (LOB splashes, QUAKE spires): painted on the
+    // 128 grid so their texels stay as fine as the creatures'.
     ember: () =>
       pixelCell({
+        n: 128,
+        units: 32,
         halo: 0.5,
         body: 0.72,
         outline: 0.4,
@@ -500,19 +510,27 @@ function paintAtlas({ cells, size, grid }) {
           h.path('M16 16 C17.5 18 18.3 19.5 18 21.5 A2.2 2.2 0 0 1 14 21.5 C13.8 19.5 15.4 18.4 16 16 Z');
         },
       }),
+    // A hollow soap bubble: a bright rim with a dark hairline, a curved highlight and two glints;
+    // the inside stays clear (only the soft halo), so it never reads as a dark ball.
     bubble: () =>
       pixelCell({
-        halo: 0.2,
-        outline: null,
+        n: 128,
+        units: 32,
+        halo: 0.3,
+        outline: 0.3,
         bevel: false,
-        body: 0.24,
-        mask: (h) => h.circle(16, 16, 12),
+        body: 0.95,
+        mask: (h) => {
+          h.ring(16, 16, 11.4, 2.2);
+          h.ring(16, 16, 8, 1.5, Math.PI * 1.05, Math.PI * 1.45);
+          h.circle(11.2, 10.6, 1.3);
+          h.circle(21.2, 21.2, 0.9);
+        },
         details: (h) => {
-          h.level(0.86);
-          h.ring(16, 16, 11.2, 1.8);
           h.level(1);
-          h.ring(16, 16, 7.5, 1.6, Math.PI * 1.05, Math.PI * 1.45);
-          h.circle(11, 10.5, 1.4);
+          h.ring(16, 16, 12.1, 0.8, Math.PI * 0.95, Math.PI * 1.7);
+          h.ring(16, 16, 8, 1.5, Math.PI * 1.05, Math.PI * 1.45);
+          h.circle(11.2, 10.6, 1.3);
         },
       }),
     petal: () =>
@@ -696,6 +714,8 @@ function paintAtlas({ cells, size, grid }) {
     // facet on the left, shaded facet on the right, a glowing vein up the middle.
     spike: () =>
       pixelCell({
+        n: 128,
+        units: 32,
         halo: 0.12,
         outline: 0.24,
         mask: (h) =>
@@ -810,12 +830,15 @@ function paintAtlas({ cells, size, grid }) {
       }),
 
     // --- Effect cells (54–63): archetype identity art ------------------------------------------
+    // Pixel identity cells are stamped at about a fighter's height: painted on the 128 grid
+    // (designed on 64), so one art texel is about one creature texel on screen.
     // Ground crack (a flat court decal): thick fissures racing out of a crater, a glowing white-hot
     // seam inside each, a dark lip around it so the break reads on bright and dark courts alike.
     crack: () => {
       const seams = [];
       return pixelCell({
-        n: 64,
+        n: 128,
+        units: 64,
         halo: 0.35,
         outline: 0.12,
         bevel: false,
@@ -914,7 +937,8 @@ function paintAtlas({ cells, size, grid }) {
     // A curling wave crest facing +u: water body, a foaming lip and flying spray.
     crest: () =>
       pixelCell({
-        n: 64,
+        n: 128,
+        units: 64,
         halo: 0.25,
         body: 0.72,
         shade: 0.55,
@@ -969,7 +993,8 @@ function paintAtlas({ cells, size, grid }) {
     // target): thin enough that the seal and the creature read through the crossing.
     chain: () =>
       pixelCell({
-        n: 64,
+        n: 128,
+        units: 64,
         halo: 0.2,
         body: 0.8,
         shade: 0.52,
@@ -996,15 +1021,28 @@ function paintAtlas({ cells, size, grid }) {
           }
         },
       }),
-    // A curse seal: a thick double circle, a pentagram and five seal studs, white-hot star lines
-    // outlined in dark so the glyph stays legible over a bright court (HEX, stamped on the target).
+    // A lock seal (HEX, stamped behind the target): a thick double ring set with four crystal
+    // studs around a white-hot keyhole, outlined in dark so it reads on bright courts. Deliberately
+    // plain geometry: no star, script or ritual symbol.
     sigil: () => {
-      const star = [0, 2, 4, 1, 3, 0].map((k) => {
-        const a = -Math.PI / 2 + (k * TAU) / 5;
-        return [32 + Math.cos(a) * 19, 32 + Math.sin(a) * 19];
-      });
+      const stud = (a) => {
+        const c = Math.cos(a),
+          s = Math.sin(a),
+          at = (r, w) => [32 + c * r - s * w, 32 + s * r + c * w];
+        return [at(20.5, 0), at(25.5, 3), at(31, 0), at(25.5, -3)];
+      };
+      const keyhole = (h) => {
+        h.circle(32, 28, 5.6);
+        h.poly([
+          [29.2, 30],
+          [34.8, 30],
+          [37.2, 42],
+          [26.8, 42],
+        ]);
+      };
       return pixelCell({
-        n: 64,
+        n: 128,
+        units: 64,
         halo: 0.3,
         outline: 0.14,
         bevel: false,
@@ -1012,17 +1050,13 @@ function paintAtlas({ cells, size, grid }) {
         mask: (h) => {
           h.ring(32, 32, 25.5, 4);
           h.ring(32, 32, 19.5, 2.4);
-          h.line(star, 3.2);
-          for (let k = 0; k < 5; k++) {
-            const a = -Math.PI / 2 + ((k + 0.5) * TAU) / 5;
-            h.circle(32 + Math.cos(a) * 25.5, 32 + Math.sin(a) * 25.5, 2.8);
-          }
-          h.circle(32, 32, 3.5);
+          for (let k = 0; k < 4; k++) h.poly(stud(Math.PI / 4 + (k * TAU) / 4));
+          keyhole(h);
         },
         details: (h) => {
           h.level(1);
-          h.line(star, 1.4);
-          h.circle(32, 32, 2);
+          keyhole(h);
+          for (let k = 0; k < 4; k++) h.poly(stud(Math.PI / 4 + (k * TAU) / 4));
           h.level(0.66);
           h.ring(32, 32, 19.5, 1.2);
         },
@@ -1062,10 +1096,10 @@ function paintAtlas({ cells, size, grid }) {
         const lum = rim > 0.5 && Math.abs(y) > 0.38 ? 0.4 : 0.9 + 0.1 * clamp01(core + braidA);
         return [lum, clamp01(Math.max(core, tube, rim * 0.95, halo, braidA, braidB)) * edge];
       }),
-    // A blade swoosh cutting diagonally through the cell centre (top left → bottom right, bowing
-    // toward the top right), thickest mid-swing with both tips pointed: a white-hot leading edge, a
-    // solid body, a dark rim that outlines it on bright courts and a short fading motion smear on
-    // the trailing side.
+    // A thin blade swoosh cutting diagonally through the cell centre (top left → bottom right,
+    // bowing toward the top right), thickest mid-swing with both tips pointed: a white-hot leading
+    // edge, a solid body, a dark rim that outlines it on bright courts and a short fading motion
+    // smear on the trailing side. Thin enough that the target reads through the swing.
     slash: () =>
       fieldCell((x, y) => {
         const cx = -0.86,
@@ -1080,10 +1114,10 @@ function paintAtlas({ cells, size, grid }) {
         if (s <= 0 || s >= 1 || Math.max(Math.abs(x), Math.abs(y)) > 0.97) return [1, 0];
         const outer = 1.36,
           taper = Math.sin(Math.PI * s) ** 1.1,
-          width = 0.3 * taper,
+          width = 0.2 * taper,
           v = (outer - r) / Math.max(1e-3, width),
           rimOut = r > outer && r < outer + 0.045 * taper ? 0.95 : 0,
-          smear = v > 1 && v < 2.3 ? 0.4 * ((2.3 - v) / 1.3) ** 1.5 * taper : 0;
+          smear = v > 1 && v < 2.3 ? 0.3 * ((2.3 - v) / 1.3) ** 1.5 * taper : 0;
         if (v >= 0 && v <= 1) return [v < 0.38 ? 1 : 0.86 - 0.16 * v, 1];
         if (rimOut) return [0.14, rimOut];
         return [0.72, smear];
@@ -1112,6 +1146,7 @@ function paintAtlas({ cells, size, grid }) {
   };
 
   // --- Creature motifs: each Signature's identity glyph ----------------------------------------------
+  // Designed on 32, painted on 64: the lobbed glyph flies at half a fighter's height.
   const MOTIFS = {
     orakyn: {
       halo: 0.3,
@@ -1259,18 +1294,40 @@ function paintAtlas({ cells, size, grid }) {
         );
       },
     },
+    // Two tusks rising from a boulder crowned with crystal shards (no face, so no horned mask).
     brontusk: {
       mask: (h) => {
         h.path('M5 21 Q2 8 10 3 Q7.5 12 11 20 Z');
         h.path('M27 21 Q30 8 22 3 Q24.5 12 21 20 Z');
-        h.ellipse(16, 22, 8, 6);
+        h.path('M6 28 Q6 20 12 18.5 L20 18.5 Q26 20 26 28 Z');
+        h.poly([
+          [12.5, 19],
+          [14.5, 9],
+          [16.5, 19],
+        ]);
+        h.poly([
+          [16, 19],
+          [18.5, 12],
+          [20, 19],
+        ]);
       },
       details: (h) => {
-        h.level(0.42);
-        h.circle(12.5, 21, 1.5);
-        h.circle(19.5, 21, 1.5);
-        h.level(0.62);
-        h.ellipse(16, 25.5, 3.5, 1.5);
+        h.level(1);
+        h.line(
+          [
+            [14.4, 11],
+            [14.8, 17.5],
+          ],
+          1
+        );
+        h.level(0.58);
+        h.line(
+          [
+            [9, 24],
+            [13, 26],
+          ],
+          1
+        );
       },
     },
     ferrax: {
@@ -1280,33 +1337,37 @@ function paintAtlas({ cells, size, grid }) {
         h.path('M28 28 Q23 12 4 4 Q18 12 25 29 Z');
       },
     },
+    // A standing stone slab on a plinth with a glowing zigzag vein (no carving, no emblem).
     monolith: {
       mask: (h) => {
-        h.path('M10 27 L10 9 Q10 4 16 4 Q22 4 22 9 L22 27 Z');
+        h.poly([
+          [10, 27],
+          [10.5, 7],
+          [14, 3.5],
+          [21.5, 5],
+          [22.5, 27],
+        ]);
         h.rect(6, 25, 20, 4, 1);
       },
       details: (h) => {
         h.level(1);
         h.line(
           [
-            [16, 8.5],
-            [16, 21],
-          ],
-          1.8
-        );
-        h.line(
-          [
-            [13, 12],
-            [19, 12],
+            [17.5, 7],
+            [14.5, 11.5],
+            [18, 15.5],
+            [14.5, 20],
+            [16.5, 24],
           ],
           1.4
         );
+        h.level(0.62);
         h.line(
           [
-            [13.5, 17],
-            [18.5, 17],
+            [11.5, 9],
+            [13, 7.5],
           ],
-          1.4
+          1
         );
       },
     },
@@ -1633,18 +1694,21 @@ function paintAtlas({ cells, size, grid }) {
         ]);
       },
     },
+    // A hexagonal moonstone with a crescent engraved in it (no star beside the crescent).
     hexalune: {
       halo: 0.3,
       mask: (h) => {
-        h.circle(15, 16, 13);
-        h.cut(() => h.circle(20.5, 13, 11));
-        h.star(20.5, 14, 6, 5.6, 3);
+        h.poly(
+          Array.from({ length: 6 }, (_, i) => {
+            const a = -Math.PI / 2 + (i * TAU) / 6;
+            return [16 + Math.cos(a) * 13, 16 + Math.sin(a) * 13];
+          })
+        );
       },
       details: (h) => {
-        h.level(1);
-        h.star(20.5, 14, 6, 5.6, 3);
-        h.level(0.36);
-        h.circle(20.5, 14, 1.6);
+        h.level(0.34);
+        h.circle(14.5, 16.5, 8);
+        h.cut(() => h.circle(18.5, 13.5, 7));
       },
     },
     deuilastre: {
@@ -1679,16 +1743,28 @@ function paintAtlas({ cells, size, grid }) {
         );
       },
     },
+    // Dawn: a sun half risen over the horizon, five rays above it.
     aubeastre: {
       halo: 0.45,
       mask: (h) => {
-        h.star(16, 16, 8, 13, 5, -Math.PI / 2);
-        h.ring(16, 16, 10.5, 1.4);
+        h.circle(16, 21, 8.5);
+        h.cut(() => h.rect(0, 22.5, 32, 10));
+        h.rect(3, 22.5, 26, 2.8, 1.4);
+        for (const deg of [-90, -55, -125, -22, -158]) {
+          const a = (deg * Math.PI) / 180;
+          h.line(
+            [
+              [16 + Math.cos(a) * 11, 21 + Math.sin(a) * 11],
+              [16 + Math.cos(a) * 15, 21 + Math.sin(a) * 15],
+            ],
+            2
+          );
+        }
       },
       details: (h) => {
         h.level(1);
-        h.star(16, 16, 4, 13, 3.4);
-        h.circle(16, 16, 3);
+        h.circle(16, 21, 5);
+        h.cut(() => h.rect(0, 22.5, 32, 10));
       },
     },
     flambelier: {
@@ -1769,7 +1845,9 @@ function paintAtlas({ cells, size, grid }) {
   };
 
   for (const [name, index] of Object.entries(cells)) {
-    const cell = name.startsWith('motif-') ? pixelCell(MOTIFS[name.slice(6)]) : PAINTERS[name](),
+    const cell = name.startsWith('motif-')
+        ? pixelCell({ n: 64, units: 32, ...MOTIFS[name.slice(6)] })
+        : PAINTERS[name](),
       x0 = (index % grid) * CELL,
       y0 = Math.floor(index / grid) * CELL;
     for (let y = 0; y < CELL; y++)

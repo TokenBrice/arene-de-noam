@@ -65,8 +65,9 @@ function typeColor(creatureId) {
   return (AFFINITIES[CREATURES[creatureId]?.affinity] ?? AFFINITIES.neutral).color;
 }
 
-// A 48 × 48-texel window of the battle sprite; CSS picks the integer scale (--texel).
-function portrait(creatureId, className = '') {
+// A 48 × 48-texel window of the battle sprite; CSS picks the integer scale (--texel). Only the
+// player's side shows a Chromatique: enemy portraits pin the normal sprite.
+function portrait(creatureId, className = '', side = 'player') {
   const frame = element('span', `fx-portrait ${className}`.trim()),
     image = element('img'),
     [x, y] = PORTRAIT_FOCUS[creatureId] ?? [64, 40],
@@ -74,7 +75,10 @@ function portrait(creatureId, className = '') {
     top = Math.max(0, Math.min(128 - PORTRAIT_TEXELS, y - PORTRAIT_TEXELS / 2));
   image.alt = '';
   image.decoding = 'async';
-  image.src = sprite(creatureId);
+  if (side === 'enemy') {
+    image.src = sprite(creatureId, 'normal');
+    image.dataset.variant = 'normal';
+  } else image.src = sprite(creatureId);
   frame.style.setProperty('--crop-x', left);
   frame.style.setProperty('--crop-y', top);
   frame.style.setProperty('--portrait-color', typeColor(creatureId));
@@ -123,6 +127,19 @@ function slideTrack(from, { inAt = 0.16, outAt = 0.84, exit = -from * 0.4, extra
   ];
 }
 
+// Top-band pills drop in solid from above the band and lift away (transform only): an opaque pill
+// sliding over the top row occludes it cleanly, where an opacity fade would double-expose both.
+function dropTrack(inAt = 0.16, outAt = 0.84) {
+  return [
+    { transform: 'translateY(-130%)', offset: 0, easing: easeOut },
+    { transform: 'translateY(0)', offset: inAt },
+    { transform: 'translateY(0)', offset: outAt, easing: easeIn },
+    { transform: 'translateY(-130%)', offset: 1 },
+  ];
+}
+// Reduced motion: the pill appears and leaves in place almost at once (no slow cross-fade).
+const snapTrack = () => fadeTrack(0.03, 0.97);
+
 function buildSignature(node, { creatureId, moveId, side }) {
   const flip = side === 'enemy' ? -1 : 1,
     strip = element('div', 'fx-band-strip'),
@@ -130,7 +147,7 @@ function buildSignature(node, { creatureId, moveId, side }) {
   node.style.setProperty('--banner-color', movePalette(moveId));
   copy.append(element('small', 'fx-band-caption', `✦ ${creatureName(creatureId)}`));
   copy.append(element('b', 'fx-band-title', t('battle.signatureBanner', { move: t(`move.${moveId}`) })));
-  strip.append(portrait(creatureId, 'fx-band-portrait'), copy);
+  strip.append(portrait(creatureId, 'fx-band-portrait', side), copy);
   node.append(strip);
   const skew = `skewY(${-5 * flip}deg)`;
   return [
@@ -168,7 +185,7 @@ function clashHalf(side, { creatureId, moveId }) {
   half.style.setProperty('--banner-color', movePalette(moveId));
   copy.append(element('small', 'fx-band-caption', `✦ ${creatureName(creatureId)}`));
   copy.append(element('b', 'fx-band-title', t(`move.${moveId}`)));
-  half.append(portrait(creatureId, 'fx-band-portrait'), copy);
+  half.append(portrait(creatureId, 'fx-band-portrait', side), copy);
   return half;
 }
 
@@ -206,18 +223,7 @@ function buildSignatureReady(node, { creatureId, moveId }) {
   pill.append(portrait(creatureId, 'fx-mini-portrait'), copy, mark);
   node.append(pill);
   // Drops into the top band (never over the fighters, §6.4), then lifts away.
-  return [
-    [
-      pill,
-      [
-        { transform: 'translateY(-18px) scale(0.9)', opacity: 0, offset: 0, easing: pop },
-        { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.22 },
-        { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.8 },
-        { transform: 'translateY(-10px) scale(1)', opacity: 0, offset: 1 },
-      ],
-      fadeTrack(),
-    ],
-  ];
+  return [[pill, dropTrack(0.18, 0.82), snapTrack()]];
 }
 
 function buildSwitchIn(node, { side, creatureId, source, surge = 0 }) {
@@ -234,7 +240,7 @@ function buildSwitchIn(node, { side, creatureId, source, surge = 0 }) {
   if (surge > 0) notes.append(element('small', 'fx-switch-note', t('battle.surgeBonus', { amount: surge })));
   if (notes.childElementCount) pill.append(notes);
   node.append(pill);
-  return [[pill, slideTrack(40, { inAt: 0.14, outAt: 0.84 }), fadeTrack()]];
+  return [[pill, dropTrack(0.14, 0.84), snapTrack()]];
 }
 
 // `team`: the side's creature ids, lead first (a bare lead id shows no bench).
@@ -247,9 +253,9 @@ function introCard(side, team) {
   name.innerHTML = affinityIcon(CREATURES[lead].affinity);
   name.append(creatureName(lead));
   const benchRow = element('span', 'fx-intro-bench');
-  for (const id of bench) benchRow.append(portrait(id, 'fx-mini-portrait'));
+  for (const id of bench) benchRow.append(portrait(id, 'fx-mini-portrait', side));
   copy.append(name, benchRow);
-  card.append(portrait(lead, 'fx-intro-portrait'), copy);
+  card.append(portrait(lead, 'fx-intro-portrait', side), copy);
   return card;
 }
 
@@ -299,18 +305,7 @@ function buildWeather(node, { arena, weather }) {
     effects,
   });
   node.append(pill);
-  return [
-    [
-      pill,
-      [
-        { transform: 'translateY(-14px) scale(0.92)', opacity: 0, offset: 0, easing: pop },
-        { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.2 },
-        { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.82 },
-        { transform: 'translateY(-8px) scale(1)', opacity: 0, offset: 1 },
-      ],
-      fadeTrack(),
-    ],
-  ];
+  return [[pill, dropTrack(0.18, 0.84), snapTrack()]];
 }
 
 function buildOutro(node, won) {
@@ -356,7 +351,7 @@ function buildCutIn(node, { side, creatureId }, { glyph, caption, title, note })
   mark.innerHTML = icon(glyph);
   copy.append(element('small', null, caption), element('b', null, title));
   if (note) copy.append(element('em', null, note));
-  card.append(portrait(creatureId, 'fx-cutin-portrait'), copy, mark);
+  card.append(portrait(creatureId, 'fx-cutin-portrait', side), copy, mark);
   node.append(card);
   return [
     [

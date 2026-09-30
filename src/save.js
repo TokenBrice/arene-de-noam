@@ -3,7 +3,7 @@ import { FEAT_IDS } from './data/progression.js';
 import { TRIAL_IDS } from './data/trials.js';
 
 export const SAVE_KEY = 'arene-de-noam-save';
-export const SAVE_VERSION = 17;
+export const SAVE_VERSION = 18;
 export const QUALITY_CHOICES = Object.freeze(['auto', 'low', 'mid', 'high']);
 export const DEFAULT_SAVE = Object.freeze({
   version: SAVE_VERSION,
@@ -33,6 +33,8 @@ export const DEFAULT_SAVE = Object.freeze({
   expertMode: false,
   battleSpeed: 1,
   quality: 'auto',
+  haptics: false,
+  chromatiques: {},
 });
 
 // v1 -> v2: arena cosmetics became a persisted collection.
@@ -112,6 +114,9 @@ export const migrateV15 = (save) => {
 };
 // v16 -> v17: graphics quality became a player choice; automatic detection stays the default.
 export const migrateV16 = (save) => ({ ...save, version: 17, quality: 'auto' });
+// v17 -> v18: light haptics became an opt-in setting, and each creature may show its Chromatique
+// (unlocks stay derived from mastery; only the display preference is stored).
+export const migrateV17 = (save) => ({ ...save, version: 18, haptics: false, chromatiques: {} });
 
 export const SAVE_MIGRATIONS = Object.freeze([
   migrateV1,
@@ -130,6 +135,7 @@ export const SAVE_MIGRATIONS = Object.freeze([
   migrateV14,
   migrateV15,
   migrateV16,
+  migrateV17,
 ]);
 
 export function migrateSave(value) {
@@ -151,6 +157,14 @@ function validTeam(team) {
     new Set(team).size === 3 &&
     team.every((id) => CREATURE_IDS.includes(id))
   );
+}
+// Chromatique display preferences: known creature ids mapped to `true`; anything else is dropped.
+export function sanitizeChromatiques(value) {
+  const chromatiques = {};
+  if (value && typeof value === 'object')
+    for (const id of CREATURE_IDS)
+      if (Object.hasOwn(value, id) && value[id] === true) chromatiques[id] = true;
+  return chromatiques;
 }
 export function validateSave(value) {
   const migrated = migrateSave(value);
@@ -249,6 +263,8 @@ export function validateSave(value) {
     expertMode: Boolean(migrated.expertMode),
     battleSpeed: migrated.battleSpeed === 2 ? 2 : 1,
     quality: QUALITY_CHOICES.includes(migrated.quality) ? migrated.quality : 'auto',
+    haptics: migrated.haptics === true,
+    chromatiques: sanitizeChromatiques(migrated.chromatiques),
   };
 }
 
@@ -261,6 +277,7 @@ export function freshDefaultSave() {
     customSquads: [null, null, null],
     feats: [],
     trials: [],
+    chromatiques: {},
   };
 }
 

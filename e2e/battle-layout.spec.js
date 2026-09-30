@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { installCompletedTutorial } from './helpers.js';
+import { arenaReady, installCompletedTutorial } from './helpers.js';
 
 const VIEWPORTS = [
   { width: 320, height: 568 },
@@ -22,15 +22,12 @@ test('the battle HUD keeps the stage clear, readable and tappable from 320×568 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto('/?seed=40&animations=0&player=orakyn,abyssar,virelia&enemy=hexalune,calderoc,farfombre');
-    await page.getByRole('button', { name: /Combat rapide|Quick Battle/ }).click();
-    const ruleSelect = page.getByLabel(/Règle du duel|Duel rule/);
-    if (!(await ruleSelect.isVisible().catch(() => false))) {
-      const plan = page.locator('details.battle-plan > summary').first();
-      await plan.scrollIntoViewIfNeeded();
-      await plan.click();
-    }
-    await ruleSelect.selectOption('fortress_duel');
-    await page.getByRole('button', { name: /Entrer dans|Enter the/ }).click();
+    await page.locator('[data-action="quick"]').click();
+    await page.locator('[data-action="open-options"]').click();
+    await page.locator('[data-rule-pick="fortress_duel"]').click();
+    await page.keyboard.press('Escape');
+    await page.locator('[data-action="start-battle"]').click();
+    await arenaReady(page);
     await expect(page.locator('.battle-screen:not(.locked) [data-move]:enabled').first()).toBeVisible();
 
     // Portrait: a tab under the rival's plate. Landscape: the dock head, off the stage.
@@ -117,8 +114,9 @@ test('the pause sheet opens from the top row and Escape, mid-turn included, and 
   await installCompletedTutorial(page, { expertMode: false });
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/?seed=40&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre');
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.locator('[data-action="start-battle"]').click();
+  await arenaReady(page);
   await expect(page.locator('.battle-screen:not(.locked) [data-move]:enabled').first()).toBeVisible();
 
   await page.keyboard.press('Escape');
@@ -154,8 +152,8 @@ test('switch sheet rows show HP and a verdict, and the recommendation never cove
   await page.goto(
     '/?seed=40&animations=0&player=orakyn,abyssar,virelia&enemy=kordane,calderoc,farfombre&enemyMove=crystal_strike'
   );
-  await page.getByRole('button', { name: /Combat rapide/ }).click();
-  await page.getByRole('button', { name: /Entrer dans/ }).click();
+  await page.locator('[data-action="quick"]').click();
+  await page.locator('[data-action="start-battle"]').click();
   await page.keyboard.press('c');
   const rows = page.locator('.switch-option');
   await expect(rows).toHaveCount(2);

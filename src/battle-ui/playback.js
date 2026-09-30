@@ -1,5 +1,5 @@
 import { ctx, registerRoutes } from '../app/context.js';
-import { playBeats, playIntro } from './director.js';
+import { clearPresentation, playBeats, playIntro, playOutro } from './director.js';
 
 const { screen } = ctx;
 
@@ -7,13 +7,12 @@ const { screen } = ctx;
 // director (director.js) replays it beat by beat and advances this display-state projection as
 // each event is presented, so the HUD shows the battle as the player sees it.
 
+// Same rule as the director's: the current battle on the battle screen, or a Move Theater session
+// (bestiary, §8.5) with its own `alive` predicate.
 function sessionIsActive(session) {
-  return Boolean(
-    session &&
-    ctx.battleSession === session &&
-    !session.cancelled &&
-    screen.classList.contains('battle-screen')
-  );
+  if (!session || session.cancelled) return false;
+  if (session.alive) return session.alive();
+  return ctx.battleSession === session && screen.classList.contains('battle-screen');
 }
 
 function beginPresentation(session, preTurnState) {
@@ -87,8 +86,7 @@ function advancePresentation(session, event) {
 
 // Plays one engine result (resolveTurn, applyReplacement or applyTrainerCommand) through the
 // director, then hands the HUD back to the resolved state.
-async function playEvents(events) {
-  const session = ctx.battleSession;
+async function playEvents(events, session = ctx.battleSession) {
   try {
     if (sessionIsActive(session)) await playBeats(session, events);
   } finally {
@@ -96,9 +94,22 @@ async function playEvents(events) {
   }
 }
 
+// Victory / defeat finale before the results (§6.7). Name and contract kept for results.js.
+function battleOutroFx(state) {
+  return playOutro(state);
+}
+
+// Drops every in-flight readout, banner and FX quad of a presentation session (the battle's by
+// default).
+function clearBattleFx(session) {
+  clearPresentation(session);
+}
+
 registerRoutes({
   playEvents,
   playIntro,
   beginPresentation,
   advancePresentation,
+  battleOutroFx,
+  clearBattleFx,
 });

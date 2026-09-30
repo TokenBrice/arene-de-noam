@@ -50,18 +50,21 @@ The important mutable `ctx` fields are:
 | `save` | Validated in-memory save object; write through `ctx.persist()` |
 | `selection` | Current pre-battle team/configuration draft |
 | `battleSession` | UI session config plus authoritative engine `state`, timeline, and cancellation token |
-| `gauntletRun`, `draftRun` | Temporary mode state; not persisted mid-run |
+| `gauntletRun` | Live Expédition run (team, stage, faveurs, camp HP); in memory only, never persisted |
+| `draftRun` | Temporary Pioche du jour picks; not persisted |
+| `leaveGuard` | The showing page's leave confirmation, set through `ctx.setLeaveGuard` (see navigation) |
+| `selectionGuide` | One-shot flag: team select shows its first-time guide after the tutorial |
 | `arenaScene` | Current Three.js presenter; dispose before leaving/replacing it |
 | `locked` | Prevents input while entrances or event playback are active |
 | `routes` | Registered cross-module functions |
 
-Title rendering clears transient runs and the current battle. Battle sessions carry a monotonically increasing token and `cancelled` flag so delayed animation work cannot mutate a later screen.
+Title rendering clears the current battle, the selection and the Pioche picks. An Expédition run outlives it: a run left through the battle pause stays live, and once a stage is cleared the Défis sheet resumes it at the faveur screen. Only starting a new run, finishing it, or confirming its leave guard ends it. Battle sessions carry a monotonically increasing token and `cancelled` flag so delayed animation work cannot mutate a later screen.
 
 ## Screen and mode ownership
 
 | Flow | Configuration/data | Screen/controller |
 | --- | --- | --- |
-| First-run tutorial | Fixed tutorial actions | `screens/tutorial.js`, battle controller, results |
+| First-run tutorial | Four scripted lessons (super efficace → switch to resist → Signature ✦ → finish) and the rival's script, in `screens/tutorial.js` | Lesson gating, rival plan and prompt-line tip via routes (`tutorialAllows`, `tutorialLesson`, `tutorialTip`, `tutorialEnemyAction`); HUD prompt, battle controller, results |
 | Rival League | `data/trainers.js` | `screens/league.js`, `screens/team-select.js` |
 | Champion Circuit | `data/circuit.js`, trainer circuit teams | Team select and results |
 | Quick Battle | `data/battle-rules.js` | Team select |
@@ -70,9 +73,18 @@ Title rendering clears transient runs and the current battle. Battle sessions ca
 | Mythic Trials | `data/trials.js` | `screens/trials.js`, team select, results |
 | Bestiary/Move Theater | Creature/move/passive data | `screens/bestiary.js` |
 | Academy | Affinities/statuses/i18n copy | `screens/academy.js` |
-| Settings | Save preferences | `screens/settings.js`, shared shell augmentation |
+| Settings | Save preferences | `screens/settings.js` |
 
 `screens/team-select.js` normalizes the selected mode into the config accepted by `route.startBattle(...)`: teams/leads, mode, arena, difficulty, trainer index, and explicit modifiers. Mode effects should enter battle through this config and the engine modifier list, not through hidden UI mutations.
+
+### Navigation and the back gesture
+
+[`src/app/shell.js`](../src/app/shell.js) owns navigation. `bindCommon()` only wires the chrome every screen shares (music, `[data-action="title"]` home, `[data-action="back"]`, settings, mute); screen-specific DOM belongs to the owning screen. Every screen but the hub and battle opens with `ctx.topbar(title, { eyebrow, actions, settings })`: a 48 px chevron back, the page `h1`, the screen's own actions, then mute and settings.
+
+- The Android back gesture, the browser back button and Escape share `route.goBack()`: it closes the Move Theater or the top sheet first; in battle it opens the pause sheet; elsewhere it calls `route.navigateUp()`, which is also behind every `[data-action="back"]` button.
+- One level up is the nearest hub the player came through (title, League, Trials, Academy); Settings return to the screen that opened them.
+- History holds a single "inside" entry above the boot entry whenever a screen other than the bare title shows, re-armed after each handled back, so back never leaves the app from inside it and forward can never replay a battle. A MutationObserver on `#screen[data-page]` keeps it in sync; screens need no history code.
+- A page holding progress one tap could drop sets `ctx.setLeaveGuard({ message, detail, confirm, cancel, onLeave })`. The Expédition sets one on its stage results and faveur screen. While the guard belongs to the showing page, going up (back gesture, Escape, `[data-action="back"]`) or home (`[data-action="title"]`) opens a confirm sheet instead. Confirming clears the guard, runs `onLeave` (the Expédition drops its run), then leaves; showing any other page clears it.
 
 ## Battle UI lifecycle
 
@@ -84,11 +96,11 @@ Title rendering clears transient runs and the current battle. Battle sessions ca
 4. A player action is paired with one cached/planned AI action and passed to `resolveTurn`.
 5. The returned state replaces the prior state. `playback.js` serially consumes the returned events while input is locked.
 6. Free K.O. replacements are resolved via `applyReplacement`; the enemy is handled first, then the player selector opens if needed.
-7. `screens/results.js` reads `state.history`, awards/persists progression, and renders results or advances a multi-stage mode.
+7. `screens/results.js` reads `state.history`, awards/persists progression, and renders results. Every won Expédition stage shows its results first; its "Étape suivante" call to action calls `advanceGauntlet()` (boon choice), and the final stage books the run win before rendering results. A first League win shows the earned badge (`ctx.badgeArt`, the art shared with the hub strip and the League map) and any side mode it opens. The tutorial also ends on results ("Choisis ton équipe" → team select).
 
 [`src/battle-ui/playback.js`](../src/battle-ui/playback.js) is an event interpreter, not a rules engine. Add or change an engine event whenever presentation needs causal information that cannot safely be reconstructed from final state. Keep event payloads semantic and deterministic.
 
-[`src/battle-ui/fx.js`](../src/battle-ui/fx.js) and [`src/presentation/arena.js`](../src/presentation/arena.js) own spectacle. Every async effect must tolerate screen/session cancellation. Reduced motion and `?animations=0` must keep flow functional and fast.
+[`src/battle-ui/director.js`](../src/battle-ui/director.js) (played through `playback.js`) and [`src/presentation/arena.js`](../src/presentation/arena.js) own spectacle, in battle and in the bestiary Move Theater, which plays one move on the same stack ([`battle-presentation.md`](battle-presentation.md) §8.5). Every async effect must tolerate screen/session cancellation. Reduced motion and `?animations=0` must keep flow functional and fast.
 
 ## Engine boundary
 

@@ -54,16 +54,15 @@ export async function installCompletedTutorial(page, extra = {}) {
   );
 }
 
-export async function playVisibleBattle(page, { untilSelection = false, maxIterations = 300 } = {}) {
+// A page's first battle waits on the lazily loaded arena chunk (Three.js import, scene build and
+// SwiftShader shader compiles). Under the parallel suite's CPU load that can outlast the default
+// 5 s expect timeout, so battle entry gets its own budget.
+export async function arenaReady(page) {
+  await expect(page.locator('#arena')).toBeVisible({ timeout: 15000 });
+}
+
+export async function playVisibleBattle(page, { maxIterations = 300 } = {}) {
   for (let turn = 0; turn < maxIterations; turn++) {
-    if (
-      untilSelection &&
-      (await page
-        .getByRole('heading', { name: /Compose ton équipe|Build your team/ })
-        .isVisible()
-        .catch(() => false))
-    )
-      return;
     if (
       await page
         .getByRole('heading', { name: /Victoire|Victory|Belle bataille|Good battle/ })

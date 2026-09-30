@@ -25,6 +25,14 @@ const LOW_DPR_LOD = 0.6;
 const GLOW_OVER = 0.4;
 // Depth bias sentinel (`front: true` bursts and rings): drawn in front of every fighter.
 const OVERLAY_BIAS = 1e6;
+// `back: true` (bursts, billboard rings, pillars, beams): pushed this many fighter heights behind
+// the anchor along the view ray, so the fighter's opaque texels hide it and the art frames the
+// creature (a seal, a crest, spires, a spotlight) instead of covering its hit reaction.
+const BACK_BIAS = 0.35;
+// Near cap: an emitter anchored on the fighter that looks larger on screen sizes by
+// √(far / near) of its own height, never below this share.
+const NEAR_CAP_MIN = 0.7;
+const NEAR_CAPPED = new Set(['burst', 'ring', 'pillar', 'rain', 'groundDecal']);
 
 const MODE_BILLBOARD = 0;
 const MODE_PILLAR = 1; // billboard pivoting on its bottom edge
@@ -288,6 +296,8 @@ export class FxLayer {
   #b = new THREE.Vector3();
   #c = new THREE.Vector3();
   #d = new THREE.Vector3();
+  #eye = new THREE.Vector3();
+  #viewed = false;
 
   // `wake` (optional): ArenaScene's render-loop kick, so a spawn on an idle arena (no ambient
   // frames under reduced motion) is drawn.
@@ -388,7 +398,7 @@ export class FxLayer {
     if (!(count > 0)) return null;
     const record = this.#emitters.find((candidate) => !candidate.active) ?? this.#stealEmitter();
     const options = { ...defaults, ...opts, count },
-      h = this.#height(options.side);
+      h = this.#height(options.side) * (NEAR_CAPPED.has(emitter) ? this.#nearScale(options.side) : 1);
     Object.assign(record, {
       active: true,
       generation: record.generation + 1,
@@ -541,6 +551,8 @@ export class FxLayer {
     this.#right.set(m[0], m[1], m[2]).normalize();
     this.#up.set(m[4], m[5], m[6]).normalize();
     this.#forward.set(m[8], m[9], m[10]).normalize();
+    this.#eye.set(m[12], m[13], m[14]);
+    this.#viewed = true;
     if (!this.#uploaded && this.texture.image) {
       renderer.initTexture(this.texture);
       this.#uploaded = true;
@@ -612,6 +624,22 @@ export class FxLayer {
     return Math.max(0.2, head.distanceTo(feet));
   }
 
+  // Near cap (§9.3): < 1 on the fighter that looks larger on screen (the near player in
+  // portrait), so its impact art frames it at a size comparable to the far fighter's.
+  #nearScale(side) {
+    if (!this.#viewed) return 1;
+    const self = this.#screenHeight(side),
+      far = this.#screenHeight(side === 'player' ? 'enemy' : 'player');
+    return self > far ? Math.max(NEAR_CAP_MIN, Math.sqrt(far / self)) : 1;
+  }
+
+  // Height over view depth: proportional to the fighter's on-screen height.
+  #screenHeight(side) {
+    const h = this.#height(side),
+      depth = this.#worldAnchor(side, 'center', this.#c).sub(this.#eye).dot(this.#forward);
+    return h / Math.max(1e-3, -depth);
+  }
+
   #stealEmitter() {
     // Every slot busy: reuse the oldest non-persistent emitter (its live quads keep fading).
     let chosen = null;
@@ -641,8 +669,13 @@ export class FxLayer {
     const o = record.options;
     switch (record.type) {
       case 'burst':
-        for (let i = 0; i < o.count; i++) this.#spawnBurst(record, index);
-        record.spawned = o.count;
+        // `staggerMs`: a fountain, one quad every staggerMs, so its duration grows with the
+        // tier/quality-scaled count (longer on high, restrained on low).
+        if (o.staggerMs > 0) this.#spawnDue(record, index);
+        else {
+          for (let i = 0; i < o.count; i++) this.#spawnBurst(record, index);
+          record.spawned = o.count;
+        }
         break;
       case 'orbit':
         for (let i = 0; i < o.count; i++) this.#spawnOrbit(record, index, i);
@@ -668,7 +701,8 @@ export class FxLayer {
       record.active = false;
   }
 
-  // Staggered spawns (ring, streak, pillar, rain, trailFollow) as their emitter time advances.
+  // Staggered spawns (ring, streak, pillar, rain, trailFollow, burst fountains) as their emitter
+  // time advances.
   #spawnDue(record, index) {
     const o = record.options;
     if (record.type === 'trailFollow') {
@@ -685,7 +719,7 @@ export class FxLayer {
     const interval =
       record.type === 'ring'
         ? 70
-        : record.type === 'pillar' || record.type === 'groundDecal'
+        : record.type === 'pillar' || record.type === 'groundDecal' || record.type === 'burst'
           ? (o.staggerMs ?? 40)
           : record.type === 'streak'
             ? (o.travelMs * 0.6) / Math.max(1, o.count - 1)
@@ -696,7 +730,11 @@ export class FxLayer {
       else if (record.type === 'streak') this.#spawnStreak(record, index, i);
       else if (record.type === 'pillar') this.#spawnPillar(record, index, i);
       else if (record.type === 'groundDecal') this.#spawnDecal(record, index, i);
-      else this.#spawnRain(record, index);
+      else if (record.type === 'burst') {
+        // A fountain follows its fighter (a hopping winner).
+        this.#worldAnchor(record.side, record.at, record.anchor);
+        this.#spawnBurst(record, index);
+      } else this.#spawnRain(record, index);
     }
     if (record.spawned >= o.count) record.active = false;
   }
@@ -733,7 +771,7 @@ export class FxLayer {
     q.b[slot] = b;
     q.a[slot] = o.alpha ?? 1;
     q.emitter[slot] = index;
-    q.bias[slot] = o.front ? OVERLAY_BIAS : record.h * 0.3;
+    q.bias[slot] = o.front ? OVERLAY_BIAS : o.back ? -record.h * BACK_BIAS : record.h * 0.3;
     q.stretch[slot] = o.stretch ?? 0;
     q.reach[slot] = 1;
     return slot;
@@ -913,7 +951,7 @@ export class FxLayer {
       q.move[slot] = MOVE_STATIC;
       q.mode[slot] = MODE_SPAN;
       q.stretch[slot] = -1; // fixed axis: tx/ty/tz hold the tail→head vector
-      q.bias[slot] = h * 0.15;
+      q.bias[slot] = o.back ? -h * BACK_BIAS : h * 0.15;
       const grow = o.grow ?? 0.35;
       this.#size(slot, width, width, width * grow, width * grow);
     }
@@ -934,7 +972,7 @@ export class FxLayer {
     q.fadeOut[slot] = o.life * 0.45;
     q.move[slot] = MOVE_STATIC;
     q.mode[slot] = MODE_PILLAR;
-    q.bias[slot] = h * 0.2;
+    q.bias[slot] = o.back ? -h * BACK_BIAS : h * 0.2;
     q.pop[slot] = o.popMs ?? o.life / 4;
     this.#size(slot, o.width * h, 0, o.width * h, height, CURVE_POP);
   }
@@ -987,7 +1025,9 @@ export class FxLayer {
     q.persistent[slot] = Number.isFinite(o.life) ? 0 : 1;
     q.move[slot] = MOVE_ORBIT;
     q.mode[slot] = MODE_BILLBOARD;
-    q.bias[slot] = 0;
+    // A single marker on the body (radius 0: Marqué's reticle) sits just in front of its own
+    // fighter so the sprite never z-fights it; circling quads handle depth in #orbitPosition.
+    q.bias[slot] = o.radius > 0 ? 0 : h * 0.3;
     this.#size(slot, size, size);
     this.#orbitPosition(slot, record);
     q.qx[slot] = q.px[slot];
