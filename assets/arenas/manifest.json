@@ -1,0 +1,184 @@
+{
+  "generator": {
+    "method": "offline-bake",
+    "tool": "tools/generate-arena-plates.mjs",
+    "renderer": "Chromium 151.0.7922.34 (Playwright), Canvas 2D, 2× supersampled",
+    "encoder": "Chromium WebP, quality 0.84",
+    "units": 0
+  },
+  "layout": {
+    "plate": {
+      "width": 2048,
+      "height": 512,
+      "az": 75,
+      "elMin": -8,
+      "elMax": 20,
+      "floorEl": -4.780191847199159,
+      "crowd": [
+        -3.930191847199159,
+        2.269808152800841
+      ]
+    },
+    "court": {
+      "size": 1024
+    }
+  },
+  "arenas": {
+    "crystal": {
+      "title": "Dôme de cristal",
+      "brief": "art/arena-briefs/crystal.json",
+      "seed": "arena-plate|crystal|1",
+      "prompt": {
+        "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+        "plate": "Icy night under a glass dome. Faint glass ribs arc overhead, a teal-to-violet aurora curtain crosses the upper sky above sparse stars. The landmark is a fan of tall pale crystal spires rising behind the stands, lit from inside, with frost mist at their feet. Frosted-glass terraces with cool rim-lit railings, slender crystal light pylons with pale beams.",
+        "court": "Polished ice court of hexagonal frosted tiles with faint internal veins and glints, crisp pale boundary rings and an inlaid glowing six-rhombus sigil."
+      },
+      "date": "2026-09-30",
+      "units": 0,
+      "plate": {
+        "file": "crystal/plate.webp",
+        "width": 2048,
+        "height": 512,
+        "bytes": 72808,
+        "sha256": "e3a81e0c1d5bf0be51f1cee440ee4c5004494473244c2365067e98344552f6c7"
+      },
+      "court": {
+        "file": "crystal/court.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 63414,
+        "sha256": "8393c74d28a6538bd1de5744b54b912ea81ed65c1c2f472dc1ce6b33d0aeaa9f"
+      }
+    },
+    "grove": {
+      "title": "Sanctuaire sylvestre",
+      "brief": "art/arena-briefs/grove.json",
+      "seed": "arena-plate|grove|1",
+      "prompt": {
+        "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+        "plate": "Golden hour in a forest clearing. A colossal ancient tree stands backlit in the centre, its dark trunk rimmed with gold, its canopy framing the top of the sky; sun shafts fall through hazy golden air over a distant tree line. Wooden terraces under leafy eaves, lantern poles with warm glows.",
+        "court": "Mossy flagstone court: rounded stones with moss and grass in the joints, soft sun dapples, warm cream markings and a carved six-rhombus sigil."
+      },
+      "date": "2026-09-30",
+      "units": 0,
+      "plate": {
+        "file": "grove/plate.webp",
+        "width": 2048,
+        "height": 512,
+        "bytes": 91976,
+        "sha256": "aa97dc951a05b6cf22bf86dd4c8340705f682040f35eb83d6fff6864baa33567"
+      },
+      "court": {
+        "file": "grove/court.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 46454,
+        "sha256": "28a40520cf9d5840916973f0fe7b88911e934072937c3a364db8b2e5a672f54c"
+      }
+    },
+    "tidal": {
+      "title": "Crypte des marées",
+      "brief": "art/arena-briefs/tidal.json",
+      "seed": "arena-plate|tidal|1",
+      "prompt": {
+        "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+        "plate": "A bioluminescent sea cave. A dark rock vault frames an arch opening onto a moonlit teal sea; a bright waterfall column pours from the arch into a misty pool behind the stands. Wet rock galleries with glowing algae ledges, sea-lantern pillars, cyan and blue light spots on the rock.",
+        "court": "Wet stone tiles with shallow puddles catching teal light, worn joints, shell inlays, pale sea-foam markings and an inlaid six-rhombus sigil."
+      },
+      "date": "2026-09-30",
+      "units": 0,
+      "plate": {
+        "file": "tidal/plate.webp",
+        "width": 2048,
+        "height": 512,
+        "bytes": 69474,
+        "sha256": "ada1851401e940695b4b08f6e7f40e839c02e8df8a84b843e07986e1af0d6fcc"
+      },
+      "court": {
+        "file": "tidal/court.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 50244,
+        "sha256": "f62b044ddadea4670e53141cd0d6a5dabf8ecfb3ba84d07ecc9df896493e4f7d"
+      }
+    },
+    "volcano": {
+      "title": "Forge du volcan",
+      "brief": "art/arena-briefs/volcano.json",
+      "seed": "arena-plate|volcano|1",
+      "prompt": {
+        "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+        "plate": "A dark volcanic cone against a blazing orange sky, smoke billowing from the crater lit from below, glowing lava rivers down its flanks, distant ridges in the haze, and two forge chimneys. Basalt terraces with ember-lit iron rails, brazier masts.",
+        "court": "Dark basalt column tiles with a few thin glowing lava seams kept away from the pads, ash dusting, amber markings and an inlaid six-rhombus sigil."
+      },
+      "date": "2026-09-30",
+      "units": 0,
+      "plate": {
+        "file": "volcano/plate.webp",
+        "width": 2048,
+        "height": 512,
+        "bytes": 64232,
+        "sha256": "1e921b640aaacfe4ae5499113ad68c4eea6fd9c0b23d8a40489eaa59c679f06e"
+      },
+      "court": {
+        "file": "volcano/court.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 53286,
+        "sha256": "8c603bea9848e92630abefb2277710ca924b4a0b0042de0a59eea8d028c4aa90"
+      }
+    },
+    "astral": {
+      "title": "Observatoire astral",
+      "brief": "art/arena-briefs/astral.json",
+      "seed": "arena-plate|astral|1",
+      "prompt": {
+        "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+        "plate": "Deep violet night with drifting nebulae and a dense star field; a ringed planet hangs in the upper sky with a small moon, and an observatory dome with a glowing slit rises to one side. Colonnaded galleries with brass rails, orrery lamp posts.",
+        "court": "Midnight lapis stone with gold constellation inlays, concentric orbit rings and fine star specks, pale gold markings and an inlaid six-rhombus sigil."
+      },
+      "date": "2026-09-30",
+      "units": 0,
+      "plate": {
+        "file": "astral/plate.webp",
+        "width": 2048,
+        "height": 512,
+        "bytes": 80354,
+        "sha256": "1576f24defa6b92f629ffd92317b3757a9947b4437c921640d8c8ee5164a5ae3"
+      },
+      "court": {
+        "file": "astral/court.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 56286,
+        "sha256": "4c6c3f9cc482431b00f14487c064eac868012d2e5ae7d1f9b45b18e5925ace49"
+      }
+    },
+    "eclipse": {
+      "title": "Couronne d'éclipse",
+      "brief": "art/arena-briefs/eclipse.json",
+      "seed": "arena-plate|eclipse|1",
+      "prompt": {
+        "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+        "plate": "A black sun inside a blazing pink-gold corona over a rose dusk horizon; a ring of dark crown spires with rose rim light encircles the stadium. Dark stone galleries with rose-gold trims, spire lamps.",
+        "court": "Polished dark rose marble with soft gold veining, a sun-ring inlay around the centre, amber markings and an inlaid six-rhombus sigil."
+      },
+      "date": "2026-09-30",
+      "units": 0,
+      "plate": {
+        "file": "eclipse/plate.webp",
+        "width": 2048,
+        "height": 512,
+        "bytes": 64340,
+        "sha256": "8deb52bbf213cbf44ce2c16537486e36bcaf67fae0ef1b598102566a6affeaf3"
+      },
+      "court": {
+        "file": "eclipse/court.webp",
+        "width": 1024,
+        "height": 1024,
+        "bytes": 56748,
+        "sha256": "2a2dbe5ff7b9ccddac5a8a5b73ee05b6d8cd8b4d6c15d5432bb94cfa9841f395"
+      }
+    }
+  }
+}

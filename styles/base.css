@@ -112,43 +112,63 @@ button:not(:disabled):is(:active, .is-pressed),
     radial-gradient(circle at 20% 85%, #173b55 0, transparent 28%),
     linear-gradient(145deg, #080b25, #11102c 55%, var(--surface));
 }
-/* Shared route transition: a decorative veil clears as the new screen enters.
-   The veil has no semantic content, so only one accessible screen exists. */
-.screen-transition-veil {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-veil);
-  pointer-events: none;
-  background: var(--bg-0);
-  animation: screenVeil var(--dur-med) var(--ease-in) forwards;
+/* Route transitions (src/app/shell.js, View Transitions API). While one runs,
+   html[data-navigation] is 'forward' or 'back': the old screen slides 32 px
+   away and fades, the new one slides in from the other side, 240 ms in all.
+   Only transform and opacity animate, on the compositor: groups keep their
+   place (the default group animation also animates width and height) and a
+   creature on both screens is moved by shell.js with a transform while its two
+   snapshots cross-fade (a static plus-lighter blend instead of the default
+   animated one); a creature on one screen only (:only-child) moves with its
+   page. Reduced motion and ?animations=0 never start a transition. */
+::view-transition-group(*) {
+  animation-name: none;
 }
-@keyframes screenVeil {
+html[data-navigation='forward']::view-transition {
+  --route-shift: 32px;
+}
+html[data-navigation='back']::view-transition {
+  --route-shift: -32px;
+}
+::view-transition-old(*) {
+  mix-blend-mode: plus-lighter;
+  animation: routeFadeOut 240ms var(--ease-out) both;
+}
+::view-transition-new(*) {
+  mix-blend-mode: plus-lighter;
+  animation: routeFadeIn 240ms var(--ease-out) both;
+}
+::view-transition-old(root),
+::view-transition-old(*):only-child {
+  mix-blend-mode: normal;
+  animation: routeOut 140ms var(--ease-in) both;
+}
+::view-transition-new(root),
+::view-transition-new(*):only-child {
+  mix-blend-mode: normal;
+  animation: routeIn 200ms var(--ease-out) 40ms both;
+}
+@keyframes routeFadeOut {
   to {
     opacity: 0;
   }
 }
-.screen.screen-entering {
-  animation: screenEnter var(--dur-med) var(--ease-out);
-}
-@keyframes screenEnter {
+@keyframes routeFadeIn {
   from {
     opacity: 0;
-    transform: translateY(12px);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .screen-transition-veil {
-    display: none;
-  }
-  .screen.screen-entering {
-    animation: none;
+@keyframes routeOut {
+  to {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--route-shift)));
   }
 }
-body.reduced-motion .screen-transition-veil {
-  display: none;
-}
-body.reduced-motion .screen.screen-entering {
-  animation: none;
+@keyframes routeIn {
+  from {
+    opacity: 0;
+    transform: translateX(var(--route-shift));
+  }
 }
 .boot-screen {
   display: grid;

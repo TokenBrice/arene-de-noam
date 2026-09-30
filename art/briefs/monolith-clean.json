@@ -1,0 +1,12 @@
+{
+  "id": "monolith-clean",
+  "seed": 510411,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/monolith-battle.png",
+  "variant_count": 4,
+  "description": "Redraw this creature as clean premium pixel art in the house style of a polished creature-battler roster: compact readable pixel clusters, three or four tone ramps per material, one clear top-left light, a selective dark outline that is darkest on the shadow side, and far less noisy texture. Make the stone read as a few big clean slabs with crisp lit edges instead of many small chipped blocks. Keep its identity exactly: an ancient squat rune golem built from stacked dark slate stone slabs, two huge shield-like slab arms with golden rune circles, fortress shoulders, a glowing golden core eye in the chest, a small head with a golden horn crest and golden eyes, golden rune lines and gold trim, thick short legs, frontal battle stance. Same silhouette, pose and palette (dark slate indigo stone, bright gold). Full body, transparent background, no ground shadow, no text."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "magmoth-clean",
+  "seed": 510211,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/magmoth-battle.png",
+  "variant_count": 4,
+  "description": "Redraw this creature as clean premium pixel art in the house style of a polished creature-battler roster: compact readable pixel clusters, three or four tone ramps per material, one clear top-left light, a selective dark outline that is darkest on the shadow side, and far less noisy texture. Replace the scratchy fur strokes and cluttered lava lines with bold simple fur tufts, flat basalt planes and a few clean glowing seams. Keep its identity exactly: a huge gentle volcanic moth and tortoise creature, two big dark basalt wing-shells with glowing orange-red lava seams and round eye-spot patterns, a thick cream ash-fur ruff around the neck, a friendly face with glowing red eyes, feathery orange antennae, a heavy basalt shell body, stubby legs with glowing lava claws, right-facing three-quarter stance. Same silhouette, pose and palette (charcoal basalt, lava orange and red, warm cream fur). Full body, transparent background, no ground shadow, no text."
+}

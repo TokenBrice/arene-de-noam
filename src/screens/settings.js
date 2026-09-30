@@ -3,8 +3,8 @@ import { hapticsSupported, previewHaptics, stopHaptics } from '../app/haptics.js
 import { applyQualityChoice } from '../app/quality.js';
 import { QUALITY_CHOICES } from '../save.js';
 
-const { freshDefaultSave, SAVE_KEY, i18n, t, screen, sound, persist, disposeArena, topbar } = ctx;
-const { bindCommon, icon, openSheet, renderTitle, rerenderPreservingFocus } = route;
+const { freshDefaultSave, SAVE_KEY, i18n, t, screen, sound, persist, notify, disposeArena, topbar } = ctx;
+const { bindCommon, icon, openSheet, renderCurrent, renderTitle, rerenderPreservingFocus } = route;
 
 const QUALITY_LABEL_KEYS = Object.freeze({
   auto: 'settings.qualityAuto',
@@ -182,12 +182,20 @@ function renderSettings() {
   screen.className = 'screen';
   screen.innerHTML = settingsHtml();
   bindCommon();
+  // Each language is its own chunk: the other one loads first. The page shown by the time it
+  // arrives (usually still Réglages) re-renders in the new language.
   screen.querySelectorAll('[data-lang]').forEach((button) =>
-    button.addEventListener('click', () => {
-      i18n.setLang(button.dataset.lang);
+    button.addEventListener('click', async () => {
+      try {
+        if (!(await i18n.setLang(button.dataset.lang))) return;
+      } catch (error) {
+        console.error(error);
+        notify(t('error.pageLoad'));
+        return;
+      }
       ctx.save.language = i18n.lang;
       persist();
-      rerenderPreservingFocus(() => renderSettings());
+      rerenderPreservingFocus(renderCurrent);
     })
   );
   for (const [id, key] of [

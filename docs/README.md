@@ -12,13 +12,13 @@ This directory is the implementation map for coding agents. It is intentionally 
 
 ## Sixty-second orientation
 
-- Static browser app: no build, backend, account, analytics, or runtime network calls.
+- Static browser app: no backend, account, analytics, or runtime network calls; development runs the sources unbundled (the deployed `dist/` is a CI-only build).
 - `index.html` loads `src/main.js` as native ES modules and maps `three` to the vendored copy.
-- `src/app/context.js` constructs the shared `ctx` registry. Screens and battle UI register callable routes as import-time side effects.
+- `src/app/context.js` constructs the shared `ctx` registry. Screens and battle UI register callable routes as import-time side effects; `src/main.js` loads the title, and `src/app/screens.js` is the lazy chunk with every other screen.
 - `src/battle/` is the deterministic, DOM-free engine. It clones input state and returns `{ state, events }`.
 - `src/battle-ui/` owns battle sessions, intent/preview UI, input locking, event playback, effects, and the results handoff.
 - `src/data/` contains authored gameplay content and mode configuration. Classes are descriptive; mastery is cosmetic/progression-only.
-- `src/save.js` is the strict, versioned localStorage boundary. `src/i18n.js` contains parallel French and English dictionaries.
+- `src/save.js` is the strict, versioned localStorage boundary. `src/i18n/fr.js` and `src/i18n/en.js` are the parallel dictionaries, one module per language; `src/i18n.js` loads the shown one.
 - `styles/` is an ordered CSS cascade. Battle-only sheets are preloaded by `index.html` and promoted on demand by `ctx.ensureBattleStyles()`.
 
 ## Where a change belongs
@@ -31,11 +31,12 @@ This directory is the implementation map for coding agents. It is intentionally 
 | Mode setup or progression | Relevant `src/data/` and `src/screens/` module | Save work if persisted; e2e flow coverage |
 | Battle controls/readouts | `src/battle-ui/controller.js`, `hud.js` | Keyboard/touch and simple/expert mode checks |
 | Event animation/audio | `src/battle-ui/director.js` (beats → cue timelines on `fx-clock.js`), `src/presentation/{fighters,fx-layer}.js`, `src/data/choreo.js`, `src/battle-ui/banners.js`, `src/sound.js` | `docs/battle-presentation.md`; reduced-motion, ×2, hurry and `?animations=0` behavior |
-| Screen/navigation UI | `src/screens/`, `src/app/shell.js` | `registerRoutes`, focus/escape behavior, responsive e2e |
+| Music | `tools/music/score.js` (score, mix) and `render.js` (voices) → `node tools/bake-music.mjs --report agents/<dir>` → `assets/music/*.ogg`; runtime playback in `src/sound.js` (`MUSIC_TRACKS`) | Never hand-edit the `.ogg` files: change the score and re-bake (the tool fails on loudness, peak, seam, memory or a missing motif). A new theme or stem needs its `MUSIC_TRACKS` entry; `node --test test/audio.test.js`; owner listening on the phone |
+| Screen/navigation UI | `src/screens/`, `src/app/shell.js`, `src/app/screens.js` (lazy imports) | `registerRoutes`, focus/escape behavior, route transitions (await a transitioned render), responsive e2e |
 | Persisted shape | `src/save.js` | Bump `SAVE_VERSION`, add one migration, validate old/corrupt/future saves |
-| User-facing copy | `src/i18n.js` | Use the words in [`glossary.md`](glossary.md); add the same key to `fr` and `en`; test `?lang=en` |
+| User-facing copy | `src/i18n/fr.js`, `src/i18n/en.js` | Use the words in [`glossary.md`](glossary.md); add the same key to both files; test `?lang=en` |
 | CSS | `styles/` and sometimes `index.html` | Preserve cascade order and battle lazy-load anchor order |
-| Sprite/art | `assets/monsters/`, `assets/asset-manifest.json` | Keep runtime local; generation material stays dev-only under `art/`/`tools/` |
+| Sprite/art | `art/monsters/originals/<id>.png` → `tools/normalize-sprites.mjs` → `assets/monsters/<id>/battle.png` + `battle-shiny.png`, `src/data/sprite-metrics.js`, `assets/asset-manifest.json` | Never hand-edit the generated files: change the source or the tool's `SPRITES`/`CHROMATIQUES` tables and re-run it. A redraw keeps the replaced source under `art/monsters/originals/pre-redraw/` and records it in the manifest entry's `previous` block; `node --test test/sprite-assets.test.js`. Generation material (`art/briefs/`, `art/concepts/`, `tools/generate-pixellab.mjs`) stays dev-only |
 
 ## Non-negotiable contracts
 

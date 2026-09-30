@@ -11,7 +11,7 @@ French is the reference; English mirrors it. These are the only words the UI use
 | **Changer** | **Switch** | Fais entrer une autre créature. Celle qui entre reçoit le coup du rival. | `swap` |
 | **Barrière** | **Barrier** | Un bouclier qui prend les dégâts avant tes PV. | `shield` |
 | **Talent** | **Talent** | Un pouvoir que ta créature a toujours, sans utiliser son tour. | talent glyph (`src/data/passives.js`) |
-| **Bonus** / **Malus** | **Boost** / **Penalty** | Les bons effets (▲) t'aident, les mauvais (▼) te gênent. Ils durent quelques tours. | status icons (`src/battle/statuses.js`) |
+| **Bonus** / **Malus** | **Boost** / **Penalty** | Les bons effets (▲) t'aident, les mauvais (▼) te gênent. Ils durent quelques tours. | status icons (`src/battle/statuses.js`); badge corner mark `arrow-up` / `arrow-down` (`src/app/status-badge.js`) |
 | **Marqué** · **Combo** | **Marked** · **Combo** | Une créature Marquée prend plus de dégâts au prochain coup : c'est un Combo. | `target-lock` status icon |
 | **Sonné** · **Esquive** | **Dazed** · **Dodge** | Sonné : plus lent et frappe moins fort. Esquive : la prochaine attaque te rate. | `dizzy-stars` · `ghost` status icons |
 | **Météo de l'arène** | **Arena weather** | Chaque arène rend un type plus fort et un autre plus faible, pour les deux équipes. | `map` |
@@ -19,6 +19,7 @@ French is the reference; English mirrors it. These are the only words the UI use
 | **Badges** | **Badges** | Gagne un combat de Ligue pour gagner son badge. Les badges ouvrent de nouveaux modes. | `badge` |
 | **Pouvoir d'As** | **Ace Power** | Le coup spécial d'un rival quand il ne lui reste qu'une créature. | `crown` |
 | **Expédition** · **Pioche du jour** | **Expedition** · **Daily Pick** | Expédition : trois combats d'affilée avec des faveurs. Pioche du jour : une équipe surprise, chaque jour. | `mountain` · `calendar` |
+| **Nouveau** | **New** | Un mode qui vient de s'ouvrir et auquel tu n'as pas encore joué (tuile Défis et sa ligne). | gold tab (`.new-pill`) |
 | **Chromatique** | **Chromatic** | Une couleur spéciale pour une créature que tu maîtrises (maîtrise 5). Tu choisis de la montrer ou non. Seules tes créatures la montrent, jamais celles du rival. | creature sprite (`battle-shiny.png`) |
 | **Bestiaire** | **Bestiary** | Les 30 créatures, leurs fiches et **Mes stats** (tes exploits). | `book` |
 | **Ton équipe** | **Your team** | Les trois créatures que tu emmènes au combat. Le jeu te tutoie : jamais « Mon équipe ». | `team` |
@@ -29,6 +30,6 @@ Stats read **PV · Attaque · Défense · Vitesse** (EN **HP · Attack · Defens
 ## Writing rules
 
 - Decision surfaces (move buttons, the info sheet in simple mode, switch rows) use ten words or fewer and no numbers. Exact numbers live in `move.effectDetail.*` and other `*Detail` keys, shown only with **Détails tactiques** (`save.expertMode`).
-- French typography is automatic: `frenchTypography()` in `src/i18n.js` puts a narrow no-break space (U+202F) before `! ? : ; »` and after `«`, and a no-break space before `%`. Type ordinary spaces in the dictionary.
-- Use generic genre words (Feu, Eau, PV, K.O., Super efficace). Never copy a franchise's full catchphrases.
+- French typography is automatic: `frenchTypography()` in `src/i18n.js` puts a narrow no-break space (U+202F) before `! ? : ; »` and after `«`, and a no-break space before `%` when it loads the French dictionary. Type ordinary spaces in `src/i18n/fr.js`.
+- Use generic genre words (Feu, Eau, PV, K.O., Super efficace). Never copy a franchise's full catchphrases, and never reuse a monster franchise's move, talent, item or creature name, in either language: that is why Farfombre's move reads **Tison furtif** / **Sly Cinder**, Orakyn's talent **Regard d'oracle** / **Oracle's Gaze** and Lumivox's **Bis !** / **Once More!**.
 - Retired words must not return: Éclat, Surge, Déchaîner, Insaisissable, GRD, emblème, Draft, Traversée, and the old class names (Rempart, Assassin, Soigneur, Contrôleur, Briseur, Duelliste). `test/i18n-save.test.js` fails if a dictionary value uses one.

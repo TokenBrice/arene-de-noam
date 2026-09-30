@@ -18,21 +18,22 @@ const {
   mainAffinity,
   badgeArt,
 } = ctx;
-const { bindCommon, icon, newSelection, renderTeamSelect } = route;
+const { bindCommon, icon, newSelection, renderTeamSelect, startSelectionBattle } = route;
 
 // The rival shown in the card. It follows the current rival until the player
 // picks another node, and snaps back when the League advances.
 let selectedRival = null;
 let selectedForProgress = null;
 
-function openLeagueRival(index) {
-  const trainer = TRAINERS[index];
-  ctx.selection = newSelection('ladder');
-  ctx.selection.trainerIndex = index;
-  ctx.selection.enemyTeam = [...trainer.team];
-  ctx.selection.arena = trainer.arena;
-  ctx.selection.difficulty = TRAINERS[index].difficulty;
-  renderTeamSelect('ladder');
+// A League duel against rival `index`, with the saved team (lead first).
+function leagueSelection(index) {
+  const trainer = TRAINERS[index],
+    selection = newSelection('ladder');
+  selection.trainerIndex = index;
+  selection.enemyTeam = [...trainer.team];
+  selection.arena = trainer.arena;
+  selection.difficulty = trainer.difficulty;
+  return selection;
 }
 
 function rivalState(index, progress) {
@@ -101,14 +102,20 @@ function cardHtml(index, progress) {
       .join(''),
     typeFact = `<span class="league-fact type-fact" style="--chip-color:${AFFINITIES[type].color}"><span class="league-fact-label">${affinityIcon(type)}${affinityName(type)}</span><small>${t('league.mainType')}</small></span>`,
     ace = `<p class="league-ace">${icon('crown')}<span><b>${t(`ace.${trainer.ace}`)}</b><span>${t(`ace.effect.${trainer.ace}`)}</span></span></p>`,
-    cta = `<button type="button" class="primary-btn wide" data-action="league-${index}">${state === 'cleared' ? t('league.replay') : t('league.fight')}</button>`;
+    // Like JOUER: the gold button fights with the saved team; team select is the second way in.
+    cta = `<button type="button" class="primary-btn wide" data-action="league-fight">${state === 'cleared' ? t('league.replay') : t('league.fight')}</button><button type="button" class="subtle-btn wide" data-action="league-team">${icon('team')}<span>${t('league.changeTeam')}</span></button>`;
   return `<section class="league-card ${state}" style="${colors};--type-color:${AFFINITIES[type].color}">${head}<div class="league-card-team">${team}</div><div class="league-facts">${typeFact}${arenaWeatherHtml(trainer.arena)}</div>${ace}${cta}</section>`;
 }
 
 function bindCard(index) {
-  screen
-    .querySelector(`[data-action="league-${index}"]`)
-    ?.addEventListener('click', () => openLeagueRival(index));
+  screen.querySelector('[data-action="league-fight"]')?.addEventListener('click', () => {
+    ctx.selection = leagueSelection(index);
+    startSelectionBattle(ctx.selection);
+  });
+  screen.querySelector('[data-action="league-team"]')?.addEventListener('click', () => {
+    ctx.selection = leagueSelection(index);
+    renderTeamSelect('ladder');
+  });
 }
 
 // Picking a node patches the card in place: focus and the route's scroll stay.
@@ -152,4 +159,4 @@ function renderLeague() {
   bindCard(selectedRival);
 }
 
-registerRoutes({ arenaWeatherHtml, openLeagueRival, renderLeague });
+registerRoutes({ arenaWeatherHtml, renderLeague });

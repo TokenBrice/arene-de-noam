@@ -1,14 +1,17 @@
 // Production build for GitHub Pages: `npm run build` writes dist/.
 // Development stays unbundled (`npm run serve`); CI runs this before deploying.
 //
-// - One minified ESM bundle of src/main.js with code splitting: the dynamic
-//   import of src/presentation/arena.js puts it and Three.js in a lazy chunk.
+// - One minified ESM bundle of src/main.js with code splitting. Dynamic imports
+//   make lazy chunks: src/app/screens.js (every screen but the title, and the
+//   battle UI), src/presentation/arena.js with Three.js, and one dictionary per
+//   language (src/i18n/<lang>.js; index.html preloads the shown one).
 // - Eager CSS in cascade order, split only where a lazy battle sheet must slot
 //   in (src/app/battle-stylesheets.js anchors), so lazy loading keeps the exact
 //   eager cascade. Battle sheets sharing an anchor share one lazy file.
 // - Content-hashed JS/CSS/font names; __ASSET_MAP__ tells ctx.ensureBattleStyles()
 //   the hashed stylesheet names; __DIST__ enables service-worker registration.
-// - index.html rewritten for the hashed files; runtime assets copied as-is.
+// - index.html rewritten for the hashed files (with #chunk-preloads, the lazy
+//   chunks' shared lazy imports); runtime assets copied as-is.
 // - dist/sw.js with a versioned precache list of every dist file.
 import { build, transform } from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -29,6 +32,8 @@ const STATIC_DIRS = [
   ['assets/icons', (name) => name.endsWith('.png')],
   ['assets/monsters', (name) => name === 'battle.png' || name === 'battle-shiny.png'],
   ['assets/fx', (name) => name === 'atlas.png'],
+  ['assets/arenas', (name) => name.endsWith('.webp')],
+  ['assets/music', (name) => name.endsWith('.ogg')],
   ['fonts', (name) => name.endsWith('.txt')],
 ];
 
@@ -163,6 +168,25 @@ const staticImports = (file, seen = new Set()) => {
   return seen;
 };
 const eagerJs = [mainFile, ...staticImports(mainFile)];
+const languageJs = Object.fromEntries(
+  ['fr', 'en'].map((language) => {
+    const file = Object.keys(jsOutputs).find(
+      (out) => jsOutputs[out].entryPoint === `src/i18n/${language}.js`
+    );
+    if (!file) fail(`no chunk for src/i18n/${language}.js`);
+    return [language, file];
+  })
+);
+// A lazy chunk's static imports that are lazy too (code it shares with another lazy chunk, e.g.
+// the screens and the arena): index.html lists them per entry (#chunk-preloads) so ctx
+// modulepreloads them beside the chunk instead of one round trip after it.
+const eagerSet = new Set(eagerJs);
+const chunkPreloads = {};
+for (const [file, { entryPoint }] of Object.entries(jsOutputs)) {
+  if (!entryPoint || file === mainFile) continue;
+  const lazyDeps = [...staticImports(file)].filter((dep) => !eagerSet.has(dep));
+  if (lazyDeps.length) chunkPreloads[entryPoint] = lazyDeps.map(outputUrl);
+}
 
 // --- index.html ------------------------------------------------------------
 let html = sourceHtml;
@@ -185,6 +209,19 @@ html = replaceOnce(
   /import\('\.\/src\/main\.js'\)/,
   `import('${outputUrl(mainFile)}')`,
   'main.js import'
+);
+for (const [language, file] of Object.entries(languageJs))
+  html = replaceOnce(
+    html,
+    new RegExp(`'\\./src/i18n/${language}\\.js'`),
+    `'${outputUrl(file)}'`,
+    `${language} dictionary preload`
+  );
+html = replaceOnce(
+  html,
+  /[ \t]*<\/head>/,
+  `    <script type="application/json" id="chunk-preloads">${JSON.stringify(chunkPreloads)}</script>\n  </head>`,
+  'head end'
 );
 await writeFile(path.join(DIST, 'index.html'), html);
 
@@ -225,14 +262,18 @@ const sw = await transform(await readFile(path.join(ROOT, 'sw.js'), 'utf8'), {
 await writeFile(path.join(DIST, 'sw.js'), sw.code);
 
 // --- Report ------------------------------------------------------------------
-// Critical path = what the title waits on: the page, eager CSS and eager JS.
+// Critical path = what the title waits on: the page, eager CSS, eager JS and the
+// default (French) dictionary. Cold JS = the JS part of it.
+const criticalJs = new Set(
+  [...eagerJs, languageJs.fr, ...staticImports(languageJs.fr)].map((file) => outputUrl(file).slice(2))
+);
 const critical = new Set([
   'index.html',
-  ...eagerJs.map((file) => outputUrl(file).slice(2)),
+  ...criticalJs,
   ...eagerGroups.map((group) => groupUrl.get(group.name).slice(2)),
 ]);
 const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`.padStart(10);
-const total = { raw: 0, gzip: 0 };
+const total = { raw: 0, gzip: 0, jsGzip: 0 };
 console.log(`dist/ built (${files.length + 1} files)\n${'file'.padEnd(40)}       raw       gzip`);
 for (const file of files.filter((name) => /\.(js|css|html)$/.test(name)).concat('sw.js')) {
   const bytes = await readFile(path.join(DIST, file)),
@@ -240,7 +281,9 @@ for (const file of files.filter((name) => /\.(js|css|html)$/.test(name)).concat(
   if (critical.has(file)) {
     total.raw += bytes.length;
     total.gzip += gzip;
+    if (criticalJs.has(file)) total.jsGzip += gzip;
   }
   console.log(`${file.padEnd(40)}${kb(bytes.length)} ${kb(gzip)}${critical.has(file) ? '  critical' : ''}`);
 }
 console.log(`critical path total: ${kb(total.raw).trim()} raw, ${kb(total.gzip).trim()} gzip`);
+console.log(`cold JS (title, French): ${kb(total.jsGzip).trim()} gzip`);

@@ -36,12 +36,6 @@ function guardGauntletRun() {
   });
 }
 
-// A live run with at least one cleared stage still to finish: the Défis sheet resumes it.
-function resumableGauntlet() {
-  const run = ctx.gauntletRun;
-  return run && run.stage > 0 && run.stage < GAUNTLET_STAGES.length ? run : null;
-}
-
 function startGauntlet(team, lead) {
   ctx.gauntletRun = { team: [...team], lead, stage: 0, boons: [], condition: null, pendingBoon: null };
   startGauntletStage();
@@ -173,5 +167,4 @@ registerRoutes({
   advanceGauntlet,
   renderGauntletBoons,
   guardGauntletRun,
-  resumableGauntlet,
 });

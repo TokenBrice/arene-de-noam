@@ -1,0 +1,13 @@
+{
+  "id": "brontusk-redraw",
+  "seed": 510101,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/brontusk-battle.png",
+  "reference_image": "assets/monsters/orakyn/battle.png",
+  "variant_count": 3,
+  "description": "Redraw this exact creature in the pixel-art style of the reference: clean compact pixel clusters, flat cel shading with a few crisp highlights, a selective dark outline, calm readable detail, no noisy texture strokes. Keep its identity exactly: a massive armored musk-ox and rhino hybrid, shaggy brown fur mane over the shoulders, stone-gray armor plates on the legs and flanks, amber-gold crystal spikes along the back, a large amber crystal horn on the snout, curved ivory horns, thin gold force cracks in the stone, four planted hooves with gold crystal claws, tufted brown tail, right-facing three-quarter battle stance, same silhouette, pose and palette (brown fur, stone gray, amber gold, ivory). Take only the drawing style from the reference, never its shape or its blue colours. Full body, transparent background, no ground shadow, no text."
+}

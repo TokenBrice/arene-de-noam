@@ -1,0 +1,12 @@
+{
+  "id": "brontusk-clean",
+  "seed": 510111,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/brontusk-battle.png",
+  "variant_count": 4,
+  "description": "Redraw this creature as clean premium pixel art in the house style of a polished creature-battler roster: compact readable pixel clusters, three or four tone ramps per material, one clear top-left light, a selective dark outline that is darkest on the shadow side, and far less noisy texture. Replace the scratchy fur strokes and cluttered cracks with a few bold fur clumps and simple flat stone planes. Keep its identity exactly: a massive armored musk-ox and rhino hybrid, shaggy warm brown fur mane over the shoulders, stone-gray armor plates on the legs and flanks, amber-gold crystal spikes along the back, one big amber crystal horn on the snout, curved ivory horns, a clearly visible fierce eye, thin gold force cracks, four planted hooves with gold crystal claws, tufted tail, right-facing three-quarter battle stance. Same silhouette, pose and palette (warm brown, stone gray, amber gold, ivory). Full body, transparent background, no ground shadow, no text."
+}

@@ -1,0 +1,21 @@
+{
+  "brief": "../../briefs/brontusk-redraw.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_reference",
+  "source": "art/monsters/originals/pre-redraw/brontusk-battle.png",
+  "reference": "assets/monsters/orakyn/battle.png",
+  "seed": 510101,
+  "job_id": "b8859013-2198-4c46-8766-3b6188a94224",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "brontusk-redraw-candidate-1.png",
+    "brontusk-redraw-candidate-2.png",
+    "brontusk-redraw-candidate-3.png",
+    "brontusk-redraw-candidate-4.png",
+    "brontusk-redraw-candidate-5.png",
+    "brontusk-redraw-candidate-6.png"
+  ]
+}

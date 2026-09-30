@@ -8,13 +8,14 @@ import { MOVES } from '../data/moves.js';
 export const BEAT_BUDGET_MS = Object.freeze({
   action: Object.freeze({ 1: 700, 2: 1000, 3: 1150 }),
   signatureCutIn: 450,
+  // The clash band announces both Signatures at once: the answering one plays no band of its own.
   clashCutIn: 600,
   extraHit: Object.freeze({ 1: 220, 2: 220, 3: 120 }),
   addOn: 250,
   actionCap: Object.freeze({ 1: 1500, 2: 1500, 3: 1800 }),
   // The K.O. flash, stamp and dissolve (BEAT_TIMELINES.ko): short, so a lethal blow → K.O. →
   // next creature chain stays short (K.O. turns are the pacing tail).
-  ko: 600,
+  ko: 500,
   extraKo: 300,
   // A lethal action hands its readout tail to the K.O. beat that follows it (the K.O. stamp
   // replaces the number; non-lethal numbers keep their full ≥ 450 ms). The director also ends it
@@ -25,6 +26,9 @@ export const BEAT_BUDGET_MS = Object.freeze({
   replacement: 400,
   cutin: Object.freeze({ 'perfect-relay': 600, 'trainer-command': 700, ace: 900 }),
   tick: 500,
+  // A lethal tick hands its number to the K.O. beat like a lethal action: the number lands at 80
+  // and the K.O. beat takes over 40 ms later.
+  lethalTick: 120,
   effects: 300,
   skip: 0,
   end: 0,
@@ -295,7 +299,13 @@ export function groupBeats(events) {
     if (beat.effects) deriveRows(beat);
   }
   const signatures = beats.filter((beat) => beat.kind === 'action' && beat.signature);
-  if (signatures.some((beat) => beat.side !== signatures[0].side)) signatures[0].clash = true;
+  const answer = signatures.find((beat) => beat.side !== signatures[0].side);
+  if (answer) {
+    signatures[0].clash = true;
+    answer.clashAnswer = true;
+  }
+  for (const beat of beats)
+    if (beat.kind === 'chip' && beat.chip === 'tick') beat.lethal = beat.ticks.some((tick) => tick.hp <= 0);
   return beats;
 }
 
@@ -320,7 +330,8 @@ export function beatBudgetMs(beat, { reducedMotion = false } = {}) {
     return budget.reducedReadout;
   }
   if (beat.kind === 'action') {
-    const cutIn = beat.signature ? (beat.clash ? budget.clashCutIn : budget.signatureCutIn) : 0,
+    const cutIn =
+        beat.signature && !beat.clashAnswer ? (beat.clash ? budget.clashCutIn : budget.signatureCutIn) : 0,
       total =
         cutIn +
         budget.action[beat.tier] +
@@ -332,7 +343,8 @@ export function beatBudgetMs(beat, { reducedMotion = false } = {}) {
   if (beat.kind === 'switch')
     return (beat.replacement ? budget.replacement : budget.switch) + (hasAddOn(beat) ? budget.addOn : 0);
   if (beat.kind === 'cutin') return budget.cutin[beat.cutIn] + (hasAddOn(beat) ? budget.addOn : 0);
-  if (beat.kind === 'chip') return beat.chip === 'tick' ? budget.tick : budget.effects;
+  if (beat.kind === 'chip')
+    return beat.chip === 'tick' ? (beat.lethal ? budget.lethalTick : budget.tick) : budget.effects;
   return 0;
 }
 

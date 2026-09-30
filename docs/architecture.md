@@ -8,9 +8,9 @@ The principal data flow is:
 
 ```text
 index.html
-  -> src/main.js imports every registrar
-  -> src/app/context.js builds ctx and loads the save/i18n/services
-  -> screens register routes into ctx.routes
+  -> src/main.js imports the title, shell and input; src/app/screens.js (lazy) the rest
+  -> src/app/context.js builds ctx and loads the save, the shown language and services
+  -> modules register routes into ctx.routes as they load
   -> a screen creates a battle config
   -> battle-ui/controller.js creates engine state
   -> battle/engine.js returns next state + semantic events
@@ -20,24 +20,24 @@ index.html
 
 ## Bootstrap and shared registry
 
-[`index.html`](../index.html) supplies the DOM shell, CSS order, Three.js import map, the Nunito font preload, and a friendly boot failure fallback. It dynamically imports [`src/main.js`](../src/main.js).
+[`index.html`](../index.html) supplies the DOM shell, CSS order, Three.js import map, the Nunito font preload, a `modulepreload` of the shown language's dictionary, and a friendly boot failure fallback. It dynamically imports [`src/main.js`](../src/main.js).
 
-`main.js` imports all screen, battle UI, and input modules for their registration side effects. Only after every import does it install screen-transition wrappers, start global input, and render the title. Once the title is idle it prefetches the arena chunk (`ctx.loadArena()`), then, in the built `dist/` only, registers the service worker.
+`main.js` imports only what the title needs: `context.js`, `quality.js`, `shell.js`, `screens/title.js` and `input/keyboard.js`, for their registration side effects. It then installs the route transitions (`installScreenTransitions`), starts global input and renders the title. Every other screen and the battle UI live in [`src/app/screens.js`](../src/app/screens.js), one lazy chunk loaded by `ctx.loadScreens()`. Once the title is idle, `main.js` prefetches that chunk, then the arena chunk (`ctx.loadArena()`), then, in the built `dist/` only, registers the service worker.
 
 [`src/app/context.js`](../src/app/context.js) is the composition root:
 
 - Imports data, engine functions, persistence, localization, and sound. It does **not** import Three.js: `ctx.loadArena()` is a memoised `import('../presentation/arena.js')`, and `renderBattle` awaits it beside `ensureBattleStyles()`. Browsers keep a failed module load for the page's lifetime, so a failed load takes the friendly error path with a reload hint (`error.arenaLoad`); `?failWebgl=1` still shows the WebGL error.
-- Loads and validates the save, applies a `?lang=fr|en` override, and validates dictionary parity.
+- Loads and validates the save, applies a `?lang=fr|en` override, and awaits that language's dictionary (top-level `await`), so every module importing `ctx` starts with a synchronous `t()`.
 - Creates the mutable `ctx` application registry and attaches shared values/helpers with `Object.assign`.
-- Exposes `registerRoutes({ name: handler })`, which merges handlers into `ctx.routes`.
-- Exposes `route`, a proxy whose properties are stable forwarding functions. `const { renderTitle } = route` is safe before `renderTitle` is registered because lookup occurs when the forwarding function is called.
+- Exposes `registerRoutes({ name: handler })`, which merges handlers into `ctx.routes` (through the wrapper `shell.js` installs with `wrapRoutes`, which puts screen renders in the route transition, lazy ones included).
+- Exposes `route`, a proxy whose properties are stable forwarding functions. `const { renderTitle } = route` is safe before `renderTitle` is registered because lookup occurs when the forwarding function is called. A route not registered yet belongs to the lazy screens chunk: the call loads it (`ctx.loadScreens()`, memoised), runs the handler and returns a promise of its result; a failed load shows `error.pageLoad`.
 
 This registry deliberately avoids direct screen-to-screen imports. When adding a cross-module callable:
 
 1. Define it in its owning module.
 2. Include it in that module's final `registerRoutes(...)` call.
 3. Consume it through `route` from `context.js`.
-4. Ensure `main.js` imports the owning module before any call can occur.
+4. Put the owning module in `src/app/screens.js`, or in `main.js` only if the title renders it. Code that runs before the lazy chunk (the title, shell, input, `context.js`) calls lazy routes freely but `await`s any value it needs from one (the title's JOUER awaits `newSelection`).
 
 Use a direct import only inside cohesive pure layers such as `src/battle/` and `src/data/`; do not create a second global registry.
 
@@ -86,12 +86,22 @@ Title rendering clears the current battle, the selection and the Pioche picks. A
 - History holds a single "inside" entry above the boot entry whenever a screen other than the bare title shows, re-armed after each handled back, so back never leaves the app from inside it and forward can never replay a battle. A MutationObserver on `#screen[data-page]` keeps it in sync; screens need no history code.
 - A page holding progress one tap could drop sets `ctx.setLeaveGuard({ message, detail, confirm, cancel, onLeave })`. The Expédition sets one on its stage results and faveur screen. While the guard belongs to the showing page, going up (back gesture, Escape, `[data-action="back"]`) or home (`[data-action="title"]`) opens a confirm sheet instead. Confirming clears the guard, runs `onLeave` (the Expédition drops its run), then leaves; showing any other page clears it.
 
+### Route transitions
+
+Screen renders registered as routes (`renderTitle`, `renderTeamSelect`, `renderLeague`, … see `SCREEN_TRANSITION_PAGES` in `shell.js`) change page through the View Transitions API (`transitionScreen`):
+
+- **Direction** comes from the hub trail: a hub the player came through sits at its trail index, Settings one level above their opener, any other page one level above the current hub. Deeper is forward (the new screen slides in from the right while the old one slides left and fades), shallower is back (mirrored). `html[data-navigation]` carries the direction while a transition runs; the keyframes are in `styles/base.css`.
+- **Shared creatures:** an element marked `data-shared-creature="<id>"` on both screens travels from its old box to its new one (the title's trio ↔ team select's slots). Only transform and opacity animate, on the compositor, for 240 ms: the groups' default size animation is off and `shell.js` moves each shared group with a transform from its old box.
+- **Timing contract:** the render runs in the transition's update callback, one frame after the call; the route call returns `transition.updateCallbackDone`. Code that touches the new screen right after navigating awaits it (results' "Défis" button: `await renderTitle(); openChallenges()`). History sync treats the pending page as shown.
+- **Instant swap** (render now, focus the `h1`) for same-page re-renders, the boot screen, anything into or out of `battle`/`battle-loading` (the battle has its own intro and outro), reduced motion (save or OS), `?animations=0`, a browser without `document.startViewTransition`, and a back gesture whose `popstate` reports `hasUAVisualTransition`.
+- **Low tier keeps them.** Measured at 6× CPU (`?quality=low` and the default tier alike): a transition adds no long task (title → team select's one long task is the team-select render itself, 67–78 ms, which the instant swap has too at 73–96 ms), and its main-thread work runs only while it plays, 3–6 ms per frame (+≈ 230 ms forward, +≈ 150–210 ms back in total); at 8× the frames stay under 7 ms. Its GPU cost is two full-screen snapshots for 240 ms (≈ 2 × 10 MB at the target's 1082 × 2402 backing).
+
 ## Battle UI lifecycle
 
 [`src/battle-ui/controller.js`](../src/battle-ui/controller.js) owns the imperative battle lifecycle:
 
 1. `startBattle(config)` creates deterministic engine state and wraps it in `ctx.battleSession`.
-2. `renderBattle()` awaits battle-only CSS and the lazy arena chunk, constructs the HUD/stage/controls, creates `ArenaScene` (then `warmUp()`), and binds controls.
+2. `renderBattle()` awaits battle-only CSS and the lazy arena chunk, constructs the HUD/stage/controls, creates `ArenaScene`, awaits its fighters and `ready` (the arena's painted plate and court, or the procedural fallback within 1.5 s), then calls `warmUp()` and plays the intro.
 3. `hud.js` renders legal buttons, previews, enemy intent, and state plates from the current state.
 4. A player action is paired with one cached/planned AI action and passed to `resolveTurn`.
 5. The returned state replaces the prior state. `playback.js` serially consumes the returned events while input is locked.
@@ -131,7 +141,7 @@ Combat state itself is not persisted. [`screens/results.js`](../src/screens/resu
 
 ## Localization
 
-[`src/i18n.js`](../src/i18n.js) has two flat dictionaries, `fr` and `en`. Keys must be exactly parallel. `t(key, vars)` falls back to the other language and then renders `⟦key⟧`, but that fallback is resilience rather than permission to omit translations.
+Each language is its own flat dictionary module, [`src/i18n/fr.js`](../src/i18n/fr.js) and [`src/i18n/en.js`](../src/i18n/en.js), so a page downloads only the language it shows. Keys must be exactly parallel (`test/i18n-save.test.js`). The core, [`src/i18n.js`](../src/i18n.js), loads a dictionary on demand (`loadDictionary`, memoised, French typography applied once) and builds the translator: `createI18n(lang)` resolves once that language is loaded, so `t(key, vars)` stays synchronous; a key missing anyway renders `⟦key⟧` (the other language is not loaded to fall back on). `setLang(lang)` loads the other dictionary first, then switches (a switch overtaken by a later one changes nothing); Réglages then re-renders the showing page.
 
 Add user-facing text as keys in both dictionaries, including names/effects/lore. Do not hard-code visible French or English in templates unless it is a language-neutral symbol. When changing mechanics, update localized effect copy and tests that assert authored values.
 
@@ -145,14 +155,16 @@ tokens.css -> base.css -> components.css -> screen layers -> overrides
 
 `index.html` eagerly loads common sheets and lists the battle sheets in a comment manifest (read by tooling and the build). [`src/app/battle-stylesheets.js`](../src/app/battle-stylesheets.js) is the single list of battle sheets in cascade order, each with its eager anchor (the eager sheet that follows it, or `null` for the end). `ctx.ensureBattleStyles()` creates the real stylesheet links on first selection/battle/theater entry and inserts each before its anchor. When adding or moving a battle stylesheet, update the manifest and that list together without changing the effective cascade; the build fails if they disagree.
 
-Three.js is local under `vendor/` and reached through the `three` import-map specifier; only `src/presentation/arena.js` imports it, and only through the lazy `ctx.loadArena()`. Never import `arena.js` statically, or Three.js returns to the title's critical path. `ArenaScene` is presentational and must fail into the controller's friendly WebGL recovery path; `warmUp()` compiles every scene material (hidden FX pools included) during the battle intro so the first hit never stalls on a shader link. Creature runtime sprites live at `assets/monsters/<id>/battle.png`; provenance/processing metadata belongs in `assets/asset-manifest.json`. `art/` and `tools/generate-pixellab.mjs` are development-only and must never become runtime dependencies.
+Three.js is local under `vendor/` and reached through the `three` import-map specifier; only `src/presentation/arena.js` imports it, and only through the lazy `ctx.loadArena()`. Never import `arena.js` statically, or Three.js returns to the title's critical path. `ArenaScene` is presentational and must fail into the controller's friendly WebGL recovery path; `warmUp()` compiles every scene material (hidden FX pools included) during the battle intro so the first hit never stalls on a shader link. Creature runtime sprites live at `assets/monsters/<id>/battle.png`; provenance/processing metadata belongs in `assets/asset-manifest.json`. Painted arena plates and courts live at `assets/arenas/<id>/{plate,court}.webp` with their own provenance in `assets/arenas/manifest.json`; they are baked by `tools/generate-arena-plates.mjs` from `art/arena-briefs/`, and the runtime painter (`stage/painter.js`) stays as their fallback ([`battle-presentation.md`](battle-presentation.md) §7.7). `art/`, `tools/generate-pixellab.mjs` and `tools/generate-arena-plates.mjs` are development-only and must never become runtime dependencies.
+
+Music is baked: `assets/music/<theme>.ogg` plus `<arena>-tension.ogg` stems, played from decoded buffers by `src/sound.js` (contract in [`battle-presentation.md` §12.1](battle-presentation.md#121-music-5c-baked)). Their source is the score in `tools/music/`, rendered by `node tools/bake-music.mjs`; like `art/`, the score and the bake tool are development-only and never runtime dependencies.
 
 ## Production build and offline
 
 [`tools/build.mjs`](../tools/build.mjs) (`npm run build`, run by `.github/workflows/pages.yml` after `npm test`) writes `dist/`, which GitHub Pages deploys:
 
-- **JS:** one minified ESM bundle of `src/main.js` (esbuild, code splitting). The dynamic `arena.js` import makes `arena.js` + Three.js a lazy chunk; `three` resolves to `vendor/three.module.min.js`. Static chunk imports get `<link rel="modulepreload">`.
+- **JS:** one minified ESM bundle of `src/main.js` (esbuild, code splitting); `three` resolves to `vendor/three.module.min.js`. Dynamic imports make lazy chunks: `src/app/screens.js` (every screen but the title, with the battle UI), `arena.js` + Three.js, and each language's dictionary. Static chunk imports of the entry get `<link rel="modulepreload">`, and the `index.html` dictionary preload is rewritten to the hashed language chunks. A lazy chunk's own lazy static imports (code the screens share with the arena) are listed per entry in a `#chunk-preloads` JSON island; `ctx.loadScreens()`/`loadArena()` modulepreload them beside the chunk, saving a round trip. The build reports the critical path (page, eager CSS, eager JS and the French dictionary) and its cold JS; the §1 budget is ≤ 150 KB and ≤ 130 KB gzip.
 - **CSS:** eager sheets are bundled in cascade order and split only at battle-sheet anchors, so each lazy battle file still slots into the exact eager cascade; battle sheets sharing an anchor share one lazy file. `url()` assets (fonts) are hashed and the font preload is rewritten to match.
 - **Asset map:** the build defines `__ASSET_MAP__` (source stylesheet path → hashed file) for `ensureBattleStyles()`; in development it is undefined and the map is the identity. `__DIST__` marks the bundle so only it registers the service worker.
-- **Static files** copied unchanged: `manifest.webmanifest`, `assets/icons/`, `assets/monsters/*/battle.png`, font licences. Runtime code may build URLs only for these.
-- **Service worker:** [`sw.js`](../sw.js) is minified into `dist/sw.js` with `__BUILD_ID__` (hash of every dist file) and `__PRECACHE__` (every dist file). It precaches on install (hashed files may come from the HTTP cache, others are revalidated), serves same-origin GET cache-first (every navigation gets the cached `index.html`), and uses `skipWaiting` + `clients.claim`. It keeps the previous build's cache one generation so a page still running that build can lazy-load its battle CSS and arena chunk; older caches are deleted. It is never registered in development or under `navigator.webdriver`, so e2e always hits the network.
+- **Static files** copied unchanged: `manifest.webmanifest`, `assets/icons/`, `assets/monsters/*/battle.png`, `assets/arenas/*/*.webp`, `assets/music/*.ogg`, font licences. Runtime code may build URLs only for these.
+- **Service worker:** [`sw.js`](../sw.js) is minified into `dist/sw.js` with `__BUILD_ID__` (hash of every dist file) and `__PRECACHE__` (every dist file, so every lazy chunk and both languages work offline). It precaches on install (hashed files may come from the HTTP cache, others are revalidated), serves same-origin GET cache-first (every navigation gets the cached `index.html`), and uses `skipWaiting` + `clients.claim`. It keeps the previous build's cache one generation so a page still running that build can lazy-load its screens, arena and other-language chunks and battle CSS; older caches are deleted. It is never registered in development or under `navigator.webdriver`, so e2e always hits the network.

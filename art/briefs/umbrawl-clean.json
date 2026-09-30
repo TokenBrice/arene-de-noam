@@ -1,0 +1,12 @@
+{
+  "id": "umbrawl-clean",
+  "seed": 510511,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/umbrawl-battle.png",
+  "variant_count": 4,
+  "description": "Redraw this creature as clean premium pixel art in the house style of a polished creature-battler roster: compact readable pixel clusters, three or four tone ramps per material, one clear top-left light, a selective dark outline, and far less noisy texture. Raise readability: the dark body needs a crisp violet rim light along its back, legs and tail so it reads clearly against dark backgrounds, and clear muscle planes instead of murky smoke noise. Keep its identity exactly: a low prowling shadow panther, black-purple coat, a huge curved blade-shaped tail arching over its back, glowing magenta eyes, a thin eclipse-ring collar, wisps of smoke around the paws, right-facing three-quarter prowling pose. Same silhouette, pose and palette (black purple, deep violet, glowing magenta). Full body, transparent background, no ground shadow, no text."
+}

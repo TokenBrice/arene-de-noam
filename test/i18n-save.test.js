@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DICTIONARIES, createI18n, validateDictionaries } from '../src/i18n.js';
+import { createI18n, loadDictionary } from '../src/i18n.js';
 import {
   DEFAULT_SAVE,
   SAVE_KEY,
@@ -23,6 +23,10 @@ import { CREATURE_IDS, CREATURES } from '../src/data/creatures.js';
 import { CLASS_ORDER } from '../src/data/classes.js';
 import { STATUS_DEFINITIONS } from '../src/battle/statuses.js';
 
+// One module per language (src/i18n/<lang>.js), loaded like the app does.
+const DICTIONARIES = { fr: await loadDictionary('fr'), en: await loadDictionary('en') };
+const I18N = { fr: await createI18n('fr'), en: await createI18n('en') };
+
 function storage(initial = null) {
   let value = initial;
   return {
@@ -34,25 +38,37 @@ function storage(initial = null) {
   };
 }
 test('French and English localization keys are complete and interpolation works', () => {
-  assert.equal(validateDictionaries(), true);
   assert.deepEqual(Object.keys(DICTIONARIES.fr).sort(), Object.keys(DICTIONARIES.en).sort());
-  assert.equal(createI18n('en').t('battle.turn', { turn: 7 }), 'Turn 7');
+  assert.equal(I18N.en.t('battle.turn', { turn: 7 }), 'Turn 7');
+  assert.equal(I18N.en.t('no.such.key'), '⟦no.such.key⟧');
 });
 test('every key is defined exactly once per dictionary, so no definition is shadowed', () => {
-  const source = readFileSync(new URL('../src/i18n.js', import.meta.url), 'utf8');
-  for (const [name, next] of [
-    ['fr', 'const en = {'],
-    ['en', 'export const DICTIONARIES'],
-  ]) {
-    const block = source.slice(source.indexOf(`const ${name} = {`), source.indexOf(next)),
-      keys = [...block.matchAll(/^ {2}'([^']+)':/gm)].map((match) => match[1]),
+  for (const name of ['fr', 'en']) {
+    const source = readFileSync(new URL(`../src/i18n/${name}.js`, import.meta.url), 'utf8'),
+      keys = [...source.matchAll(/^ {2}'([^']+)':/gm)].map((match) => match[1]),
       duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
     assert.deepEqual(duplicates, [], `${name} duplicates`);
     assert.equal(keys.length, Object.keys(DICTIONARIES[name]).length, `${name} key count`);
   }
 });
+test('switching language loads the other dictionary first, and the last switch wins', async () => {
+  globalThis.document = { documentElement: { lang: 'fr' } };
+  try {
+    const i18n = await createI18n('fr');
+    assert.equal(await i18n.setLang('en'), true);
+    assert.equal(i18n.lang, 'en');
+    assert.equal(i18n.t('battle.turn', { turn: 2 }), 'Turn 2');
+    assert.equal(document.documentElement.lang, 'en');
+    // A switch overtaken by a later one before its dictionary arrives changes nothing.
+    const [first, second] = await Promise.all([i18n.setLang('fr'), i18n.setLang('en')]);
+    assert.deepEqual([first, second], [false, true]);
+    assert.equal(i18n.lang, 'en');
+  } finally {
+    delete globalThis.document;
+  }
+});
 test('French punctuation stays attached with a narrow no-break space and never wraps alone', () => {
-  const { t } = createI18n('fr');
+  const { t } = I18N.fr;
   assert.equal(t('battle.ko', { name: 'Orakyn' }), 'Orakyn est K.O.\u202f!');
   for (const [key, value] of Object.entries(DICTIONARIES.fr)) {
     assert.doesNotMatch(value, /[ \u00a0][!?:;»]|«[ \u00a0]/, `${key}: plain space before punctuation`);
@@ -67,8 +83,8 @@ test('player-facing copy uses the settled glossary and none of the retired terms
   for (const [language, dictionary] of Object.entries(DICTIONARIES))
     for (const [key, value] of Object.entries(dictionary))
       assert.doesNotMatch(value, retired, `${language} ${key}`);
-  const fr = createI18n('fr').t,
-    en = createI18n('en').t;
+  const fr = I18N.fr.t,
+    en = I18N.en.t;
   assert.equal(
     fr('battle.action.move', { actor: 'Orakyn', move: 'Arc lucide' }),
     'Orakyn utilise Arc lucide\u202f!'
@@ -470,8 +486,8 @@ test('current feats and the owned-only legacy assist feat have stable localized 
   assert.equal(count, 10);
   assert.deepEqual(FEAT_IDS.slice(-2), ['contract_hero', 'final_duelist']);
   assert.equal(CURRENT_FEAT_IDS.includes('team_assist'), false);
-  assert.equal(createI18n('fr').t('feat.total', { count: 0, total: count }), `0/${count} exploits`);
-  assert.equal(createI18n('en').t('feat.total', { count: 0, total: count }), `0/${count} feats`);
+  assert.equal(I18N.fr.t('feat.total', { count: 0, total: count }), `0/${count} exploits`);
+  assert.equal(I18N.en.t('feat.total', { count: 0, total: count }), `0/${count} feats`);
   for (const [id, feat] of Object.entries(FEATS)) {
     assert.equal(feat.id, id);
     assert.notEqual(DICTIONARIES.fr[`feat.${id}`], undefined);

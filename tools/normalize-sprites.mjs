@@ -8,7 +8,8 @@
 //   - `assets/asset-manifest.json`: a `normalized` provenance block next to the generation record;
 //   - `assets/monsters/<id>/battle-shiny.png`: its Chromatique, a palette swap of `battle.png` (see
 //     CHROMATIQUES), recorded as a `chromatique` block in the manifest.
-// Family-A sprites (PixelLab pixel art that already matches the Orakyn anchor) only get the baseline.
+// Family-A sprites (PixelLab pixel art that already matches the Orakyn anchor) only get the baseline,
+// plus the palette pass alone when their source has more than MAX_COLORS colours.
 //
 // Deterministic: the same originals and SPRITES/CHROMATIQUES tables always give byte-identical outputs.
 // Usage: node tools/normalize-sprites.mjs [--chromatiques]   (the flag re-bakes only the Chromatiques)
@@ -49,9 +50,14 @@ const FULL_PASS = {
   outlineMinArea: 12,
 };
 
-// Per-creature table. `family`: A = on-style PixelLab art (baseline only); B = downscaled image-gen
+// Per-creature table. `family`: A = on-style PixelLab art (baseline only; a `colors` key also
+// quantises a source palette above MAX_COLORS, with no cleanup or outline); B = downscaled image-gen
 // with a soft fringe; C = image-gen that fills the canvas. `sizeClass` is the authored design size
 // used by `spriteMassScale` in src/data/sprite-metrics.js. Other keys override FULL_PASS.
+// Brontusk, magmoth, hexalune, monolith, umbrawl and nymbloom are PixelLab redraws (STAGE-10) of
+// family-C sprites. `art/monsters/originals/pre-redraw/` keeps each one's former source (`<id>.png`)
+// and its normalised sprite (`<id>-battle.png`, the redraw input); copying the latter to
+// `originals/<id>.png` with a plain `{ family: 'A' }` entry restores the pre-redraw sprite exactly.
 const SPRITES = {
   orakyn: { family: 'A', sizeClass: 'M' },
   lumivox: { family: 'B', sizeClass: 'M' },
@@ -59,18 +65,16 @@ const SPRITES = {
   prismage: { family: 'B', sizeClass: 'M' },
   // Amber fur against slate is its identity: keep hues apart and restore full chroma.
   kordane: { family: 'B', sizeClass: 'M', chromaWeight: 2.4, keepChroma: 1 },
-  brontusk: { family: 'C', sizeClass: 'L' },
+  brontusk: { family: 'A', sizeClass: 'L', colors: 96 },
   ferrax: { family: 'C', sizeClass: 'M' },
-  monolith: { family: 'C', sizeClass: 'L' },
+  monolith: { family: 'A', sizeClass: 'L', colors: 96 },
   abyssar: { family: 'C', sizeClass: 'L' },
   riptalon: { family: 'C', sizeClass: 'M' },
-  // Pastel ramps (pink crest, sky-blue body): full budget and lighter cleanup so the gradients stay
-  // smooth instead of banding.
-  nymbloom: { family: 'C', sizeClass: 'M', colors: 64, cleanup: 0.08 },
+  nymbloom: { family: 'A', sizeClass: 'M', colors: 96 },
   voltide: { family: 'C', sizeClass: 'M' },
   calderoc: { family: 'B', sizeClass: 'L' },
   pyrolynx: { family: 'B', sizeClass: 'M' },
-  magmoth: { family: 'C', sizeClass: 'L' },
+  magmoth: { family: 'A', sizeClass: 'L', colors: 96 },
   solflare: { family: 'B', sizeClass: 'M', colors: 64, cleanup: 0.08 },
   virelia: { family: 'B', sizeClass: 'M' },
   mossaur: { family: 'B', sizeClass: 'L' },
@@ -78,8 +82,8 @@ const SPRITES = {
   thornox: { family: 'C', sizeClass: 'L' },
   farfombre: { family: 'A', sizeClass: 'S' },
   nocturnyx: { family: 'C', sizeClass: 'M' },
-  umbrawl: { family: 'C', sizeClass: 'M' },
-  hexalune: { family: 'C', sizeClass: 'M' },
+  umbrawl: { family: 'A', sizeClass: 'M', colors: 96 },
+  hexalune: { family: 'A', sizeClass: 'M', colors: 96 },
   deuilastre: { family: 'A', sizeClass: 'M' },
   aubeastre: { family: 'A', sizeClass: 'M' },
   flambelier: { family: 'A', sizeClass: 'M' },
@@ -119,7 +123,8 @@ const CHROMATIQUES = {
   hexalune: { to: 20, chroma: 1.1, light: 0.85 },
   kordane: { from: 70, to: 250, chroma: 0.3, light: 0.6, keep: [[230, 300]] },
   lumivox: { to: 150 },
-  magmoth: { to: 200 },
+  // The redrawn basalt is a faintly plum charcoal: keep it, or the rotation turns it olive.
+  magmoth: { to: 200, keep: [[300, 360]] },
   mareclat: { to: 30, chroma: 1.3 },
   mnemora: { to: 55, ramp: 20 },
   monolith: { to: 60, chroma: 1.3 },
@@ -717,6 +722,8 @@ async function normalizeSprite(id) {
     recolour(rgba, (i) => rgba[i * 4 + 3] === 255, options);
     if (options.cleanup > 0) cleanClusters(rgba, options.cleanup);
     addOutline(rgba, options);
+  } else if (config.colors) {
+    recolour(rgba, (i) => rgba[i * 4 + 3] === 255, options);
   }
   moveToBaseline(id, rgba);
   const metrics = measure(id, rgba);

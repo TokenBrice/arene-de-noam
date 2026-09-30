@@ -117,13 +117,14 @@ function fadeTrack(inAt = 0.14, outAt = 0.82) {
   ];
 }
 
-// Slide in from `from` px, hold, slide on and fade out.
-function slideTrack(from, { inAt = 0.16, outAt = 0.84, exit = -from * 0.4, extra = '' } = {}) {
+// Slide in from `from` px, hold, slide on and fade out (gone at `endAt`).
+function slideTrack(from, { inAt = 0.16, outAt = 0.84, endAt = 1, exit = -from * 0.4, extra = '' } = {}) {
   return [
     { transform: `translateX(${from}px) ${extra}`, opacity: 0, offset: 0, easing: easeOut },
     { transform: `translateX(0) ${extra}`, opacity: 1, offset: inAt },
     { transform: `translateX(${exit * 0.1}px) ${extra}`, opacity: 1, offset: outAt, easing: easeIn },
-    { transform: `translateX(${exit}px) ${extra}`, opacity: 0, offset: 1 },
+    { transform: `translateX(${exit}px) ${extra}`, opacity: 0, offset: endAt },
+    ...(endAt < 1 ? [{ transform: `translateX(${exit}px) ${extra}`, opacity: 0, offset: 1 }] : []),
   ];
 }
 
@@ -264,9 +265,12 @@ function buildIntro(node, { player, enemy }) {
     playerCard = introCard('player', player),
     versus = element('b', 'fx-intro-vs', 'VS');
   node.append(enemyCard, versus, playerCard);
+  // The player's card leaves first, before the intro shot lowers the camera onto the near pad and
+  // its creature rises into view under the card (≈ 0.7 of the stack); the rival's card and the VS
+  // hold until the weather band takes over.
   return [
     [enemyCard, slideTrack(120, { inAt: 0.2, outAt: 0.82, exit: 60 }), fadeTrack(0.2, 0.8)],
-    [playerCard, slideTrack(-120, { inAt: 0.26, outAt: 0.82, exit: -60 }), fadeTrack(0.2, 0.8)],
+    [playerCard, slideTrack(-120, { inAt: 0.26, outAt: 0.5, endAt: 0.62, exit: -60 }), fadeTrack(0.2, 0.8)],
     [
       versus,
       [

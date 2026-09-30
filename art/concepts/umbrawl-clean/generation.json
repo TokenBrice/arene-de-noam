@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/umbrawl-clean.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/monsters/originals/pre-redraw/umbrawl-battle.png",
+  "reference": null,
+  "seed": 510511,
+  "job_id": "8c9ef6ea-7ebe-4436-a431-f260824d8eeb",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "umbrawl-clean-candidate-1.png",
+    "umbrawl-clean-candidate-2.png",
+    "umbrawl-clean-candidate-3.png",
+    "umbrawl-clean-candidate-4.png",
+    "umbrawl-clean-candidate-5.png",
+    "umbrawl-clean-candidate-6.png",
+    "umbrawl-clean-candidate-7.png",
+    "umbrawl-clean-candidate-8.png"
+  ]
+}

@@ -158,7 +158,7 @@ Applying a non-stackable status refreshes to the longer remaining duration. Time
 [`data/combos.js`](../src/data/combos.js) is the shared definition:
 
 - The only setup is `marked` (`COMBO_SETUP_STATUS`); every damaging move can finish a Combo (`moveCanCombo`).
-- A present Marqué is consumed once at transaction start and multiplies every hit in that action by exactly `COMBO_DAMAGE_MULTIPLIER` (`1.3`). UI copy derives the percentage from the preview/event `combo.multiplier`; static copy (`status.effect.marked`, `tutorial.marked`, `advice.combo`) interpolates it from the same constant in `i18n.js`.
+- A present Marqué is consumed once at transaction start and multiplies every hit in that action by exactly `COMBO_DAMAGE_MULTIPLIER` (`1.3`). UI copy derives the percentage from the preview/event `combo.multiplier`; static copy (`status.effect.marked`, `tutorial.marked`, `advice.combo`) interpolates it from the same constant in each dictionary (`src/i18n/fr.js`, `src/i18n/en.js`).
 - Evasive misses preserve the setup because miss resolution occurs before consumption.
 - Barriers do not preserve the setup.
 - If another ally applied the setup, an `assist` event credits that helper. It adds no damage or Surge; saved legacy assist counts are not newly awarded.

@@ -1,29 +1,44 @@
 import { STATUS_DEFINITIONS } from './battle/statuses.js';
 import { fxRandom, fxSeed } from './battle-ui/beats.js';
+import { cryPlan } from './sound-cries.js';
 
 const clamp01 = (value, fallback = 0) =>
   Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 
-export const SCHEDULER_INTERVAL_MS = 25;
-// Music lookahead (not SFX latency): long enough to ride out a ~250 ms main-thread stall.
-// This is the default; the low quality tier stretches it with setQuality().
-export const SCHEDULER_HORIZON_SECONDS = 0.25;
-// A step later than this is dropped (the grid jumps to the next boundary) instead of firing a
-// burst of past notes; a step late by less starts at `currentTime` with its full envelope.
-export const SCHEDULER_STALE_SECONDS = 0.03;
+// Baked music (tools/bake-music.mjs renders the score in tools/music/ offline): one looping Ogg
+// Opus file per theme in assets/music/, plus a mono tension stem per arena. Every file is
+// [margin][loop][margin], the margins being the loop's own wrap-around audio, so the loop points
+// sit MUSIC_LOOP_MARGIN_SECONDS inside both ends of the decoded buffer.
+export const MUSIC_LOOP_MARGIN_SECONDS = 0.1;
+export const MUSIC_TRACKS = Object.freeze({
+  title: Object.freeze(['base']),
+  selection: Object.freeze(['base']),
+  library: Object.freeze(['base']),
+  crystal: Object.freeze(['base', 'tension']),
+  grove: Object.freeze(['base', 'tension']),
+  tidal: Object.freeze(['base', 'tension']),
+  volcano: Object.freeze(['base', 'tension']),
+  astral: Object.freeze(['base', 'tension']),
+  eclipse: Object.freeze(['base', 'tension']),
+  victory: Object.freeze(['base']),
+  defeat: Object.freeze(['base']),
+});
+export const musicUrl = (themeId, stem) =>
+  `./assets/music/${themeId}${stem === 'base' ? '' : `-${stem}`}.ogg`;
+const MUSIC_FADE_IN_SECONDS = 0.6;
+const MUSIC_FADE_OUT_SECONDS = 0.22;
 
 // Gain staging for phone speakers at factory sliders (music 0.45, SFX 0.8): the music bed sits
 // around −22 LUFS and important cues 6–10 dB above it. Trims multiply the slider value, so the
-// sliders keep their full range and zero is still silence. Reverb returns sit inside each
-// category chain, after the category level/duck, so every control owns its wet signal too.
-const MUSIC_TRIM = 4.2;
+// sliders keep their full range and zero is still silence. The music files carry their own
+// reverb and are mastered to −16 LUFS; MUSIC_TRIM puts them at about −22 LUFS through the master
+// compressor's make-up gain (measured end to end, agents/impl/5C). The SFX room return sits
+// inside the SFX chain, after its level, so that slider owns its wet signal too.
+const MUSIC_TRIM = 0.7;
 const SFX_TRIM = 9.75;
-const MUSIC_REVERB_SECONDS = 1.7;
-const MUSIC_REVERB_RETURN = 0.5;
 const SFX_ROOM_SECONDS = 0.55;
-// Low quality tier: shorter mono impulses. A mono voice then costs one convolution instead of
-// two, and the shorter tail shrinks the convolver's FFT work.
-const MUSIC_REVERB_LITE_SECONDS = 0.8;
+// Low quality tier: a shorter mono room impulse. A mono voice then costs one convolution
+// instead of two, and the shorter tail shrinks the convolver's FFT work.
 const SFX_ROOM_LITE_SECONDS = 0.35;
 const SFX_ROOM_RETURN = 0.45;
 // Safety limiter. A DynamicsCompressorNode adds makeup gain (fullRangeGain^-0.6, Web Audio
@@ -33,12 +48,15 @@ const SFX_ROOM_RETURN = 0.45;
 const LIMITER_THRESHOLD_DB = -6;
 const LIMITER_RATIO = 20;
 const LIMITER_TRIM = 10 ** ((0.6 * LIMITER_THRESHOLD_DB * (1 - 1 / LIMITER_RATIO)) / 20);
-const TENSION_LEVEL = 0.34;
-const TENSION_REVERB_SEND = 0.12;
-// Adaptive music hysteresis: the presented state must move the tension by this much before the
-// layer follows, and it then glides over seconds, so one hit never pumps the score.
+// The arena's tension stem follows the presented state: silent up to TENSION_FLOOR, full from
+// TENSION_FULL (calculateTension scale). The state must move the tension by TENSION_DEADBAND
+// before the stem follows, and it then glides over seconds, so one hit never pumps the score.
+const TENSION_FLOOR = 0.2;
+const TENSION_FULL = 0.7;
 const TENSION_DEADBAND = 0.08;
 const TENSION_GLIDE_SECONDS = 1.2;
+const tensionStemGain = (tension) => clamp01((tension - TENSION_FLOOR) / (TENSION_FULL - TENSION_FLOOR));
+
 // One soft threshold cue when the player's creature drops under 25 % HP; it re-arms above 35 %
 // or when another creature comes in. No alarm loop.
 const LOW_HP_ENTER = 0.25;
@@ -169,16 +187,6 @@ const CUE_REVERB = Object.freeze({
 const MATERIAL_CUES = new Set(['windup', 'release', 'contact']);
 // A resisted hit plays its material through this low-pass: same family, audibly damped.
 const RESISTED_LOWPASS_HZ = 1600;
-const CRY_FLOOR_HZ = 300;
-const CRY_PITCH_HZ = Object.freeze({
-  orakyn: 610,
-  kordane: 180,
-  farfombre: 420,
-  abyssar: 118,
-  calderoc: 150,
-  virelia: 510,
-});
-const CRY_WAVES = Object.freeze(['triangle', 'square', 'sawtooth', 'triangle']);
 
 export const SCREEN_THEME_MAP = Object.freeze({
   title: 'title',
@@ -195,206 +203,11 @@ export const SCREEN_THEME_MAP = Object.freeze({
   results: 'victory',
 });
 
-// `level` is an optional per-theme loudness trim (mastering): the darker, low-pass-heavy arenas
-// measure several LU quieter than the rest at the same voice gains.
-const theme = (config) =>
-  Object.freeze({
-    level: 1,
-    ...config,
-    scale: Object.freeze(config.scale),
-    chords: Object.freeze(config.chords.map((chord) => Object.freeze(chord))),
-    melody: Object.freeze(config.melody),
-  });
-
-// Chords are semitone offsets from each theme root. The repeating four-chord
-// phrases deliberately favor suspended/add9 colors over arcade-style loops.
-export const MUSIC_THEMES = Object.freeze({
-  title: theme({
-    root: 50,
-    tempo: 68,
-    scale: [0, 2, 4, 7, 9, 11],
-    chords: [
-      [0, 4, 7, 14],
-      [-3, 2, 7, 11],
-      [5, 9, 12, 16],
-      [2, 7, 11, 16],
-    ],
-    melody: [4, null, 2, null, 3, 5, null, 2, 1, null, 3, null, 2, 0, null, null],
-    bass: [0, -3, 5, 2],
-    wave: 'sine',
-    colorWave: 'triangle',
-    filter: 1450,
-  }),
-  selection: theme({
-    root: 55,
-    tempo: 76,
-    scale: [0, 2, 3, 5, 7, 9, 10],
-    chords: [
-      [0, 3, 7, 10],
-      [5, 9, 12, 15],
-      [-2, 3, 7, 12],
-      [3, 7, 10, 14],
-    ],
-    melody: [2, null, 4, 3, null, 1, null, 0, 3, null, 5, null, 4, 2, null, 1],
-    bass: [0, 5, -2, 3],
-    wave: 'triangle',
-    colorWave: 'sine',
-    filter: 1750,
-  }),
-  library: theme({
-    root: 48,
-    tempo: 62,
-    scale: [0, 2, 4, 6, 7, 9, 11],
-    chords: [
-      [0, 4, 7, 11],
-      [2, 6, 9, 14],
-      [7, 11, 14, 18],
-      [4, 7, 11, 16],
-    ],
-    melody: [0, null, 3, null, 5, null, 4, 2, null, 1, null, 4, 3, null, 2, null],
-    bass: [0, 2, 7, 4],
-    wave: 'sine',
-    colorWave: 'triangle',
-    filter: 1200,
-  }),
-  crystal: theme({
-    root: 50,
-    tempo: 82,
-    scale: [0, 2, 4, 7, 9, 11],
-    chords: [
-      [0, 4, 7, 14],
-      [9, 12, 16, 19],
-      [5, 9, 12, 16],
-      [7, 11, 14, 18],
-    ],
-    melody: [4, null, 5, 3, null, 2, 4, null, 1, null, 3, 5, null, 4, 2, null],
-    bass: [0, 9, 5, 7],
-    wave: 'sine',
-    colorWave: 'triangle',
-    filter: 2300,
-  }),
-  grove: theme({
-    root: 45,
-    tempo: 74,
-    scale: [0, 2, 3, 5, 7, 9, 10],
-    chords: [
-      [0, 3, 7, 10],
-      [5, 9, 12, 15],
-      [3, 7, 10, 14],
-      [-2, 3, 7, 10],
-    ],
-    melody: [0, 2, null, 3, 4, null, 2, null, 1, 3, null, 5, null, 4, 2, null],
-    bass: [0, 5, 3, -2],
-    wave: 'triangle',
-    colorWave: 'sine',
-    filter: 980,
-    level: 1.1,
-  }),
-  tidal: theme({
-    root: 47,
-    tempo: 70,
-    scale: [0, 2, 3, 5, 7, 9, 10],
-    chords: [
-      [0, 3, 7, 14],
-      [-2, 3, 7, 10],
-      [5, 9, 12, 17],
-      [3, 7, 10, 15],
-    ],
-    melody: [3, null, 4, null, 2, 1, null, 3, 5, null, 4, 2, null, 0, null, 1],
-    bass: [0, -2, 5, 3],
-    wave: 'sine',
-    colorWave: 'triangle',
-    filter: 1350,
-  }),
-  volcano: theme({
-    root: 43,
-    tempo: 92,
-    scale: [0, 1, 3, 5, 7, 8, 10],
-    chords: [
-      [0, 3, 7, 13],
-      [1, 5, 8, 12],
-      [-2, 3, 7, 10],
-      [5, 8, 12, 15],
-    ],
-    melody: [0, null, 3, 2, null, 4, 3, null, 5, null, 4, 2, 1, null, 3, null],
-    bass: [0, 1, -2, 5],
-    wave: 'sawtooth',
-    colorWave: 'triangle',
-    filter: 820,
-    level: 1.35,
-  }),
-  astral: theme({
-    root: 52,
-    tempo: 78,
-    scale: [0, 2, 4, 6, 7, 9, 11],
-    chords: [
-      [0, 4, 7, 11],
-      [6, 9, 13, 16],
-      [2, 6, 9, 14],
-      [7, 11, 14, 18],
-    ],
-    melody: [5, null, 3, null, 4, 2, null, 1, 3, null, 6, null, 5, 4, null, 2],
-    bass: [0, 6, 2, 7],
-    wave: 'sine',
-    colorWave: 'square',
-    filter: 2650,
-  }),
-  eclipse: theme({
-    root: 42,
-    tempo: 86,
-    scale: [0, 1, 3, 5, 6, 8, 10],
-    chords: [
-      [0, 3, 6, 10],
-      [5, 8, 12, 15],
-      [1, 6, 10, 13],
-      [-2, 3, 6, 10],
-    ],
-    melody: [0, null, 4, 3, null, 1, 2, null, 5, null, 4, null, 2, 1, null, 3],
-    bass: [0, 5, 1, -2],
-    wave: 'triangle',
-    colorWave: 'sawtooth',
-    filter: 720,
-    level: 1.26,
-  }),
-  victory: theme({
-    root: 55,
-    tempo: 72,
-    scale: [0, 2, 4, 7, 9, 11],
-    chords: [
-      [0, 4, 7, 11],
-      [5, 9, 12, 16],
-      [2, 7, 11, 14],
-      [0, 4, 7, 14],
-    ],
-    melody: [0, 2, 4, null, 5, null, 4, 3, 2, null, 4, 5, null, 3, 2, 0],
-    bass: [0, 5, 2, 0],
-    wave: 'triangle',
-    colorWave: 'sine',
-    filter: 1900,
-  }),
-  defeat: theme({
-    root: 45,
-    tempo: 58,
-    scale: [0, 2, 3, 5, 7, 8, 10],
-    chords: [
-      [0, 3, 7, 10],
-      [-2, 3, 7, 10],
-      [-4, 0, 3, 7],
-      [-5, 0, 3, 7],
-    ],
-    melody: [5, null, 4, null, 3, null, 2, 1, null, 3, null, 2, 0, null, null, null],
-    bass: [0, -2, -4, -5],
-    wave: 'sine',
-    colorWave: 'triangle',
-    filter: 760,
-  }),
-});
-
 export function resolveThemeId(screenId) {
   const id = String(screenId || 'title');
   if (id.startsWith('battle:')) {
     const arena = id.slice(7);
-    return MUSIC_THEMES[arena] ? arena : 'crystal';
+    return MUSIC_TRACKS[arena] ? arena : 'crystal';
   }
   return SCREEN_THEME_MAP[id] || 'title';
 }
@@ -437,8 +250,6 @@ function battleMetrics(view) {
   };
 }
 
-const midiToFrequency = (midi) => 440 * 2 ** ((midi - 69) / 12);
-
 export class SoundSystem {
   constructor(settings, onFailure = () => {}) {
     this.settings = settings || {};
@@ -447,12 +258,8 @@ export class SoundSystem {
     this.graph = null;
     this.themeId = null;
     this.screenId = null;
-    this.themeBus = null;
-    this.themeWetBus = null;
-    this.tensionThemeBus = null;
-    this.scheduler = 0;
-    this.nextStepTime = 0;
-    this.stepIndex = 0;
+    // The current theme's player (startMusic): its decoded stems, buses and looping sources.
+    this.music = null;
     this.tension = 0;
     this.hidden = Boolean(globalThis.document?.hidden);
     this.musicSources = new Set();
@@ -467,9 +274,10 @@ export class SoundSystem {
     // Per-beat cue arbitration (see cue()) and the presented-state trackers of setBattleState.
     this.cueBeat = null;
     this.lowHp = null;
+    // The last team-select / Pioche pick cry (call()), faded by the next pick.
+    this.pickCue = null;
     this.failureNotified = false;
-    // Quality-tier budget (see src/app/quality.js); the defaults are the mid/high costs.
-    this.horizon = SCHEDULER_HORIZON_SECONDS;
+    // Quality-tier budget (see src/app/quality.js): the SFX room cost, 'full' on mid/high.
     this.reverb = 'full';
     this.audioDebug = new URLSearchParams(globalThis.location?.search || '').get('audiodebug') === '1';
     this._nodeCount = this.audioDebug ? 0 : undefined;
@@ -508,23 +316,17 @@ export class SoundSystem {
     this.applyMixerLevels();
     if (!this.ctx) return;
     const levels = computeMixerLevels(this.settings);
-    if (levels.master === 0 || levels.music === 0) {
-      this.stopScheduler();
-      this.cancelSources(this.musicSources);
-    } else if (this.ctx.state === 'running' && !this.hidden) {
-      this.startScheduler();
-    }
+    // A silenced music slider releases the decoded stems; bringing it back reloads the theme.
+    if (levels.master === 0 || levels.music === 0) this.releaseMusic();
+    else this.startMusic();
   }
 
-  // Tier hook: `horizon` is the music lookahead in seconds, `reverb` is 'full' or 'lite'.
-  // Swapping an impulse on the live convolvers keeps every routing connection in place.
-  setQuality({ horizon, reverb }) {
-    this.horizon = horizon;
+  // Tier hook: `reverb` is the SFX room's cost, 'full' or 'lite' (the music carries its own
+  // baked reverb). Swapping the impulse on the live convolver keeps every connection in place.
+  setQuality({ reverb }) {
     if (reverb === this.reverb) return;
     this.reverb = reverb;
-    if (!this.graph) return;
-    this.graph.musicReverb.buffer = this.musicImpulse();
-    this.graph.sfxRoom.buffer = this.roomImpulse();
+    if (this.graph) this.graph.sfxRoom.buffer = this.roomImpulse();
   }
 
   async unlock() {
@@ -540,7 +342,7 @@ export class SoundSystem {
       if (this.ctx.state !== 'running') throw new Error('AudioContext did not resume');
       this.failureNotified = false;
       this.applyMixerLevels(true);
-      this.startScheduler();
+      this.startMusic();
       return true;
     } catch {
       if (this.ctx && !this.graph) {
@@ -557,9 +359,8 @@ export class SoundSystem {
     this.hidden = Boolean(hidden);
     if (!this.ctx) return;
     if (this.hidden) {
-      this.stopScheduler();
-      this.cancelSources(this.musicSources);
       // Stale hits/cries must not resume mid-attack: drop the SFX session and the room's tail.
+      // The music loop pauses with the context and resumes where it stopped.
       this.closeSfxSession(0);
       this.resetSfxRoom();
       this.ctx.suspend?.().catch?.(() => {});
@@ -575,13 +376,13 @@ export class SoundSystem {
     );
   }
 
-  // Music: voices → theme bus (per-theme fade) → musicLevel → musicDuck → master, and voice
-  // sends → theme wet bus (same fade) → hall → return → musicLevel. The tension layer runs
-  // tension theme bus → tensionLevel → musicLevel, with one fixed send into the hall.
+  // Music: base stem → player bus (theme fade) → musicLevel → musicDuck → master; the arena's
+  // tension stem → player tension bus → tensionLevel → musicLevel. The stems carry their baked
+  // reverb, so the slider, fades, tension and ducking scale the whole music signal.
   // SFX: cue voices → cue bus → session dry bus → sfxLevel → master, and cue sends → session
-  // wet bus → high-passed short room → return → sfxLevel. Sliders, theme fades, tension and ducking
-  // therefore scale the wet signal exactly like the dry one. The master ends in the bus
-  // compressor then a safety limiter, so pile-ups of cues stay under −1 dBFS true peak.
+  // wet bus → high-passed short room → return → sfxLevel, so the SFX slider owns its wet signal
+  // too. The master ends in the bus compressor then a safety limiter, so pile-ups of cues stay
+  // under −1 dBFS true peak.
   buildGraph() {
     const ctx = this.ctx;
     const now = ctx.currentTime;
@@ -591,10 +392,7 @@ export class SoundSystem {
     const limiter = this.createNode('createDynamicsCompressor');
     const musicLevel = this.createNode('createGain');
     const tensionLevel = this.createNode('createGain');
-    const tensionSend = this.createNode('createGain');
     const musicDuck = this.createNode('createGain');
-    const musicReverb = this.createNode('createConvolver');
-    const musicReturn = this.createNode('createGain');
     const sfxLevel = this.createNode('createGain');
     const sfxRoomFilter = this.createNode('createBiquadFilter');
     const sfxRoom = this.createNode('createConvolver');
@@ -611,9 +409,6 @@ export class SoundSystem {
     limiter.ratio.setValueAtTime(LIMITER_RATIO, now);
     limiter.attack.setValueAtTime(0.001, now);
     limiter.release.setValueAtTime(0.08, now);
-    musicReverb.buffer = this.musicImpulse();
-    musicReturn.gain.setValueAtTime(MUSIC_REVERB_RETURN, now);
-    tensionSend.gain.setValueAtTime(TENSION_REVERB_SEND, now);
     sfxRoomFilter.type = 'highpass';
     sfxRoomFilter.frequency.setValueAtTime(220, now);
     sfxRoomFilter.Q.setValueAtTime(0.6, now);
@@ -622,8 +417,6 @@ export class SoundSystem {
     musicDuck.gain.setValueAtTime(1, now);
 
     tensionLevel.connect(musicLevel);
-    tensionLevel.connect(tensionSend).connect(musicReverb);
-    musicReverb.connect(musicReturn).connect(musicLevel);
     musicLevel.connect(musicDuck).connect(master);
     sfxRoomFilter.connect(sfxRoom).connect(sfxReturn).connect(sfxLevel);
     sfxLevel.connect(master);
@@ -635,14 +428,11 @@ export class SoundSystem {
       musicLevel,
       tensionLevel,
       musicDuck,
-      musicReverb,
-      musicReturn,
       sfxLevel,
       sfxRoomFilter,
       sfxRoom,
       sfxReturn,
     };
-    this.createThemeBuses(false);
     this.applyMixerLevels(true);
   }
 
@@ -656,11 +446,6 @@ export class SoundSystem {
     this.disconnectNode(sfxRoom);
     sfxRoomFilter.connect(room).connect(sfxReturn);
     this.graph.sfxRoom = room;
-  }
-
-  musicImpulse() {
-    const lite = this.reverb === 'lite';
-    return this.createImpulse(lite ? MUSIC_REVERB_LITE_SECONDS : MUSIC_REVERB_SECONDS, 2.8, lite ? 1 : 2);
   }
 
   roomImpulse() {
@@ -693,9 +478,9 @@ export class SoundSystem {
     set(this.graph.master.gain, levels.master);
     set(this.graph.musicLevel.gain, levels.music * MUSIC_TRIM);
     set(this.graph.sfxLevel.gain, levels.sfx * SFX_TRIM);
-    // The tension layer feeds musicLevel, so the sliders still silence it at once; its own
-    // level glides so the presented state reshapes the score over seconds, not per hit.
-    const tension = this.tension * TENSION_LEVEL;
+    // The tension stem feeds musicLevel, so the sliders still silence it at once; its own level
+    // glides so the presented state reshapes the score over seconds, not per hit.
+    const tension = tensionStemGain(this.tension);
     if (immediate) this.graph.tensionLevel.gain.setValueAtTime(tension, now);
     else this.graph.tensionLevel.gain.setTargetAtTime(tension, now, TENSION_GLIDE_SECONDS);
   }
@@ -709,16 +494,12 @@ export class SoundSystem {
     if (nextTheme === this.themeId) return false;
     if (!inBattle) this.tension = 0;
     this.themeId = nextTheme;
-    this.stopScheduler();
-    this.fadeThemeBuses();
+    this.releaseMusic();
     // Everything the previous screen scheduled, including battle cues queued ahead on the
     // audio clock, ends here; the new screen's cues (a results sting) open a fresh session.
     this.closeSfxSession();
-    if (this.ctx && this.graph) this.createThemeBuses(true);
     this.applyMixerLevels();
-    this.stepIndex = 0;
-    this.nextStepTime = this.ctx ? this.ctx.currentTime + 0.05 : 0;
-    this.startScheduler();
+    this.startMusic();
     return true;
   }
 
@@ -773,195 +554,95 @@ export class SoundSystem {
     gain.setTargetAtTime(1, now + Math.max(0.04, duration), 0.12);
   }
 
-  stopMusic() {
-    this.stopScheduler();
-    this.fadeThemeBuses();
-    this.cancelSources(this.musicSources, 0.22);
-    this.themeId = null;
-    this.screenId = null;
+  // Plays the current theme once the context runs, unless music is silenced or the page hidden.
+  // Only the current theme is fetched and decoded; a player for another theme is released first.
+  startMusic() {
+    const levels = computeMixerLevels(this.settings);
+    if (!this.graph || this.ctx.state !== 'running' || this.hidden || !this.themeId) return;
+    if (levels.master === 0 || levels.music === 0 || this.music?.themeId === this.themeId) return;
+    this.releaseMusic();
+    const player = { themeId: this.themeId, buffers: [], buses: [], sources: [] };
+    this.music = player;
+    void this.loadMusic(player);
   }
 
-  createThemeBuses(fadeIn) {
-    if (!this.ctx || !this.graph) return;
-    const now = this.ctx.currentTime;
-    const level = MUSIC_THEMES[this.themeId]?.level ?? 1;
-    this.themeBus = this.createNode('createGain');
-    this.themeWetBus = this.createNode('createGain');
-    this.tensionThemeBus = this.createNode('createGain');
-    for (const bus of [this.themeBus, this.themeWetBus, this.tensionThemeBus]) {
-      bus.gain.setValueAtTime(fadeIn ? 0.0001 : level, now);
-      if (fadeIn) bus.gain.exponentialRampToValueAtTime(level, now + 0.42);
+  // Fetches and decodes the theme's stems. A player replaced meanwhile is dropped before its
+  // decode (or right after it), so rapid screen changes never start a stale theme. A missing
+  // file or a browser that cannot decode Ogg Opus leaves the music silent, without a notice:
+  // the SFX still work.
+  async loadMusic(player) {
+    try {
+      const buffers = await Promise.all(
+        MUSIC_TRACKS[player.themeId].map(async (stem) => {
+          const response = await fetch(musicUrl(player.themeId, stem));
+          if (!response.ok) throw new Error(`music ${response.status}`);
+          const data = await response.arrayBuffer();
+          return this.music === player ? this.ctx.decodeAudioData(data) : null;
+        })
+      );
+      if (this.music === player) this.playMusic(player, buffers);
+    } catch {
+      // Silent music is the fallback.
     }
-    this.themeBus.connect(this.graph.musicLevel);
-    this.themeWetBus.connect(this.graph.musicReverb);
-    this.tensionThemeBus.connect(this.graph.tensionLevel);
   }
 
-  fadeThemeBuses() {
-    if (!this.ctx) return;
+  // Starts every stem at one audio-clock time and loop offset, so the tension stem stays
+  // sample-locked to the base; the loop points skip the margins (MUSIC_LOOP_MARGIN_SECONDS).
+  playMusic(player, buffers) {
     const now = this.ctx.currentTime;
-    const fadingBuses = [this.themeBus, this.themeWetBus, this.tensionThemeBus].filter(Boolean);
-    for (const bus of fadingBuses) {
+    const start = now + 0.05;
+    const busFor = new Map();
+    for (const [stem, level] of [
+      ['base', this.graph.musicLevel],
+      ['tension', this.graph.tensionLevel],
+    ]) {
+      if (!MUSIC_TRACKS[player.themeId].includes(stem)) continue;
+      const bus = this.createNode('createGain');
+      bus.gain.setValueAtTime(0.0001, now);
+      bus.gain.exponentialRampToValueAtTime(1, start + MUSIC_FADE_IN_SECONDS);
+      bus.connect(level);
+      busFor.set(stem, bus);
+      player.buses.push(bus);
+    }
+    MUSIC_TRACKS[player.themeId].forEach((stem, index) => {
+      const buffer = buffers[index];
+      const source = this.createNode('createBufferSource');
+      source.buffer = buffer;
+      source.loop = true;
+      source.loopStart = MUSIC_LOOP_MARGIN_SECONDS;
+      source.loopEnd = buffer.duration - MUSIC_LOOP_MARGIN_SECONDS;
+      source.connect(busFor.get(stem));
+      this.trackSource(source, this.musicSources);
+      source.start(start, MUSIC_LOOP_MARGIN_SECONDS);
+      player.sources.push(source);
+    });
+    player.buffers = buffers;
+  }
+
+  // Fades the current player out and stops it; its buffers are released with it.
+  releaseMusic(fade = MUSIC_FADE_OUT_SECONDS) {
+    const player = this.music;
+    this.music = null;
+    if (!player?.buses.length) return;
+    const now = this.ctx.currentTime;
+    for (const bus of player.buses) {
       bus.gain.cancelScheduledValues(now);
       bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), now);
-      bus.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      bus.gain.exponentialRampToValueAtTime(0.0001, now + fade);
     }
-    if (fadingBuses.length) {
-      globalThis.setTimeout(() => {
-        for (const bus of fadingBuses) this.disconnectNode(bus);
-      }, 260);
-    }
-    this.cancelSources(this.musicSources, 0.24);
+    for (const source of player.sources) source.stop(now + fade + 0.02);
+    globalThis.setTimeout(
+      () => player.buses.forEach((bus) => this.disconnectNode(bus)),
+      (fade + 0.06) * 1000
+    );
   }
 
-  startScheduler() {
-    const levels = computeMixerLevels(this.settings);
-    if (
-      this.scheduler ||
-      !this.ctx ||
-      this.ctx.state !== 'running' ||
-      this.hidden ||
-      levels.master === 0 ||
-      levels.music === 0 ||
-      !this.themeId
-    )
-      return;
-    if (!this.nextStepTime || this.nextStepTime < this.ctx.currentTime)
-      this.nextStepTime = this.ctx.currentTime + 0.05;
-    this.scheduleAhead();
-    this.scheduler = globalThis.setInterval(() => this.scheduleAhead(), SCHEDULER_INTERVAL_MS);
-  }
-
-  stopScheduler() {
-    if (this.scheduler) globalThis.clearInterval(this.scheduler);
-    this.scheduler = 0;
-  }
-
-  scheduleAhead() {
-    if (!this.ctx || this.ctx.state !== 'running' || !this.themeId || this.hidden) return;
-    const config = MUSIC_THEMES[this.themeId];
-    const stepDuration = 60 / config.tempo / 4;
-    const now = this.ctx.currentTime;
-    if (this.nextStepTime < now - SCHEDULER_STALE_SECONDS) {
-      // A main-thread stall outran the lookahead: keep the rhythmic grid but skip the steps
-      // that are already gone rather than starting them all at once.
-      const skipped = Math.ceil((now - this.nextStepTime) / stepDuration);
-      this.nextStepTime += skipped * stepDuration;
-      this.stepIndex += skipped;
-    }
-    while (this.nextStepTime < now + this.horizon) {
-      this.scheduleMusicStep(config, this.stepIndex, Math.max(now, this.nextStepTime), stepDuration);
-      this.nextStepTime += stepDuration;
-      this.stepIndex += 1;
-    }
-  }
-
-  scheduleMusicStep(config, step, time, stepDuration) {
-    const position = step % 16;
-    const bar = Math.floor(step / 16);
-    const chordIndex = bar % config.chords.length;
-    if (position === 0) {
-      for (const semitone of config.chords[chordIndex])
-        this.musicNote(midiToFrequency(config.root + semitone + 12), time, stepDuration * 14.5, {
-          gain: 0.012,
-          wave: config.wave,
-          filter: config.filter,
-          attack: Math.min(0.7, stepDuration * 2),
-          reverb: 0.4,
-        });
-      this.musicNoise(time, stepDuration * 15.5, config.filter * 0.42);
-    }
-    if (position % 4 === 0) {
-      const bassOffset = config.bass[chordIndex];
-      const fifth = position === 12 ? 7 : 0;
-      this.musicNote(midiToFrequency(config.root + bassOffset - 12 + fifth), time, stepDuration * 3.25, {
-        gain: 0.033,
-        wave: 'triangle',
-        filter: 420,
-        attack: 0.025,
-        reverb: 0.08,
-      });
-    }
-    if (position % 2 === 0) {
-      const melodyIndex = config.melody[(bar * 8 + position / 2) % config.melody.length];
-      if (melodyIndex !== null) {
-        const octave = melodyIndex >= 5 ? 12 : 0;
-        const semitone = config.scale[melodyIndex % config.scale.length];
-        this.musicNote(midiToFrequency(config.root + semitone + 12 + octave), time, stepDuration * 1.55, {
-          gain: 0.021,
-          wave: config.colorWave,
-          filter: config.filter * 1.25,
-          attack: 0.035,
-          reverb: 0.32,
-        });
-      }
-    }
-    if (position % 4 === 2 || (this.tension > 0.62 && position % 2 === 1)) {
-      const accent = position % 4 === 2 ? 1 : 1.5;
-      this.musicNote(midiToFrequency(config.root + 24) * accent, time, stepDuration * 0.42, {
-        gain: 0.026,
-        wave: 'triangle',
-        filter: 1150,
-        attack: 0.006,
-        reverb: 0.12,
-        tension: true,
-      });
-    }
-  }
-
-  musicNote(freq, time, duration, options) {
-    if (!this.ctx || !this.themeBus) return;
-    const oscillator = this.createNode('createOscillator');
-    const filter = this.createNode('createBiquadFilter');
-    const gain = this.createNode('createGain');
-    const attack = Math.max(0.005, Math.min(duration * 0.45, options.attack));
-    const end = time + duration;
-    oscillator.type = options.wave;
-    oscillator.frequency.setValueAtTime(Math.max(28, freq), time);
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(Math.max(180, options.filter), time);
-    filter.Q.setValueAtTime(0.7, time);
-    gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(options.gain, time + attack);
-    gain.gain.setValueAtTime(options.gain, Math.max(time + attack, end - Math.min(0.7, duration * 0.45)));
-    gain.gain.exponentialRampToValueAtTime(0.0001, end);
-    oscillator.connect(filter).connect(gain);
-    const chain = [oscillator, filter, gain];
-    if (options.tension) gain.connect(this.tensionThemeBus);
-    else {
-      gain.connect(this.themeBus);
-      const send = this.createNode('createGain');
-      send.gain.setValueAtTime(options.reverb, time);
-      gain.connect(send).connect(this.themeWetBus);
-      chain.push(send);
-    }
-    this.trackSource(oscillator, this.musicSources, chain);
-    oscillator.start(time);
-    oscillator.stop(end + 0.02);
-  }
-
-  musicNoise(time, duration, cutoff) {
-    if (!this.ctx || !this.themeBus) return;
-    const source = this.createNode('createBufferSource');
-    const filter = this.createNode('createBiquadFilter');
-    const gain = this.createNode('createGain');
-    source.buffer = this.getNoiseBuffer('ambience', 2);
-    source.loop = true;
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(Math.max(160, cutoff), time);
-    filter.Q.setValueAtTime(0.55, time);
-    gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(0.008, time + Math.min(0.8, duration * 0.25));
-    gain.gain.setValueAtTime(0.008, time + duration * 0.66);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-    source.connect(filter).connect(gain);
-    gain.connect(this.themeBus);
-    const send = this.createNode('createGain');
-    send.gain.setValueAtTime(0.48, time);
-    gain.connect(send).connect(this.themeWetBus);
-    this.trackSource(source, this.musicSources, [source, filter, gain, send]);
-    source.start(time);
-    source.stop(time + duration + 0.02);
+  // Decoded music held right now, in bytes of PCM: the current theme's stems only.
+  musicBytes() {
+    return (this.music?.buffers ?? []).reduce(
+      (sum, buffer) => sum + buffer.length * buffer.numberOfChannels * Float32Array.BYTES_PER_ELEMENT,
+      0
+    );
   }
 
   openSfxSession() {
@@ -1767,67 +1448,90 @@ export class SoundSystem {
     }
   }
 
-  // Creature voices, profiled per creature id (authored profiles arrive with the baked cries).
-  // 'entry' on arrival, 'effort' in a Signature, 'faint' = softened: two rounded sighing
-  // syllables settling downward, never a wail. Trims shorten syllables, never raise the pitch.
-  // Voices under CRY_FLOOR_HZ fold up by octaves so a phone speaker still carries them.
+  // Creature cries: the authored profile of src/sound-cries.js, resolved for the variant ('entry'
+  // on arrival and the team-select pick, 'effort' in a Signature, 'faint' as the creature falls).
+  // An unknown id is silent. Trims shorten syllables and gaps like voice(), never the pitch.
   cryVoices(cue, id, variant = 'entry', { at = 0, gain = 1 } = {}) {
-    const seed = this.hash(id);
-    const profile = CRY_PITCH_HZ[id] || 180 + (seed % 470);
-    const freq =
-      profile < CRY_FLOOR_HZ ? profile * 2 ** Math.ceil(Math.log2(CRY_FLOOR_HZ / profile)) : profile;
-    const v = (spec) => this.voice(cue, { ...spec, at: at + (spec.at || 0), gain: spec.gain * gain });
-    if (variant === 'faint') {
-      v({
-        wave: 'sawtooth',
-        freq: freq * 1.05,
-        end: freq * 0.84,
-        dur: 0.32,
-        gain: 0.026,
-        attack: 0.03,
-        filter: ['lowpass', 2600, 900, 0.5],
-      });
-      v({
-        wave: 'triangle',
-        freq: freq * 0.9,
-        end: freq * 0.62,
-        at: 0.17,
-        dur: 0.4,
-        gain: 0.022,
-        attack: 0.04,
-        filter: ['lowpass', 1800, 600, 0.5],
-      });
-      v({ dur: 0.3, gain: 0.012, attack: 0.08, filter: ['bandpass', 1400, 700, 1] });
-      return;
+    for (const layer of cryPlan(id, variant) ?? []) this.cryLayer(cue, layer, at, gain);
+  }
+
+  // One cry layer: an oscillator following its pitch contour, or a looping noise/grain buffer;
+  // its filters in series; an exponential envelope; optional vibrato (pitch LFO), FM (a sine
+  // modulator tracking the contour) and amplitude flutter.
+  cryLayer(cue, layer, offset, level) {
+    const start = cue.start + (offset + layer.at) * cue.trim,
+      duration = layer.dur <= 0.06 ? layer.dur : 0.06 + (layer.dur - 0.06) * cue.trim,
+      stop = start + duration,
+      peak = layer.gain * level;
+    let source;
+    if (layer.wave) {
+      source = this.createNode('createOscillator');
+      source.type = layer.wave;
+      this.cryContour(source.frequency, layer, start, duration, 1);
+    } else {
+      source = this.createNode('createBufferSource');
+      source.buffer =
+        layer.noise === 'white'
+          ? this.getNoiseBuffer('sfx', NOISE_SECONDS)
+          : this.getGrainBuffer(layer.noise, Math.floor(cue.random() * 4));
+      source.loop = true;
     }
-    const effort = variant === 'effort',
-      bright = ['lowpass', Math.max(2400, freq * 7), Math.max(1600, freq * 4), 0.8],
-      breath = 900 + (seed % 7) * 240;
-    v({
-      wave: CRY_WAVES[seed % 4],
-      freq,
-      end: freq * (effort ? 1.3 : 1.08 + (seed % 4) * 0.025),
-      dur: effort ? 0.2 : 0.22,
-      gain: effort ? 0.05 : 0.043,
-      attack: 0.008,
-      filter: bright,
-    });
-    v({
-      wave: CRY_WAVES[(seed + 1) % 4],
-      freq: freq * (effort ? 1.35 : 1.25 + (seed % 5) * 0.04),
-      end: freq * (effort ? 1.5 : 0.92),
-      at: effort ? 0.06 : 0.065,
-      dur: effort ? 0.24 : 0.25,
-      gain: effort ? 0.03 : 0.026,
-      attack: 0.008,
-      filter: bright,
-    });
-    v({
-      dur: 0.12,
-      gain: 0.016 + (seed % 4) * 0.004,
-      attack: 0.004,
-      filter: ['bandpass', breath, breath, 0.8],
-    });
+    const chain = [source];
+    let head = source;
+    for (const [type, from, to, q, db] of layer.filters) {
+      const node = this.createNode('createBiquadFilter');
+      node.type = type;
+      node.frequency.setValueAtTime(from, start);
+      if (to !== from) node.frequency.exponentialRampToValueAtTime(to, stop);
+      node.Q.setValueAtTime(q, start);
+      if (db) node.gain.setValueAtTime(db, start);
+      head.connect(node);
+      head = node;
+      chain.push(node);
+    }
+    const amp = this.createNode('createGain');
+    this.envelope(amp.gain, start, stop, peak, layer.attack, layer.hold);
+    head.connect(amp).connect(cue.input);
+    chain.push(amp);
+    const shared = [...chain, ...cue.nodes];
+    this.trackSource(source, this.sfxSources, shared);
+    const modulate = (target, depthOf, rateOf) => {
+      const lfo = this.createNode('createOscillator'),
+        depth = this.createNode('createGain');
+      lfo.type = 'sine';
+      rateOf(lfo.frequency);
+      depthOf(depth.gain);
+      lfo.connect(depth).connect(target);
+      this.trackSource(lfo, this.sfxSources, [lfo, depth, ...shared]);
+      lfo.start(start);
+      lfo.stop(stop + 0.02);
+    };
+    const fixed = (value) => (param) => param.setValueAtTime(value, start);
+    if (layer.vib) modulate(source.frequency, fixed(layer.vib[1]), fixed(layer.vib[0]));
+    if (layer.fm)
+      modulate(source.frequency, fixed(layer.fm[1]), (param) =>
+        this.cryContour(param, layer, start, duration, layer.fm[0])
+      );
+    if (layer.am)
+      modulate(
+        amp.gain,
+        (param) => this.envelope(param, start, stop, peak * layer.am[1], layer.attack, layer.hold),
+        fixed(layer.am[0])
+      );
+    if (layer.wave) source.start(start);
+    else source.start(start, cue.random() * NOISE_SECONDS);
+    source.stop(stop + 0.02);
+    cue.end = Math.max(cue.end, stop);
+  }
+
+  // A layer's pitch contour (× `scale`) on a frequency param: glides, or jumps for `steps`.
+  cryContour(param, { pitch, steps }, start, duration, scale) {
+    param.setValueAtTime(pitch[0][1] * scale, start);
+    for (const [at, hz] of pitch.slice(1)) {
+      const time = start + at * duration;
+      if (steps) param.setValueAtTime(hz * scale, time);
+      else param.exponentialRampToValueAtTime(hz * scale, time);
+    }
   }
 
   // One soft "ba-dum" when the player's creature falls under a quarter of its HP (trackLowHp).
@@ -1934,8 +1638,16 @@ export class SoundSystem {
   }
 
   // A creature's arrival voice outside battle playback (team-select pick, Pioche du jour pick).
+  // A new pick fades the previous pick's cry, so quick picks never pile up.
   call(id) {
     const cue = this.openCue({ reverb: 0.36, seed: `cry|${id}` });
-    if (cue) this.cryVoices(cue, id, 'entry');
+    if (!cue) return;
+    const previous = this.pickCue;
+    if (previous && previous.end > cue.start) {
+      previous.bus.gain.cancelScheduledValues(cue.start);
+      previous.bus.gain.setTargetAtTime(0, cue.start, 0.02);
+    }
+    this.cryVoices(cue, id, 'entry');
+    this.pickCue = cue;
   }
 }

@@ -1,0 +1,12 @@
+{
+  "id": "hexalune-clean-2",
+  "seed": 510312,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/hexalune-battle.png",
+  "variant_count": 4,
+  "description": "Redraw the rendering of this creature as clean premium pixel art while keeping its silhouette, frontal hovering pose and colours. Simplify the busy feather mantle into five or six large layered feather shapes, each with clean three-tone shading and a crisp light edge, dark between them. Make the owl face and the crescent horned crown the brightest focal point: pale glowing cyan eyes, a clear beak, a bright blue crown gem with light spilling onto the face. Keep the curling purple tentacles smooth with evenly spaced glowing cyan ring markings and a lighter underside. Draw the three curse wisps as clean violet flame shapes with one eye sigil each. Keep the small rune charms on the chest. Remove stray single pixels, speckles and sparkles. Midnight blue, indigo, violet and glowing cyan palette, selective dark outline, transparent background, no ground shadow, no text."
+}

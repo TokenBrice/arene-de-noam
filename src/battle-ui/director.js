@@ -15,6 +15,7 @@ import {
   TIERS,
   TIMELINES,
   movePalette,
+  punchKick,
   tierStretch,
 } from '../data/choreo.js';
 import { SPRITE_METRICS } from '../data/sprite-metrics.js';
@@ -82,6 +83,14 @@ function typeColor(creatureId) {
 
 function signatureOf(creature) {
   return creature?.moves.find((id) => MOVES[id]?.signature) ?? null;
+}
+
+// Only the player's side shows a Chromatique: every rival image pins the normal look, and
+// `data-variant` keeps a Chromatique toggle from repainting it (ctx.setChromatique).
+function spriteAttrs(side, creatureId) {
+  return side === 'player'
+    ? `src="${sprite(creatureId)}"`
+    : `src="${sprite(creatureId, 'normal')}" data-variant="normal"`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -205,6 +214,17 @@ function distanceBetween(a, b) {
   );
 }
 
+// Layout box of an element (page px, transforms ignored).
+function layoutBox(element) {
+  let left = 0,
+    top = 0;
+  for (let node = element; node; node = node.offsetParent) {
+    left += node.offsetLeft;
+    top += node.offsetTop;
+  }
+  return { left, top, right: left + element.offsetWidth, bottom: top + element.offsetHeight };
+}
+
 class ReadoutLayer {
   constructor(element) {
     this.element = element;
@@ -276,15 +296,16 @@ class ReadoutLayer {
   }
 
   // The plates and the top row sit above the stage and overlap its edges (§11.2): a readout under
-  // them would be hidden. Their boxes (stage coordinates, 4 px margin) are measured once per turn;
-  // the stage never re-fits mid-turn. The rival's intent tab under its plate is hidden while a
-  // turn plays, so it keeps nothing out.
+  // them would be hidden. Their layout boxes (stage coordinates, 4 px margin; transforms ignored,
+  // so a plate still gliding after the stage re-fit counts where it lands) are measured when a
+  // turn starts and when the stage re-fits. The rival's intent tab under its plate is hidden
+  // while a turn plays, so it keeps nothing out.
   measureKeepOut() {
-    const stage = this.stage.getBoundingClientRect(),
+    const stage = layoutBox(this.stage),
       screenRoot = this.stage.closest('.battle-screen');
     this.keepOut = [...(screenRoot?.querySelectorAll('.battle-top, .battle-plate') ?? [])]
-      .map((item) => item.getBoundingClientRect())
-      .filter((box) => box.width > 0 && box.height > 0)
+      .map(layoutBox)
+      .filter((box) => box.right > box.left && box.bottom > box.top)
       .map((box) => ({
         left: box.left - stage.left - 4,
         top: box.top - stage.top - 4,
@@ -521,7 +542,8 @@ class ReadoutLayer {
     const node = this.ally,
       anchors = this.anchors(side);
     node.dataset.side = side;
-    node.querySelector('img').src = sprite(creatureId);
+    node.querySelector('img').outerHTML =
+      `<img ${spriteAttrs(side, creatureId)} alt="" width="28" height="28">`;
     node.querySelector('span').textContent = t('battle.allyHeal', { name: creatureName(creatureId), amount });
     const width = node.offsetWidth,
       height = node.offsetHeight,
@@ -686,10 +708,13 @@ function createRun(session, beat, beats, budget) {
     consumedShown: false,
     // The action's running damage readout (contact): { dealt, absorbed, slot, tags }.
     tally: null,
-    // The beat's narration line (hud handle) and the stamp shown with it.
+    // The beat's narration line (hud handle, once), the stamp shown with it and the beat's summed
+    // hit-stops (its wall-clock length is `end + stops`).
+    narrated: false,
     line: null,
     lineText: '',
     stamp: null,
+    stops: 0,
   };
 }
 
@@ -729,9 +754,14 @@ function presentAll(run, events) {
   patch(run, ...sides);
 }
 
+// HP bars drain over DRAIN_MS; a blow that empties the bar empties it at once, so the bar reads 0
+// before the K.O. beat's stamp and line land (the lethal action hands over 40 ms after its
+// contact, the stamp comes 90 ms into the K.O. beat).
+const DRAIN_MS = 450;
+const LETHAL_DRAIN_MS = 100;
 function drain(run, side, fromHp, toHp) {
   if (fromHp === toHp) return;
-  route.drainHp(side, fromHp, Math.max(0, toHp), run.clock.realMs(450));
+  route.drainHp(side, fromHp, Math.max(0, toHp), run.clock.realMs(toHp <= 0 ? LETHAL_DRAIN_MS : DRAIN_MS));
 }
 
 // The stamp shown with the beat's line becomes its emphasis at the instant it lands on the stage
@@ -1088,7 +1118,7 @@ function opPunch(run, cue, scope) {
   const tier = TIERS[scope.tier],
     shake = ctx.quality.tier === 'low' ? LOW_SHAKE : 1;
   run.arena.punch(scope.punchSide, {
-    kick: cue.kick ?? tier.kick,
+    kick: punchKick(cue, scope.tier, scope.hit),
     shakePx: (cue.shakePx ?? tier.shakePx) * shake,
     shakeMs: Number.isFinite(cue.shakeMs) ? cue.shakeMs * scope.stretch : tier.shakeMs,
   });
@@ -1176,7 +1206,7 @@ function actionPlan(run) {
     perHit = timeline.perHit ?? null,
     s = tierStretch(tier),
     cutIn =
-      beat.signature && !reduced
+      beat.signature && !beat.clashAnswer && !reduced
         ? beat.clash
           ? BEAT_BUDGET_MS.clashCutIn
           : BEAT_BUDGET_MS.signatureCutIn
@@ -1321,7 +1351,7 @@ function contact(run, hit, index, hitStop) {
       if (beat.assist) {
         const helper = t('battle.preparedBy', { helper: creatureName(beat.assist.creatureId) });
         tally.tags.assist = {
-          html: `<img src="${sprite(beat.assist.creatureId)}" alt="" width="18" height="18">${escapeHtml(helper)}`,
+          html: `<img ${spriteAttrs(beat.assist.side, beat.assist.creatureId)} alt="" width="18" height="18">${escapeHtml(helper)}`,
           text: helper,
           icon: true,
         };
@@ -1417,7 +1447,8 @@ async function playAction(run, plan) {
   const beat = run.beat,
     { timeline, perHit } = plan,
     queue = scheduler();
-  if (beat.signature) queue.add(0, () => signatureCutIn(run, plan));
+  // The clash band already announced the answering Signature: it plays no band of its own.
+  if (beat.signature && !beat.clashAnswer) queue.add(0, () => signatureCutIn(run, plan));
   // The Signature spend empties the gauge as the move fires.
   queue.add(plan.cutIn, () => {
     presentAll(
@@ -1440,6 +1471,7 @@ async function playAction(run, plan) {
         seed: hit?.seed ?? beat.seed,
         hitNumber: hit?.hit ?? 1,
         miss: !hit,
+        hit,
         contact: () => (hit ? contact(run, hit, index, plan.hitStops[index]) : dodge(run)),
       });
       for (const cue of perHit.cues) {
@@ -1523,6 +1555,7 @@ async function playKo(run) {
             const stamp = text(run)?.koStamp(run, side);
             if (stamp) stamps.push(stamp);
             markReadout(run);
+            narrateBeat(run);
           },
           cue: (name) => emitCue(run, name, { side, creatureId }),
           // One softened flash per beat, never stacked, none under reduced motion.
@@ -1553,6 +1586,12 @@ async function playSwitch(run) {
     queue = scheduler(),
     outgoing = viewOf(run.session).sides[side].team[beat.from],
     timeline = BEAT_TIMELINES[beat.replacement ? 'replacement' : 'switch'],
+    // One ✦ number at a time: when this switch is a good one, its relay card that follows carries
+    // the only number (+6, the lesson), and the switch pill drops the generic switch bonus.
+    relayFollows = run.beats.some(
+      (candidate) =>
+        candidate.kind === 'cutin' && candidate.cutIn === 'perfect-relay' && candidate.side === side
+    ),
     scope = beatScope(
       run,
       { actor: side, target: other(side) },
@@ -1562,6 +1601,7 @@ async function playSwitch(run) {
         recallColor: outgoing ? typeColor(outgoing.id) : undefined,
         swap: async () => {
           presentAll(run, [beat.start]);
+          narrateBeat(run);
           await route.patchFighters(viewOf(run.session));
           syncStatusLoops(run);
         },
@@ -1570,7 +1610,7 @@ async function playSwitch(run) {
             side,
             creatureId: beat.creatureId,
             source: beat.source,
-            surge: surgeGain(beat, side, 'switch'),
+            surge: relayFollows ? 0 : surgeGain(beat, side, 'switch'),
           }),
         cue: (name) => {
           if (name === 'switch-out') emitCue(run, name, { side, creatureId: outgoing?.id ?? null });
@@ -1676,8 +1716,9 @@ async function playChip(run) {
         );
       end = Math.max(
         end,
+        // A lethal tick is cut, not compressed: its number lands at 80 and the K.O. beat takes over.
         scheduleTimeline(queue, run, BEAT_TIMELINES.tick, scope, {
-          scale: fitScale(run, timelineEnd(BEAT_TIMELINES.tick)),
+          scale: beat.lethal && !run.reduced ? 1 : fitScale(run, timelineEnd(BEAT_TIMELINES.tick)),
         })
       );
     }
@@ -1832,23 +1873,32 @@ function beatLine(beat) {
   }
 }
 
-// The line holds the box for its beat, but never longer than a readout's floor once the next
-// beat's line arrives (hurry), so the text follows the stage instead of falling behind it.
-function narrateBeat(run, wallMs) {
-  const session = run.session,
-    line = beatLine(run.beat);
-  if (line) {
-    run.line = route.narrate(line, {
-      minMs: Math.min(run.clock.realMs(wallMs), run.clock.realFloorMs(READOUT_FLOOR_MS)),
-    });
-    run.lineText = line;
-    session.lastLine = line;
-  }
+// The beat's journal entries land at its start (§6.3).
+function journalBeat(run) {
+  const session = run.session;
   for (const event of run.beat.events ?? []) {
     if (!LOG_EVENT_TYPES.has(event.type) || event.type === 'move-skip') continue;
     session.timeline.push(journalEntry(event, event.turn || session.state.turn));
     if (session.timeline.length > TIMELINE_CAP) session.timeline.shift();
   }
+}
+
+// The beat's line lands with its stage event (§6.3): a switch's with the swap (the recall is over
+// and the plate names the newcomer), a K.O.'s with its stamp (the HP bar is empty), any other
+// beat's at its start. It holds the box for the rest of its beat, but never longer than a
+// readout's floor once the next beat's line arrives (hurry), so the text follows the stage
+// instead of falling behind it.
+function narrateBeat(run) {
+  if (run.narrated) return;
+  run.narrated = true;
+  const line = beatLine(run.beat);
+  if (!line) return;
+  const wallMs = Math.max(0, run.start + run.end + run.stops - run.clock.now());
+  run.line = route.narrate(line, {
+    minMs: Math.min(run.clock.realMs(wallMs), run.clock.realFloorMs(READOUT_FLOOR_MS)),
+  });
+  run.lineText = line;
+  run.session.lastLine = line;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1859,21 +1909,25 @@ function timelineEnd(timeline) {
 }
 
 // Virtual length of a non-action beat: its timeline (plus the chip add-on) within its budget
-// (fitScale time-scales a longer timeline to fit).
+// (fitScale time-scales a longer timeline to fit). A lethal tick ends LETHAL_CONTACT_MARGIN after
+// its number, as a lethal action after its last contact (§3.4).
 function beatEnd(run) {
   const beat = run.beat,
     addOn = addOnMs(beat);
   if (run.reduced) return run.budget;
-  const authored =
-    beat.kind === 'ko'
-      ? (beat.kos.length - 1) * BEAT_BUDGET_MS.extraKo + timelineEnd(BEAT_TIMELINES.ko)
-      : beat.kind === 'switch'
-        ? timelineEnd(BEAT_TIMELINES[beat.replacement ? 'replacement' : 'switch']) + addOn
-        : beat.kind === 'cutin'
-          ? timelineEnd(BEAT_TIMELINES[beat.cutIn]) + addOn
-          : beat.kind === 'chip' && beat.chip === 'tick'
-            ? timelineEnd(BEAT_TIMELINES.tick) + addOn
-            : run.budget;
+  const tick = BEAT_TIMELINES.tick,
+    authored =
+      beat.kind === 'ko'
+        ? (beat.kos.length - 1) * BEAT_BUDGET_MS.extraKo + timelineEnd(BEAT_TIMELINES.ko)
+        : beat.kind === 'switch'
+          ? timelineEnd(BEAT_TIMELINES[beat.replacement ? 'replacement' : 'switch']) + addOn
+          : beat.kind === 'cutin'
+            ? timelineEnd(BEAT_TIMELINES[beat.cutIn]) + addOn
+            : beat.kind === 'chip' && beat.chip === 'tick'
+              ? beat.lethal
+                ? tick.cues.find((cue) => cue.op === 'readout').at + LETHAL_CONTACT_MARGIN
+                : timelineEnd(tick) + addOn
+              : run.budget;
   return Math.min(run.budget, authored);
 }
 
@@ -1884,15 +1938,20 @@ async function playBeat(session, beat, beats) {
     end = plan ? plan.end : beatEnd(run),
     stops = plan ? plan.hitStops.reduce((sum, ms) => sum + ms, 0) : 0,
     clock = session.clock,
-    // A lethal action hands its readouts to the K.O. beat that follows (§3.4).
-    handOff = beat.kind === 'action' && beat.lethal && beats[beats.indexOf(beat) + 1]?.kind === 'ko';
+    // A lethal action or tick hands its readouts to the K.O. beat that follows (§3.4).
+    handOff =
+      (beat.kind === 'action' || beat.kind === 'chip') &&
+      beat.lethal &&
+      beats[beats.indexOf(beat) + 1]?.kind === 'ko';
   run.end = end;
+  run.stops = stops;
   ctx.currentFxMove = beat;
   if (session.pendingCut && beat.kind !== 'ko') {
     session.pendingCut = false;
     if (!run.instant) void run.arena?.shot('cut');
   }
-  narrateBeat(run, end + stops);
+  journalBeat(run);
+  if (beat.kind !== 'switch' && beat.kind !== 'ko') narrateBeat(run);
   const ok =
     beat.kind === 'action'
       ? await playAction(run, plan)
@@ -2101,7 +2160,8 @@ export async function playOutro(state) {
 
 async function outroTimeline(session, state) {
   const clock = session.clock;
-  screen.classList.add('battle-outro');
+  // The winner's hero moment takes the whole screen (§6.7, §11.2).
+  route.restage('full', () => screen.classList.add('battle-outro'));
   const winner = state.winner === 'enemy' ? 'enemy' : 'player',
     kind = winner === 'player' ? 'victory' : 'defeat',
     champion = activeOf(state, winner),

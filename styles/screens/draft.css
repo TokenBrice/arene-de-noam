@@ -431,6 +431,10 @@ button.draft-slot {
     grid-area: head;
     min-height: 48px;
   }
+  /* The 320 px column leaves "Pioche du jour" ~152 px: the phone title size keeps one line. */
+  .draft > .topbar h1 {
+    font-size: var(--text-xl);
+  }
   .draft-lede {
     grid-area: lede;
   }

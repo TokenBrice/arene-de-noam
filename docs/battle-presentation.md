@@ -130,7 +130,9 @@ After grouping:
   last event wins, first-appearance order. `beat.talents` = `passive` effects; `beat.readouts` = `heal`, `barrier`,
   `barrier-break`, `recoil` effects (numbers overlapping the contact readout window).
 - **Critical**: `beat.critical` = any hit critical; `beat.tier = min(3, baseTier + 1)`; stamp `'critical'` first.
-- **Signature clash**: when both sides have a Signature ActionBeat in the same list, the first gets `clash: true`.
+- **Signature clash**: when both sides have a Signature ActionBeat in the same list, the first gets `clash: true` (its
+  split band announces both) and the other side's first Signature `clashAnswer: true` (no band of its own).
+- **Lethal tick**: a tick ChipBeat whose tick empties an HP bar gets `lethal: true` (the K.O. beat follows it).
 
 ### 3.2 Beat shapes
 
@@ -140,7 +142,7 @@ After grouping:
 Chip = { side, creatureId, status, applied: boolean, stacks: number | null, remaining: number | null, event }
 
 ActionBeat = { kind: 'action', side, targetSide, creatureId, moveId,
-  signature: boolean, baseTier: 1|2|3, tier: 1|2|3, critical: boolean, lethal: boolean, clash: boolean,
+  signature: boolean, baseTier: 1|2|3, tier: 1|2|3, critical: boolean, lethal: boolean, clash: boolean, clashAnswer?: true,
   seed: uint32,                    // fxSeed(moveId, turn, 0)
   start: Event /* move-start */, hits: Hit[], miss: Event | null, assist: Event | null,
   combo: { multiplier, helperId } | null, consumed: Event[],
@@ -151,7 +153,7 @@ Hit = { hit, hits, damage: Event, barrierHit: Event | null, between: Event[], am
 SwitchBeat = { kind: 'switch', side, creatureId /* incoming */, from, to, source: 'switch'|'signature'|'replacement',
   replacement: boolean, start: Event, ...rows }
 CutInBeat  = { kind: 'cutin', cutIn: 'perfect-relay'|'trainer-command'|'ace', side, creatureId, start: Event, ...rows }
-ChipBeat   = { kind: 'chip', chip: 'tick'|'skip'|'effects', ticks: Event[], skips: Event[], ...rows }
+ChipBeat   = { kind: 'chip', chip: 'tick'|'skip'|'effects', ticks: Event[], skips: Event[], lethal?: boolean, ...rows }
 KoBeat     = { kind: 'ko', kos: { side, creatureId }[], skips: Event[] /* absorbed move-skip */, events }
 EndBeat    = { kind: 'end', winner, reason, events }
 ```
@@ -183,16 +185,16 @@ the end, and a non-action timeline longer than its room (reduced motion's 450 ms
 | Beat | ×1 budget | Notes |
 | --- | --- | --- |
 | Action T1 / T2 / T3 | 700 / 1000 / 1150 | With the chip add-on and the Signature cut-in below they give the plan's ≈ 0.8 / 1.1 / 1.7 s beats. |
-| + Signature cut-in band | +450 (clash beat: +600) | Only when `signature`. |
+| + Signature cut-in band | +450 (clash beat: +600; clash answer: 0) | Only when `signature`. |
 | + each extra landed hit | +220 (T1/T2), +120 (T3) | Per-hit spacing of the `perHit` block (§10.3). |
 | + chip row add-on | +250 | When `chips` or `talents` is non-empty (≤ 0.3 s). Number readouts (`readouts`) overlap and add nothing. |
 | Action cap | 1500 (T1/T2), 1800 (T3) | Includes cut-in, hits and add-on. A Signature beat is ≤ 1.8 s. |
 | Lethal action | −400 | The KoBeat takes over the readout: the number keeps its floor into the K.O. beat, which retires it, and the K.O. stamp replaces it. The director ends the beat `LETHAL_CONTACT_MARGIN` (40 virtual ms) after its last contact when that comes first (a single-hit Signature K.O. ≈ 1.0 s instead of 1.2 s). Non-lethal numbers keep ≥ 450 ms. |
-| K.O. | 600 (+300 per extra K.O. in the beat) | Flash + stamp at 90, dissolve 170–590. Absorbed `move-skip` adds nothing. |
+| K.O. | 500 (+300 per extra K.O. in the beat) | Flash + stamp and line at 90, dissolve 150–480. Absorbed `move-skip` adds nothing. |
 | Voluntary / relay switch | 700 (+250 add-on) | Recall 180, empty 60, drop and land. |
 | Replacement | 400 (+250 add-on) | Enters an empty pad: no recall; the drop lands at 165. |
 | Cut-in | perfect-relay 600, trainer-command 700, ace 900 (+250 add-on) | |
-| Chip `tick` / `effects` / `skip` | 500 / 300 / 0 | |
+| Chip `tick` / `effects` / `skip` | 500 / 300 / 0 | A lethal tick: 120 (`lethalTick`): its number lands at 80 and the K.O. beat takes over 40 ms later, as after a lethal action. |
 | End | 0 | The finale is the outro (§6.7), not the turn. |
 | **Reduced motion** | every beat 450; action +150 per extra hit; skip and end 0 | Readout beats ≥ 450 ms; cosmetic time (cut-in, travel, hit-stop, add-on) is 0. |
 
@@ -203,11 +205,13 @@ deadline, so the next line never shows over them), and a beat ends no earlier th
 rarely binds (a tick's number lands at 80 of its 450); at ×2 it stretches short beats instead of letting the text overlap
 the next beat; holding divides it by `HURRY_RATE` with everything else. Turn pacing proof:
 `test/beats.test.js` runs seeded AI battles (the turn window = the turn plus the enemy's free replacement) and asserts
-median ≤ 2.4 s and p90 ≤ 3.5 s; measured nominal values are median ≈ 1.95 s and p90 ≈ 2.9 s across
-Apprentice/Standard/Champion mixes (K.O. 600, replacement 400). The remaining margin is the director's only overhead
-allowance (`timing.mjs` phone ×1 must still read median ≤ 2.4 s, p90 ≤ 3.5 s). The worst Signature turn, an enemy hit
-with a chip, a lethal `continental_divide`, its K.O., a burn tick and the enemy's replacement, measures ≈ 3.45 s at ×1 on
-the phone profile (360×800, 4× CPU).
+median ≤ 2.4 s and p90 ≤ 3.5 s; measured nominal values are median ≈ 1.9 s, p90 ≈ 2.8 s and p99 ≈ 3.5 s across
+Apprentice/Standard/Champion mixes (K.O. 500, lethal tick 120, replacement 400). The remaining margin is the director's
+only overhead allowance (`timing.mjs` phone ×1 must still read median ≤ 2.4 s, p90 ≤ 3.5 s). On the phone profile
+(360×800, 4× CPU, stage re-fits included) the double-K.O. chain (an enemy Signature, a lethal hit, its K.O., a lethal
+burn tick, the second K.O. and the enemy's replacement) measures ≈ 3.3 s tap → replacement sheet and the Signature clash
+turn ≈ 3.3 s. The nominal tail above 3.5 s (≈ 1 % of turns) is a Signature clash or K.O. chain followed by the rival's
+Ace cut-in or a Signature relay switch.
 
 ### 3.5 FX randomness
 
@@ -350,7 +354,8 @@ never reads `state.rngState`.
 - **Contact routine** (per hit, at the timeline's `contact` cue): `session.cues.emit('contact')`;
   `clock.hitStop(TIERS[tier].hitStopMs)` (hits ≥ 2: `min(hitStopMs, 40)`; none under reduced motion);
   target `react('hit')` + `react('knockback', { px: TIERS[tier].knockPx })`; `arena.punch(target, TIERS[tier])`; impact
-  emitters; then the readout: the target's block (started now), `drainHp(target, from, to, clock.realMs(450))`, the
+  emitters; then the readout: the target's block (started now), `drainHp(target, from, to, clock.realMs(450))` (100 when
+  the blow empties the bar), the
   stamp cues (every fresh kind), the block's one stamp and, at the same instant, the narration's emphasis (§6.3),
   `readout` cue, combo tag on hit 1, barrier "absorbed N" on the same number when `hit.barrierHit`. The shown stamp is the
   first of `miss`, `blocked`, `effective`, `resisted`, `critical` in `beat.stamps` (type effectiveness is the lesson the
@@ -366,23 +371,27 @@ never reads `state.rngState`.
   (`status.countering`), Cuir de ronces, or the damage move whose side effect it is (drain, recoil, its barrier); a
   support move's own heal or barrier needs none.
 - **Surges**: advanced and patched when the beat's readout plays; never wait.
-- **K.O.** (KoBeat, 600: `BEAT_TIMELINES.ko`): a lethal action's handed-over readouts retire at the beat start; per K.O.
-  `react('ko')` + `ko` cue, `arena.shot('ko', { side })`, `arena.cheer()` at 60, the softened screen flash (§9.6),
-  `react('faint', { ms: 420 })` + `faint-cry` at 170, the `battle.koStamp` stamp on the fallen creature at 90 (the
-  narration line `battle.ko` already reads "X est K.O. !", so it takes no emphasis), HUD team balls. The stamp retires
-  before the beat ends, so a replacement never drops under it; `shot('cut')` at the next beat.
-- **Switch**: `react('recall')` (not for replacements) → empty 60 ms → `await route.patchFighters(view)` → `react('enter')` →
-  "X, à toi !" banner → HUD patch on landing (±50 ms of the landing).
+- **K.O.** (KoBeat, 500: `BEAT_TIMELINES.ko`): a lethal action's or tick's handed-over readouts retire at the beat start;
+  per K.O. `react('ko')` + `ko` cue, `arena.shot('ko', { side })`, `arena.cheer()` at 60, the softened screen flash
+  (§9.6), `react('faint', { ms: 330 })` + `faint-cry` at 150, the `battle.koStamp` stamp on the fallen creature at 90
+  with the narration line `battle.ko` ("X est K.O. !", no emphasis), HUD team balls. A blow that empties an HP bar
+  drains it in `LETHAL_DRAIN_MS` (100) instead of 450, so the bar reads 0 before the stamp and the line land. The stamp
+  retires before the beat ends, so a replacement never drops under it; `shot('cut')` at the next beat.
+- **Switch**: `react('recall')` (not for replacements) → empty 60 ms → swap: the plate names the newcomer and the line
+  "X entre en jeu !" lands, `await route.patchFighters(view)` → `react('enter')` → "X, à toi !" banner → HUD patch on
+  landing (±50 ms of the landing). One ✦ number at a time: when a Perfect Relay card follows for the same side, the
+  pill drops its switch bonus and the card carries the relay's (+6, the lesson).
 - **Signature**: cut-in band (§9.6) then the tier-3 timeline; `signature-cutin` cue; the first ActionBeat with `clash` shows
-  the split clash band instead.
+  the split clash band instead, and the answering Signature (`clashAnswer`) plays no band of its own.
 
 ### 6.3 Narration and log
 
 - One narration line per beat that carries news: ActionBeat (`battle.action.move`), KoBeat (`battle.ko`), SwitchBeat
   (`battle.action.switch` / `battle.immaculateRelay`), CutInBeat (existing relay/command/Ace keys), tick ChipBeat
   (`battle.action.tick`), EndBeat (`battle.logEnd.*`). Chip rows, surges and readouts add no line (≈ 2 lines per turn).
-  `route.narrate(text, { minMs: min(clock.realMs(budget), clock.realFloorMs(READOUT_FLOOR_MS)) })` at beat start (§11.4)
-  returns the line's handle; the emphasis joins it **at the contact**, when the stage stamp lands:
+  The line lands with its stage event: a switch's at the swap, a K.O.'s with its stamp, any other at its beat start:
+  `route.narrate(text, { minMs: min(clock.realMs(rest of the beat), clock.realFloorMs(READOUT_FLOOR_MS)) })` (§11.4)
+  returns the line's handle (the journal entries still land at beat start); the emphasis joins it **at the contact**, when the stage stamp lands:
   `route.emphasizeNarration(handle, emphasis)` with the shown stamp's text (`battle.hitEffective`, `battle.hitWeak`,
   `battle.critical`, `battle.missCallout`, `battle.blocked`). The narration never
   announces a hit before its contact, and text and stage always show the same stamp.
@@ -417,19 +426,25 @@ fighters) and `first: true`; otherwise `first: false` and the HUD glint only (3D
 
 `playIntro(session)`: portrait VS stack (3C-2 banner, 850 ms) over `arena.shot('intro')` (1.2 s), both leads
 `switch-in` cues with `source: 'intro'`, then the arena weather banner ("Forge du volcan : Feu +20 %, Plante −20 %",
-omitted for Crystal, 700 ms) starting at 850 ms, exactly when the VS stack is gone. Layers are sequenced, never
-cross-faded in place: the plates stay hidden under `battle-intro` and slide in only after the VS cards have left
-(Crystal hands over at 850 ms), and the weather pill drops in solid over the top row (§9.6). Total 1.55 s at ×1
-(tap → controls ≈ 1.8 s with the arena load, under the 2.0 s budget); reduced motion: static VS 300 ms + weather banner
-450 ms; `?animations=0`: returns `true` immediately. Returns `false` if the session died. Holding the stage hurries it (§6.5).
+omitted for Crystal, 700 ms) starting at 850 ms, exactly when the VS stack is gone. The intro plays in the turn's room
+(§11.2: the battle screen is built in `'turn'` mode and locked, so the arena fits once). Layers are sequenced, never
+cross-faded in place: the player's VS card leaves first (gone at 0.62 of the stack) before the camera lowers onto the
+near pad and its creature rises into view under it; the plates stay hidden under `battle-intro` and slide in only after
+the VS cards have left (Crystal hands over at 850 ms), and the weather pill drops in solid over the top row (§9.6).
+Total 1.55 s at ×1 (tap → controls ≈ 1.8 s with the arena load, under the 2.0 s budget); reduced motion: static VS
+300 ms + weather banner 450 ms; `?animations=0`: returns `true` immediately. Returns `false` if the session died.
+Holding the stage hurries it (§6.5).
 
 ### 6.7 Outro
 
-`battleOutroFx(state)`: keeps `screen.classList` `battle-outro` while it runs (e2e hook), then plays
+`battleOutroFx(state)`: gives the stage the whole screen (`route.restage('full')`, §11.2) and keeps `screen.classList`
+`battle-outro` while it runs (e2e hook), then plays
 `BEAT_TIMELINES.victory` / `.defeat` (1.6 s). Victory is the winner's hero moment: `victory` cue, `arena.shot('victory',
 { side: winner })` (the camera turns to the winner and pushes in, §7.4), `arena.cheer(1.5)` then a second roar at
 700 ms, a gold flash and court ring, a warm spotlight rising behind the winner (`beamQuad` with `back`), three hops, and
-three confetti fountains (`burst` with `staggerMs`, §9.3: ≈ 0.4 s of confetti on Low, ≈ 0.9 s on High). "VICTOIRE !" enters
+confetti: a pop of paper squares and ribbons (`solid` cells, `flutter`, §9.3) out of the winner, then a flutter of them
+falling over the whole upper stage (`band`). The fountains are quality-scaled: Low about 8 + 7 pieces over 0.5 s, High
+about 18 + 15 over 1.1 s. "VICTOIRE !" enters
 at 200 ms, once the plates (faded by `battle-outro`) are gone, and stays ≥ 800 ms. Defeat is dignified: no confetti,
 cheer or shake; the rival hops once and "Défaite… Bien joué !" enters at 200 ms over the fainted player's pad. Then a
 quick clean `.battle-exit` fade (opacity only, 180 ms; 150 ms reduced; floor time: the director sets the layout's
@@ -456,7 +471,9 @@ new ArenaScene(canvas, theme, { quality, governor = null, reducedMotion = false,
 - Writes `--arena-sky-top`, `--arena-sky-bottom`, `--arena-accent` on the closest `.battle-screen` at construction, for 3D's
   static CSS plate behind the HUD zones.
 - Public read-only fields (tooling and gates rely on them): `renderer`, `scene`, `camera`, `canvas`, `fighters` (§8),
-  `fx` (§9), `paused`, `disposed`.
+  `fx` (§9), `paused`, `disposed`, and `ready` (§7.7): `Promise<boolean>` that resolves once the arena's plate and court
+  are on the GPU (painted or procedural), `false` if disposed first. The controller awaits it with `patchFighters` before
+  the intro.
 
 ### 7.2 Methods
 
@@ -467,14 +484,14 @@ new ArenaScene(canvas, theme, { quality, governor = null, reducedMotion = false,
 | `worldAnchor(side, point = 'center', out?)` → `THREE.Vector3` | **Live** world position of `'feet' \| 'center' \| 'head'`, including the fighter's current reaction offset. Used by the FX layer. |
 | `setClock(clock \| null)` | Choreography time source (§7.5). |
 | `shot(name, { side, duration })` → `Promise<boolean>` | §7.4. |
-| `punch(targetSide, { kick = 1, shakePx = 0, shakeMs = 0 } = {})` | Impact punch: a snap push-in of `kick × 5 %` (share of size) toward a point 85 % of the way from the other fighter's rest centre to the target's, plus a `kick × 0.7°` roll toward the attack, both decaying on clock time (rate 10.5/s, frozen by hit-stops), and a screen shake of `shakePx` CSS px for `shakeMs` virtual ms. A push re-aims the camera part of the way at its point and narrows the fov (no dolly), so the target moves toward the frame centre, never out of it: at a Signature contact (`kick` 2.2 after the `lean`) ≥ 95 % of the target's box stays in frame on every layout. No-op under reduced motion and `?animations=0`. |
+| `punch(targetSide, { kick = 1, shakePx = 0, shakeMs = 0 } = {})` | Impact punch: a snap push-in of `kick × 5 %` (share of size) toward a point 85 % of the way from the other fighter's rest centre to the target's, plus a `kick × 0.7°` roll toward the attack. Both hold through the hit-stop and then decay on clock time (rate 8/s, an ≈ 87 ms half-life). A screen shake of `shakePx` CSS px runs for `shakeMs` virtual ms. A push re-aims the camera part of the way at its point and narrows the fov (no dolly), so the target moves toward the frame centre, never out of it. At a Signature contact (`kick` 2.2 after the `lean`), and at the strongest plain hit (a super-effective critical, capped at `kick` 2), ≥ 95 % of the target's box stays in frame on every layout. No-op under reduced motion and `?animations=0`. |
 | `setGrade({ saturation = 1, exposure = 0, contrast = 1 } = {}, { ms = 0 } = {})` | Colour-grade target for stage and fighter materials (not the FX layer), tweened over `ms` virtual ms, persistent until changed. Ranges: saturation 0–2, exposure −1…1 (colour × (1 + exposure)), contrast 0.5–1.5 around 0.5. Combined with the tension grade. Replaces every canvas CSS filter and the cinematic dims (Signature cut-in: `exposure −0.35`). Reduced motion: applied instantly. `?animations=0`: ignored. |
 | `cheer(strength = 1)` | Crowd flash-bulbs (pool: low 12, mid/high 20), fired on super-effective hits, K.O. and victory. No-op under reduced motion and `?animations=0`. |
 | `setBattleState({ tension = 0, showdown = false })` | Unchanged signature; drives the tension grade, motes and showdown framing. |
 | `setPaused(paused)` | Unchanged Phase 1 semantics: one final frame, then no rendering until resumed. Also calls `fighters.setPaused` / `fx.setPaused`. Does not pause the clock (§11.5 pairs them). |
 | `setQuality(quality)` | Unchanged: frame caps, DPR, motes, FX budget now; MSAA with the next arena. Re-runs `fitToStage` with the last rect. |
-| `warmUp()` → `Promise<boolean>` | Compiles every program (stage, fighters, FX layer, hidden pools), awaits `fx.ready`; `false` if disposed first. |
-| `stats()` → `{ draws, triangles, programs, drawingBuffer: [w, h], pixelRatio, fxLive, fxPeak }` | Gate probe; renders nothing extra. |
+| `warmUp()` → `Promise<boolean>` | Awaits `ready`, compiles every program (stage, fighters, FX layer, hidden pools), awaits `fx.ready`; `false` if disposed first. |
+| `stats()` → `{ draws, triangles, programs, drawingBuffer: [w, h], pixelRatio, fxLive, fxPeak, stage: { plate, court } }` | Gate probe; renders nothing extra. `stage.plate` / `stage.court`: `'painted'`, `'procedural'` (fallback) or `null` before `ready`. |
 | `dispose()` | Unchanged: stops the loop, detaches the governor, disposes fighters, FX, geometries, materials, textures, `forceContextLoss()`. |
 
 **Removed** (clean cutover): `burst()`, `flash()` and the `arena-hit` / `arena-power` canvas classes (replaced by `fx.emit`,
@@ -551,6 +568,35 @@ drives ambient motion only (motes, crowd, idle breathing). Without a clock, chor
   land a whole number of device px per texel when the drawing buffer is not rescaled (the range passed to `setLayout` pins
   the result).
 - Landmark visible in the upper stage at 360×800, 412×915, 800×360 and 1440×900.
+
+### 7.7 Painted plates (5A)
+
+Each arena ships a painted backdrop plate and court under `assets/arenas/<id>/` (`plate.webp` 2048×512, `court.webp`
+1024², ≈ 45–95 KB each), baked offline by `node tools/generate-arena-plates.mjs` (Playwright's Chromium, Canvas 2D, 2×
+supersampled, seeded by `art/arena-briefs/<id>.json`; provenance, sizes and hashes in `assets/arenas/manifest.json`).
+They use the runtime painter's exact layout (`painter.js`: azimuth ±`PLATE_AZ`, elevation `PLATE_EL_MIN…PLATE_EL_MAX`,
+floor line `FLOOR_EL`, crowd band `CROWD_BAND`, court disc inscribed in the square with x along the pad axis), so the
+crowd wave, twinkles, flash-bulbs, floor seam and reflections line up with either source.
+
+- **Loading.** The constructor starts `loadStage()`: `fetch` + `createImageBitmap` (`imageOrientation: 'flipY'`, no
+  premultiply or colour conversion) off the main thread, raced against a 1.5 s deadline. Each image that is missing,
+  fails to decode or is late is painted by `paintBackdrop` / `paintCourt` instead (a `console.warn`, never an error
+  screen). The stage group (backdrop, floor, pads, motes, shafts) stays hidden until both textures are uploaded
+  (`renderer.initTexture`); the decoded bitmaps are then closed, so only the GPU textures stay resident, and `dispose()`
+  frees them on leave.
+- **Resolution.** Chosen from the framing, not the plan's 2048×1024: the band spans 150° × 28°, and at rest 360×800 High
+  (DPR 2) shows ≈ 24.6 device px per degree, so a 2048×512 plate texel covers 1.8 × 1.4 device px, finer than the
+  rival's 2.6 px creature texel (player 3.5 px); 1024 rows would only be minified away (1.46 texels per px on High,
+  2.9 on Low). The court keeps 1024² (texels 2–4× magnified near the camera, which suits a soft floor).
+- **Tiers and memory.** One asset set for every tier: plate + court = 10.7 MiB with mipmaps, exactly the procedural
+  canvases' footprint, and only the current arena is resident. A half-res Low variant was rejected: at DPR 1 its plate
+  texel (1.8 px) would be coarser than the rival's creature texel (1.3 px) for a 4 MiB saving the budget does not need.
+- **Art rules.** Soft painted world under crisp sprites. The band behind the fighters (azimuth −16…18°, floor line to
+  10°) stays calm: its local contrast is 30–42 % lower than the procedural plate's, and its mean value sits at or below
+  the sprites' (grove, the golden arena, is the one lighter sky). Bright accents live above the rival's head; each
+  landmark's hero element sits upper-centre, slightly right, so portrait phones see it beside the rival's plate.
+- **Regenerating.** Edit the painter in the tool or the brief, re-run the tool (it rewrites the WebPs and the manifest),
+  then re-check the contact sheets in colour and greyscale.
 
 ---
 
@@ -667,13 +713,18 @@ creature sheet that plays one move on the battle's own stack. Nothing below the 
 
 ```js
 arena.fx = new FxLayer({ scene, worldAnchor: (side, point, out) => arena.worldAnchor(side, point, out),
-  quality, reducedMotion, testAnimationScale });
+  texelWorld: (side) => arena.fighters.texelWorld(side), quality, reducedMotion, testAnimationScale, wake });
 ```
 
 One `THREE.InstancedMesh` of camera-facing quads (billboarded in the vertex shader), one 1024² atlas, one custom
-`ShaderMaterial` (per-instance colour, uv cell, age/life, blend, hot core), CPU integration with a fixed 1/60 s step in
-preallocated `Float32Array`s: one draw call, no per-frame allocation. The material is double-sided in a single pass
-(`forceSinglePass`): court decals and mirrored art wind clockwise on screen and must not be culled.
+`ShaderMaterial` (per-instance colour, uv cell, age/life, blend, hot core, texel size), CPU integration with a fixed
+1/60 s step in preallocated `Float32Array`s: one draw call, no per-frame allocation. The material is double-sided in a
+single pass (`forceSinglePass`): court decals and mirrored art wind clockwise on screen and must not be culled.
+
+**Warm draw.** `warmUp` compiles the program; until one frame has drawn it with the atlas bound, an invisible quad
+(alpha 0: it samples the atlas, then discards) rides at the end of the batch, and the atlas decode wakes the arena for
+that frame. Battle entry therefore pays for the texture upload and the GPU pipeline and sampler builds, not the first
+contact. Before this, a SwiftShader Chromium under load stalled 0.6–1.0 s on the first turn's first FX draw.
 
 ### 9.2 API
 
@@ -708,15 +759,19 @@ Common options:
 - `front: true` (`burst`, billboard `ring`): drawn in front of every fighter (a melee blade arc over the attacker that
   lunged in front of its target). `back: true` (`burst`, billboard `ring`, `pillar`, `beamQuad`): pushed 0.35 h behind
   the anchor, so the fighter's opaque texels hide it and large identity art (HEX seal, WAVE crest, QUAKE spires, LOB
-  splash, the victory spotlight) frames the creature and never hides its hit reaction. Every quad otherwise carries a
-  small depth bias toward the camera; the bias moves it along its view ray, so it changes the depth test only, never the
-  screen footprint.
+  splash, the victory spotlight) frames the creature and never hides its hit reaction. On a `streak`, `back` makes it
+  land behind its target: its bias eases over the travel, like its size, from in front of the emitter to 0.35 of the
+  target's h behind the target. The rolling WAVE crest uses this; with the far attacker's h it used to arrive in front
+  of the near player and cover it through the hit-stop. Every other quad carries a small depth bias toward the camera.
+  The bias moves a quad along its view ray, so it changes only the depth test, never the screen footprint.
+- `cell: 'solid'`: a flat rectangle in its colour, with no atlas art (confetti). `colors: ['#rrggbb', …]`: each quad
+  picks one.
 
 Positions resolve through `worldAnchor` at emit time; `orbit` and `trailFollow` re-resolve every update.
 
 | Emitter | Extra options (defaults) | Shape |
 | --- | --- | --- |
-| `burst` | `speed: 1.2, spread: 2π, gravity: 0.8, drag: 0.9, offset: 0.08, sizeJitter: 0.8, grow: 0.35, fade: 0.5`; `stretch`, `face`, `rot`, `rotJitter`, `spin`, `staggerMs` | Radial explosion from the anchor. `offset`: start distance (h); `grow`: end size / start size; `fade`: fraction of life spent fading out (life jitters 70–100 %); `stretch` > 0: velocity-stretched streaks. `face: 'away' \| 'toward'` aims the cone along the attack and mirrors the art (and its `spin`) when the attack runs left. `rot` ± `rotJitter` / 2 fixes the orientation, `spin` in rad/ms; without `rot` quads tumble. `staggerMs`: a fountain, one quad every `staggerMs` from the live anchor, so it lasts `count × staggerMs` (longer on High, shorter on Low). |
+| `burst` | `speed: 1.2, spread: 2π, gravity: 0.8, drag: 0.9, offset: 0.08, sizeJitter: 0.8, grow: 0.35, fade: 0.5`; `stretch`, `face`, `rot`, `rotJitter`, `spin`, `staggerMs`, `aspect`, `band`, `flutter`, `sway` | Radial explosion from the anchor. `offset`: start distance (h); `grow`: end size / start size; `fade`: fraction of life spent fading out (life jitters 70–100 %); `stretch` > 0: velocity-stretched streaks. `face: 'away' \| 'toward'` aims the cone along the attack and mirrors the art (and its `spin`) when the attack runs left. `rot` ± `rotJitter` / 2 fixes the orientation, `spin` in rad/ms; without `rot` quads tumble. `staggerMs`: a fountain, one quad every `staggerMs` from the live anchor, so it lasts `count × staggerMs` (longer on High, shorter on Low). `aspect`: width / height (ribbons). `band: [lo, hi]`: spawn anywhere across the stage width between those screen heights (−1 bottom … 1 top) at the anchor's depth, instead of at the anchor (confetti over the upper stage). `flutter` (rad/ms): the quad flips (width follows \|cos\|, its back shaded 0.6) and sways `sway` h sideways, like falling paper. |
 | `ring` | `r0: 0.1, r1: 0.7`; `flat` | One ring quad expanding in the fighter plane; `flat: true` lays it on the court (a shockwave around the feet). |
 | `streak` | `travelMs: 180, length: 0.45, arc: 0`; `upright`, `grow` | Stretched quads from `side`/`at` to `to` (bolts, projectiles); `arc` lifts the path (h at mid-flight). `upright: true`: an upright sprite standing on its path (a rolling crest), mirrored to face the travel direction, swelling by `grow`. |
 | `beamQuad` | `width: 0.18, scroll: 2, grow: 0.35, fadeIn: 60`; `sky` | A strip from the anchor to `to`, each end at its own depth and as wide as its fighter's scale, overshooting by half a width; a scrolled cell tiles every ~2 widths (`beam` cell). Two quads: the tube and a fully additive white core (0.4 width). `sky`: lifts the tail `sky` h straight up, a column falling onto `to` (RAIN) or rising from it (negative `scroll`: BOOST, HEAL). |
@@ -732,6 +787,16 @@ non-persistent quads are recycled; persistent status loops are never stolen. Are
 screen area (stage viewports; beams as their projected trapezoid, court decals foreshortened by the angle between the
 court and the view ray, travelling quads at their scaled size); above `quality.fx.quadArea` (§14) every quad shrinks by
 the same factor `√(budget / area)`, so fill cost stays bounded without changing the composition.
+
+**Drawn at the creatures' texel size.** The atlas is the high-resolution source. On screen, every quad is resampled
+to its fighter's sprite texel (`FighterLayer.texelWorld(side)`, eased from the emitter's fighter to the target's on
+travelling quads). The fragment shader cuts the quad into creature-sized texels across its current world extent. Each
+texel is flat: the atlas is sampled at its centre over half its footprint. Its coverage is quantised to eighths
+through a 4 × 4 ordered dither. So a cell reads as pixel art beside the creatures at any stamped size (a 0.1 h spark
+and a 3 h shock ring alike), with hard texel edges and dithered, never smooth, falloffs. A texel smaller than about one
+screen pixel falls back to smooth sampling. A static per-cell repaint could not do this: `glow`, `ring`, `rune`,
+`ember`, `bubble`, `spike` and `shield` are stamped anywhere from 0.14 h to 1.7 h. Before, the pixel cells stepped at
+2–3 screen px next to 4–5 px sprites, and the light cells were smooth gradients.
 
 ### 9.4 Atlas cells (3C-2 authors the image, both units use these names)
 
@@ -813,6 +878,11 @@ palette and geometry disjointness stays.
 | `kick` (punch) | 0.6 | 1 | 1.4 |
 | `quadScale` | 1 | 1.5 | 2 |
 
+Plain punches (`punchKick(cue, tier, hit)` in choreo.js, applied by the director to each landed hit) scale the kick by
+what the hit meant, using `PUNCH_FEEL`: × 0.6 when resisted or barrier-blocked, × 1.2 when neutral, × 1.8 when
+super-effective, and × 1.5 more on a critical, capped at 2. For a T1 move that gives a push of 1.8 % (resisted),
+3.6 % (neutral), 5.4 % (super-effective) and 9–10 % (critical). Signature (`sig`) punches keep their authored kick.
+
 Quality scaling on top (director): quads × low 0.6 / mid 1 / high 1.4, shake × low 0.6; `FxLayer` still clamps to the
 tier budget.
 
@@ -850,7 +920,7 @@ Cue = { at: number /* virtual ms from beat start, authored for T1 */, op: string
 | `fighter` | `who, reaction`, reaction options (§8.2) | `arena.fighters.react` |
 | `emit` | `emitter, from: who, at, to?: { who, at }, cell` (or `'motif'` → `MOVE_FX.motif`), `q` (count before tier/quality scaling), emitter options | `arena.fx.emit` (seeded by the hit/beat seed) |
 | `shot` | `name, who?, ms?` | `arena.shot` |
-| `punch` | `kick?, shakePx?, shakeMs?` (defaults from `TIERS`) | `arena.punch` |
+| `punch` | `kick?, shakePx?, shakeMs?` (defaults from `TIERS`; per-hit plain punches × `PUNCH_FEEL`, §10.2) | `arena.punch` |
 | `grade` | `saturation?, exposure?, contrast?, ms` | `arena.setGrade` |
 | `cheer` | `strength?` | `arena.cheer` |
 | `contact` | – | Director contact routine for the current hit (§6.2) |
@@ -895,10 +965,19 @@ pooled nodes on first use. Stacking inside the stage: canvas < proxies < `#fx-te
 
 ### 11.2 Stage geometry (3D)
 
-At 360×800 `.battle-stage` is ≥ 420 CSS px tall (≥ 470 at 412×915); landscape = stage left + 304 px dock right; the stage
-rect **does not change** when the dock swaps to the narration box (no re-fit mid-turn), nor between turns in any language:
-every dock row has a fixed height (a tile's forecast row never wraps; its effectiveness pill breaks inside itself onto two
-12 px lines; the expert detail row is always there). Plates sit in the corners opposite
+At 360×800 `.battle-stage` is ≥ 420 CSS px tall at choice time (≥ 470 at 412×915); landscape = stage left + 304 px dock
+right. **Stage room** (`route.restage(mode, update)`, hud.js; `data-stage` on the screen): `'choice'` (the command dock),
+`'turn'` (portrait: the dock shrinks to the 62 px slim narration bar while a turn plays, the intro included, and while a
+K.O.'d creature's replacement is picked; 360×800: 479 → 662 px stage) and `'full'` (the outro: the top row and the bar
+fade out over a full-screen stage, landscape folds the dock column away). A mode change lays the screen out once and
+re-fits the arena once, synchronously (`fitToStage`; its ResizeObserver then finds the rect unchanged; ≈ 3–7 ms at 4–6×
+CPU on Low), so a turn costs two re-fits (grow at the lock, shrink when control returns) and never one mid-turn. The
+canvas, the player's plate and the dock then glide from where they were (WAAPI `transform`, 300 ms, id `restage`,
+`.restaging` lets a shrinking stage paint down to the rising dock; none under reduced motion or `?animations=0`): the
+canvas scales (≥ 1, so it always covers what the screen showed) and moves so the re-fitted fighters stand where they
+stood. Readout keep-out boxes are layout boxes (transforms ignored). The stage never re-fits between turns in any
+language: every dock row has a fixed height (a tile's forecast row never wraps; its effectiveness pill breaks inside
+itself onto two 12 px lines; the expert detail row is always there), and the bar never grows. Plates sit in the corners opposite
 their creature (enemy plate top-left, player plate bottom-right) and may overlap the stage edges; they never cover a fighter's
 rest bbox (check against `--*-x/y` and `--*-size`). A plate's status chips have their own slot in its second row, between
 the level tag and the HP number (the player plate drops its level tag while chips show): `hud.js` folds whatever does not
@@ -923,10 +1002,11 @@ outside the stage.
 ### 11.4 Narration box
 
 `narrate(text, { emphasis = null, minMs = 0 } = {})` → line handle (`null` while unlocked): while `ctx.locked` the dock is
-replaced (transform/opacity only; reduced motion swaps instantly) by the narration box, which **is `#action-line`**
-(`role="status" aria-live="polite"`, a raised indigo `--bg-2`→`--bg-1` panel with a ledge, 20 px `--ink` text, names bold,
-moves cyan, emphasis 26 px display line in its tone rendered inside the same element so its
-`textContent` contains both). A line keeps the box for its own `minMs`; newer lines queue behind it in order and none is
+replaced by the narration box, which **is `#action-line`** (`role="status" aria-live="polite"`, a raised indigo
+`--bg-2`→`--bg-1` panel with a ledge, names bold, moves cyan, the emphasis in its tone rendered inside the same line so
+its `textContent` contains both). Portrait: the slim bar, two lines of 18 px (a longer line takes `data-fit="tight"`,
+16 px), the emphasis inline; landscape: a card at the top of the dock column, 20 px text, the emphasis a 26 px display
+line. A line keeps the box for its own `minMs`; newer lines queue behind it in order and none is
 ever skipped (a K.O. line always shows). While two or more lines wait, each keeps the box for 250 ms at most, so the text
 catches up with the stage. `emphasizeNarration(handle, emphasis)` adds, swaps or (`null`) removes the emphasis of that
 line in place (only the emphasis is announced), or carries it on the line while it waits. `?animations=0` ignores `minMs`.
@@ -958,9 +1038,80 @@ the dock returns.
   4B team-select pick). `victory` / `defeat` cues are on-stage accents; the fanfares stay `sound.victory()` /
   `sound.defeat()` from results.
 - `sound.setBattleState(view)` is called by 3D's HUD patch with the presented view (hysteresis inside sound.js; at most a
-  one-time low-HP cue).
+  one-time low-HP cue). It drives the arena's tension stem (§12.1).
 - Outside battle playback only UI sounds remain: `call` (team-select and Pioche du jour picks) and `hit` (the results
   stamp). The Move Theater plays through cues like a battle (§8.5).
+
+### 12.1 Music (5C, baked)
+
+- **Files.** `assets/music/<theme>.ogg` (Ogg Opus, 64 kb/s stereo) for the eleven themes of `MUSIC_TRACKS`
+  (`src/sound.js`; screens map through `SCREEN_THEME_MAP`, battles through `resolveThemeId('battle:<arena>')`), plus
+  `assets/music/<arena>-tension.ogg` (40 kb/s mono) for each of the six arenas. They ship in the service-worker precache
+  (`tools/build.mjs` STATIC_DIRS). Each file decodes to `[margin][loop][margin]`: the margins
+  (`MUSIC_LOOP_MARGIN_SECONDS` = 0.1 s) are the loop's own wrap-around audio, so the loop points are
+  `[margin, duration − margin]` at any context sample rate, and the Ogg tags `LOOPSTART` / `LOOPLENGTH` record them
+  in 48 kHz samples (`test/audio.test.js` checks every shipped file against that rule and the memory budget).
+- **Playback.** One player per theme (`startMusic` → `loadMusic` → `playMusic`): only the current theme is fetched and
+  decoded; changing theme releases the old player (0.22 s fade, sources stopped, buffers dropped) before the new one
+  decodes, and a theme left before its decode never starts. Every stem is an `AudioBufferSourceNode` looping
+  `[margin, duration − margin]`, all started at one audio-clock time and offset, so the tension stem stays
+  sample-locked to the base. Base stem → player bus (0.6 s fade-in) → `musicLevel` → `musicDuck` → master; tension stem →
+  player bus → `tensionLevel` → `musicLevel`. The stems carry their reverb, so the music slider, mute, theme fades,
+  tension and `duck()` shape the whole music signal; there is no runtime music reverb or note scheduler.
+- **Tension.** `setBattleState(view)` computes `calculateTension` from the presented view; a change of at least 0.08
+  moves the tension stem's level, which glides (1.2 s time constant) from silent at tension ≤ 0.2 to full at ≥ 0.7.
+  Leaving battle resets it to silent.
+- **Budget.** Decoded music of one screen (all its stems, 48 kHz float) is ≤ 24 MiB; `sound.musicBytes()` reports what
+  the current player holds (`tools/perf/audio-probe.mjs`, `memory-leak.mjs`).
+- **Failure.** A missing file (offline before the precache completed) or a browser that cannot decode Ogg Opus leaves
+  the music silent without the audio notice; SFX are unaffected. A silenced music slider or mute releases the decoded
+  theme and fetches nothing until music is audible again. Hiding the page suspends the context: the loop pauses and
+  resumes where it stopped (the SFX session is dropped).
+- **Authoring.** The score is `tools/music/score.js` (motif, harmony, parts and mix per theme; dev-only), voiced by
+  `tools/music/render.js`. `node tools/bake-music.mjs [--only id,…] [--report dir]` renders it in headless Chromium
+  (OfflineAudioContext), masters every base stem to −16 LUFS with a true-peak limiter linked across stems (≤ −1 dBTP
+  after decoding), encodes with WebCodecs Opus and muxes Ogg in `tools/music/ogg.js`. The loop is encoded
+  packet-periodically (the period's packets replayed as pre- and post-roll), so the decoded file is periodic sample for
+  sample: no crossfade and no seam. The tool then decodes every file again and fails on a wrong length or alignment,
+  loudness, true peak, a non-periodic loop, a seam click at 48 or 44.1 kHz, the memory budget, or a motif (1 5 6 2′ 1′)
+  missing from the pitch-tracked lead of the title, an arena or the victory; `--report` writes the metrics, the motif
+  transcription and one spectrogram per file.
+
+### 12.2 Creature cries (5C, `src/sound-cries.js`)
+
+Thirty authored voices, one per creature, synthesised at runtime by `sound.cryVoices(cue, id, variant, { at, gain })`
+(no audio files). Runtime synthesis rather than baked files: the whole table is ≈ 16 KB minified (≈ 4.4 KB gzip) instead
+of 90 Opus files in the precache and their decoded buffers; ×2/hurry trims shorten syllables and gaps at the same pitch,
+which a baked file could only do with extra renders or a chipmunking playback rate; the voices share the SFX room,
+category gain, cue ducking and session fades with every other cue.
+
+- **Profile** (`CRY_PROFILES[id]`): base pitch `f0`, the faint's breath band `breath` (Hz), `layers`, and the variant shapes
+  `effort(pitch, time, bend, bright, grit?)` / `faint(pitch, time, fall, dark)`. A layer is a tone (`wave`, `pitch` = a
+  ratio of `f0` or a contour `[[fraction, ratio], …]`, `steps` for jumps instead of glides) or a noise (`noise`:
+  `white` | `crackle` | `rustle`), with `at`, `dur`, `gain`, `attack`, `hold`, series `filters` `[type, fromHz, toHz, Q,
+  dB]` swept over the layer (`vowel(from, to)` = two formant peaks), `vib` `[rate, depth ratio]`, `am` flutter `[rate,
+  depth]` (purr, rasp, bleat, wing beats), `fm` `[ratio, index]` (glass, metal, bells) and optional `variants` (layers
+  heard only in some variants). Species, size and type choose the palette: big bodies low and slow with growl, small
+  ones chirp; Psy rings, Combat barks, Eau bubbles and gurgles, Feu crackles and hisses, Plante hoots and rustles,
+  Ténèbres breathes, hisses and warbles. Low voices keep their identity in formants inside 0.5–3 kHz (phone speakers).
+- **Variants** (`cryPlan(id, variant)` resolves them to Hz and seconds): `entry` is the score as written; `effort` is
+  higher and tighter (`pitch`, `time` < 1), its contour exaggerated (`ratio ** bend`), brighter filters, sharper
+  attacks, more flutter or an authored `grit`; `faint` is lower and slower, each tone plays its contour in the first 70 %
+  and sags to `fall` × its last pitch, darker filters (a closing low-pass on buzzy waves), softer attacks, slower
+  flutter, and a breath band under it — rounded, never a wail.
+- **Loudness** (`CRY_LEVELS[id] = [entryLevel, effortGain, faintGain]`), measured through the shipped chain at factory
+  sliders: entries −20 ± 0.5 LUFS-M, efforts ≈ −19 (a few transient-heavy voices stay lower rather than feed the
+  limiter), faints ≈ −21, true peak ≤ −3 dBFS, no clipping. A new or re-voiced creature is re-measured with the local 5C
+  harness (gitignored `agents/impl/P5C_Cries/`: `run-renders.mjs`, `analyse.py`, `levels.mjs`), which also checks
+  pairwise MFCC-DTW distinctness and the phone-proxy loss, and draws the spectrogram sheet.
+- **Triggers** (owner decision #26): `switch-in` (intro leads, switches, replacements) → `entry`; `signature-cutin` →
+  `effort` inside the cut-in (0.08 s, gain 0.8); `faint-cry` → `faint`; `sound.call(id)` → `entry` for the team-select
+  pick (300 ms cooldown in `team-select.js`) and the Pioche du jour pick, where a new pick fades the previous pick's cry.
+  Never on ordinary moves. The cue ranking is unchanged (§12): cries are identity cues, so the `faint-cry` plays ducked
+  while the K.O. flash sounds; the effort rides in the impact-tier cut-in. `?animations=0` returns from the intro before
+  its cues (no intro cries); every other cue fires as the instant clock plays it.
+- **Cost**: 18 nodes per entry cry (median; max 24), 21 per faint (max 29), 44 per cut-in with its effort; starting a cry
+  costs 1.1 ms of main thread (median, p90 1.5 ms, worst 2 ms) under a 6× CPU throttle.
 
 ---
 
@@ -997,6 +1148,7 @@ budget.
 | Motes (`quality.arena.dust`) | 60 | 120 | 170 |
 | Floor reflection | off | glossy courts | glossy courts |
 | Crowd flash-bulbs | 12 | 20 | 20 |
+| Stage textures (plate 2048×512 + court 1024², mipmapped) | 10.7 MiB | same | same |
 | **FX live quads** (`quality.fx.quads`) | **96** | **160** | **256** |
 | Summed quad area (`quality.fx.quadArea`, stage viewports) | ≤ 0.6 | ≤ 1 | ≤ 1.5 |
 | Fighter breathing | quantised bob | vertex squash | + sway |

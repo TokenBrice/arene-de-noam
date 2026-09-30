@@ -44,6 +44,7 @@ async function sample(i) {
       contextsNotGCed: held,
       audioLive: s?._nodeCount,
       audioSources: s ? s.musicSources.size + s.sfxSources.size : null,
+      musicDecodedMiB: s ? Math.round((s.musicBytes() / 1048576) * 100) / 100 : null,
     };
   });
   const row = {

@@ -112,7 +112,7 @@ body.high-contrast .academy-status.negative {
   color: #fff;
   background-color: #280713;
 }
-body.high-contrast .status-badge::after,
+body.high-contrast .status-badge-mark,
 body.high-contrast .plate-status::after,
 body.high-contrast .plate-detail-status > i::after,
 body.high-contrast .codex-status > i::after,

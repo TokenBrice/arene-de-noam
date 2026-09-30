@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/nymbloom-clean-2.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/monsters/originals/pre-redraw/nymbloom-battle.png",
+  "reference": null,
+  "seed": 510612,
+  "job_id": "7e775291-2185-4571-921a-75b910dabf1e",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "nymbloom-clean-2-candidate-1.png",
+    "nymbloom-clean-2-candidate-2.png",
+    "nymbloom-clean-2-candidate-3.png",
+    "nymbloom-clean-2-candidate-4.png",
+    "nymbloom-clean-2-candidate-5.png",
+    "nymbloom-clean-2-candidate-6.png",
+    "nymbloom-clean-2-candidate-7.png",
+    "nymbloom-clean-2-candidate-8.png"
+  ]
+}

@@ -33,6 +33,12 @@ const BACK_BIAS = 0.35;
 // √(far / near) of its own height, never below this share.
 const NEAR_CAP_MIN = 0.7;
 const NEAR_CAPPED = new Set(['burst', 'ring', 'pillar', 'rain', 'groundDecal']);
+// `cell: 'solid'`: a flat rectangle in its colour, no atlas art (confetti squares and ribbons).
+const SOLID_CELL = -1;
+// `flutter` quads (confetti) sway sideways at this share of their flip rate, and show their darker
+// back (this shade) while the flip turns it to the camera.
+const SWAY_RATE = 0.45;
+const BACK_SHADE = 0.6;
 
 const MODE_BILLBOARD = 0;
 const MODE_PILLAR = 1; // billboard pivoting on its bottom edge
@@ -81,12 +87,14 @@ attribute vec4 aAxis;  // MODE_STRETCH / MODE_SPAN: world axis from tail to head
 attribute vec4 aColor; // rgb (sRGB), alpha
 attribute vec4 aCell;  // atlas cell, additive, uv scroll (cells/s), hot core
 attribute vec4 aLife;  // age, life, fade-in, fade-out (virtual ms)
+attribute float aTexel; // world size of one sprite texel of the quad's fighter (0: smooth)
 uniform float uAreaScale;
 uniform float uNear;
 uniform float uGrid;
 varying vec2 vLocal;   // 0–1 across the quad (u along the stretch axis)
 varying vec2 vOrigin;  // atlas cell origin
 varying vec2 vTile;    // x: repeats along a scrolled stretch quad (0 = untiled), y: scroll offset
+varying vec2 vGrid;    // creature-sized texels across the quad (u, v); 0 = smooth
 varying vec4 vColor;
 varying float vAdditive;
 varying float vHot;
@@ -97,6 +105,9 @@ void main() {
   float c = cos(aShape.z), s = sin(aShape.z);
   vec4 mv;
   vTile = vec2(0.0);
+  // World extent the texel grid spans, before the area clamp (a clamp shrinks the texels with the
+  // art instead of reflowing them).
+  vec2 extent = abs(aShape.xy);
   if (mode > 3.5) {
     // Span: each end sits at its anchor's depth, so the ray meets both fighters; each end is as
     // wide as its fighter's scale (w = head / tail) and overshoots by half a width (the flares
@@ -109,6 +120,9 @@ void main() {
     mv.xy += (dir * sign(corner.x) * 0.5 * size.x + vec2(-dir.y, dir.x) * corner.y * size.y) * end;
     // A scrolled span tiles its cell every ~2 widths instead of stretching it.
     if (aCell.z != 0.0) vTile = vec2(max(1.0, floor((length(aAxis.xyz) + size.x) / max(1e-4, (1.0 + aAxis.w) * size.y) + 0.5)), aCell.z * aLife.x * 0.001);
+    // Texels: across the tail's width, along the strip at the tail's scale.
+    float tailDepth = max(1e-3, -tail.z);
+    extent.x = length(screen) * tailDepth + 0.5 * extent.x * (1.0 + aAxis.w * tailDepth / max(1e-3, -head.z));
   } else if (mode > 2.5) {
     mv = viewMatrix * vec4(aPos.xyz, 1.0);
     vec2 axis = (viewMatrix * vec4(aAxis.xyz, 0.0)).xy;
@@ -116,6 +130,7 @@ void main() {
     vec2 dir = len > 1e-5 ? axis / len : vec2(1.0, 0.0);
     vec2 perp = vec2(-dir.y, dir.x);
     mv.xy += dir * corner.x * (len + size.x) + perp * corner.y * size.y;
+    extent.x += len;
   } else if (mode > 1.5) {
     vec2 ground = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
     mv = viewMatrix * vec4(aPos.xyz + vec3(ground.x, 0.0, ground.y), 1.0);
@@ -126,6 +141,7 @@ void main() {
     p *= size;
     mv.xy += vec2(c * p.x - s * p.y, s * p.x + c * p.y);
   }
+  vGrid = aTexel > 0.0 ? max(vec2(1.0), extent / aTexel) : vec2(0.0);
   // Depth bias toward the camera (w) moves the quad along its view ray, so only the depth test
   // changes, never its screen footprint; OVERLAY_BIAS pulls it in front of every fighter (the
   // blade arc over a lunging attacker).
@@ -133,7 +149,8 @@ void main() {
   mv.xyz *= pulled / z;
   gl_Position = projectionMatrix * mv;
   float cell = aCell.x;
-  vOrigin = vec2(mod(cell, uGrid), uGrid - 1.0 - floor(cell / uGrid)) / uGrid;
+  // A solid quad (cell < 0) samples no art: its origin carries the flag.
+  vOrigin = cell < 0.0 ? vec2(-1.0) : vec2(mod(cell, uGrid), uGrid - 1.0 - floor(cell / uGrid)) / uGrid;
   vLocal = corner + 0.5;
   float fadeIn = aLife.z > 0.0 ? clamp(aLife.x / aLife.z, 0.0, 1.0) : 1.0;
   float fadeOut = aLife.w > 0.0 ? clamp((aLife.y - aLife.x) / aLife.w, 0.0, 1.0) : 1.0;
@@ -142,11 +159,15 @@ void main() {
   vHot = aCell.w;
 }`;
 
-// Tiled (scrolled) quads wrap u per fragment inside the cell's art span (texels 4.5–123.5, the
-// `beam` cell's period) and sample with the unwrapped gradients, so the wrap never picks a coarse
-// mip. `uLod` < 1 sharpens the mip choice (low tier: half-resolution quads would otherwise sample
-// a mip where the soft cells blur into blocks). `hot` whitens only the brightest texels (the art's
-// lit highlights and glow cores), so pixel cells keep their type colour on the body.
+// The art is drawn at its fighter's sprite texel size (§9.4): the quad is cut into `vGrid`
+// creature-sized texels, each flat (the atlas sampled at its centre over half its footprint), and
+// its coverage quantised to eighths through a 4 × 4 ordered dither, so a cell stamped at any size
+// reads as pixel art beside the creatures, with hard texel edges and dithered (never smooth)
+// falloffs. A texel smaller than about a screen pixel (a tiny far quad) falls back to smooth
+// sampling. Tiled (scrolled) quads wrap u per fragment inside the cell's art span (texels
+// 4.5–123.5, the `beam` cell's period). `uLod` < 1 sharpens the mip choice (low tier). `hot`
+// whitens only the brightest texels (the art's lit highlights and glow cores), so pixel cells keep
+// their type colour on the body.
 const FRAGMENT = /* glsl */ `
 uniform sampler2D uAtlas;
 uniform float uGrid;
@@ -154,25 +175,43 @@ uniform float uLod;
 varying vec2 vLocal;
 varying vec2 vOrigin;
 varying vec2 vTile;
+varying vec2 vGrid;
 varying vec4 vColor;
 varying float vAdditive;
 varying float vHot;
+// 4 × 4 ordered-dither threshold of a texel position, in [0, 1).
+float bayer2(vec2 a) {
+  a = floor(a);
+  return fract(dot(a, vec2(0.5, a.y * 0.75)));
+}
+float bayer4(vec2 a) {
+  return bayer2(0.5 * a) * 0.25 + bayer2(a);
+}
 void main() {
-  vec2 cellUv = vLocal * (1.0 - 2.0 / 128.0) + 1.0 / 128.0, unwrapped = vLocal;
+  vec2 p = vLocal * max(vGrid, vec2(1.0)), texel = floor(p), perPixel = fwidth(p);
+  float pixel = vGrid.x > 0.0 ? 1.0 - clamp(max(perPixel.x, perPixel.y) * 2.0 - 1.0, 0.0, 1.0) : 0.0;
+  vec2 local = mix(vLocal, (texel + 0.5) / max(vGrid, vec2(1.0)), pixel);
+  vec2 cellUv = local * (1.0 - 2.0 / 128.0) + 1.0 / 128.0, unwrapped = local, repeats = vec2(1.0);
   float ends = 1.0;
   if (vTile.x > 0.0) {
-    unwrapped.x = vLocal.x * vTile.x - vTile.y;
+    unwrapped.x = local.x * vTile.x - vTile.y;
     cellUv.x = (4.5 + 119.0 * fract(unwrapped.x)) / 128.0;
-    ends = smoothstep(0.0, 0.05, vLocal.x) * smoothstep(1.0, 0.95, vLocal.x);
+    ends = smoothstep(0.0, 0.05, local.x) * smoothstep(1.0, 0.95, local.x);
+    repeats.x = vTile.x;
   }
-  vec2 grad = unwrapped * (uLod / uGrid);
-  vec4 tex = textureGrad(uAtlas, vOrigin + cellUv / uGrid, dFdx(grad), dFdy(grad));
-  float alpha = tex.a * vColor.a * ends;
+  // Mip footprint: half a texel when pixelated (the art's nearest look at that size, so shapes keep
+  // hard silhouettes while sub-texel details still average in), else the screen pixel.
+  vec2 grad = vLocal * repeats * (uLod / uGrid), footprint = repeats * (0.5 * uLod / uGrid) / max(vGrid, vec2(1.0));
+  vec2 dx = mix(dFdx(grad), vec2(footprint.x, 0.0), pixel), dy = mix(dFdy(grad), vec2(0.0, footprint.y), pixel);
+  vec4 tex = vOrigin.x < 0.0 ? vec4(1.0) : textureGrad(uAtlas, vOrigin + cellUv / uGrid, dx, dy);
+  float coverage = tex.a * ends;
+  coverage = mix(coverage, min(1.0, floor(coverage * 8.0 + bayer4(texel)) * 0.125), pixel);
+  float alpha = coverage * vColor.a;
   if (alpha < 0.004) discard;
   float lum = tex.r / max(tex.a, 1e-3);
-  float hot = clamp(vHot * tex.a * tex.a * smoothstep(0.78, 1.0, lum), 0.0, 1.0);
+  float hot = clamp(vHot * coverage * coverage * smoothstep(0.78, 1.0, lum), 0.0, 1.0);
   vec3 tint = mix(vColor.rgb, vec3(1.0), hot);
-  gl_FragColor = vec4(tint * tex.rgb * vColor.a * ends, alpha * (1.0 - vAdditive));
+  gl_FragColor = vec4(tint * lum * alpha, alpha * (1.0 - vAdditive));
 }`;
 
 const colorCache = new Map();
@@ -239,6 +278,7 @@ const QUAD_FIELDS = [
   'stretch',
   'mode',
   'bias',
+  'biasTo', // travelling quads: depth bias on arrival (eased from `bias` like the travel)
   'cell',
   'additive',
   'scroll',
@@ -262,6 +302,10 @@ const QUAD_FIELDS = [
   // on-screen scale of the fighters it passes by growing to `reach` × its size at the far end.
   'reach',
   'pop', // CURVE_POP: ms to reach full size
+  'texel', // world size of one sprite texel of the quad's fighter (the pixel grid, §9.4)
+  'texelTo', // travelling quads: the target fighter's texel (eased like the travel)
+  'flutter', // flip rate (rad/ms) of a fluttering piece (confetti); 0 = rigid
+  'sway', // its sideways sway (world)
 ];
 
 export class FxLayer {
@@ -270,6 +314,7 @@ export class FxLayer {
   ready;
   #scene;
   #worldAnchor;
+  #texelWorld;
   #reducedMotion;
   #instant;
   #wake;
@@ -285,6 +330,8 @@ export class FxLayer {
   #paused = false;
   #disposed = false;
   #uploaded = false;
+  #warmed = false;
+  #warmQueued = false;
   #serial = 0;
   #emitters = [];
   #attributes;
@@ -298,12 +345,25 @@ export class FxLayer {
   #d = new THREE.Vector3();
   #eye = new THREE.Vector3();
   #viewed = false;
+  // Half-extents of the view at unit depth (tan of the half fovs), from the last drawn camera.
+  #tanX = 1;
+  #tanY = 1;
 
-  // `wake` (optional): ArenaScene's render-loop kick, so a spawn on an idle arena (no ambient
-  // frames under reduced motion) is drawn.
-  constructor({ scene, worldAnchor, quality, reducedMotion = false, testAnimationScale = 1, wake = null }) {
+  // `texelWorld(side)`: world size of one sprite texel of that side's creature (FighterLayer), the
+  // size every quad's art is drawn at. `wake` (optional): ArenaScene's render-loop kick, so a spawn
+  // on an idle arena (no ambient frames under reduced motion) is drawn.
+  constructor({
+    scene,
+    worldAnchor,
+    texelWorld,
+    quality,
+    reducedMotion = false,
+    testAnimationScale = 1,
+    wake = null,
+  }) {
     this.#scene = scene;
     this.#worldAnchor = worldAnchor;
+    this.#texelWorld = texelWorld;
     this.#reducedMotion = Boolean(reducedMotion);
     this.#instant = testAnimationScale === 0;
     this.#wake = typeof wake === 'function' ? wake : null;
@@ -332,6 +392,7 @@ export class FxLayer {
       color: attribute('aColor', 4),
       cell: attribute('aCell', 4),
       life: attribute('aLife', 4),
+      texel: attribute('aTexel', 1),
     };
 
     this.texture = new THREE.Texture();
@@ -370,8 +431,9 @@ export class FxLayer {
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 10;
-    // Visible until the atlas is on the GPU, so warmUp compiles the program and the first
-    // frames upload the texture before any contact needs it.
+    // Visible until one frame has drawn it with the atlas bound (the warm draw, #upload), so
+    // warmUp compiles the program and battle entry uploads the texture and builds the GPU
+    // pipeline before any contact needs them.
     this.mesh.visible = true;
     this.mesh.onBeforeRender = (renderer, _scene, camera) => this.#beforeRender(renderer, camera);
     scene.add(this.mesh);
@@ -407,6 +469,7 @@ export class FxLayer {
       side: options.side,
       at: opts.at ?? defaults.at ?? 'center',
       h,
+      texel: this.#texelWorld(options.side),
       lift: (options.lift ?? 0) * h,
       phase: loops ? loops.loops * GOLDEN_ANGLE : 0,
       rng: fxRandom((options.seed ?? fxSeed(emitter, this.#serial++)) ^ fxSeed(emitter, options.cell)),
@@ -539,6 +602,8 @@ export class FxLayer {
       }
       this.texture.image = image;
       this.texture.needsUpdate = true;
+      // A frame now uploads it and draws the warm quad (#upload), even on an idle arena.
+      this.#wake?.();
       return true;
     } catch (error) {
       console.error(error);
@@ -557,12 +622,16 @@ export class FxLayer {
       renderer.initTexture(this.texture);
       this.#uploaded = true;
     }
+    // The warm quad is in this draw: the pipeline is built from here on.
+    if (this.#warmQueued && this.#uploaded) this.#warmed = true;
     // Summed quad area in stage viewports (§14 quality.fx.quadArea): over budget, every quad
     // shrinks by the same factor, so fill cost stays bounded without changing the composition.
     const q = this.#quads,
       view = camera.matrixWorldInverse.elements,
       projection = camera.projectionMatrix.elements,
       scale = (projection[0] * projection[5]) / 4;
+    this.#tanX = 1 / projection[0];
+    this.#tanY = 1 / projection[5];
     let area = 0;
     for (let index = 0; index < this.#live; index++) {
       const t = this.#progress(index),
@@ -753,10 +822,11 @@ export class FxLayer {
     if (this.#live > this.#peak) this.#peak = this.#live;
     const q = this.#quads,
       o = record.options,
-      [r, g, b] = rgbOf(o.color);
+      // `colors`: each quad picks one (confetti); otherwise the emit's colour.
+      [r, g, b] = rgbOf(o.colors?.length ? o.colors[Math.floor(record.rng() * o.colors.length)] : o.color);
     for (const field of this.#fields) field[slot] = 0;
     q.life[slot] = o.life;
-    q.cell[slot] = ATLAS.cells[o.cell] ?? 0;
+    q.cell[slot] = o.cell === 'solid' ? SOLID_CELL : (ATLAS.cells[o.cell] ?? 0);
     q.additive[slot] =
       o.additive === false
         ? 0
@@ -774,6 +844,7 @@ export class FxLayer {
     q.bias[slot] = o.front ? OVERLAY_BIAS : o.back ? -record.h * BACK_BIAS : record.h * 0.3;
     q.stretch[slot] = o.stretch ?? 0;
     q.reach[slot] = 1;
+    q.texel[slot] = q.texelTo[slot] = record.texel;
     return slot;
   }
 
@@ -830,7 +901,19 @@ export class FxLayer {
       jitter = o.sizeJitter ?? 0.8,
       size = o.size * h * (1 - jitter / 2 + jitter * rng()),
       grow = o.grow ?? 0.35;
-    this.#place(slot, this.#b.copy(record.anchor).addScaledVector(direction, (o.offset ?? 0.08) * h));
+    if (o.band) {
+      // `band` [lo, hi]: anywhere across the stage width, between those screen heights (−1 bottom,
+      // 1 top), at the anchor's depth (confetti over the whole upper stage).
+      const depth = Math.max(0.1, this.#c.copy(this.#eye).sub(record.anchor).dot(this.#forward)),
+        across = (rng() * 2 - 1) * 0.95 * depth * this.#tanX,
+        high = (o.band[0] + (o.band[1] - o.band[0]) * rng()) * depth * this.#tanY;
+      this.#b
+        .copy(this.#eye)
+        .addScaledVector(this.#forward, -depth)
+        .addScaledVector(this.#right, across)
+        .addScaledVector(this.#up, high);
+      this.#place(slot, this.#b);
+    } else this.#place(slot, this.#b.copy(record.anchor).addScaledVector(direction, (o.offset ?? 0.08) * h));
     q.vx[slot] = direction.x * speed;
     q.vy[slot] = direction.y * speed;
     q.vz[slot] = direction.z * speed;
@@ -853,7 +936,13 @@ export class FxLayer {
           : o.spin;
     q.move[slot] = MOVE_FREE;
     q.mode[slot] = q.stretch[slot] > 0 ? MODE_STRETCH : MODE_BILLBOARD;
-    this.#size(slot, size, size, size * grow, size * grow);
+    // `flutter` (rad/ms): the piece flips (its width follows |cos|, its back shaded) and sways by
+    // `sway` h, like a falling scrap of paper.
+    q.flutter[slot] = o.flutter ?? 0;
+    q.sway[slot] = (o.sway ?? 0) * h;
+    q.phase[slot] = rng() * TAU;
+    const aspect = o.aspect ?? 1;
+    this.#size(slot, size * aspect, size, size * aspect * grow, size * grow);
   }
 
   #spawnRing(record, index) {
@@ -890,6 +979,7 @@ export class FxLayer {
     const spreadTo = this.#screenDirection(rng() * TAU, this.#c).multiplyScalar(jitter * reach * 0.8 * rng());
     target.add(spreadTo);
     q.reach[slot] = reach;
+    q.texelTo[slot] = this.#texelWorld(to.side);
     if (o.overshoot) target.addScaledVector(this.#c.subVectors(target, from), o.overshoot);
     q.fx[slot] = from.x;
     q.fy[slot] = from.y;
@@ -905,12 +995,16 @@ export class FxLayer {
     q.move[slot] = MOVE_TRAVEL;
     this.#place(slot, from);
     const thickness = o.size * h;
+    // In front of its emitter as it leaves; `back`: lands BACK_BIAS target heights behind its
+    // target, the bias easing over the travel like the size (a far emitter's h would push the
+    // arrival in front of a near target and cover its hit reaction).
+    if (!o.front) q.bias[slot] = h * (o.upright ? 0.1 : 0.3);
+    q.biasTo[slot] = o.back ? -h * reach * BACK_BIAS : q.bias[slot];
     if (o.upright) {
       // A travelling upright sprite standing on its path (a rolling crest), art mirrored to face
       // the travel direction; it swells by `grow` over its life.
       q.mode[slot] = MODE_PILLAR;
       q.stretch[slot] = 0;
-      q.bias[slot] = h * 0.1;
       q.flip[slot] = this.#c.subVectors(target, from).dot(this.#right) < 0 ? 1 : 0;
       const grow = o.grow ?? 1;
       this.#size(slot, thickness, thickness, thickness * grow, thickness * grow);
@@ -1242,27 +1336,37 @@ export class FxLayer {
     return Math.hypot(q.vx[slot], q.vy[slot], q.vz[slot]) * q.stretch[slot];
   }
 
+  // Eased travel progress of a travelling quad (0 at the emitter, 1 on arrival); 1 otherwise.
+  #travelled(slot) {
+    const q = this.#quads;
+    if (q.move[slot] !== MOVE_TRAVEL) return 1;
+    return easeInSine(Math.min(1, q.age[slot] / Math.max(1, q.travel[slot])));
+  }
+
   // Size factor of a travelling quad: 1 at the emitter, `reach` on arrival (eased like the travel).
   #reachScale(slot) {
     const q = this.#quads;
     if (q.move[slot] !== MOVE_TRAVEL) return 1;
-    return 1 + (q.reach[slot] - 1) * easeInSine(Math.min(1, q.age[slot] / Math.max(1, q.travel[slot])));
+    return 1 + (q.reach[slot] - 1) * this.#travelled(slot);
   }
 
   #upload(alpha) {
     const q = this.#quads,
       live = this.#live,
-      { pos, shape, axis, color, cell, life } = this.#attributes,
+      { pos, shape, axis, color, cell, life, texel } = this.#attributes,
       P = pos.array,
       S = shape.array,
       X = axis.array,
       C = color.array,
       L = cell.array,
-      A = life.array;
+      A = life.array,
+      T = texel.array;
     for (let slot = 0; slot < live; slot++) {
       const i4 = slot * 4,
         t = this.#progress(slot),
-        reach = this.#reachScale(slot);
+        reach = this.#reachScale(slot),
+        travel = q.move[slot] === MOVE_TRAVEL,
+        travelled = travel ? this.#travelled(slot) : 1;
       let x = q.qx[slot] + (q.px[slot] - q.qx[slot]) * alpha,
         y = q.qy[slot] + (q.py[slot] - q.qy[slot]) * alpha,
         z = q.qz[slot] + (q.pz[slot] - q.qz[slot]) * alpha;
@@ -1283,11 +1387,25 @@ export class FxLayer {
         y -= ay * 0.5;
         z -= az * 0.5;
       }
+      // A fluttering piece flips (its width follows |cos|, its back shaded) and sways sideways.
+      let turn = 1,
+        shade = 1;
+      if (q.flutter[slot] > 0) {
+        const spin = q.phase[slot] + q.flutter[slot] * q.age[slot],
+          flip = Math.cos(spin),
+          sway = q.sway[slot] * Math.sin(q.phase[slot] * 1.7 + spin * SWAY_RATE);
+        turn = Math.max(0.15, Math.abs(flip));
+        shade = flip < 0 ? BACK_SHADE : 1;
+        x += this.#right.x * sway;
+        y += this.#right.y * sway;
+        z += this.#right.z * sway;
+      }
       P[i4] = x;
       P[i4 + 1] = y;
       P[i4 + 2] = z;
-      P[i4 + 3] = q.bias[slot];
-      S[i4] = Math.max(0, q.s0w[slot] + (q.s1w[slot] - q.s0w[slot]) * t) * reach * (q.flip[slot] ? -1 : 1);
+      P[i4 + 3] = travel ? q.bias[slot] + (q.biasTo[slot] - q.bias[slot]) * travelled : q.bias[slot];
+      S[i4] =
+        Math.max(0, q.s0w[slot] + (q.s1w[slot] - q.s0w[slot]) * t) * reach * turn * (q.flip[slot] ? -1 : 1);
       S[i4 + 1] = Math.max(0, q.s0h[slot] + (q.s1h[slot] - q.s0h[slot]) * t) * reach;
       S[i4 + 2] = q.rot[slot];
       S[i4 + 3] = q.mode[slot];
@@ -1295,9 +1413,9 @@ export class FxLayer {
       X[i4 + 1] = ay;
       X[i4 + 2] = az;
       X[i4 + 3] = q.mode[slot] === MODE_SPAN ? q.reach[slot] : 1;
-      C[i4] = q.r[slot];
-      C[i4 + 1] = q.g[slot];
-      C[i4 + 2] = q.b[slot];
+      C[i4] = q.r[slot] * shade;
+      C[i4 + 1] = q.g[slot] * shade;
+      C[i4 + 2] = q.b[slot] * shade;
       C[i4 + 3] = q.move[slot] === MOVE_ORBIT ? q.a[slot] * this.#orbitShade(slot) : q.a[slot];
       L[i4] = q.cell[slot];
       L[i4 + 1] = q.additive[slot];
@@ -1308,16 +1426,42 @@ export class FxLayer {
       A[i4 + 1] = Math.min(q.life[slot], 1e8);
       A[i4 + 2] = q.fadeIn[slot];
       A[i4 + 3] = q.fadeOut[slot];
+      T[slot] = travel ? q.texel[slot] + (q.texelTo[slot] - q.texel[slot]) * travelled : q.texel[slot];
     }
-    for (const attribute of [pos, shape, axis, color, cell, life]) {
+    // Warm draw: until one frame has drawn the program with the atlas bound, an invisible quad
+    // (alpha 0: it samples the atlas, then discards) rides at the end of the batch, so battle entry,
+    // not the first contact, pays for the texture upload and the GPU pipeline and sampler builds.
+    let count = live;
+    this.#warmQueued = !this.#warmed && Boolean(this.texture.image) && live < CAPACITY;
+    if (this.#warmQueued) this.#writeWarm(count++);
+    for (const attribute of [pos, shape, axis, color, cell, life, texel]) {
       attribute.clearUpdateRanges();
-      if (live) {
-        attribute.addUpdateRange(0, live * attribute.itemSize);
+      if (count) {
+        attribute.addUpdateRange(0, count * attribute.itemSize);
         attribute.needsUpdate = true;
       }
     }
-    this.mesh.count = live;
-    this.mesh.visible = live > 0 || !this.#uploaded;
+    this.mesh.count = count;
+    this.mesh.visible = count > 0 || !this.#warmed;
+  }
+
+  // The warm quad: a small billboard on the player, in front of everything, fully transparent.
+  #writeWarm(slot) {
+    const { pos, shape, axis, color, cell, life, texel } = this.#attributes,
+      i4 = slot * 4,
+      size = this.#height('player') * 0.25,
+      at = this.#worldAnchor('player', 'center', this.#c);
+    for (const attribute of [pos, shape, axis, color, cell, life]) attribute.array.fill(0, i4, i4 + 4);
+    pos.array[i4] = at.x;
+    pos.array[i4 + 1] = at.y;
+    pos.array[i4 + 2] = at.z;
+    pos.array[i4 + 3] = OVERLAY_BIAS;
+    shape.array[i4] = shape.array[i4 + 1] = size;
+    shape.array[i4 + 3] = MODE_BILLBOARD;
+    axis.array[i4 + 3] = 1;
+    cell.array[i4] = ATLAS.cells.glow;
+    life.array[i4 + 1] = 1;
+    texel.array[slot] = this.#texelWorld('player');
   }
 
   #orbitShade(slot) {

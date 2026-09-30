@@ -16,8 +16,9 @@
 
 /* Stage banners and cut-ins (src/battle-ui/banners.js, docs/battle-presentation.md §9.6). Pooled
    nodes inside #fx-text, hidden when idle, animated by WAAPI on transform and opacity only. Each
-   banner box covers the stage and is a size container, so type and portraits scale with the stage.
-   Portraits are 48-texel crops of the battle sprite at an integer texel scale (--texel). */
+   banner box covers the stage and is a size container, so type and portraits scale with the stage
+   (bounded by its width too: a turn's portrait stage is tall and narrow). Portraits are 48-texel
+   crops of the battle sprite at an integer texel scale (--texel). */
 .fx-banner {
   --banner-color: var(--gold);
   position: absolute;
@@ -80,7 +81,7 @@
 .fx-cutin-portrait {
   --texel: 1.5px;
 }
-@container (min-height: 560px) {
+@container (min-height: 560px) and (min-width: 400px) {
   .fx-portrait {
     --texel: 3px;
   }
@@ -147,7 +148,7 @@
 }
 .fx-band-title {
   color: #fff;
-  font-size: clamp(28px, 6.4cqh, 44px);
+  font-size: clamp(28px, min(6.4cqh, 9cqw), 44px);
   line-height: 1;
   text-shadow:
     0 3px 0 #0b0d24,
@@ -169,7 +170,7 @@
   margin-left: -16px;
 }
 .fx-clash-half .fx-band-title {
-  font-size: clamp(24px, 5.2cqh, 36px);
+  font-size: clamp(24px, min(5.2cqh, 7.2cqw), 36px);
 }
 .fx-clash-vs {
   z-index: 1;
@@ -473,7 +474,7 @@
   text-transform: uppercase;
 }
 .fx-cutin-copy b {
-  font-size: clamp(22px, 5cqh, 30px);
+  font-size: clamp(22px, min(5cqh, 6.6cqw), 30px);
   text-wrap: balance;
 }
 .fx-cutin-copy em {

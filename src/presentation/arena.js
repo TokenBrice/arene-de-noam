@@ -21,11 +21,11 @@ import {
 } from './stage/painter.js';
 import { PAD_TOP, fitCreatures, solveFraming } from './stage/framing.js';
 import {
-  canvasTexture,
   pointsMaterial,
   shaftMaterial,
   sharedUniforms,
   stageMaterial,
+  stageTexture,
 } from './stage/materials.js';
 import { CameraRig, SHOTS } from './stage/rig.js';
 
@@ -49,7 +49,37 @@ const ENEMY_EASE_MS = 250;
 // The impact punch pushes in toward this point between the fighters' centres (0 = the attacker,
 // 1 = the target).
 const PUNCH_TARGET_WEIGHT = 0.85;
+// Painted stage images (5A): baked offline by tools/generate-arena-plates.mjs on the painter's
+// layout, fetched and decoded off the main thread. The procedural painter stands in for any image
+// that is missing, fails to decode or has not arrived after PLATE_TIMEOUT_MS.
+const STAGE_IMAGES = { plate: paintBackdrop, court: paintCourt };
+const PLATE_TIMEOUT_MS = 1500;
+const BITMAP_OPTIONS = { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' };
 
+// One painted image as an ImageBitmap; rejects on a missing file, a failed decode or the deadline
+// (a bitmap that lands after the deadline is closed).
+function decodeStageImage(url, deadline) {
+  const abort = new AbortController();
+  let late = false;
+  const load = fetch(url, { signal: abort.signal })
+    .then((response) => {
+      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+      return response.blob();
+    })
+    .then((blob) => createImageBitmap(blob, BITMAP_OPTIONS))
+    .then((bitmap) => {
+      if (late) bitmap.close();
+      return bitmap;
+    });
+  return Promise.race([
+    load,
+    deadline.then(() => {
+      late = true;
+      abort.abort();
+      throw new Error(`${url}: not decoded after ${PLATE_TIMEOUT_MS} ms`);
+    }),
+  ]);
+}
 // Frame-rate-independent exponential approach that settles exactly on target.
 function approach(value, target, rate) {
   const delta = target - value;
@@ -184,6 +214,7 @@ export class ArenaScene {
     this.projected = new THREE.Vector3();
     this.animateBound = this.animate.bind(this);
     this.buildStage();
+    this.ready = this.loadStage();
     this.fighters = new FighterLayer({
       scene: this.scene,
       camera: this.camera,
@@ -205,6 +236,7 @@ export class ArenaScene {
     this.fx = new FxLayer({
       scene: this.scene,
       worldAnchor: (side, point, out) => this.worldAnchor(side, point, out),
+      texelWorld: (side) => this.fighters.texelWorld(side),
       quality,
       reducedMotion,
       testAnimationScale,
@@ -240,13 +272,11 @@ export class ArenaScene {
   buildStage() {
     const t = this.theme,
       shared = (this.shared = sharedUniforms());
-    this.textures = {
-      plate: canvasTexture(paintBackdrop(t, this.themeId)),
-      court: canvasTexture(paintCourt(t, this.themeId)),
-    };
+    // The plate and court textures arrive with `loadStage()`; the stage stays hidden until then.
+    this.textures = { plate: null, court: null };
+    this.stageSource = { plate: null, court: null };
     // Backdrop plate: a camera-centred panorama band (sky, landmark, stands, towers, LED wall).
     const backdrop = stageMaterial(shared, 0);
-    backdrop.uniforms.map.value = this.textures.plate;
     backdrop.uniforms.uCrowd.value.set(
       (CROWD_BAND[0] - PLATE_EL_MIN) / (PLATE_EL_MAX - PLATE_EL_MIN),
       (CROWD_BAND[1] - PLATE_EL_MIN) / (PLATE_EL_MAX - PLATE_EL_MIN)
@@ -256,8 +286,6 @@ export class ArenaScene {
     this.backdrop.frustumCulled = false;
     // Floor: court disc + apron to the stands, dynamic pad pools, glossy reflection on mid/high.
     const floor = stageMaterial(shared, 1);
-    floor.uniforms.map.value = this.textures.court;
-    floor.uniforms.uPlate.value = this.textures.plate;
     floor.uniforms.uPlateAz.value.set(-PLATE_AZ, PLATE_AZ);
     floor.uniforms.uPlateEl.value.set(PLATE_EL_MIN, PLATE_EL_MAX);
     floor.uniforms.uPool.value.set(t.glow);
@@ -272,7 +300,7 @@ export class ArenaScene {
     for (const side of SIDES) {
       const material = stageMaterial(shared, 2),
         canvas = paintPad(document.createElement('canvas'), t, t.glow),
-        texture = canvasTexture(canvas);
+        texture = stageTexture(canvas);
       material.uniforms.map.value = texture;
       material.uniforms.uSide.value.set(t.pad.side);
       material.uniforms.uRim.value.set(t.glow);
@@ -297,7 +325,10 @@ export class ArenaScene {
     this.shafts = new THREE.Mesh(shaftGeometry, shaftMaterial(shared, t));
     this.shafts.frustumCulled = false;
     this.shafts.renderOrder = 4;
-    this.scene.add(
+    // Hidden until the plate and court are on the GPU (`ready`), so the stage appears whole.
+    this.stageGroup = new THREE.Group();
+    this.stageGroup.visible = false;
+    this.stageGroup.add(
       this.backdrop,
       this.floor,
       this.pads.player.mesh,
@@ -305,7 +336,46 @@ export class ArenaScene {
       this.points,
       this.shafts
     );
+    this.scene.add(this.stageGroup);
     this.applyTierLooks();
+  }
+
+  // The painted plate and court (5A), decoded off the main thread and raced against
+  // PLATE_TIMEOUT_MS; each image that is missing, fails to decode or is late is painted
+  // procedurally instead. Only the GPU textures stay resident. Resolves true once the stage is
+  // shown, false if disposed first.
+  async loadStage() {
+    let timer;
+    const deadline = new Promise((resolve) => (timer = setTimeout(resolve, PLATE_TIMEOUT_MS))),
+      names = Object.keys(STAGE_IMAGES),
+      bitmaps = await Promise.all(
+        names.map((name) =>
+          decodeStageImage(`./assets/arenas/${this.themeId}/${name}.webp`, deadline).catch((error) => {
+            console.warn('Painted arena image unavailable, painting it instead:', error);
+            return null;
+          })
+        )
+      );
+    clearTimeout(timer);
+    if (this.disposed) {
+      for (const bitmap of bitmaps) bitmap?.close();
+      return false;
+    }
+    names.forEach((name, index) => {
+      const bitmap = bitmaps[index];
+      this.stageSource[name] = bitmap ? 'painted' : 'procedural';
+      this.textures[name] = stageTexture(bitmap ?? STAGE_IMAGES[name](this.theme, this.themeId));
+      this.renderer.initTexture(this.textures[name]);
+      bitmap?.close();
+    });
+    const { plate, court } = this.textures,
+      floor = this.floor.material.uniforms;
+    this.backdrop.material.uniforms.map.value = plate;
+    floor.map.value = court;
+    floor.uPlate.value = plate;
+    this.stageGroup.visible = true;
+    this.wake();
+    return true;
   }
 
   applyProfile(profile) {
@@ -671,10 +741,10 @@ export class ArenaScene {
     if (this.rect) this.fitToStage(this.rect, { force: true });
   }
 
-  // Compiles every program (stage, fighters, FX, hidden pools) before the first contact, then
-  // waits for the FX atlas. Resolves false if disposed first.
-  warmUp() {
-    if (this.disposed) return Promise.resolve(false);
+  // Waits for the stage images (`ready`), compiles every program (stage, fighters, FX, hidden
+  // pools) before the first contact, then waits for the FX atlas. Resolves false if disposed first.
+  async warmUp() {
+    if (!(await this.ready) || this.disposed) return false;
     const hidden = [];
     this.scene.traverse((object) => {
       if (object.visible) return;
@@ -698,14 +768,9 @@ export class ArenaScene {
       };
       poll();
     });
-    return compiled.then((ok) =>
-      ok
-        ? this.fx.ready.then(
-            () => !this.disposed,
-            () => !this.disposed
-          )
-        : false
-    );
+    if (!(await compiled)) return false;
+    await this.fx.ready;
+    return !this.disposed;
   }
 
   stats() {
@@ -720,6 +785,7 @@ export class ArenaScene {
       pixelRatio: this.renderer.getPixelRatio(),
       fxLive: fx.live,
       fxPeak: fx.peak,
+      stage: { ...this.stageSource },
     };
   }
 
@@ -877,8 +943,8 @@ export class ArenaScene {
       this.pads[side].material.dispose();
       this.pads[side].texture.dispose();
     }
-    this.textures.plate.dispose();
-    this.textures.court.dispose();
+    this.textures.plate?.dispose();
+    this.textures.court?.dispose();
     this.renderer.dispose();
     // Free the drawing buffer (and any MSAA storage) now instead of at GC.
     this.renderer.forceContextLoss();

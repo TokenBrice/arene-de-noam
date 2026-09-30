@@ -1,0 +1,12 @@
+{
+  "id": "umbrawl-clean-2",
+  "seed": 510512,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/concepts/umbrawl-clean/umbrawl-clean-candidate-3.png",
+  "variant_count": 4,
+  "description": "Keep this exact shadow panther drawing, pose, silhouette and clean pixel-art style, and restore its glowing magenta energy so it reads at a glance. The huge curved blade tail gets a bright glowing magenta cutting edge with a thin pale silver highlight line. The claws glow magenta. The smoke wisps around the paws and along the back fade from dark purple to glowing violet and magenta at their tips. Add two or three bright magenta rune streaks on the shoulder and flank. Keep the bright magenta eyes and the magenta eclipse-ring collar, the violet rim light along the back and legs, compact pixel clusters and a selective dark outline. Black-purple body, glowing magenta and violet accents, transparent background, no ground shadow, no text."
+}

@@ -58,7 +58,9 @@ export const AFFINITIES = {
       'M15.2 2.2A9.9 9.9 0 1 0 21.7 16a8.2 8.2 0 0 1-9.4 1.6A8.1 8.1 0 0 1 9.1 6.5a8.2 8.2 0 0 1 6.1-4.3Zm2.5 4.2 1.1 1.2 1.5-.6-.8 1.4 1 1.3-1.6-.3-.9 1.3-.2-1.6-1.6-.5 1.5-.7V6.4Z',
   },
   neutral: {
-    color: '#B9C2D5',
+    // A deep slate: a solid, deliberate tile under white type (a pale grey read as disabled),
+    // outside every type, status and class colour.
+    color: '#5B6A9E',
     nameKey: 'affinity.neutral',
     iconPath: 'M12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z',
   },

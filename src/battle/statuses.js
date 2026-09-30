@@ -48,13 +48,6 @@ export function statusIcon(id, className = '') {
   return `<svg class="status-icon status-icon-${definition.iconKey}${className ? ` ${className}` : ''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${STATUS_ICON_CONTENT[definition.iconKey]}</svg>`;
 }
 
-export function statusBadgeHtml(id, { label = '', compact = false, className = '', title = '' } = {}) {
-  const definition = STATUS_DEFINITIONS[id];
-  if (!definition) throw new Error(`Unknown status badge: ${id}`);
-  const polarity = definition.positive ? 'positive' : 'negative';
-  return `<span class="status-badge status-${id} ${polarity}${compact ? ' compact' : ''}${definition.lightInk ? ' light-ink' : ''}${className ? ` ${className}` : ''}" data-status="${id}" data-icon="${definition.iconKey}" data-polarity="${polarity}" style="--status-color:${definition.color}"${title ? ` title="${title}"` : ''}>${statusIcon(id)}${label ? `<span class="status-badge-label">${label}</span>` : ''}</span>`;
-}
-
 export function sortStatusIds(ids) {
   const positions = new Map(STATUS_DISPLAY_ORDER.map((id, index) => [id, index]));
   return [...ids].filter((id) => STATUS_DEFINITIONS[id]).sort((a, b) => positions.get(a) - positions.get(b));

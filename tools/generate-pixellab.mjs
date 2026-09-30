@@ -86,6 +86,23 @@ async function imageBytes(image) {
   return Buffer.from(await response.arrayBuffer());
 }
 
+// Frames one /edit-images-v2 request can return for an output size; a reference image takes a slot.
+function maxEditFrames({ width, height }, withReference) {
+  const side = Math.max(width, height);
+  const frames = side <= 64 ? 16 : side <= 80 ? 9 : side <= 128 ? 4 : 1;
+  return withReference && frames > 1 ? frames - 1 : frames;
+}
+
+async function base64Png(file) {
+  const bytes = await readFile(file);
+  // PNG IHDR: width and height are the big-endian words at bytes 16 and 20.
+  return {
+    image: { base64: `data:image/png;base64,${bytes.toString('base64')}` },
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+  };
+}
+
 async function requestForBrief(brief) {
   if (!brief.edit_image) {
     return {
@@ -99,18 +116,19 @@ async function requestForBrief(brief) {
     };
   }
 
-  const source = await readFile(brief.edit_image);
-  const encoded = `data:image/png;base64,${source.toString('base64')}`;
-  const count = Math.max(1, Math.min(4, brief.variant_count || 1));
+  // `reference_image` switches to edit_with_reference: the edit images take the reference image's style.
+  const withReference = Boolean(brief.reference_image);
+  const source = await base64Png(brief.edit_image);
+  const count = Math.max(
+    1,
+    Math.min(maxEditFrames(brief.image_size, withReference), brief.variant_count || 1)
+  );
   return {
     endpoint: '/edit-images-v2',
     body: {
-      method: 'edit_with_text',
-      edit_images: Array.from({ length: count }, () => ({
-        image: { base64: encoded },
-        width: brief.image_size.width,
-        height: brief.image_size.height,
-      })),
+      method: withReference ? 'edit_with_reference' : 'edit_with_text',
+      edit_images: Array.from({ length: count }, () => source),
+      ...(withReference ? { reference_image: await base64Png(brief.reference_image) } : {}),
       image_size: brief.image_size,
       description: brief.description,
       seed: brief.seed,
@@ -161,22 +179,26 @@ async function main() {
     await writeFile(path.join(outputDir, filename), await imageBytes(image));
     files.push(filename);
   }
+  const usage = job.usage || created.usage || null;
   await writeFile(
     path.join(outputDir, 'generation.json'),
     `${JSON.stringify(
       {
         brief: path.relative(outputDir, briefPath),
+        endpoint: request.endpoint,
+        method: request.body.method ?? null,
         source: brief.edit_image || null,
+        reference: brief.reference_image || null,
         seed: brief.seed,
         job_id: jobId,
-        usage: job.usage || created.usage || null,
+        usage,
         files,
       },
       null,
       2
     )}\n`
   );
-  console.log(`Saved ${files.length} candidate(s) to ${outputDir}`);
+  console.log(`Saved ${files.length} candidate(s) to ${outputDir}; usage ${JSON.stringify(usage)}`);
 }
 
 main().catch((error) => {

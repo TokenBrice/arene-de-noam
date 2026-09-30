@@ -1,0 +1,9 @@
+{
+  "id": "volcano",
+  "title": "Forge du volcan",
+  "seed": "arena-plate|volcano|1",
+  "style": "Soft painterly stadium diorama, original design: no text, logos, ball emblems or recognisable venue. Crowd as a soft colour mass. Values one to two steps darker than the pixel-art creatures, calm and low-contrast behind them (stands band and landmark base), detail and the brightest accents kept to the upper sky and the edges.",
+  "plate": "A dark volcanic cone against a blazing orange sky, smoke billowing from the crater lit from below, glowing lava rivers down its flanks, distant ridges in the haze, and two forge chimneys. Basalt terraces with ember-lit iron rails, brazier masts.",
+  "court": "Dark basalt column tiles with a few thin glowing lava seams kept away from the pads, ash dusting, amber markings and an inlaid six-rhombus sigil.",
+  "value": "Bright horizon band behind a dark triangular cone; dark top and dark court."
+}

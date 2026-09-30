@@ -30,10 +30,12 @@ const VICTORY_PUSH = 0.1;
 const INTRO_YAW = THREE.MathUtils.degToRad(9);
 const SHOWDOWN_PUSH = 0.01;
 // Impact punch: a snap push-in of `kick × KICK_PUSH` (share of size) aimed at the punch focus, a
-// roll of `kick × KICK_ROLL` toward the attack, both decaying at KICK_RATE per second.
+// roll of `kick × KICK_ROLL` toward the attack, both held through the hit-stop (virtual time
+// freezes) and then decaying at KICK_RATE per second (≈ 87 ms half-life, long enough to read).
+// The director scales `kick` by what the hit meant (choreo.js punchKick).
 const KICK_PUSH = 0.05;
 const KICK_ROLL = THREE.MathUtils.degToRad(0.7);
-const KICK_RATE = 10.5;
+const KICK_RATE = 8;
 
 const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 const easeInOutSine = (t) => -(Math.cos(Math.PI * t) - 1) / 2;

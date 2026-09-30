@@ -77,6 +77,30 @@ export function tierStretch(tier) {
   return (action[tier] - TIERS[tier].hitStopMs) / (action[1] - TIERS[1].hitStopMs);
 }
 
+// §10.2 punch feel: a plain hit's camera snap says what the hit meant. The tier's kick is scaled by
+// the hit's effectiveness (a resisted or barrier-blocked hit only nudges, a super-effective one
+// snaps) and again on a critical, capped under the Signature's authored kick so framing holds.
+// Signature punches (`sig` cues) and cues without a landed hit keep their authored kick.
+export const PUNCH_FEEL = Object.freeze({
+  resisted: 0.6,
+  neutral: 1.2,
+  effective: 1.8,
+  critical: 1.5,
+  max: 2,
+});
+export function punchKick(cue, tier, hit = null) {
+  const kick = cue.kick ?? TIERS[tier].kick;
+  if (cue.sig || !hit) return kick;
+  const affinity = hit.affinity ?? 1,
+    effect =
+      hit.blocked || affinity < 1
+        ? PUNCH_FEEL.resisted
+        : affinity > 1
+          ? PUNCH_FEEL.effective
+          : PUNCH_FEEL.neutral;
+  return Math.min(PUNCH_FEEL.max, kick * effect * (hit.critical ? PUNCH_FEEL.critical : 1));
+}
+
 // §9.4: 8 × 8 cells of 128 px, index = row × 8 + column. Generic cells first, then one motif per
 // creature (its Signature's identity glyph), then the effect cells in 54–63. Stretched quads
 // (streak, beamQuad, `stretch`) map the cell's +u axis to the travel direction; billboards keep
@@ -288,6 +312,35 @@ const dust = (at, who, q, options = {}) =>
     color: DUST,
     ...options,
   });
+// Victory confetti: paper squares and ribbons (`solid` rectangles, no atlas art) in festive
+// colours, each flipping (`flutter`, its darker back showing) and swaying (`sway`) as it falls
+// under gravity and air drag. One call = a squares emit and a ribbons emit (≈ 0.85 × q).
+const CONFETTI = Object.freeze(['#ffd23f', '#ff5d8f', '#4fd8ff', '#8cff6b', '#ffffff', '#b98cff']);
+const confetti = (at, from, q, options = {}) => {
+  const paper = {
+    cell: 'solid',
+    colors: CONFETTI,
+    drag: 0.88,
+    sizeJitter: 0.3,
+    grow: 1,
+    fade: 0.3,
+    additive: false,
+    hot: 0,
+    flutter: 0.013,
+    sway: 0.1,
+    ...options,
+  };
+  return [
+    emit(at, 'burst', from, { ...paper, q, size: 0.075 }),
+    emit(at + 15, 'burst', from, {
+      ...paper,
+      q: Math.max(1, Math.round(q * 0.85)),
+      size: 0.17,
+      aspect: 0.32,
+      flutter: paper.flutter * 0.8,
+    }),
+  ];
+};
 
 // The contact frame shared by the damage archetypes: a type-coloured flare with a white-hot
 // heart, a shock ring, sparks thrown through the target along the attack and a court scorch.
@@ -884,9 +937,9 @@ export const TIMELINES = freezeDeep({
     },
   },
 
-  // Water gathers at the attacker's feet, a wave crest rolls along the floor and breaks on the
-  // target: a crest taller than it rears up behind it, framing its hit reaction, and a column of
-  // spray bursts.
+  // Water gathers at the attacker's feet, a wave crest rolls along the floor and breaks behind the
+  // target (`back`: it lands behind it, never over its hit reaction): a crest taller than it rears
+  // up behind it, framing its hit reaction, and a column of spray bursts.
   WAVE: {
     cues: [
       fighter(0, 'actor', 'windup', { ms: 100, squash: 0.1 }),
@@ -906,6 +959,7 @@ export const TIMELINES = freezeDeep({
         life: 35,
         additive: 0,
         hot: 0.6,
+        back: true,
       }),
       emit(100, 'streak', anchor('actor', 'feet'), {
         to: anchor('target', 'feet'),
@@ -1432,20 +1486,20 @@ export const BEAT_TIMELINES = freezeDeep({
       }),
       op(60, 'cheer'),
       op(90, 'readout'),
-      fighter(170, 'target', 'faint', { ms: 420 }),
-      cue(170, 'faint-cry'),
-      emit(190, 'burst', TARGET, {
+      fighter(150, 'target', 'faint', { ms: 330 }),
+      cue(150, 'faint-cry'),
+      emit(165, 'burst', TARGET, {
         cell: 'spark',
         q: 10,
         speed: 0.6,
         spread: 1.2,
         drag: 0.95,
         gravity: -0.5,
-        life: 400,
+        life: 320,
         size: 0.07,
         hot: 0.4,
       }),
-      op(600, 'end'),
+      op(500, 'end'),
     ],
   },
   switch: {
@@ -1613,9 +1667,11 @@ export const BEAT_TIMELINES = freezeDeep({
     ],
   },
   // The winner's hero moment: the camera turns to it and pushes in, a warm spotlight rises behind
-  // it, it hops three times while confetti fountains out of it and the stands roar twice. The
-  // fountains spawn one quad every `staggerMs`, so their length follows the quality-scaled count
-  // (≈ 0.4 s on Low, ≈ 0.9 s on High). "VICTOIRE !" enters once the plates have faded (200 ms).
+  // it, it hops three times and the stands roar twice while confetti celebrates: a pop of paper
+  // squares and ribbons out of the winner, then a flutter of them falling over the whole upper
+  // stage (`band`), each piece flipping and swaying on its way down. The flutter spawns one piece
+  // every `staggerMs`, so its length and density follow the quality-scaled count (restrained on
+  // Low, generous on High). "VICTOIRE !" enters once the plates have faded (200 ms).
   victory: {
     cues: [
       cue(0, 'victory'),
@@ -1642,43 +1698,28 @@ export const BEAT_TIMELINES = freezeDeep({
       }),
       fighter(120, 'actor', 'victory', { hops: 3, ms: 960 }),
       op(200, 'banner', { kind: 'victory' }),
-      emit(240, 'burst', anchor('actor', 'head'), {
-        cell: 'petal',
-        q: 12,
-        staggerMs: 55,
-        speed: 2.5,
-        spread: 1.1,
-        drag: 0.94,
-        gravity: 2.2,
-        life: 1300,
-        size: 0.14,
-        additive: false,
+      ...confetti(230, anchor('actor', 'head'), 7, { speed: 3.4, spread: 2.3, gravity: 3, life: 1300 }),
+      ...confetti(320, anchor('actor', 'head'), 13, {
+        band: [0.15, 1.1],
+        staggerMs: 60,
+        speed: 0.5,
+        spread: 6.3,
+        gravity: 2.4,
+        life: 1600,
       }),
       emit(270, 'burst', anchor('actor', 'head'), {
         cell: 'star',
-        q: 10,
-        staggerMs: 70,
+        q: 6,
+        staggerMs: 90,
         speed: 2.7,
-        spread: 0.9,
-        drag: 0.94,
+        spread: 1.4,
+        drag: 0.9,
         gravity: 2.2,
-        life: 1300,
+        life: 1100,
         size: 0.13,
+        grow: 0.8,
         hot: 0.5,
         color: '#ffcb3d',
-      }),
-      emit(300, 'burst', anchor('actor', 'head'), {
-        cell: 'shard',
-        q: 8,
-        staggerMs: 85,
-        speed: 2.3,
-        spread: 1.3,
-        drag: 0.94,
-        gravity: 2.2,
-        life: 1200,
-        size: 0.12,
-        additive: false,
-        color: '#ffffff',
       }),
       op(700, 'cheer', { strength: 1.2 }),
       op(1600, 'end'),

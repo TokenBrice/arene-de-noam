@@ -1,4 +1,4 @@
-import { ctx, registerRoutes, route } from './context.js';
+import { ctx, registerRoutes, route, wrapRoutes } from './context.js';
 import { icon, installIconSprite } from './icons.js';
 
 const { t, screen, sound, persist, escapeHtml, testAnimationScale } = ctx;
@@ -75,11 +75,21 @@ function renderCurrent() {
   else (PAGE_RENDERERS[screen.dataset.page] ?? renderSettings)();
 }
 
-/* Minimal shared route transition. The new screen renders synchronously and
-   fades/slides in, while a short full-screen veil supplies the visual handoff.
-   Keeping only one semantic DOM tree avoids duplicate headings, labels, and
-   live regions during the transition. Skipped for same-page re-renders, the
-   boot screen, reduced motion, and ?animations=0. */
+/* Route transitions (View Transitions API, UI-14). Forward (deeper in the hub trail, see
+   pageDepth) pushes the new screen in from the right, back reverses it. A creature marked
+   `data-shared-creature="<id>"` on both screens (the title's trio, team select's slots) travels
+   from its old place to its new one; on one screen only, it moves with the page. Only transform
+   and opacity animate, on the compositor, for TRANSITION_MS (styles/base.css). One semantic DOM
+   tree exists throughout: the old screen is only a snapshot.
+
+   The render runs in the transition's update callback, one frame later: the route call returns
+   a promise that resolves once the new screen is in the DOM, and a caller that touches the new
+   screen right away awaits it. Instant swap (render now, its result returned) for same-page
+   re-renders, the boot screen, anything into or out of a battle (it has its own intro and
+   outro), reduced motion, ?animations=0, a browser without the API, and a back gesture the
+   browser already animates. Every quality tier, Low included, gets them: at 6x CPU they add no
+   long task and only a few ms of main-thread work per frame while they play (measurements in
+   docs/architecture.md, "Route transitions"). */
 const SCREEN_TRANSITION_PAGES = {
   renderTitle: 'title',
   renderAcademy: 'academy',
@@ -92,28 +102,119 @@ const SCREEN_TRANSITION_PAGES = {
   renderSettings: 'settings',
   renderBattle: 'battle',
 };
+const INSTANT_PAGES = new Set(['boot', 'battle-loading', 'battle']);
+const TRANSITION_MS = 240;
+const root = document.documentElement;
+let activeTransition = null;
+// The page a pending transition is about to show, for history sync before its render runs.
+let pendingPage = null;
+// Set while popstate handles a back gesture the browser animated itself.
+let browserAnimatesBack = false;
+
+function animatesTransitions(from, to) {
+  return (
+    typeof document.startViewTransition === 'function' &&
+    testAnimationScale !== 0 &&
+    !ctx.save.reducedMotion &&
+    !reducedMotionQuery.matches &&
+    !browserAnimatesBack &&
+    !INSTANT_PAGES.has(from) &&
+    !INSTANT_PAGES.has(to)
+  );
+}
+
+// A hub the player came through sits at its trail index, Settings one level above the screen
+// that opened them, any other screen one level above the current hub.
+function pageDepth(page) {
+  const hub = hubTrail.indexOf(page);
+  if (hub >= 0) return hub;
+  if (page === 'settings') return pageDepth(ctx.settingsReturn) + 1;
+  return hubTrail.length;
+}
+
+// The shared creatures in view, one element per creature id, with their viewport boxes.
+function sharedCreatures() {
+  const view = screen.getBoundingClientRect(),
+    found = new Map();
+  for (const element of screen.querySelectorAll('[data-shared-creature]')) {
+    const id = element.dataset.sharedCreature,
+      box = element.getBoundingClientRect();
+    if (found.has(id) || !box.width || box.bottom <= view.top || box.top >= view.bottom) continue;
+    found.set(id, { element, box });
+  }
+  return found;
+}
+
+function settleNewPage() {
+  screen.scrollTo(0, 0);
+  const heading = screen.querySelector('h1');
+  heading?.setAttribute('tabindex', '-1');
+  heading?.focus({ preventScroll: true });
+}
+
 function transitionScreen(render, targetPage) {
-  const pageChanged = Boolean(screen.dataset.page) && targetPage !== screen.dataset.page;
-  if (testAnimationScale === 0 || ctx.save.reducedMotion || !pageChanged) {
-    render();
-  } else {
-    render();
-    screen.classList.add('screen-entering');
-    const veil = document.createElement('i');
-    veil.className = 'screen-transition-veil';
-    veil.setAttribute('aria-hidden', 'true');
-    document.body.append(veil);
-    setTimeout(() => {
-      veil.remove();
-      screen.classList.remove('screen-entering');
-    }, 340);
+  const from = screen.dataset.page,
+    pageChanged = Boolean(from) && targetPage !== from;
+  if (!pageChanged || !animatesTransitions(from, targetPage)) {
+    const result = render();
+    if (pageChanged) settleNewPage();
+    return result;
   }
-  if (pageChanged) {
-    screen.scrollTo(0, 0);
-    const heading = screen.querySelector('h1');
-    heading?.setAttribute('tabindex', '-1');
-    heading?.focus({ preventScroll: true });
+  const before = sharedCreatures(),
+    travels = [];
+  for (const [id, shared] of before) {
+    shared.element.style.viewTransitionName = `creature-${id}`;
+    shared.transform = getComputedStyle(shared.element).transform;
   }
+  root.dataset.navigation = pageDepth(targetPage) < pageDepth(from) ? 'back' : 'forward';
+  pendingPage = targetPage;
+  const transition = document.startViewTransition(() => {
+    pendingPage = null;
+    render();
+    settleNewPage();
+    for (const [id, { element }] of sharedCreatures()) {
+      if (!before.has(id)) continue;
+      element.style.viewTransitionName = `creature-${id}`;
+      travels.push({ name: `creature-${id}`, ...before.get(id) });
+    }
+  });
+  activeTransition = transition;
+  // A shared creature's group moves by transform alone, from its old box to the place the
+  // browser gave it: the group is sized like the new element and transformed about its centre,
+  // so the first frame centres it on the old box, scaled, with the old element's own transform
+  // (the title's flipped hero turns around on the way).
+  transition.ready.then(
+    () => {
+      for (const { name, box, transform } of travels) {
+        const pseudoElement = `::view-transition-group(${name})`,
+          group = getComputedStyle(root, pseudoElement),
+          width = parseFloat(group.width),
+          height = parseFloat(group.height),
+          x = box.left + (box.width - width) / 2,
+          y = box.top + (box.height - height) / 2,
+          own = transform === 'none' ? '' : transform;
+        root.animate(
+          {
+            transform: [
+              `translate(${x}px, ${y}px) scale(${box.width / width}, ${box.height / height}) ${own}`,
+              group.transform,
+            ],
+          },
+          { duration: TRANSITION_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', pseudoElement }
+        );
+      }
+    },
+    () => {}
+  );
+  const finish = () => {
+    if (activeTransition !== transition) return;
+    activeTransition = null;
+    delete root.dataset.navigation;
+    for (const element of screen.querySelectorAll('[data-shared-creature]'))
+      element.style.viewTransitionName = '';
+  };
+  transition.finished.then(finish, finish);
+  return transition.updateCallbackDone;
 }
 export function rerenderPreservingFocus(render) {
   const active = document.activeElement;
@@ -122,10 +223,10 @@ export function rerenderPreservingFocus(render) {
   if (key) ctx.screen.querySelector(`[data-focus-key="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
 }
 export function installScreenTransitions() {
-  for (const [name, page] of Object.entries(SCREEN_TRANSITION_PAGES)) {
-    const render = ctx.routes[name];
-    if (render) ctx.routes[name] = (...args) => transitionScreen(() => render(...args), page);
-  }
+  wrapRoutes((name, render) => {
+    const page = SCREEN_TRANSITION_PAGES[name];
+    return page ? (...args) => transitionScreen(() => render(...args), page) : render;
+  });
 }
 
 /* Bottom sheet: the one overlay primitive for switch, replacement, move info,
@@ -243,7 +344,7 @@ let rewinding = false;
 const onInsideEntry = () => history.state?.[INSIDE_KEY] === true;
 
 function syncHistory() {
-  const page = screen.dataset.page;
+  const page = pendingPage ?? screen.dataset.page;
   if (!page || page === 'boot') return;
   const inside = page !== 'title' || topSheet() !== null;
   if (inside && !onInsideEntry()) history.pushState({ [INSIDE_KEY]: true }, '');
@@ -327,9 +428,14 @@ function installHistoryNavigation() {
     if (ctx.leaveGuard && ctx.leaveGuard.page !== screen.dataset.page) ctx.leaveGuard = null;
     syncHistory();
   }).observe(screen, { attributes: true, attributeFilter: ['data-page'] });
-  addEventListener('popstate', () => {
+  addEventListener('popstate', (event) => {
     if (rewinding) rewinding = false;
-    else goBack();
+    else {
+      // A back swipe the browser already animated gets no second, in-page transition.
+      browserAnimatesBack = event.hasUAVisualTransition === true;
+      goBack();
+      browserAnimatesBack = false;
+    }
     syncHistory();
   });
 }

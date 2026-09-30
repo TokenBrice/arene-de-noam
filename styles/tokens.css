@@ -167,7 +167,6 @@
   --z-controls: 8;
   --z-modal: 20; /* in-screen dialogs and battle overlays */
   --z-sheet: 30; /* bottom sheets */
-  --z-veil: 40; /* route transition */
   --z-theater: 80; /* full-screen move preview */
   --z-toast: 100;
 

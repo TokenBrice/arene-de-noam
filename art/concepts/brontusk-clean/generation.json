@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/brontusk-clean.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/monsters/originals/pre-redraw/brontusk-battle.png",
+  "reference": null,
+  "seed": 510111,
+  "job_id": "d439561c-8528-4f64-965c-0894f00127e0",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "brontusk-clean-candidate-1.png",
+    "brontusk-clean-candidate-2.png",
+    "brontusk-clean-candidate-3.png",
+    "brontusk-clean-candidate-4.png",
+    "brontusk-clean-candidate-5.png",
+    "brontusk-clean-candidate-6.png",
+    "brontusk-clean-candidate-7.png",
+    "brontusk-clean-candidate-8.png"
+  ]
+}

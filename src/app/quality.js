@@ -17,7 +17,7 @@ const budget = (tier, arena, fx, audio) =>
 
 // arena: renderer settings read by ArenaScene (DPR caps, MSAA, frame caps, ambient dust points).
 // fx: GPU FX layer live-quad budget and summed quad area (stage viewports).
-// audio: music lookahead (seconds) and reverb cost ('lite' = short mono impulses).
+// audio: SFX room reverb cost ('lite' = a short mono impulse); the music is baked.
 export const QUALITY_BUDGETS = Object.freeze({
   low: budget(
     'low',
@@ -31,7 +31,7 @@ export const QUALITY_BUDGETS = Object.freeze({
       dust: 60,
     },
     { quads: 96, quadArea: 0.6 },
-    { horizon: 0.35, reverb: 'lite' }
+    { reverb: 'lite' }
   ),
   mid: budget(
     'mid',
@@ -45,7 +45,7 @@ export const QUALITY_BUDGETS = Object.freeze({
       dust: 120,
     },
     { quads: 160, quadArea: 1 },
-    { horizon: 0.25, reverb: 'full' }
+    { reverb: 'full' }
   ),
   high: budget(
     'high',
@@ -59,7 +59,7 @@ export const QUALITY_BUDGETS = Object.freeze({
       dust: 170,
     },
     { quads: 256, quadArea: 1.5 },
-    { horizon: 0.25, reverb: 'full' }
+    { reverb: 'full' }
   ),
 });
 

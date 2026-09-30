@@ -58,6 +58,12 @@ const PLATE_STATUS_LIMIT = { simple: 3, expert: 4 };
 const currentView = (session = ctx.battleSession) =>
   session ? (session.displayState ?? session.state) : null;
 const ratioOf = (value, max) => (max > 0 ? Math.max(0, Math.min(1, value / max)) : 0);
+
+// Only the player's side shows a Chromatique: every rival image pins the normal look, and
+// `data-variant` keeps a Chromatique toggle from repainting it (ctx.setChromatique).
+function spriteAttrs(side, id) {
+  return side === 'player' ? `src="${sprite(id)}"` : `src="${sprite(id, 'normal')}" data-variant="normal"`;
+}
 const scaleX = (ratio) => `scaleX(${ratio.toFixed(4)})`;
 const isRookie = (view) => Boolean(view?.modifiers?.includes('rookie'));
 const coarsePointer = matchMedia('(pointer: coarse)');
@@ -143,9 +149,10 @@ function intentChipHtml(state, { portrait = false } = {}) {
           : t('battle.intentTactic');
   } else if (action.type === 'switch' && expert)
     text = t('battle.intentSwitchTo', { name: creatureName(state.sides.enemy.team[action.index].id) });
-  const face = portrait
-    ? `<img class="intent-portrait" src="${sprite(activeOf(state, 'enemy').id)}" alt="${escapeHtml(creatureName(activeOf(state, 'enemy').id))}">`
-    : '';
+  const rival = activeOf(state, 'enemy').id,
+    face = portrait
+      ? `<img class="intent-portrait" ${spriteAttrs('enemy', rival)} alt="${escapeHtml(creatureName(rival))}">`
+      : '';
   return `<div class="intent-read intent-${tone}" role="note"><span class="visually-hidden">${escapeHtml(t('battle.intent'))} :</span>${face}${icon(iconName)}<b>${escapeHtml(text)}</b></div>`;
 }
 
@@ -543,8 +550,17 @@ function emphasisTone(emphasis) {
   return 'neutral';
 }
 
+// A leading space keeps the inline emphasis of the slim bar apart from its sentence (a block
+// emphasis drops it).
 function emphasisHtml(emphasis) {
-  return `<span class="narration-emphasis" data-tone="${emphasisTone(emphasis)}">${escapeHtml(emphasis)}</span>`;
+  return `<span class="narration-emphasis" data-tone="${emphasisTone(emphasis)}"> ${escapeHtml(emphasis)}</span>`;
+}
+
+// The slim bar holds two lines: a line that needs more takes its tighter size (16 px). The bar
+// never grows, so a long line never re-fits the stage.
+function fitNarration(line) {
+  delete line.dataset.fit;
+  if (line.scrollHeight > line.clientHeight + 1) line.dataset.fit = 'tight';
 }
 
 function showNarration(entry) {
@@ -552,7 +568,8 @@ function showNarration(entry) {
   if (!line) return;
   entry.shownAt = performance.now();
   narration.current = entry;
-  line.innerHTML = `<span class="narration-line">${highlightNames(entry.text)}</span>${entry.emphasis ? emphasisHtml(entry.emphasis) : ''}`;
+  line.innerHTML = `<span class="narration-line">${highlightNames(entry.text)}${entry.emphasis ? emphasisHtml(entry.emphasis) : ''}</span>`;
+  fitNarration(line);
 }
 
 // The showing line hands over once its hold is over and a line waits.
@@ -597,10 +614,12 @@ function narrate(text, { emphasis = null, minMs = 0 } = {}) {
 function emphasizeNarration(entry, emphasis) {
   if (!entry || entry.emphasis === emphasis) return;
   entry.emphasis = emphasis;
-  const line = narration.current === entry ? screen.querySelector('#action-line') : null;
-  if (!line?.querySelector('.narration-line')) return;
-  line.querySelector('.narration-emphasis')?.remove();
-  if (emphasis) line.insertAdjacentHTML('beforeend', emphasisHtml(emphasis));
+  const line = narration.current === entry ? screen.querySelector('#action-line') : null,
+    text = line?.querySelector('.narration-line');
+  if (!text) return;
+  text.querySelector('.narration-emphasis')?.remove();
+  if (emphasis) text.insertAdjacentHTML('beforeend', emphasisHtml(emphasis));
+  fitNarration(line);
 }
 
 // The narration box while a turn plays: empty until the first beat narrates.
@@ -609,6 +628,106 @@ function openNarration() {
   if (!line || line.querySelector('.narration-line')) return;
   resetNarration();
   line.textContent = '';
+  delete line.dataset.fit;
+}
+
+/* ------------------------------------------------------------- stage room */
+
+// The stage takes the room the rest of the screen leaves it (§11.2): the command dock while the
+// player chooses ('choice'), the slim narration bar while a turn plays or a K.O.'d creature's
+// replacement is picked ('turn'), the whole screen for the outro ('full'). A mode change lays the
+// screen out once and re-fits the arena once, synchronously (its ResizeObserver then finds the
+// rect unchanged). The canvas, the player's plate and the dock then glide from where they were
+// (compositor-only FLIP), so nothing re-lays out per frame.
+const RESTAGE = { id: 'restage', ms: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
+let restageToken = 0;
+
+const clampTo = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high));
+
+// Screen-space centre of both fighters' rest feet and heads, and their summed visible heights.
+function fighterFrame(anchors, rect) {
+  const points = ['player', 'enemy'].flatMap((side) =>
+    ['feet', 'head'].map((key) => [rect.left + anchors[side][key].x, rect.top + anchors[side][key].y])
+  );
+  return {
+    x: points.reduce((sum, [x]) => sum + x, 0) / points.length,
+    y: points.reduce((sum, [, y]) => sum + y, 0) / points.length,
+    size: anchors.player.sizePx + anchors.enemy.sizePx,
+  };
+}
+
+function restage(mode, update = null) {
+  const stage = screen.querySelector('.battle-stage'),
+    arena = ctx.arenaScene;
+  if (screen.dataset.stage === mode || !stage || !arena || arena.disposed) {
+    screen.dataset.stage = mode;
+    update?.();
+    return;
+  }
+  for (const animation of screen.getAnimations({ subtree: true }))
+    if (animation.id === RESTAGE.id) animation.finish();
+  const canvas = stage.querySelector('.arena-canvas'),
+    dock = screen.querySelector('.battle-command-dock'),
+    plate = screen.querySelector('.battle-plate-slot.player'),
+    from = stage.getBoundingClientRect(),
+    fromFrame = fighterFrame(arena.anchors(), from),
+    dockFrom = dock?.getBoundingClientRect(),
+    plateFrom = plate?.getBoundingClientRect();
+  screen.dataset.stage = mode;
+  update?.();
+  const to = stage.getBoundingClientRect();
+  if (Math.round(to.width) === Math.round(from.width) && Math.round(to.height) === Math.round(from.height))
+    return;
+  const toFrame = fighterFrame(arena.fitToStage(to), to);
+  if (testAnimationScale === 0 || ctx.save.reducedMotion || !canvas) return;
+  // What the screen showed of the old stage above the dock stays covered from the first frame:
+  // the canvas scales (never below 1) and moves so the re-fitted fighters stand where they stood,
+  // as far as covering that room allows, then relaxes to its new rest.
+  const keep = {
+      left: Math.max(from.left, to.left) - to.left,
+      right: Math.min(from.right, to.right) - to.left,
+      top: from.top - to.top,
+      bottom: Math.min(from.bottom, dockFrom?.top ?? from.bottom) - to.top,
+    },
+    scale = Math.max(
+      1,
+      fromFrame.size / toFrame.size,
+      (keep.right - keep.left) / to.width,
+      (keep.bottom - keep.top) / to.height
+    ),
+    x = clampTo(
+      fromFrame.x - to.left - scale * (toFrame.x - to.left),
+      keep.right - scale * to.width,
+      keep.left
+    ),
+    y = clampTo(
+      fromFrame.y - to.top - scale * (toFrame.y - to.top),
+      keep.bottom - scale * to.height,
+      keep.top
+    ),
+    glide = (node, transform) =>
+      node.animate([{ transform }, { transform: 'none' }], {
+        duration: RESTAGE.ms,
+        easing: RESTAGE.easing,
+        id: RESTAGE.id,
+      }),
+    token = ++restageToken;
+  // The stage paints below its new edge while it shrinks, down to the rising dock.
+  screen.classList.add('restaging');
+  glide(canvas, `translate(${x}px, ${y}px) scale(${scale})`).finished.then(
+    () => token === restageToken && screen.classList.remove('restaging'),
+    () => token === restageToken && screen.classList.remove('restaging')
+  );
+  for (const [node, rect] of [
+    [dock, dockFrom],
+    [plate, plateFrom],
+  ]) {
+    if (!node || !rect) continue;
+    const now = node.getBoundingClientRect(),
+      dx = node === dock ? 0 : rect.left - now.left,
+      dy = rect.top - now.top;
+    if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) glide(node, `translate(${dx}px, ${dy}px)`);
+  }
 }
 
 /* ------------------------------------------------------------- command dock */
@@ -1112,7 +1231,7 @@ function plateDetailHtml(side, view = currentView()) {
     team = owner.team
       .map(
         (member, index) =>
-          `<li class="${index === owner.active ? 'active' : ''}${member.hp <= 0 ? ' ko' : ''}"><img src="${sprite(member.id)}" alt=""><span><b>${escapeHtml(creatureName(member.id))}</b><span class="plate-hp switch-hp" data-hp-state="${member.hp > 0 ? hpState(member.hp, member.maxHp) : 'low'}"><i class="plate-hp-fill" style="transform:${scaleX(ratioOf(member.hp, member.maxHp))}"></i></span></span><small class="num">${member.hp}/${member.maxHp}</small></li>`
+          `<li class="${index === owner.active ? 'active' : ''}${member.hp <= 0 ? ' ko' : ''}"><img ${spriteAttrs(side, member.id)} alt=""><span><b>${escapeHtml(creatureName(member.id))}</b><span class="plate-hp switch-hp" data-hp-state="${member.hp > 0 ? hpState(member.hp, member.maxHp) : 'low'}"><i class="plate-hp-fill" style="transform:${scaleX(ratioOf(member.hp, member.maxHp))}"></i></span></span><small class="num">${member.hp}/${member.maxHp}</small></li>`
       )
       .join('');
   return `<div class="plate-detail" style="--plate-type:${AFFINITIES[c.affinity].color}"><div class="plate-detail-head"><i class="plate-type">${affinityIcon(c.affinity)}</i><b>${escapeHtml(affinityName(c.affinity))}</b><span class="num">${c.hp}/${c.maxHp} ${escapeHtml(t('battle.hpUnit'))}</span></div>${side === 'enemy' && isRookie(view) ? `<p class="plate-detail-rookie">${icon('info')}<span><b>${escapeHtml(t('battle.level', { level: ROOKIE_LEVEL }))}</b> ${escapeHtml(t('battle.rookie'))}</span></p>` : ''}<article class="plate-detail-talent">${icon('sparkle')}<div><small>${escapeHtml(t('battle.talent'))}</small><b>${escapeHtml(t(`passive.${passive}`))}</b>${expert ? `<p>${escapeHtml(t(`passive.effect.${passive}`))}</p>` : ''}</div></article><div class="plate-detail-statuses">${statuses.join('') || `<p>${escapeHtml(t('battle.noStatuses'))}</p>`}</div><ol class="plate-detail-team" aria-label="${escapeHtml(t('battle.plateTeam'))}">${team}</ol>${side === 'enemy' ? `<div class="plate-detail-intent">${intentChipHtml(ctx.battleSession.state)}</div>` : ''}</div>`;
@@ -1304,6 +1423,7 @@ registerRoutes({
   narrate,
   emphasizeNarration,
   openNarration,
+  restage,
   renderCommands,
   moveInfoHtml,
   switchSheetHtml,

@@ -154,6 +154,8 @@ test('switch sheet rows show HP and a verdict, and the recommendation never cove
   );
   await page.locator('[data-action="quick"]').click();
   await page.locator('[data-action="start-battle"]').click();
+  // The dock stays locked from the battle screen's first frame until the intro hands over.
+  await expect(page.locator('.battle-screen:not(.locked) [data-move]:enabled').first()).toBeVisible();
   await page.keyboard.press('c');
   const rows = page.locator('.switch-option');
   await expect(rows).toHaveCount(2);

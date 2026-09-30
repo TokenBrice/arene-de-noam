@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/monolith-clean.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/monsters/originals/pre-redraw/monolith-battle.png",
+  "reference": null,
+  "seed": 510411,
+  "job_id": "099b78ee-3947-4203-9ab0-29f947b92517",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "monolith-clean-candidate-1.png",
+    "monolith-clean-candidate-2.png",
+    "monolith-clean-candidate-3.png",
+    "monolith-clean-candidate-4.png",
+    "monolith-clean-candidate-5.png",
+    "monolith-clean-candidate-6.png",
+    "monolith-clean-candidate-7.png",
+    "monolith-clean-candidate-8.png"
+  ]
+}

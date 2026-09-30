@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/magmoth-clean-2.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/concepts/magmoth-clean/magmoth-clean-candidate-1.png",
+  "reference": null,
+  "seed": 510212,
+  "job_id": "e83b0909-72c6-4e36-8838-f3a4b88341c1",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "magmoth-clean-2-candidate-1.png",
+    "magmoth-clean-2-candidate-2.png",
+    "magmoth-clean-2-candidate-3.png",
+    "magmoth-clean-2-candidate-4.png",
+    "magmoth-clean-2-candidate-5.png",
+    "magmoth-clean-2-candidate-6.png",
+    "magmoth-clean-2-candidate-7.png",
+    "magmoth-clean-2-candidate-8.png"
+  ]
+}

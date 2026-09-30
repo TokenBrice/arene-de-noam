@@ -211,7 +211,7 @@ function checkCue(where, cue, { end, cells }) {
       assert.ok(cue.to, `${where}: ${cue.emitter} travels to an anchor`);
     assert.ok(Number.isInteger(cue.q) && cue.q > 0, `${where}: quad count`);
     assert.ok(
-      cue.cell in ATLAS.cells || (cells === 'motif' && cue.cell === 'motif'),
+      cue.cell in ATLAS.cells || cue.cell === 'solid' || (cells === 'motif' && cue.cell === 'motif'),
       `${where}: cell ${cue.cell}`
     );
   }

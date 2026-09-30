@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/magmoth-clean.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/monsters/originals/pre-redraw/magmoth-battle.png",
+  "reference": null,
+  "seed": 510211,
+  "job_id": "c25e65d2-c0b7-4ebb-959e-8bd35487f6d5",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "magmoth-clean-candidate-1.png",
+    "magmoth-clean-candidate-2.png",
+    "magmoth-clean-candidate-3.png",
+    "magmoth-clean-candidate-4.png",
+    "magmoth-clean-candidate-5.png",
+    "magmoth-clean-candidate-6.png",
+    "magmoth-clean-candidate-7.png",
+    "magmoth-clean-candidate-8.png"
+  ]
+}

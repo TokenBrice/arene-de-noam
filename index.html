@@ -20,6 +20,14 @@
         if (saved?.highContrast) root.classList.add('high-contrast');
         if (language === 'en' || language === 'fr') root.lang = language;
       } catch {}
+      // The shown language's dictionary is its own module (src/i18n.js): fetch it beside the app
+      // instead of after it. tools/build.mjs rewrites both paths to their hashed chunks.
+      {
+        const dictionary = document.createElement('link');
+        dictionary.rel = 'modulepreload';
+        dictionary.href = document.documentElement.lang === 'en' ? './src/i18n/en.js' : './src/i18n/fr.js';
+        document.head.append(dictionary);
+      }
     </script>
     <title>Arène de Noam</title>
     <link rel="stylesheet" href="./styles/tokens.css" />

@@ -69,10 +69,10 @@ test('a first League win celebrates the badge and the mode it opens; a replay do
   expect(saved.ladderVictories).toBe(6);
 });
 
-test('the League route preselects the next rival and replays cleared duels', async ({ page }) => {
+test('the League card fights with the saved team, or opens team select first', async ({ page }) => {
   await page.setViewportSize(PHONE);
   await installCompletedTutorial(page, { ladderVictories: 2 });
-  await page.goto('/');
+  await page.goto('/?animations=0');
   await page.locator('[data-action="league"]').first().click();
   await expect(page.getByRole('heading', { name: 'Carte de la Ligue' })).toBeVisible();
   await expect(page.locator('.league-node')).toHaveCount(12);
@@ -84,15 +84,25 @@ test('the League route preselects the next rival and replays cleared duels', asy
   await expect(card).toContainText('Rival 3/12');
   await expect(card.locator('.weather-chip')).toHaveCount(2);
   await expect(page.locator('.primary-btn')).toHaveCount(1);
-  await expectInFirstViewport(page, page.locator('[data-action="league-2"]'));
+  await expectInFirstViewport(page, page.locator('[data-action="league-fight"]'));
+  await expectInFirstViewport(page, page.locator('[data-action="league-team"]'));
   await page.locator('[data-league-node="5"]').click();
   await expect(card).toContainText('???');
-  await expect(page.locator('.league-card .primary-btn')).toHaveCount(0);
+  await expect(card.locator('button')).toHaveCount(0);
+  // A cleared rival: "Changer d'équipe" prepares the duel in team select…
   await page.locator('[data-league-node="0"]').click();
   await expect(page.locator('[data-league-node="0"]')).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Rejouer ce duel' }).click();
+  await page.getByRole('button', { name: 'Changer d’équipe' }).click();
   await expect(page.locator('#screen')).toHaveAttribute('data-page', 'selection');
-  await expect(page.getByText('Gardienne de l’Aube').first()).toBeVisible();
+  await expect(page.locator('.ts-rival')).toContainText('Gardienne de l’Aube');
+  // …while the gold button replays it straight away with the saved team, like JOUER.
+  await page.locator('[data-action="back"]').click();
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'league');
+  await expect(page.locator('[data-league-node="0"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Rejouer ce duel' }).click();
+  await arenaReady(page);
+  await expect(page.locator('#fighter-enemy')).toHaveAttribute('data-creature', TRAINERS[0].team[0]);
+  await expect(page.locator('#fighter-player')).toHaveAttribute('data-creature', 'orakyn');
 });
 
 test('all six arena themes render without runtime errors', async ({ page }) => {
@@ -419,6 +429,37 @@ test('the tutorial ends on a real Victoire that awards XP, then leads to team se
   expect(saved.mastery.abyssar).toBeGreaterThan(0);
   await page.locator('[data-action="pick-team"]').click();
   await expect(page.locator('#screen')).toHaveAttribute('data-page', 'selection');
+  await expect(page.locator('.ts-guide')).toContainText('Bravo');
+});
+
+test('a skipped tutorial greets team select without a Bravo', async ({ page }) => {
+  await page.goto('/?seed=4242&animations=0');
+  await page.locator('[data-action="play"]').first().click();
+  await page.locator('.battle-screen:not(.locked) [data-action="skip-tutorial"]').click({ timeout: 15000 });
+  await page.locator('[data-action="skip-confirm"]').click();
+  await expect(page.locator('#screen')).toHaveAttribute('data-page', 'selection');
+  await expect(page.locator('.ts-guide')).toBeVisible();
+  await expect(page.locator('.ts-guide')).not.toContainText('Bravo');
+});
+
+test('a newly opened side mode is marked Nouveau until it is played', async ({ page }) => {
+  await page.setViewportSize(PHONE);
+  // Four badges: Expédition and Épreuves open; the Expédition was already won once.
+  await installCompletedTutorial(page, { ladderVictories: 4, gauntletWins: 1 });
+  await page.goto('/?animations=0');
+  await expect(page.locator('.hub-tile--challenges .new-pill')).toBeVisible();
+  await page.locator('[data-action="challenges"]').click();
+  await expect(page.locator('.hub-challenge--trials .new-pill')).toBeVisible();
+  await expect(page.locator('.hub-challenge--gauntlet .new-pill')).toHaveCount(0);
+  await expect(page.locator('.hub-challenge--draft .new-pill')).toHaveCount(0);
+  // A cleared trial counts as played: nothing is new any more.
+  await page.evaluate(() => {
+    const save = JSON.parse(localStorage.getItem('arene-de-noam-save'));
+    localStorage.setItem('arene-de-noam-save', JSON.stringify({ ...save, trials: ['starstorm'] }));
+  });
+  await page.reload();
+  await expect(page.locator('.hub-tile--challenges')).toBeVisible();
+  await expect(page.locator('.new-pill')).toHaveCount(0);
 });
 
 test('the back gesture goes one level up, pauses battles and never leaves from inside', async ({ page }) => {
@@ -427,7 +468,7 @@ test('the back gesture goes one level up, pauses battles and never leaves from i
   const onPage = (name) => expect(page.locator('#screen')).toHaveAttribute('data-page', name);
   await page.locator('[data-action="league"]').first().click();
   await page.locator('[data-league-node="0"]').click();
-  await page.locator('[data-action="league-0"]').click();
+  await page.locator('[data-action="league-team"]').click();
   await onPage('selection');
   await page.goBack();
   await onPage('league');
@@ -473,21 +514,44 @@ test('removed loadout systems stay absent and battle opens at neutral Signature'
   await expect(page.locator('#hud-player')).toContainText('30/100');
 });
 
-test('secondary screens fit phone, landscape and desktop without horizontal clipping', async ({ page }) => {
+test('secondary screens fit phone, landscape and desktop: no horizontal clipping, one-line titles', async ({
+  page,
+}) => {
   await installCompletedTutorial(page, ALL_MODES);
+  const open = {
+    league: () => page.locator('[data-action="league"]').first().click(),
+    bestiary: () => page.locator('[data-action="bestiary"]').click(),
+    academy: () => page.locator('[data-action="academy"]').click(),
+    trials: async () => {
+      await page.locator('[data-action="challenges"]').click();
+      await page.locator('[data-action="trials"]').click();
+    },
+    draft: async () => {
+      await page.locator('[data-action="challenges"]').click();
+      await page.locator('[data-action="draft"]').click();
+    },
+  };
   for (const viewport of [PHONE, { width: 800, height: 360 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport);
-    await page.goto('/?animations=0');
-    for (const action of ['league', 'bestiary', 'academy']) {
-      await page.locator(`[data-action="${action}"]`).first().click();
-      const size = await page.evaluate(() => ({
-        body: document.documentElement.scrollWidth,
-        screen: document.querySelector('#screen').scrollWidth,
-        view: innerWidth,
-      }));
+    for (const go of Object.values(open)) {
+      await page.goto('/?animations=0');
+      await go();
+      await expect(page.locator('.topbar-title h1')).toBeVisible();
+      const size = await page.evaluate(() => {
+        const h1 = document.querySelector('.topbar-title h1');
+        return {
+          body: document.documentElement.scrollWidth,
+          screen: document.querySelector('#screen').scrollWidth,
+          view: innerWidth,
+          // The page title never wraps under its topbar actions.
+          titleLines: Math.round(
+            h1.getBoundingClientRect().height / parseFloat(getComputedStyle(h1).lineHeight)
+          ),
+        };
+      });
       expect(size.body).toBeLessThanOrEqual(size.view);
       expect(size.screen).toBeLessThanOrEqual(size.view);
-      await page.locator('[data-action="back"]').first().click();
+      expect(size.titleLines).toBe(1);
     }
   }
 });
@@ -495,7 +559,7 @@ test('secondary screens fit phone, landscape and desktop without horizontal clip
 test('cold boot does not steal focus during initial title render', async ({ page }) => {
   await installCompletedTutorial(page);
   await page.goto('/?animations=0');
-  await expect(page.locator('.screen-transition-veil')).toHaveCount(0);
+  await expect(page.locator('[data-action="quick"]')).toBeVisible();
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
 });
 

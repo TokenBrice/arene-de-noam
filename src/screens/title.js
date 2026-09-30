@@ -32,7 +32,6 @@ const {
   renderBestiary,
   renderAcademy,
   renderGauntletBoons,
-  resumableGauntlet,
 } = route;
 
 // Title = mode hub: the lead creature on a spotlight, the League strip, one
@@ -56,26 +55,29 @@ function ladderMode() {
   return ctx.save.ladderVictories >= LADDER_COUNT ? 'circuit' : 'ladder';
 }
 
-function play() {
+// newSelection lives in the lazy screens chunk: its route call may resolve later.
+async function play() {
   if (!ctx.save.tutorialComplete) {
     startTutorial();
     return;
   }
   const mode = ladderMode();
-  ctx.selection = newSelection(mode);
+  ctx.selection = await newSelection(mode);
   if (isValidTeam(ctx.selection.team)) startSelectionBattle(ctx.selection);
   else renderTeamSelect(mode);
 }
 
+// The trio carries data-shared-creature: team select shows the same creatures in its slots, and
+// the route transition (shell.js) moves each one between the two screens.
 function heroHtml() {
   const [lead, ...bench] = ctx.save.lastTeam;
   const benchHtml = bench
     .map(
       (id, index) =>
-        `<img class="hub-bench hub-bench-${index ? 'right' : 'left'}" src="${sprite(id)}" alt="${creatureName(id)}" width="128" height="128" decoding="async">`
+        `<img class="hub-bench hub-bench-${index ? 'right' : 'left'}" src="${sprite(id)}" alt="${creatureName(id)}" width="128" height="128" decoding="async" data-shared-creature="${id}">`
     )
     .join('');
-  return `<section class="hub-hero"><div class="hub-stage"><i class="hub-cone" aria-hidden="true"></i><i class="hub-pad" aria-hidden="true"></i>${benchHtml}<div class="hub-lead"><img src="${sprite(lead)}" alt="${creatureName(lead)}" width="128" height="128"></div></div></section>`;
+  return `<section class="hub-hero"><div class="hub-stage"><i class="hub-cone" aria-hidden="true"></i><i class="hub-pad" aria-hidden="true"></i>${benchHtml}<div class="hub-lead"><img src="${sprite(lead)}" alt="${creatureName(lead)}" width="128" height="128" data-shared-creature="${lead}"></div></div></section>`;
 }
 
 // The strip's twelve badges, in the same art as the League map and the results.
@@ -88,9 +90,11 @@ function leagueHtml() {
   return `<button type="button" class="hub-league" data-action="league"><span class="hub-league-icon">${icon('trophy')}</span><span class="hub-league-text"><b>${t('hub.league', { count: progress, total: LADDER_COUNT })}</b><small>${next}</small></span><span class="hub-badges" aria-hidden="true">${badges}</span>${icon('chevron-right')}</button>`;
 }
 
-function tileHtml(action, iconName, label, hint) {
-  return `<button type="button" class="hub-tile hub-tile--${action}" data-action="${action}"><span class="hub-tile-icon">${icon(iconName)}</span><span class="hub-tile-text"><b>${label}</b><small>${hint}</small></span></button>`;
+function tileHtml(action, iconName, label, hint, marker = '') {
+  return `<button type="button" class="hub-tile hub-tile--${action}" data-action="${action}"><span class="hub-tile-icon">${icon(iconName)}</span><span class="hub-tile-text"><b>${label}</b><small>${hint}</small></span>${marker}</button>`;
 }
+
+const newPill = () => `<span class="new-pill">${t('hub.new')}</span>`;
 
 function statsLine() {
   const { wins, winStreak, bestGrade, battlesPlayed } = ctx.save;
@@ -101,6 +105,13 @@ function statsLine() {
   return `<p class="hub-stats">${parts.join(' · ')}</p>`;
 }
 
+// A live Expédition run with at least one cleared stage still to finish: the Défis sheet resumes
+// it at the faveur screen instead of starting over.
+function resumableGauntlet() {
+  const run = ctx.gauntletRun;
+  return run && run.stage > 0 && run.stage < GAUNTLET_STAGES.length ? run : null;
+}
+
 // In unlock order (2, 4 then 6 badges), so open modes come first.
 const CHALLENGES = [
   { action: 'gauntlet', icon: 'mountain', label: 'app.gauntlet' },
@@ -108,14 +119,22 @@ const CHALLENGES = [
   { action: 'draft', icon: 'calendar', label: 'app.draft' },
 ];
 
+// A side mode is "Nouveau" while it is open and was never played, read from the save as it is
+// (no flag of its own): no Expédition won or under way, no trial cleared, no Pioche won.
+const PLAYED = Object.freeze({
+  gauntlet: (save) => save.gauntletWins > 0 || Boolean(resumableGauntlet()),
+  trials: (save) => save.trials.length > 0,
+  draft: (save) => save.draftWins > 0,
+});
+const isNewMode = (action, modes) => modes[action].unlocked && !PLAYED[action](ctx.save);
+
 function challengeHint(action) {
   if (action === 'draft') return t('hub.draftHint');
   if (action === 'gauntlet') return t('hub.gauntletHint', { count: GAUNTLET_STAGES.length });
   return t('hub.trialsHint', { count: ctx.save.trials.length, total: TRIALS.length });
 }
 
-// A live Expédition run with a cleared stage takes the Expédition row: it resumes at the
-// faveur screen instead of starting over.
+// A live Expédition run with a cleared stage takes the Expédition row (resumableGauntlet).
 function challengeRow({ action, icon: iconName, label }, modes) {
   const run = action === 'gauntlet' ? resumableGauntlet() : null,
     { unlocked, badgesNeeded } = modes[action],
@@ -125,7 +144,7 @@ function challengeRow({ action, icon: iconName, label }, modes) {
       : unlocked
         ? `<small>${challengeHint(action)}</small>`
         : `<small class="hub-lock">${icon('lock')}<span>${t('hub.locked', { count: badgesNeeded - ctx.save.ladderVictories })}</span></small>`;
-  return `<button type="button" class="hub-challenge hub-challenge--${action}${unlocked ? '' : ' is-locked'}" data-action="${action}"${run ? ' data-resume' : ''}${unlocked ? '' : ' disabled'}><span class="hub-challenge-icon">${icon(iconName)}</span><span class="hub-challenge-text"><b>${title}</b>${detail}</span>${unlocked ? icon('chevron-right') : ''}</button>`;
+  return `<button type="button" class="hub-challenge hub-challenge--${action}${unlocked ? '' : ' is-locked'}" data-action="${action}"${run ? ' data-resume' : ''}${unlocked ? '' : ' disabled'}><span class="hub-challenge-icon">${icon(iconName)}</span><span class="hub-challenge-text"><b>${title}</b>${detail}</span>${unlocked ? icon('chevron-right') : ''}${isNewMode(action, modes) ? newPill() : ''}</button>`;
 }
 
 function openChallenges() {
@@ -162,7 +181,8 @@ function renderTitle() {
       'challenges',
       'flag',
       t('hub.challenges'),
-      lockedCount ? t('hub.challengesLocked', { count: lockedCount }) : t('hub.challengesHint')
+      lockedCount ? t('hub.challengesLocked', { count: lockedCount }) : t('hub.challengesHint'),
+      CHALLENGES.some(({ action }) => isNewMode(action, modes)) ? newPill() : ''
     ),
     tileHtml('bestiary', 'book', t('hub.creatures'), t('hub.creaturesHint', { count: CREATURE_IDS.length })),
     tileHtml('academy', 'school', t('app.academy'), t('hub.schoolHint')),

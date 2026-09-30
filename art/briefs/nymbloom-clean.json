@@ -1,0 +1,12 @@
+{
+  "id": "nymbloom-clean",
+  "seed": 510611,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/nymbloom-battle.png",
+  "variant_count": 4,
+  "description": "Redraw this creature as clean premium pixel art in the house style of a polished creature-battler roster: compact readable pixel clusters, three or four tone ramps per material, one clear top-left light, a selective dark outline that is darkest on the shadow side, and no soft airbrushed glow or noisy speckles. Keep its identity exactly: a graceful royal axolotl-deer healer, pearl sky-blue body with small white spots, coral-pink feathery axolotl gills fanning from the head, a pink water-lily crown with thin golden antlers, a friendly face with a clear dark eye, a long flowing pink and blue fin tail, slender deer legs with dark hooves, a few round healing bubbles floating around it, right-facing three-quarter standing pose. Same silhouette, pose and palette (pearl blue, coral pink, lily white, small gold accents). Full body, transparent background, no ground shadow, no text."
+}

@@ -1,9 +1,9 @@
 // Unlit stage materials. One shared ShaderMaterial program draws the backdrop plate, the floor
 // (court + apron + dynamic pad pools + optional glossy reflection) and the pads; one Points
 // program draws the ambient motes and the crowd flash-bulbs; high tier adds one light-shaft
-// program. Textures are NoColorSpace canvases and shaders write raw display-space sRGB, so the
-// grade maths matches the fighter shader (3B): c = mix(luma, c, sat); c *= 1 + exposure;
-// c = (c − 0.5)·contrast + 0.5.
+// program. Textures (painted plates decoded as ImageBitmaps, or the fallback painter's canvases)
+// are NoColorSpace and shaders write raw display-space sRGB, so the grade maths matches the
+// fighter shader (3B): c = mix(luma, c, sat); c *= 1 + exposure; c = (c − 0.5)·contrast + 0.5.
 import * as THREE from 'three';
 
 const GRADE = /* glsl */ `
@@ -111,12 +111,16 @@ void main() {
   gl_FragColor = vec4(grade(c), 1.0);
 }`;
 
-export function canvasTexture(canvas, { mipmaps = true } = {}) {
-  const texture = new THREE.CanvasTexture(canvas);
+// A stage texture from a painted canvas or a decoded ImageBitmap. WebGL ignores UNPACK_FLIP_Y for
+// bitmaps, so they are decoded with `imageOrientation: 'flipY'` and uploaded as-is.
+export function stageTexture(image, { mipmaps = true } = {}) {
+  const texture = new THREE.Texture(image);
+  texture.flipY = !(typeof ImageBitmap === 'function' && image instanceof ImageBitmap);
   texture.colorSpace = THREE.NoColorSpace;
   texture.generateMipmaps = mipmaps;
   texture.minFilter = mipmaps ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
   texture.anisotropy = 4;
+  texture.needsUpdate = true;
   return texture;
 }
 

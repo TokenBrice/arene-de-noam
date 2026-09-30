@@ -53,15 +53,13 @@ import {
   STATUS_DEFINITIONS,
   STATUS_DISPLAY_ORDER,
   sortStatusIds,
-  statusBadgeHtml,
   statusIcon,
 } from '../battle/statuses.js';
-import { createI18n, validateDictionaries } from '../i18n.js';
+import { statusBadgeHtml } from './status-badge.js';
+import { createI18n } from '../i18n.js';
 import { DEFAULT_SAVE, SAVE_KEY, freshDefaultSave, loadSave, persistSave } from '../save.js';
 import { SoundSystem } from '../sound.js';
 import { BATTLE_STYLESHEETS } from './battle-stylesheets.js';
-
-if (!validateDictionaries()) throw new Error('Localization dictionaries are incomplete');
 
 const params = new URLSearchParams(location.search);
 const testAnimationScale = params.get('animations') === '0' ? 0 : 1;
@@ -69,7 +67,9 @@ const loaded = loadSave();
 const initialSave = loaded.save;
 const urlLang = params.get('lang');
 if (urlLang === 'en' || urlLang === 'fr') initialSave.language = urlLang;
-const i18n = createI18n(initialSave.language);
+// Only the shown language is downloaded; everything that imports ctx waits for it, so t() is
+// synchronous from the first render on.
+const i18n = await createI18n(initialSave.language);
 const { t } = i18n;
 const screen = document.querySelector('#screen');
 const toast = document.querySelector('#toast');
@@ -255,14 +255,42 @@ function ensureBattleStyles() {
   return ctx.battleStylesReady;
 }
 
+/* In dist/, a lazy chunk may statically import another lazy chunk (code it shares with the
+   arena or the screens); tools/build.mjs lists those per entry in index.html (#chunk-preloads)
+   and they are fetched beside the chunk, not one round trip after it. Development has no list. */
+const CHUNK_PRELOADS = JSON.parse(document.querySelector('#chunk-preloads')?.textContent || '{}');
+function preloadChunkImports(entry) {
+  for (const href of CHUNK_PRELOADS[entry] ?? []) {
+    const link = document.createElement('link');
+    link.rel = 'modulepreload';
+    link.href = href;
+    document.head.append(link);
+  }
+}
+
 /* Three.js and the arena form a lazy chunk: the title never waits on them.
    main.js prefetches it once the title is idle; renderBattle awaits it. A
    failed load stays failed for this page (browsers keep failed module loads),
    so renderBattle asks for a reload. */
 let arenaModule = null;
 function loadArena() {
-  arenaModule ??= import('../presentation/arena.js');
+  if (!arenaModule) {
+    preloadChunkImports('src/presentation/arena.js');
+    arenaModule = import('../presentation/arena.js');
+  }
   return arenaModule;
+}
+
+/* The screens the title does not show, with the battle UI, form one lazy chunk (screens.js):
+   the title waits on none of it. main.js prefetches it once the title is idle; a route call that
+   arrives first loads it on the spot (see `route`). A failed load stays failed for this page. */
+let screensModule = null;
+function loadScreens() {
+  if (!screensModule) {
+    preloadChunkImports('src/app/screens.js');
+    screensModule = import('./screens.js');
+  }
+  return screensModule;
 }
 
 function disposeArena() {
@@ -400,6 +428,7 @@ Object.assign(ctx, {
   SAVE_KEY,
   persistSave,
   loadArena,
+  loadScreens,
   params,
   testAnimationScale,
   loaded,
@@ -433,21 +462,42 @@ Object.assign(ctx, {
   setLeaveGuard,
 });
 
+/* Cross-module calls. `const { renderTitle } = route` is safe before renderTitle is registered:
+   lookup happens when the forwarding function is called. A route that is not registered yet
+   lives in the lazy screens chunk: the call loads it first and returns a promise of the result,
+   so a caller that may run before the chunk (the title) awaits any value it needs. */
 export const route = new Proxy(
   {},
   {
     get(_target, property) {
       return function (...args) {
         const handler = ctx.routes[property];
-        if (!handler) throw new Error(`Route is not registered: ${String(property)}`);
-        return Reflect.apply(handler, this, args);
+        if (handler) return Reflect.apply(handler, this, args);
+        return loadScreens().then(
+          () => {
+            const loaded = ctx.routes[property];
+            if (!loaded) throw new Error(`Route is not registered: ${String(property)}`);
+            return Reflect.apply(loaded, this, args);
+          },
+          (error) => {
+            notify(t('error.pageLoad'));
+            throw error;
+          }
+        );
       };
     },
   }
 );
 
+// shell.js wraps the screen renders in the route transition (wrapRoutes); the wrapper also
+// applies to routes registered later, the lazy chunk's included.
+let wrapRoute = (_name, handler) => handler;
 export function registerRoutes(routes) {
-  Object.assign(ctx.routes, routes);
+  for (const [name, handler] of Object.entries(routes)) ctx.routes[name] = wrapRoute(name, handler);
+}
+export function wrapRoutes(wrap) {
+  wrapRoute = wrap;
+  for (const [name, handler] of Object.entries(ctx.routes)) ctx.routes[name] = wrap(name, handler);
 }
 
 syncPreferenceClasses();

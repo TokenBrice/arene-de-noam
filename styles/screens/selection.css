@@ -48,6 +48,13 @@
   flex: none;
   margin: 0;
 }
+/* "Ton équipe" stays on one line beside the three actions: a 360 px phone leaves it ~104 px
+   (and the landscape column below ~96 px), too little for the shared 22–28 px title. */
+@media (max-width: 400px) {
+  .ts > .topbar h1 {
+    font-size: var(--text-lg);
+  }
+}
 .ts-teams-btn > span {
   display: none;
 }
@@ -753,6 +760,9 @@
   }
   .ts > .topbar {
     min-height: 48px;
+  }
+  .ts > .topbar h1 {
+    font-size: var(--text-lg);
   }
   .ts-rival {
     padding-block: 6px;

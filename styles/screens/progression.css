@@ -125,34 +125,49 @@ body.high-contrast .badge-art--open .badge-rim {
 .status-badge.positive {
   border-radius: 999px;
 }
+/* A malus is a clipped tab; the clip keeps a notch open over its top-right corner so the
+   corner mark can stick out like the bonus one. */
 .status-badge.negative {
   border-style: inset;
   border-radius: 2px;
   background: color-mix(in srgb, var(--status-color) 18%, #050611);
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  clip-path: polygon(
+    6px 0,
+    calc(100% - 8px) 0,
+    calc(100% - 8px) -9px,
+    calc(100% + 9px) -9px,
+    calc(100% + 9px) 8px,
+    100% 8px,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0 100%,
+    0 6px
+  );
 }
-.status-badge::after {
+/* Corner mark: the chrome up / down arrow (src/app/status-badge.js) on a status-coloured disc
+   (bonus) or square (malus). */
+.status-badge-mark {
   position: absolute;
+  top: -7px;
+  right: -6px;
   display: grid;
   place-items: center;
-  width: 9px;
-  height: 9px;
+  width: 13px;
+  height: 13px;
   color: #07091d;
   background: var(--status-color);
-  font-size: 7px;
-  line-height: 1;
+  box-shadow: 0 0 0 1.5px #07091d;
 }
-.status-badge.positive::after {
-  content: '▲';
-  top: -5px;
-  right: 1px;
+.status-badge.positive .status-badge-mark {
   border-radius: 50%;
 }
-.status-badge.negative::after {
-  content: '▼';
-  right: 0;
-  bottom: -5px;
-  border-radius: 1px;
+.status-badge.negative .status-badge-mark {
+  border-radius: 2px;
+}
+.status-badge-mark .ico {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3.4;
 }
 .status-badge .status-icon {
   width: 15px;

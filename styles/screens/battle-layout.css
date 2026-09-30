@@ -14,6 +14,7 @@
   --plate-number: 16px;
   --top-btn: var(--hit);
   --dock-head: var(--hit);
+  --narration-bar: 62px;
   overflow: hidden;
   background:
     radial-gradient(120% 70% at 50% 0%, var(--arena-accent, #5b6cff) -60%, transparent 70%),
@@ -53,6 +54,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  transform-origin: 0 0;
   transition: none;
 }
 .battle-screen .fx-text {
@@ -751,6 +753,80 @@
   pointer-events: none;
   transition: visibility 0s linear var(--dur-med);
 }
+/* ------------------------------------------------------------- stage room */
+/* The stage takes the room the rest of the screen leaves it (§11.2, hud.js
+   restage): the dock while the player chooses, the slim narration bar while a
+   turn plays or a replacement is picked (portrait), the whole screen for the
+   outro. Each change lays out and re-fits the arena once, then the canvas,
+   the player's plate and the dock glide from where they were. The curtain
+   under the dock covers the room it gives up while it glides down; a
+   shrinking stage keeps painting down to the rising dock. */
+.battle-screen .battle-command-dock::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  background: var(--bg-0);
+  pointer-events: none;
+}
+.battle-screen.restaging .battle-stage {
+  overflow: visible;
+  clip-path: inset(0 0 -100vh);
+}
+@media (orientation: portrait) {
+  .battle-screen[data-stage='turn'] .battle-command-dock {
+    padding-top: 6px;
+  }
+  .battle-screen[data-stage='turn'] :is(.battle-controls, .dock-head > :not(.action-line)) {
+    display: none;
+  }
+  .battle-screen[data-stage='turn'] .dock-head {
+    height: var(--narration-bar);
+    padding-left: 0;
+  }
+  /* The slim narration bar: two lines of 18 px (16 px for a longer line),
+     names bold, moves cyan, the stamp's emphasis inline in its tone. */
+  .battle-screen.locked .action-line {
+    position: static;
+    height: 100%;
+    gap: 0;
+    padding: 8px 14px;
+    border-radius: var(--radius-m);
+    font-size: 18px;
+    line-height: 1.25;
+    overflow: hidden;
+    animation: none;
+  }
+  .battle-screen.locked .action-line[data-fit='tight'] {
+    font-size: 16px;
+  }
+  .battle-screen.locked .narration-line {
+    margin-block: auto;
+  }
+  .battle-screen.locked .narration-emphasis {
+    display: inline;
+    font-size: 1.1em;
+    line-height: 1;
+  }
+}
+/* The outro: the stage takes the whole screen, the top row and the bar fade
+   out over it. */
+.battle-screen[data-stage='full'] :is(.battle-top, .battle-command-dock) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) linear;
+}
+.battle-screen[data-stage='full'] .battle-top {
+  top: 0;
+}
+.battle-screen[data-stage='full'] .battle-command-dock {
+  bottom: 0;
+}
 /* Tutorial (GAME-04): the lesson lives in the prompt line, so the stage stays
    clear; the head row is taller for the whole tutorial (the stage fits once). */
 .battle-screen.tutorial-mode {
@@ -1312,6 +1388,17 @@ body.high-contrast .battle-screen .prompt-hint {
     grid-template-columns: minmax(0, 1fr) var(--dock-w);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas: 'stage top' 'stage dock';
+  }
+  /* The outro folds the dock column away; its panels fade out in place. */
+  .battle-screen[data-stage='full'] .battle-layout {
+    grid-template-columns: minmax(0, 1fr) 0;
+  }
+  .battle-screen[data-stage='full'] :is(.battle-top, .battle-command-dock) {
+    left: auto;
+    width: var(--dock-w);
+  }
+  .battle-screen[data-stage='full'] .battle-command-dock {
+    top: 0;
   }
   .battle-screen .battle-top {
     padding-left: var(--battle-edge);

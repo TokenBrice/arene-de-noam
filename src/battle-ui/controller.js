@@ -141,13 +141,13 @@ function openBattleSheet({ title, body, actions = [], variant, onClose }) {
 }
 
 // Only the player's own creatures show their Chromatique; the rival's copy of a
-// creature always keeps its normal look.
+// creature always keeps its normal look (`data-variant` pins it).
 const fighterVariant = (side, id) => (side === 'player' ? ctx.spriteVariant(id) : 'normal');
 
 // Visually hidden stand-ins for the WebGL fighters: names for assistive tech and
 // e2e hooks (docs/battle-presentation.md §8.3). FighterLayer writes data-phase.
 function fighterProxyHtml(side, creature) {
-  return `<div class="fighter-proxy visually-hidden ${side}" id="fighter-${side}" data-creature="${creature.id}" data-affinity="${creature.affinity}" data-phase="idle"><img src="${sprite(creature.id, fighterVariant(side, creature.id))}" alt="${escapeHtml(creatureName(creature.id))}" width="128" height="128"></div>`;
+  return `<div class="fighter-proxy visually-hidden ${side}" id="fighter-${side}" data-creature="${creature.id}" data-affinity="${creature.affinity}" data-phase="idle"><img src="${sprite(creature.id, fighterVariant(side, creature.id))}"${side === 'player' ? '' : ' data-variant="normal"'} alt="${escapeHtml(creatureName(creature.id))}" width="128" height="128"></div>`;
 }
 // Idempotent sync of both fighters to `view` (§8.4): the proxy is written at the
 // swap, then the scene places the sprite. A K.O.'d active creature is shown
@@ -271,6 +271,8 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
   const state = session.state;
   screen.dataset.page = 'battle';
   screen.className = `screen battle-screen ${ctx.save.expertMode ? 'expert-mode' : 'simple-mode'}${session.mode === 'tutorial' ? ' tutorial-mode' : ''}`;
+  // The intro plays in the turn's room (§6.6, §11.2): the arena fits that stage from its first frame.
+  screen.dataset.stage = 'turn';
   screen.innerHTML = `<div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info">${topRowHtml(state)}<div class="battle-plate-slot enemy" id="hud-enemy">${plateHtml('enemy', state)}</div><div class="battle-plate-slot player" id="hud-player">${plateHtml('player', state)}</div></section><section class="battle-stage" data-battle-zone="stage"><canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas>${fighterProxyHtml('enemy', activeOf(state, 'enemy'))}${fighterProxyHtml('player', activeOf(state, 'player'))}<div id="fx-text" class="fx-text" aria-hidden="true"></div></section><section class="battle-command-dock" data-battle-zone="controls"><div class="dock-head" id="dock-head"><div class="action-line" id="action-line" role="status" aria-live="polite"></div></div><div class="battle-controls"><div class="move-grid" id="moves"></div></div></section></div><div id="replacement-root"></div>`;
   try {
     if (!arena) throw new Error('ARENA_LOAD_FAILED');
@@ -304,11 +306,13 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
   });
   bindInfoZone(session);
   bindCommandDock(session);
+  ctx.locked = true;
   refreshBattle();
   sound.unlock();
   void requestWakeLock();
-  // Both fighters are on the GPU before the programs compile and the intro plays.
-  await patchFighters(state);
+  // Both fighters and the arena's plate and court are on the GPU before the programs compile and
+  // the intro plays (`ready` settles within its decode deadline, painting any late image).
+  await Promise.all([patchFighters(state), ctx.arenaScene.ready]);
   if (!sessionIsActive(session)) return;
   void ctx.arenaScene.warmUp();
   battleEntrance(session);
@@ -657,21 +661,27 @@ async function battleEntrance(session = ctx.battleSession) {
 
 /* refreshBattle is a composition (§11.3). Unlocked: both plates, the fighters,
    the dock and the top row. Locked (playback): plates and top row only, so
-   any caller during a turn stays cheap and never rebuilds the dock. */
+   any caller during a turn stays cheap and never rebuilds the dock. The stage
+   keeps the turn's room while a turn plays and while a K.O.'d creature's
+   replacement is picked (the sheet covers the dock), and gives it back to the
+   dock when the player chooses (hud.js restage, §11.2). */
 function refreshBattle() {
   const session = ctx.battleSession;
   if (!session || !screen.classList.contains('battle-screen')) return;
-  const view = session.displayState ?? session.state;
-  screen.classList.toggle('locked', ctx.locked);
-  patchHud('player', view);
-  patchHud('enemy', view);
-  if (ctx.locked) {
-    openNarration();
-    return;
-  }
-  void patchFighters(view);
-  renderCommands();
-  restoreCommandFocus();
+  const view = session.displayState ?? session.state,
+    turn = ctx.locked || Boolean(session.state.sides.player.pendingReplacement);
+  route.restage(turn ? 'turn' : 'choice', () => {
+    screen.classList.toggle('locked', ctx.locked);
+    patchHud('player', view);
+    patchHud('enemy', view);
+    if (ctx.locked) {
+      openNarration();
+      return;
+    }
+    void patchFighters(view);
+    renderCommands();
+    restoreCommandFocus();
+  });
 }
 
 /* ------------------------------------------------------------------- turns */

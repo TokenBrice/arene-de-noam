@@ -1,16 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
-  MUSIC_THEMES,
+  MUSIC_LOOP_MARGIN_SECONDS,
+  MUSIC_TRACKS,
   SCREEN_THEME_MAP,
-  SCHEDULER_HORIZON_SECONDS,
-  SCHEDULER_STALE_SECONDS,
   SoundSystem,
   calculateTension,
   computeMixerLevels,
+  musicUrl,
   resolveThemeId,
 } from '../src/sound.js';
+import { ARENAS } from '../src/data/trainers.js';
+import { readOggOpus } from '../tools/music/ogg.js';
 import { MOVES } from '../src/data/moves.js';
+import { CREATURES } from '../src/data/creatures.js';
+import { CUE_NAMES } from '../src/battle-ui/cues.js';
+import { CRY_LEVELS, CRY_PROFILES, CRY_VARIANTS, cryPlan } from '../src/sound-cries.js';
 import {
   DEFAULT_SAVE,
   SAVE_MIGRATIONS,
@@ -21,41 +27,52 @@ import {
   validateSave,
 } from '../src/save.js';
 
-test('music themes cover every screen family and authored arena', () => {
+test('every screen family and arena resolves to baked music, and arenas add a tension stem', () => {
   assert.deepEqual(
-    Object.keys(MUSIC_THEMES).sort(),
-    [
-      'astral',
-      'crystal',
-      'defeat',
-      'eclipse',
-      'grove',
-      'library',
-      'selection',
-      'tidal',
-      'title',
-      'victory',
-      'volcano',
-    ].sort()
+    Object.keys(MUSIC_TRACKS).sort(),
+    [...ARENAS, 'defeat', 'library', 'selection', 'title', 'victory'].sort()
   );
-  for (const [id, config] of Object.entries(MUSIC_THEMES)) {
-    assert.ok(config.tempo >= 58 && config.tempo <= 92, `${id} tempo`);
-    assert.ok(config.scale.length >= 6, `${id} scale`);
-    assert.equal(config.chords.length, 4, `${id} progression`);
-    assert.ok(
-      config.chords.every((chord) => chord.length === 4),
-      `${id} chord voicing`
-    );
-    assert.ok(config.melody.includes(null), `${id} melody has rests`);
+  for (const arena of ARENAS) {
+    assert.equal(resolveThemeId(`battle:${arena}`), arena);
+    assert.deepEqual(MUSIC_TRACKS[arena], ['base', 'tension']);
   }
+  for (const theme of new Set(Object.values(SCREEN_THEME_MAP)))
+    assert.deepEqual(MUSIC_TRACKS[theme], ['base']);
   assert.equal(SCREEN_THEME_MAP.academy, 'library');
-  assert.equal(resolveThemeId('battle:eclipse'), 'eclipse');
   assert.equal(resolveThemeId('battle:not-an-arena'), 'crystal');
   assert.equal(resolveThemeId('gauntlet-boon'), 'selection');
   const sound = new SoundSystem(DEFAULT_SAVE);
   assert.equal(sound.setScreen('title'), true);
   assert.equal(sound.setScreen('settings'), false);
   assert.equal(sound.setScreen('selection'), true);
+});
+
+// The runtime loops [margin, duration − margin] of each decoded file (MUSIC_LOOP_MARGIN_SECONDS),
+// so the shipped files must hold exactly margin + loop + margin samples, with every stem of a
+// theme on one loop; the decoded PCM of one screen (all its stems, 48 kHz float) stays ≤ 24 MiB.
+test('the shipped music files loop exactly and fit the decoded-memory budget', async () => {
+  const margin = MUSIC_LOOP_MARGIN_SECONDS * 48000;
+  for (const [theme, stems] of Object.entries(MUSIC_TRACKS)) {
+    let decoded = 0,
+      loop = null;
+    for (const stem of stems) {
+      const url = musicUrl(theme, stem);
+      const file = readOggOpus(await readFile(new URL(`../${url.slice(2)}`, import.meta.url)));
+      assert.ok(file.crcOk && file.eos, `${url} pages`);
+      assert.equal(file.inputRate, 48000);
+      assert.equal(file.channels, stem === 'base' ? 2 : 1, `${url} channels`);
+      assert.equal(Number(file.tags.LOOPSTART), margin, `${url} loop start`);
+      assert.equal(
+        file.samples,
+        margin + Number(file.tags.LOOPLENGTH) + margin,
+        `${url} ends one margin after the loop`
+      );
+      loop ??= file.tags.LOOPLENGTH;
+      assert.equal(file.tags.LOOPLENGTH, loop, `${url} shares the theme's loop`);
+      decoded += file.samples * file.channels * Float32Array.BYTES_PER_ELEMENT;
+    }
+    assert.ok(decoded <= 24 * 2 ** 20, `${theme} decodes to ${decoded} bytes`);
+  }
 });
 
 test('mixer settings clamp independently and mute only the master', () => {
@@ -206,6 +223,7 @@ class FakeNode {
     this.outputs = new Set();
     this.listeners = {};
     this.started = [];
+    this.offsets = [];
     this.stopped = [];
     this.disconnects = 0;
   }
@@ -220,8 +238,9 @@ class FakeNode {
   addEventListener(type, listener) {
     this.listeners[type] = listener;
   }
-  start(time) {
+  start(time, offset) {
     this.started.push(time);
+    this.offsets.push(offset);
   }
   stop(time) {
     assert.ok(this.started.length, `${this.kind} stopped before start`);
@@ -271,9 +290,33 @@ class FakeAudioContext {
     this.suspended += 1;
     return Promise.resolve();
   }
+  decodeAudioData() {
+    return Promise.reject(new DOMException('Unable to decode audio data', 'EncodingError'));
+  }
 }
 
-// Music volume 0 keeps the real setInterval scheduler from starting inside unit tests.
+// Serves the music files to a sound system: a fetch stub (restored after the test) and a decoder
+// giving 30.2 s buffers, stereo for base stems and mono for tension stems. Returns the fetched
+// and decoded URLs.
+function serveMusic(t, sound) {
+  const log = { fetched: [], decoded: [] };
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    log.fetched.push(url);
+    return { ok: true, status: 200, arrayBuffer: async () => ({ url }) };
+  });
+  sound.ctx.decodeAudioData = async ({ url }) => {
+    log.decoded.push(url);
+    const channels = url.includes('-tension') ? 1 : 2;
+    return { url, duration: 30.2, length: 30.2 * 48000, numberOfChannels: channels, sampleRate: 48000 };
+  };
+  return log;
+}
+
+// Lets the stubbed fetch / decode promises of a music load settle.
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+const pcmBytes = (buffer) => buffer.length * buffer.numberOfChannels * 4;
+
+// Music volume 0 keeps the music player from fetching inside unit tests that do not need it.
 function soundWithGraph(settings = { ...DEFAULT_SAVE, musicVolume: 0 }) {
   const sound = new SoundSystem(settings);
   sound.ctx = new FakeAudioContext();
@@ -337,6 +380,9 @@ test('cue voices start before they stop and every chain disconnects once its las
   const before = sound.ctx.nodes.length;
   sound.cue('contact', { ...HIT, beat: 1, affinity: 'tide' });
   sound.cue('status-', { beat: 2, side: 'enemy', creatureId: 'kordane', statuses: ['marked'] });
+  // Cries add modulators (vibrato, FM, flutter) wired into params; they must be released too.
+  sound.cue('switch-in', { beat: 3, side: 'player', creatureId: 'orakyn', source: 'switch' });
+  sound.cue('faint-cry', { beat: 4, side: 'enemy', creatureId: 'brontusk' });
   const session = [sound.sfxSession.dry, sound.sfxSession.wet];
   const cueNodes = sound.ctx.nodes.slice(before).filter((node) => !session.includes(node));
 
@@ -354,41 +400,30 @@ test('cue voices start before they stop and every chain disconnects once its las
   );
 });
 
-test('every dry and wet path of each category passes through that category controls only', () => {
+test('every path of each category passes through that category controls only', async (t) => {
   const sound = soundWithGraph({ ...DEFAULT_SAVE });
+  serveMusic(t, sound);
   const { graph, ctx } = sound;
-  const [note] = sourcesCreatedBy(sound, () =>
-    sound.musicNote(440, 1, 0.5, { gain: 0.02, wave: 'sine', filter: 1500, attack: 0.01, reverb: 0.4 })
-  );
-  const [noise] = sourcesCreatedBy(sound, () => sound.musicNoise(1, 1, 600));
-  const [tension] = sourcesCreatedBy(sound, () =>
-    sound.musicNote(880, 1, 0.2, {
-      gain: 0.02,
-      wave: 'triangle',
-      filter: 1150,
-      attack: 0.01,
-      reverb: 0.12,
-      tension: true,
-    })
-  );
+  sound.setScreen('battle:crystal');
+  await settle();
+  const [base, tension] = [...sound.musicSources];
   const sfx = sourcesCreatedBy(sound, () => sound.cue('contact', { ...HIT, beat: 1, affinity: 'flame' }));
   const viaConvolver = (paths) => paths.some((path) => path.some((node) => node.kind === 'convolver'));
 
-  for (const source of [note, noise]) {
+  // The music carries its reverb: one path per stem, through the music controls only.
+  for (const [source, controls] of [
+    [base, [graph.musicLevel, graph.musicDuck, graph.master]],
+    [tension, [graph.tensionLevel, graph.musicLevel, graph.musicDuck, graph.master]],
+  ]) {
     const paths = pathsToOutput(source, ctx.destination);
-    assert.ok(viaConvolver(paths) && paths.some((path) => !path.some((node) => node.kind === 'convolver')));
-    for (const path of paths) {
-      assert.ok(path.includes(sound.themeBus) || path.includes(sound.themeWetBus), 'theme fade');
-      for (const control of [graph.musicLevel, graph.musicDuck, graph.master])
-        assert.ok(path.includes(control));
-      assert.ok(!path.includes(graph.sfxLevel));
-    }
+    assert.equal(paths.length, 1);
+    for (const control of controls) assert.ok(paths[0].includes(control));
+    assert.ok(!paths[0].includes(graph.sfxLevel) && !viaConvolver(paths));
   }
-  const tensionPaths = pathsToOutput(tension, ctx.destination);
-  assert.ok(viaConvolver(tensionPaths));
-  for (const path of tensionPaths)
-    for (const control of [sound.tensionThemeBus, graph.tensionLevel, graph.musicLevel, graph.musicDuck])
-      assert.ok(path.includes(control));
+  assert.ok(
+    !pathsToOutput(base, ctx.destination)[0].includes(graph.tensionLevel),
+    'the base ignores tension'
+  );
   for (const source of sfx) {
     const paths = pathsToOutput(source, ctx.destination);
     assert.ok(viaConvolver(paths));
@@ -402,7 +437,105 @@ test('every dry and wet path of each category passes through that category contr
   sound.update({ ...DEFAULT_SAVE, musicVolume: 0, sfxVolume: 0 });
   assert.equal(graph.musicLevel.gain.targets.at(-1), 0);
   assert.equal(graph.sfxLevel.gain.targets.at(-1), 0);
-  assert.equal(graph.tensionLevel.gain.targets.at(-1), 0, 'no tension, no tension layer');
+  assert.equal(graph.tensionLevel.gain.targets.at(-1), 0, 'no tension, no tension stem');
+});
+
+test('a theme plays its stems sample-locked, and only the current theme stays decoded', async (t) => {
+  const sound = soundWithGraph({ ...DEFAULT_SAVE });
+  const log = serveMusic(t, sound);
+  const { ctx } = sound;
+  sound.setScreen('battle:volcano');
+  await settle();
+  assert.deepEqual(log.fetched, [musicUrl('volcano', 'base'), musicUrl('volcano', 'tension')]);
+  const [base, tension] = [...sound.musicSources];
+  for (const source of [base, tension]) {
+    assert.equal(source.loop, true);
+    assert.equal(source.loopStart, MUSIC_LOOP_MARGIN_SECONDS);
+    assert.equal(source.loopEnd, source.buffer.duration - MUSIC_LOOP_MARGIN_SECONDS);
+  }
+  assert.deepEqual(base.offsets, [MUSIC_LOOP_MARGIN_SECONDS], 'the loop starts after its margin');
+  assert.deepEqual([tension.started, tension.offsets], [base.started, base.offsets], 'one start, one offset');
+  assert.equal(sound.musicBytes(), pcmBytes(base.buffer) + pcmBytes(tension.buffer));
+
+  ctx.currentTime = 2;
+  sound.setScreen('victory');
+  for (const source of [base, tension])
+    assert.ok(source.stopped[0] <= ctx.currentTime + 0.3, 'the arena fades out');
+  assert.equal(sound.musicBytes(), 0, 'the arena is released before the next theme decodes');
+  await settle();
+  assert.deepEqual(log.decoded.slice(2), [musicUrl('victory', 'base')]);
+  assert.equal(sound.musicBytes(), 30.2 * 48000 * 2 * 4);
+
+  // A theme left before its decode never starts.
+  const before = ctx.nodes.length;
+  sound.setScreen('title');
+  sound.setScreen('selection');
+  await settle();
+  assert.deepEqual(log.decoded.slice(3), [musicUrl('selection', 'base')]);
+  const started = ctx.nodes
+    .slice(before)
+    .filter((node) => node.kind === 'buffer-source' && node.started.length);
+  assert.deepEqual(
+    started.map((node) => node.buffer.url),
+    [musicUrl('selection', 'base')]
+  );
+});
+
+test('the tension stem follows the presented battle state past a deadband', () => {
+  const sound = soundWithGraph();
+  const level = sound.graph.tensionLevel.gain;
+  const view = (hp, enemyHp, turn) => ({
+    turn,
+    sides: {
+      player: { active: 0, surge: 0, team: [{ id: 'orakyn', hp, maxHp: 100 }] },
+      enemy: { active: 0, surge: 0, team: [{ id: 'kordane', hp: enemyHp, maxHp: 100 }] },
+    },
+  });
+  sound.setScreen('battle:crystal');
+  sound.setBattleState(view(100, 100, 1));
+  assert.equal(level.targets.at(-1), 0, 'a fresh, even fight keeps the stem silent');
+  sound.setBattleState(view(30, 25, 9));
+  assert.ok(level.targets.at(-1) > 0.5, 'a close, late, low-HP fight brings it in');
+  const changes = level.targets.length;
+  sound.setBattleState(view(29, 25, 9));
+  assert.equal(level.targets.length, changes, 'one small hit does not move the score');
+  sound.setScreen('victory');
+  assert.equal(level.targets.at(-1), 0, 'leaving the battle drops it');
+});
+
+test('music stays silent without a notice when a file is missing or cannot be decoded', async (t) => {
+  for (const failure of ['offline', 'missing', 'undecodable']) {
+    let notices = 0;
+    const sound = new SoundSystem({ ...DEFAULT_SAVE }, () => (notices += 1));
+    sound.ctx = new FakeAudioContext();
+    sound.buildGraph();
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => {
+      if (failure === 'offline') throw new TypeError('Failed to fetch');
+      return { ok: failure !== 'missing', status: 404, arrayBuffer: async () => new ArrayBuffer(8) };
+    });
+    sound.setScreen('title');
+    await settle();
+    assert.equal(fetchMock.mock.callCount(), 1, failure);
+    assert.equal(sound.musicSources.size, 0, failure);
+    assert.equal(sound.musicBytes(), 0, failure);
+    assert.equal(notices, 0, failure);
+    fetchMock.mock.restore();
+  }
+});
+
+test('a silenced music slider fetches and holds nothing; raising it loads the current theme', async (t) => {
+  const sound = soundWithGraph();
+  const log = serveMusic(t, sound);
+  sound.setScreen('title');
+  sound.update({ ...DEFAULT_SAVE, muted: true });
+  await settle();
+  assert.deepEqual(log.fetched, []);
+  sound.update({ ...DEFAULT_SAVE });
+  await settle();
+  assert.deepEqual(log.fetched, [musicUrl('title', 'base')]);
+  assert.ok(sound.musicBytes() > 0);
+  sound.update({ ...DEFAULT_SAVE, musicVolume: 0 });
+  assert.equal(sound.musicBytes(), 0, 'silencing releases the decoded theme');
 });
 
 test('leaving a screen stops its queued cues while the results sting plays once per arrival', () => {
@@ -475,15 +608,17 @@ test('leaving a screen stops its queued cues while the results sting plays once 
   );
 });
 
-test('hiding the page stops SFX and music so nothing resumes mid-attack', () => {
-  const sound = soundWithGraph();
-  const cues = sourcesCreatedBy(sound, () => {
-    sound.cue('heal', { beat: 1, speed: 1, side: 'player', creatureId: 'virelia', amount: 12, team: false });
-    sound.musicNote(440, 1, 1, { gain: 0.02, wave: 'sine', filter: 1500, attack: 0.01, reverb: 0.4 });
-  });
+test('hiding the page stops SFX while the music pauses with the context and resumes in place', async (t) => {
+  const sound = soundWithGraph({ ...DEFAULT_SAVE });
+  const log = serveMusic(t, sound);
+  sound.setScreen('title');
+  await settle();
+  const music = [...sound.musicSources];
+  const cues = sourcesCreatedBy(sound, () =>
+    sound.cue('heal', { beat: 1, speed: 1, side: 'player', creatureId: 'virelia', amount: 12, team: false })
+  );
   sound.handleVisibility(true);
   assert.equal(sound.sfxSources.size, 0);
-  assert.equal(sound.musicSources.size, 0);
   assert.ok(cues.every((source) => source.stopped.at(-1) <= sound.ctx.currentTime));
   assert.equal(sound.ctx.suspended, 1);
   assert.deepEqual(
@@ -491,43 +626,14 @@ test('hiding the page stops SFX and music so nothing resumes mid-attack', () => 
     [],
     'hidden pages stay silent'
   );
-});
-
-test('the music scheduler skips steps a stall made stale and never schedules in the past', () => {
-  const sound = new SoundSystem(DEFAULT_SAVE);
-  sound.ctx = new FakeAudioContext();
-  sound.ctx.currentTime = 10;
-  sound.themeId = 'crystal';
-  const stepDuration = 60 / MUSIC_THEMES.crystal.tempo / 4;
-  const scheduled = [];
-  sound.scheduleMusicStep = (config, step, time) =>
-    scheduled.push({ step, time, now: sound.ctx.currentTime });
-  const origin = 10.05;
-  sound.nextStepTime = origin;
-  sound.stepIndex = 0;
-
-  sound.scheduleAhead();
-  assert.ok(scheduled.length > 0);
-  assert.ok(scheduled.every(({ time }) => time >= 10 && time < 10 + SCHEDULER_HORIZON_SECONDS));
-
-  const beforeStall = scheduled.length;
-  sound.ctx.currentTime += 0.6;
-  sound.scheduleAhead();
-  const afterStall = scheduled.slice(beforeStall);
-  assert.ok(afterStall.length > 0 && afterStall.length < 0.6 / stepDuration, 'no catch-up burst');
-  assert.ok(afterStall[0].step > scheduled[beforeStall - 1].step + 1, 'stale steps were skipped');
-  for (const { step, time, now } of afterStall) {
-    assert.ok(time >= now);
-    assert.ok(Math.abs(time - (origin + step * stepDuration)) < 1e-9, 'the rhythmic grid is kept');
-  }
-
-  const slightlyLate = sound.nextStepTime + SCHEDULER_STALE_SECONDS / 2;
-  const nextStep = sound.stepIndex;
-  sound.ctx.currentTime = slightlyLate;
-  const beforeLate = scheduled.length;
-  sound.scheduleAhead();
-  assert.equal(scheduled[beforeLate].step, nextStep, 'a barely late step still plays');
-  assert.equal(scheduled[beforeLate].time, slightlyLate, 'starting now with its full envelope');
+  assert.ok(
+    music.length && music.every((source) => source.stopped.length === 0),
+    'the loop is paused, not stopped'
+  );
+  sound.handleVisibility(false);
+  await settle();
+  assert.deepEqual(log.fetched, [musicUrl('title', 'base')], 'no reload on return');
+  assert.deepEqual([...sound.musicSources], music);
 });
 
 test('one dominant cue per beat: impact outranks gestures, stamps ride on the contact, nothing waits', () => {
@@ -632,7 +738,7 @@ test('each type plays its own material family, voiced in the phone band', () => 
   );
 });
 
-test('cries mark entrances, Signatures and faints only, trimmed at ×2 without a pitch change', () => {
+test('cries play on entrances, Signatures, faints and picks only, trimmed at ×2 without a pitch change', () => {
   const sound = soundWithGraph();
   const cries = [];
   const cryVoices = sound.cryVoices.bind(sound);
@@ -640,26 +746,42 @@ test('cries mark entrances, Signatures and faints only, trimmed at ×2 without a
     cries.push({ id, variant, trim: cue.trim });
     return cryVoices(cue, id, variant, options);
   };
-  sound.cue('windup', { ...MOVE, beat: 1 });
-  sound.cue('release', { ...MOVE, beat: 1, hit: 1 });
-  sound.cue('contact', { ...HIT, beat: 1 });
-  assert.deepEqual(cries, [], 'no cry on an ordinary move');
-
-  sound.cue('signature-cutin', {
-    beat: 2,
-    speed: 1,
-    side: 'player',
-    creatureId: 'pyrolynx',
-    moveId: 'x',
-    clash: false,
+  // Every cue the director can emit, each on its own beat, with a payload carrying every field.
+  const heard = {};
+  CUE_NAMES.forEach((name, index) => {
+    sound.ctx.currentTime += 3;
+    cries.length = 0;
+    sound.cue(name, {
+      ...HIT,
+      ...MOVE,
+      beat: index + 1,
+      side: 'enemy',
+      creatureId: 'kordane',
+      speed: name === 'switch-in' ? 2 : 1,
+      statuses: ['focused'],
+      kind: 'heal',
+      source: 'replacement',
+      clash: false,
+      first: true,
+    });
+    if (cries.length) heard[name] = [...cries];
   });
-  sound.cue('faint-cry', { beat: 3, speed: 1, side: 'enemy', creatureId: 'kordane' });
-  sound.cue('switch-in', { beat: 4, speed: 2, side: 'enemy', creatureId: 'abyssar', source: 'replacement' });
-  assert.deepEqual(cries, [
-    { id: 'pyrolynx', variant: 'effort', trim: 1 },
-    { id: 'kordane', variant: 'faint', trim: 1 },
-    { id: 'abyssar', variant: 'entry', trim: 0.65 },
-  ]);
+  assert.deepEqual(heard, {
+    'signature-cutin': [{ id: 'kordane', variant: 'effort', trim: 1 }],
+    'faint-cry': [{ id: 'kordane', variant: 'faint', trim: 1 }],
+    'switch-in': [{ id: 'kordane', variant: 'entry', trim: 0.65 }],
+  });
+
+  cries.length = 0;
+  sound.call('abyssar');
+  assert.deepEqual(cries, [{ id: 'abyssar', variant: 'entry', trim: 1 }], 'a team-select pick calls');
+  const firstPick = sound.pickCue;
+  sound.ctx.currentTime += 0.3;
+  sound.call('nymbloom');
+  assert.ok(firstPick.bus.gain.targets.includes(0), 'the next pick fades the previous cry');
+  sound.ctx.currentTime += 5;
+  sound.call('orakyn');
+  assert.ok(!sound.pickCue.bus.gain.targets.includes(0), 'a finished cry is left alone');
 
   const cry = (speed) => {
     const other = soundWithGraph();
@@ -679,6 +801,44 @@ test('cries mark entrances, Signatures and faints only, trimmed at ×2 without a
     fast.every((node, index) => length(node) < length(normal[index])),
     'shorter at ×2'
   );
+});
+
+const planEnd = (plan) => Math.max(...plan.map((layer) => layer.at + layer.dur));
+const tones = (plan) => plan.filter((layer) => layer.wave);
+const meanLog2 = (values) => values.reduce((sum, value) => sum + Math.log2(value), 0) / values.length;
+
+test('every creature has its own authored voice with an effort and a faint variant', () => {
+  const roster = Object.keys(CREATURES).sort();
+  assert.deepEqual(Object.keys(CRY_PROFILES).sort(), roster);
+  assert.deepEqual(Object.keys(CRY_LEVELS).sort(), roster, 'every voice is loudness-calibrated');
+  assert.deepEqual(CRY_VARIANTS, ['entry', 'effort', 'faint']);
+
+  const shapes = new Set();
+  for (const id of roster) {
+    const plans = Object.fromEntries(CRY_VARIANTS.map((variant) => [variant, cryPlan(id, variant)]));
+    for (const [variant, plan] of Object.entries(plans)) {
+      assert.ok(tones(plan).length, `${id} ${variant} is voiced`);
+      for (const layer of plan) {
+        assert.ok(layer.gain > 0 && layer.dur > 0 && layer.at >= 0, `${id} ${variant} layer is audible`);
+        for (const [, hz] of layer.pitch ?? [])
+          assert.ok(hz > 40 && hz < 16000, `${id} ${variant} pitch ${hz}`);
+        for (const [, from, to] of layer.filters)
+          assert.ok(from < 16000 && to < 16000, `${id} ${variant} filter under Nyquist`);
+      }
+    }
+    const peak = (plan) => meanLog2(tones(plan).map((layer) => Math.max(...layer.pitch.map(([, hz]) => hz))));
+    const settle = (plan) => meanLog2(tones(plan).map((layer) => layer.pitch.at(-1)[1]));
+    assert.ok(peak(plans.effort) > peak(plans.entry), `${id}: the Signature effort is pitched up`);
+    assert.ok(planEnd(plans.effort) < planEnd(plans.entry), `${id}: the effort is tighter`);
+    assert.ok(settle(plans.faint) < settle(plans.entry), `${id}: the faint settles lower`);
+    assert.ok(planEnd(plans.faint) > planEnd(plans.entry), `${id}: the faint is slower`);
+    // A voice is its base pitch plus its layer recipe (waves/noises in order): no two creatures
+    // may share both, whatever their other parameters.
+    const recipe = CRY_PROFILES[id].layers.map((layer) => layer.wave ?? layer.noise).join('+');
+    shapes.add(`${recipe}@${Math.round(12 * Math.log2(CRY_PROFILES[id].f0))}`);
+  }
+  assert.equal(shapes.size, roster.length, 'thirty distinct voices');
+  assert.equal(cryPlan('not-a-creature'), null);
 });
 
 test('multi-hit audio follows the real contact cues instead of a pre-scheduled rhythm', () => {

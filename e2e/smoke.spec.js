@@ -53,7 +53,9 @@ test('settings, language, audio, motion, contrast and speed persist after reload
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Réglages' }).click();
-  await page.getByRole('button', { name: 'EN' }).click();
+  // Réglages render once their chunk has loaded and the route transition runs: until then the
+  // title shows, where a loose "EN" would also match other buttons.
+  await page.getByRole('button', { name: 'EN', exact: true }).click();
   await page.getByRole('switch', { name: 'Mute sound' }).check();
   await page.getByRole('switch', { name: 'Reduced motion' }).check();
   await page.getByRole('switch', { name: 'High contrast' }).check();

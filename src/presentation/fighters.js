@@ -720,6 +720,11 @@ export class FighterLayer {
     return out.copy(s.rest).addScaledVector(s.restUp, height);
   }
 
+  /** World size of one sprite texel of `side`'s creature (0 before the stage layout is set). */
+  texelWorld(side) {
+    return this.sides[side].texelWorld;
+  }
+
   worldAnchor(side, point = 'center', out = new THREE.Vector3()) {
     const s = this.sides[side],
       height = s.heightWorld * s.pose.sy * (point === 'head' ? 1 : point === 'center' ? 0.5 : 0);

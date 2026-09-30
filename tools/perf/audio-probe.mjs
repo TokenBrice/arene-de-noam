@@ -1,4 +1,4 @@
-// Audio probe: node churn, live voices and music-scheduler lateness per screen.
+// Audio probe: node churn, live voices and decoded music memory per screen.
 // Usage: node audio-probe.mjs [--rate 6]
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { launch, newPhonePage, BASE, throttle, waitIdle, round } from './lib.mjs';
@@ -22,16 +22,11 @@ await page.waitForFunction(() => globalThis.__NOAM_SOUND__?.ctx?.state === 'runn
 });
 await page.evaluate(() => {
   const s = globalThis.__NOAM_SOUND__;
-  const P = (globalThis.__audio = { late: [], steps: 0, maxLive: 0, maxSources: 0 });
-  const orig = s.scheduleMusicStep.bind(s);
-  s.scheduleMusicStep = (config, step, time, dur) => {
-    P.late.push(time - s.ctx.currentTime); // negative = scheduled in the past (audible glitch)
-    P.steps++;
-    return orig(config, step, time, dur);
-  };
+  const P = (globalThis.__audio = { maxLive: 0, maxSources: 0, maxMusicBytes: 0 });
   setInterval(() => {
     P.maxLive = Math.max(P.maxLive, s._nodeCount);
     P.maxSources = Math.max(P.maxSources, s.musicSources.size + s.sfxSources.size);
+    P.maxMusicBytes = Math.max(P.maxMusicBytes, s.musicBytes());
   }, 50);
 });
 const info = await page.evaluate(() => {
@@ -44,10 +39,9 @@ async function window(name, fn) {
   const before = await page.evaluate(() => {
     const s = globalThis.__NOAM_SOUND__,
       P = globalThis.__audio;
-    P.late = [];
-    P.steps = 0;
     P.maxLive = s._nodeCount;
     P.maxSources = 0;
+    P.maxMusicBytes = s.musicBytes();
     return { created: s._createdNodeCount, t: performance.now() };
   });
   await fn();
@@ -58,14 +52,15 @@ async function window(name, fn) {
       created: s._createdNodeCount,
       live: s._nodeCount,
       t: performance.now(),
-      late: P.late,
-      steps: P.steps,
       maxLive: P.maxLive,
       maxSources: P.maxSources,
+      musicSources: s.musicSources.size,
+      musicBytes: s.musicBytes(),
+      maxMusicBytes: P.maxMusicBytes,
     };
   });
   const secs = (after.t - before.t) / 1000;
-  const lateNotes = after.late.filter((x) => x < 0);
+  const mib = (bytes) => round(bytes / 1048576, 2);
   const row = {
     screen: name,
     rate: RATE,
@@ -74,10 +69,9 @@ async function window(name, fn) {
     liveNodesEnd: after.live,
     liveNodesPeak: after.maxLive,
     sourcesPeak: after.maxSources,
-    musicSteps: after.steps,
-    lateSteps: lateNotes.length,
-    worstLatenessMs: round(Math.min(0, ...after.late) * 1000, 0),
-    minLeadMs: round(Math.min(...after.late) * 1000, 0),
+    musicStems: after.musicSources,
+    musicDecodedMiB: mib(after.musicBytes),
+    musicDecodedPeakMiB: mib(after.maxMusicBytes),
   };
   console.log(JSON.stringify(row));
   return row;

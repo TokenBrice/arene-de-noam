@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/umbrawl-clean-2.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/concepts/umbrawl-clean/umbrawl-clean-candidate-3.png",
+  "reference": null,
+  "seed": 510512,
+  "job_id": "a62cee4e-17c1-4734-838b-7fb13d13744e",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "umbrawl-clean-2-candidate-1.png",
+    "umbrawl-clean-2-candidate-2.png",
+    "umbrawl-clean-2-candidate-3.png",
+    "umbrawl-clean-2-candidate-4.png",
+    "umbrawl-clean-2-candidate-5.png",
+    "umbrawl-clean-2-candidate-6.png",
+    "umbrawl-clean-2-candidate-7.png",
+    "umbrawl-clean-2-candidate-8.png"
+  ]
+}

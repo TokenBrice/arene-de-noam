@@ -1,0 +1,23 @@
+{
+  "brief": "../../briefs/hexalune-clean-2.json",
+  "endpoint": "/edit-images-v2",
+  "method": "edit_with_text",
+  "source": "art/monsters/originals/pre-redraw/hexalune-battle.png",
+  "reference": null,
+  "seed": 510312,
+  "job_id": "bc5b759e-9649-4742-8178-46fc08b2d62e",
+  "usage": {
+    "type": "generations",
+    "generations": 20
+  },
+  "files": [
+    "hexalune-clean-2-candidate-1.png",
+    "hexalune-clean-2-candidate-2.png",
+    "hexalune-clean-2-candidate-3.png",
+    "hexalune-clean-2-candidate-4.png",
+    "hexalune-clean-2-candidate-5.png",
+    "hexalune-clean-2-candidate-6.png",
+    "hexalune-clean-2-candidate-7.png",
+    "hexalune-clean-2-candidate-8.png"
+  ]
+}

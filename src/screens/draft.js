@@ -5,7 +5,6 @@ const {
   CLASSES,
   CREATURES,
   CREATURE_IDS,
-  MOVES,
   createDraft,
   dailyDraftSeed,
   bestLeadIndex,
@@ -56,19 +55,14 @@ function startDraft() {
 
 const typeDot = (affinityId) => `<i class="type-dot" data-type="${affinityId}" aria-hidden="true"></i>`;
 
-// One line on what the candidate brings: a type the trio lacks, else its role.
+// One line on what the candidate brings: a type the trio lacks, else its class's role (the same
+// line as the class chip beside it, so the two never disagree).
 function offerInsight(id) {
   const creature = CREATURES[id],
     team = ctx.draftRun.team;
   if (team.length && !team.some((member) => CREATURES[member].affinity === creature.affinity))
     return `<span class="draft-offer-insight is-new-type">${typeDot(creature.affinity)}${escapeHtml(t('draft.newAffinity', { affinity: affinityName(creature.affinity) }))}</span>`;
-  const moves = creature.moves.map((moveId) => MOVES[moveId]),
-    supportWeight = moves.filter((move) => move.kind === 'support' || move.kind === 'heal').length,
-    controlWeight = moves.filter(
-      (move) => move.targetStatuses?.length || move.selfStatuses?.length || move.kind === 'support'
-    ).length,
-    archetype = supportWeight >= 2 ? 'support' : controlWeight >= 2 ? 'control' : 'burst';
-  return `<span class="draft-offer-insight">${escapeHtml(t('draft.kitInsight', { archetype: t(`draft.archetype.${archetype}`) }))}</span>`;
+  return `<span class="draft-offer-insight">${escapeHtml(t(`class.effect.${creature.classId}`))}</span>`;
 }
 
 function slotHtml(index, complete, suggested) {

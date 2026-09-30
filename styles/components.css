@@ -392,6 +392,53 @@
   visibility: visible;
   transition-delay: 0s;
 }
+/* Team select: the toast ("Équipe complète…") sits just above the Combattre bar instead of
+   over the topbar and the rival header. Two columns (landscape, desktop) keep the bar on the
+   left, so the toast takes the bottom-right corner, over the roster. With a sheet open (teams
+   sheet) it stays on top, over the scrim rather than the sheet's rows. */
+#screen[data-page='selection']:not(:has(.sheet-layer)) ~ .toast {
+  top: auto;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 76px);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+#screen[data-page='selection']:not(:has(.sheet-layer)) ~ .toast:not(.show) {
+  transform: translate(-50%, 20px);
+}
+@media (min-width: 720px), (orientation: landscape) and (max-height: 480px) {
+  #screen[data-page='selection']:not(:has(.sheet-layer)) ~ .toast {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: auto;
+    max-width: calc(100vw - 380px);
+    transform: none;
+  }
+  #screen[data-page='selection']:not(:has(.sheet-layer)) ~ .toast:not(.show) {
+    transform: translateY(20px);
+  }
+}
+/* "Nouveau": a gold corner tab on a hub control whose mode just opened and was never played
+   (title.js). */
+.new-pill {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--gold-ink);
+  background: var(--gold);
+  box-shadow: 0 2px 0 var(--ledge);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+:is(.hub-tile, .hub-challenge):has(> .new-pill) {
+  position: relative;
+}
 @keyframes pulse {
   50% {
     transform: translateY(-5px);

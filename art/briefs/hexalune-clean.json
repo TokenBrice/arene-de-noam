@@ -1,0 +1,12 @@
+{
+  "id": "hexalune-clean",
+  "seed": 510311,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/hexalune-battle.png",
+  "variant_count": 4,
+  "description": "Redraw this creature as clean premium pixel art in the house style of a polished creature-battler roster: compact readable pixel clusters, three or four tone ramps per material, one clear top-left light, a selective dark outline that is darkest on the shadow side, and far less noisy texture. Replace the dense scratchy feather strokes with a few bold layered feather shapes and keep the tentacles smooth and simple. Keep its identity exactly: a many-eyed owl and cephalopod mystic hovering upright, a crescent horned crown with a glowing blue gem, an owl face with several glowing cyan eyes, a deep blue feather mantle, small rune charms hanging on the chest, curling purple tentacles with cyan ring markings, three violet curse wisps with eye sigils floating around it. Same silhouette, frontal pose and palette (midnight blue, indigo, violet, glowing cyan). Full body, transparent background, no ground shadow, no text."
+}

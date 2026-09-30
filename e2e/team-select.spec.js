@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { CREATURE_IDS } from '../src/data/creatures.js';
+import { CREATURES, CREATURE_IDS } from '../src/data/creatures.js';
+import { loadDictionary } from '../src/i18n.js';
 import { arenaReady, installCompletedTutorial, watchRuntime, expectNoRuntimeLeaks } from './helpers.js';
 
 const picked = (page) =>
@@ -61,6 +62,16 @@ test('team select fits one 360×800 viewport with a single gold Combattre and 48
   expect(layout.gold).toBe(1);
   expect(layout.targets).toEqual([true, true, true, true, true]);
   await expect(page.locator('[data-action="start-battle"]')).toHaveText(/^Combattre/);
+  // "Ton équipe" stays on one line beside its three actions, upright and held sideways.
+  const titleLines = () =>
+    page
+      .locator('.topbar-title h1')
+      .evaluate((h1) =>
+        Math.round(h1.getBoundingClientRect().height / parseFloat(getComputedStyle(h1).lineHeight))
+      );
+  expect(await titleLines()).toBe(1);
+  await page.setViewportSize({ width: 800, height: 360 });
+  expect(await titleLines()).toBe(1);
 });
 
 test('picks patch the trio: unpick, pick, the lead follows its creature, a fourth pick is refused', async ({
@@ -83,6 +94,12 @@ test('picks patch the trio: unpick, pick, the lead follows its creature, a fourt
   await expect(page.locator('[data-creature="calderoc"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('[data-creature="pyrolynx"]').click();
   expect(await picked(page)).toEqual(['abyssar', 'calderoc', 'virelia']);
+  // The refusal toast sits above the bar, clear of the topbar and the rival header.
+  const toast = page.locator('#toast');
+  await expect(toast).toHaveClass(/show/);
+  const toastBox = await toast.boundingBox(),
+    rivalBox = await page.locator('.ts-rival').boundingBox();
+  expect(toastBox.y).toBeGreaterThan(rivalBox.y + rivalBox.height);
   // Picks patch the grid in place instead of re-rendering it.
   expect(await grid.evaluate((node) => node.isConnected)).toBe(true);
   await page.locator('[data-action="start-battle"]').click();
@@ -241,7 +258,7 @@ test('quick-battle options pick difficulty, a labelled opponent, arena and rule 
   await expect(page.locator('[data-creature="calderoc"]')).toHaveAttribute('data-matchup', 'up');
   await expect(page.locator('[data-creature="abyssar"]')).toHaveAttribute(
     'aria-label',
-    /Fort contre 1 · Faible contre 1/
+    /Fort contre 1 rival · Faible contre 1 rival/
   );
   await page.locator('[data-action="open-options"]').click();
   await expect(page.locator('.sheet select')).toHaveCount(0);
@@ -283,9 +300,22 @@ test('draft: three picks, the rival reveal without Chromatiques, and the chosen 
   await page.goto('/?seed=20260814&animations=0');
   await page.locator('[data-action="challenges"]').click();
   await page.locator('[data-action="draft"]').click();
-  const chosen = [];
+  const chosen = [],
+    french = await loadDictionary('fr');
   for (let round = 0; round < 3; round++) {
     await expect(page.locator('[data-draft-pick]')).toHaveCount(3);
+    // With nothing picked yet, each offer's line says what its class does (never a role that
+    // contradicts the class chip beside it).
+    if (round === 0)
+      for (const [id, insight] of await page
+        .locator('.draft-offer')
+        .evaluateAll((offers) =>
+          offers.map((offer) => [
+            offer.querySelector('[data-draft-pick]').dataset.draftPick,
+            offer.querySelector('.draft-offer-insight').textContent,
+          ])
+        ))
+        expect(insight).toBe(french[`class.effect.${CREATURES[id].classId}`]);
     const offer = page.locator('[data-draft-pick]').first();
     chosen.push(await offer.getAttribute('data-draft-pick'));
     await offer.click();

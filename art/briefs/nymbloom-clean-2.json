@@ -1,0 +1,12 @@
+{
+  "id": "nymbloom-clean-2",
+  "seed": 510612,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/monsters/originals/pre-redraw/nymbloom-battle.png",
+  "variant_count": 4,
+  "description": "Redraw the rendering of this creature as clean premium pixel art while keeping its silhouette, pose and colours. Replace the soft glowing airbrushed gradients with crisp three-tone cel shading and hard-edged pixel clusters: the pearl blue body gets one clear light side and one shadow side, the long fin tail gets a few clean bold stripes of blue and pink instead of glowing streaks, the coral-pink axolotl gills get clean feather shapes with a darker base. Keep the pink water-lily crown with thin golden antlers, the friendly face with a clear dark eye, the small white spots, the slender deer legs with dark hooves, and the round healing bubbles with their small plus sign, drawn as simple crisp circles with one highlight. Remove stray single pixels and speckles. Pearl blue, coral pink, lily white and small gold accents, selective dark outline, transparent background, no ground shadow, no text."
+}

@@ -63,15 +63,15 @@ const STAMP_LAND_REDUCED_MS = 200;
 const MODE_ICONS = Object.freeze({ gauntlet: 'mountain', trials: 'crown', draft: 'calendar' });
 
 /* Leaves the tutorial for team select, whose one-time guide (ctx.selectionGuide) says what to
-   do next. The tutorial's own win reaches it from its results ("Choisis ton équipe"); the
-   battle's skip chip calls it directly. */
-function completeTutorial() {
+   do next. The tutorial's own win reaches it from its results ("Choisis ton équipe") and gets
+   the "Bravo !" guide; the battle's skip chip calls it with no argument and gets the plain one. */
+function completeTutorial({ won = false } = {}) {
   ctx.save.tutorialComplete = true;
   persist();
   disposeArena();
   ctx.battleSession = null;
   ctx.selection = null;
-  ctx.selectionGuide = 'tutorial';
+  ctx.selectionGuide = won ? 'tutorial' : 'skipped';
   renderTeamSelect('ladder');
 }
 
@@ -583,11 +583,12 @@ function renderResults(win) {
   // "Rival suivant" plays the next League duel straight away with the same team, like JOUER.
   on('next-battle', () => startSelectionBattle(newSelection('ladder')));
   on('replay-draft', startDraft);
-  on('challenges', () => {
-    renderTitle();
+  // The route transition renders the title in its update callback: open the sheet on it after.
+  on('challenges', async () => {
+    await renderTitle();
     openChallenges();
   });
-  on('pick-team', completeTutorial);
+  on('pick-team', () => completeTutorial({ won: win }));
   on('next-circuit', () => {
     ctx.selection = null;
     renderTeamSelect('circuit');

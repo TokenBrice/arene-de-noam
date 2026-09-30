@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { AFFINITY_TRIANGLES } from '../src/data/affinities.js';
 import { CREATURES, CREATURE_IDS } from '../src/data/creatures.js';
 import { MOVES } from '../src/data/moves.js';
-import { DICTIONARIES } from '../src/i18n.js';
+import { loadDictionary } from '../src/i18n.js';
 import { createBattle, previewMove } from '../src/battle/engine.js';
+
+const DICTIONARIES = { fr: await loadDictionary('fr'), en: await loadDictionary('en') };
 
 const triangleOf = (affinity) => AFFINITY_TRIANGLES.findIndex((triangle) => triangle.includes(affinity));
 

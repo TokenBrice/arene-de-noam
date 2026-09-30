@@ -1,0 +1,12 @@
+{
+  "id": "magmoth-clean-2",
+  "seed": 510212,
+  "image_size": {
+    "width": 128,
+    "height": 128
+  },
+  "no_background": true,
+  "edit_image": "art/concepts/magmoth-clean/magmoth-clean-candidate-1.png",
+  "variant_count": 4,
+  "description": "Keep this exact creature drawing, pose, silhouette and clean pixel-art style, but make it read instantly as a fire creature: both big wing membranes are filled with glowing molten lava, bright red-orange with a hot orange-yellow glow toward their centres, the vein seams are bright yellow, and the round eye-spot patterns glow yellow and orange inside dark basalt rims. Dark charcoal basalt stays only on the wing edges, the outer shell plates and the legs. Keep the cream ash-fur ruff, the friendly face with glowing eyes, the orange feathery antennae, the glowing lava claws, compact pixel clusters with flat cel shading and a selective dark outline. Palette: molten red-orange, bright yellow, charcoal basalt, warm cream. Full body, transparent background, no ground shadow, no text."
+}

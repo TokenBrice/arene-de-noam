@@ -201,7 +201,8 @@ function dominantType(enemy, enemyLead = 0) {
 
 /* ------------------------------------------------------------ creature sheet */
 
-// "Fort contre 1 · Faible contre 1" with its arrow, green, red or plain.
+// "Fort contre 1 rival · Faible contre 2 rivaux" (this creature against the rival trio) with its
+// arrow, green, red or plain.
 function matchupChipHtml(matchup, tag = 'p') {
   const direction = matchupDirection(matchup);
   return `<${tag} class="sheet-chip creature-sheet-matchup is-${direction}">${direction === 'even' ? '' : icon(`arrow-${direction}`)}${escapeHtml(matchupText(matchup))}</${tag}>`;
@@ -282,7 +283,9 @@ function rivalHtml(selection) {
 }
 
 /* A filled slot: its body opens the slot's action sheet (lead, card, remove),
-   the × removes it at once, and the crown plate under it sends it in first. */
+   the × removes it at once, and the crown plate under it sends it in first.
+   Its portrait is a shared creature: the route transition (shell.js) moves it
+   from or to the title's trio. */
 function slotsHtml(selection, fresh = -1) {
   const suggested = selection.team.length === 3 ? bestLeadIndex(selection.team, selection.enemyTeam) : -1;
   return Array.from({ length: 3 }, (_, index) => {
@@ -292,7 +295,7 @@ function slotsHtml(selection, fresh = -1) {
     const name = creatureName(id),
       lead = selection.lead === index,
       crownLabel = lead ? t('select.lead') : index === suggested ? t('select.suggested') : '';
-    return `<div class="ts-slot${lead ? ' is-lead' : ''}${index === suggested ? ' is-suggested' : ''}${index === fresh ? ' is-new' : ''}" style="--type-color:${AFFINITIES[CREATURES[id].affinity].color}"><button type="button" class="ts-slot-main" data-slot-open="${index}" aria-haspopup="dialog" aria-label="${escapeHtml(name)}"><img src="${sprite(id)}" alt="" width="64" height="64"><span class="ts-slot-name">${escapeHtml(name)}</span></button>${typeDot(CREATURES[id].affinity)}<button type="button" class="ts-slot-remove" data-slot-remove="${index}" aria-label="${escapeHtml(t('select.remove', { name }))}">${icon('close')}</button><button type="button" class="ts-crown" data-lead-index="${index}" aria-pressed="${lead}" aria-label="${escapeHtml(`${name}, ${lead ? t('select.lead') : t('select.chooseLead')}`)}">${icon('crown')}${crownLabel ? `<span aria-hidden="true">${escapeHtml(crownLabel)}</span>` : ''}</button></div>`;
+    return `<div class="ts-slot${lead ? ' is-lead' : ''}${index === suggested ? ' is-suggested' : ''}${index === fresh ? ' is-new' : ''}" style="--type-color:${AFFINITIES[CREATURES[id].affinity].color}"><button type="button" class="ts-slot-main" data-slot-open="${index}" aria-haspopup="dialog" aria-label="${escapeHtml(name)}"><img src="${sprite(id)}" alt="" width="64" height="64" data-shared-creature="${id}"><span class="ts-slot-name">${escapeHtml(name)}</span></button>${typeDot(CREATURES[id].affinity)}<button type="button" class="ts-slot-remove" data-slot-remove="${index}" aria-label="${escapeHtml(t('select.remove', { name }))}">${icon('close')}</button><button type="button" class="ts-crown" data-lead-index="${index}" aria-pressed="${lead}" aria-label="${escapeHtml(`${name}, ${lead ? t('select.lead') : t('select.chooseLead')}`)}">${icon('crown')}${crownLabel ? `<span aria-hidden="true">${escapeHtml(crownLabel)}</span>` : ''}</button></div>`;
   }).join('');
 }
 
@@ -326,8 +329,9 @@ function renderTeamSelect(mode = 'ladder') {
   void ensureBattleStyles();
   if (!ctx.selection || ctx.selection.mode !== mode) ctx.selection = newSelection(mode);
   const selection = ctx.selection,
-    // One-time "here is your team" hint after the tutorial (results.js sets it).
-    guide = ctx.selectionGuide === 'tutorial';
+    // One-time "here is your team" hint after the tutorial (results.js sets it): "Bravo !" only
+    // after a won tutorial, a plain welcome after a skip.
+    guide = { tutorial: 'select.guide', skipped: 'select.guideSkipped' }[ctx.selectionGuide];
   ctx.selectionGuide = null;
   const filters = AFFINITY_ORDER.map(
     (id) =>
@@ -335,7 +339,7 @@ function renderTeamSelect(mode = 'ladder') {
   ).join('');
   const teams = `<button type="button" class="icon-btn ts-teams-btn" data-action="open-teams" aria-label="${escapeHtml(t('select.teams'))}">${icon('team')}<span aria-hidden="true">${escapeHtml(t('select.teams'))}</span></button>`,
     legend = `<p class="ts-legend">${matchupMark('up')}<span>${escapeHtml(t('select.legendUp'))}</span>${matchupMark('down')}<span>${escapeHtml(t('select.legendDown'))}</span></p>`;
-  screen.innerHTML = `<div class="ts${guide ? ' has-guide' : ''}" data-mode="${mode}">${topbar(t('select.team'), { actions: teams })}${guide ? `<p class="ts-guide" role="status">${icon('sparkle')}<span>${escapeHtml(t('select.guide'))}</span></p>` : ''}<section class="ts-rival" aria-labelledby="ts-rival-name">${rivalHtml(selection)}</section><div class="ts-slots" role="group" aria-label="${escapeHtml(t('select.team'))}">${slotsHtml(selection)}</div><div class="ts-filters" role="group" aria-label="${escapeHtml(t('filter.types'))}">${filters}</div><div class="ts-grid">${legend}${CREATURE_IDS.map((id) => cellHtml(id, selection)).join('')}</div><div class="ts-bar"><span class="ts-trio" role="img" aria-label="${escapeHtml(t('select.selected', { count: selection.team.length }))}">${trioHtml(selection)}</span><button type="button" class="primary-btn ts-fight" data-action="start-battle"${canStart(selection) ? '' : ' disabled'}>${escapeHtml(t('select.ready'))}</button></div><aside class="ts-detail" aria-labelledby="ts-detail-name"></aside></div>`;
+  screen.innerHTML = `<div class="ts${guide ? ' has-guide' : ''}" data-mode="${mode}">${topbar(t('select.team'), { actions: teams })}${guide ? `<p class="ts-guide" role="status">${icon('sparkle')}<span>${escapeHtml(t(guide))}</span></p>` : ''}<section class="ts-rival" aria-labelledby="ts-rival-name">${rivalHtml(selection)}</section><div class="ts-slots" role="group" aria-label="${escapeHtml(t('select.team'))}">${slotsHtml(selection)}</div><div class="ts-filters" role="group" aria-label="${escapeHtml(t('filter.types'))}">${filters}</div><div class="ts-grid">${legend}${CREATURE_IDS.map((id) => cellHtml(id, selection)).join('')}</div><div class="ts-bar"><span class="ts-trio" role="img" aria-label="${escapeHtml(t('select.selected', { count: selection.team.length }))}">${trioHtml(selection)}</span><button type="button" class="primary-btn ts-fight" data-action="start-battle"${canStart(selection) ? '' : ' disabled'}>${escapeHtml(t('select.ready'))}</button></div><aside class="ts-detail" aria-labelledby="ts-detail-name"></aside></div>`;
   route.bindCommon();
   bindTeamSelect(selection);
 }

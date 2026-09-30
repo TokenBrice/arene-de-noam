@@ -244,16 +244,21 @@ test('two Signatures in one turn mark the clash, and a double K.O. shares one be
   assertWellFormed(events, beats);
   assert.deepEqual(kinds(beats), ['fault_charge', 'supernova', 'ko']);
   assert.deepEqual(
-    beats.slice(0, 2).map((beat) => [beat.signature, beat.tier, beat.clash]),
+    beats.slice(0, 2).map((beat) => [beat.signature, beat.tier, beat.clash, Boolean(beat.clashAnswer)]),
     [
-      [true, 3, true],
-      [true, 3, false],
+      [true, 3, true, false],
+      [true, 3, false, true],
     ]
   );
   assert.equal(beats[0].surges[0].amount, -100, 'the Signature spend rides on its beat');
   assert.equal(beats[1].combo?.multiplier, 1.3);
   assert.deepEqual(beats[2].kos.map((ko) => ko.side).sort(), ['enemy', 'player']);
   assert.ok(beatBudgetMs(beats[0]) <= BEAT_BUDGET_MS.actionCap[3]);
+  // The clash band announced both Signatures: the answer plays no cut-in band of its own.
+  assert.equal(
+    beatBudgetMs(beats[1]),
+    beatBudgetMs({ ...beats[1], clashAnswer: false }) - BEAT_BUDGET_MS.signatureCutIn
+  );
 });
 
 test('heals are number readouts, not chip rows', () => {
@@ -345,6 +350,9 @@ test('end-of-turn burns form one tick chip beat; a burn K.O. and the battle end 
   assertWellFormed(events, beats);
   assert.deepEqual(kinds(beats).slice(-3), ['chip', 'ko', 'end']);
   assert.equal(beats.at(-3).ticks[0].status, 'burning');
+  // A lethal tick hands its number to the K.O. beat, as a lethal action does.
+  assert.equal(beats.at(-3).lethal, true);
+  assert.equal(beatBudgetMs(beats.at(-3)), BEAT_BUDGET_MS.lethalTick);
   assert.equal(beats.at(-1).winner, 'player');
   assert.equal(beatBudgetMs(beats.at(-1)), 0, 'the finale belongs to the outro, not the turn');
 });

@@ -37,7 +37,7 @@ If another ally applied Marked, a short cut-in credits that helper. The credit a
 
 ## Modes
 
-The title is the mode hub. **Play** opens the tutorial on first launch, then starts the next League battle (the Champion Circuit once the League is won) straight away with the last team; **My team** opens team selection first. **Challenges** groups Expedition, Mythic Trials and Daily Pick, which open at 2, 4 and 6 League badges (a mode already played stays open).
+The title is the mode hub. **Play** opens the tutorial on first launch, then starts the next League battle (the Champion Circuit once the League is won) straight away with the last team; **My team** opens team selection first. The League map's rival card works the same way: **Fight!** (or **Replay this duel**) starts with the last team, **Change team** opens team selection first. **Challenges** groups Expedition, Mythic Trials and Daily Pick, which open at 2, 4 and 6 League badges (a mode already played stays open). A newly opened mode is marked **New** on the Challenges tile and on its row until it is first played; this is read from the save (no Expedition won or under way, no trial cleared, no Daily Pick won), not stored.
 
 - **Rival League** — twelve authored rivals, arenas, badges, styles, and Ace phases. A first win earns the rival's badge; **Next rival** starts the next duel straight away with the same team.
 - **Champion Circuit** — post-League battles under six rotating conditions.
@@ -75,9 +75,12 @@ New battles count `records.combos`. Existing `records.assists` and the `team_ass
 - `src/battle/` — deterministic engine, damage, statuses, seeded RNG, previews, and AI.
 - `src/battle-ui/` — HUD, controller, event playback, and battle effects.
 - `src/screens/` — team selection, Draft, Academy, tutorial, results, and other modes.
-- `src/i18n.js`, `src/save.js`, `src/sound.js` — localization, persistence, and synthesized audio.
+- `src/i18n/fr.js`, `src/i18n/en.js`, `src/i18n.js`, `src/save.js` — localization (one dictionary module per language, loaded on demand by the `src/i18n.js` core) and persistence.
+- `src/sound.js`, `src/sound-cries.js` — audio: synthesized UI/battle cues and the 30 authored creature cries, and playback of the baked music (a base stem per screen, plus a tension stem per arena that follows the battle).
 - `src/presentation/` — responsive Three.js arenas and reactive battle lighting.
 - `assets/asset-manifest.json` — provenance and processing record for shipped sprites.
+- `assets/arenas/` — the six painted arena plates and courts (WebP, baked offline by `tools/generate-arena-plates.mjs`), with their provenance in `assets/arenas/manifest.json`.
+- `assets/music/` — the original score as looping Ogg Opus files, one per screen family and arena (plus the arenas' tension stems). Its source is `tools/music/score.js`, rendered, mastered (−16 LUFS, ≤ −1 dBTP) and checked by the dev-only `node tools/bake-music.mjs`; one five-note motif runs through the title, the arenas and the victory.
 
 ## Verification
 

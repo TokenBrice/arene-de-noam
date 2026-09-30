@@ -197,23 +197,33 @@
     },
     {
       "creature": "brontusk",
-      "source": "art/imagegen-sources/brontusk-chroma.png",
+      "source": "art/concepts/brontusk-clean/brontusk-clean-candidate-1.png",
       "final": "assets/monsters/brontusk/battle.png",
-      "job": "exec-0583f801-3114-4fe4-b5b7-12132bed24fc",
-      "usage": "one built-in generation",
-      "prompt": "Massive armored musk-ox rhinoceros hybrid with crystal brow plate, stone-gray body, amber force cracks, and planted hooves.",
+      "model": "PixelLab /edit-images-v2 edit_with_text (STAGE-10 redraw from the normalised sprite; an edit_with_reference pilot with the Orakyn anchor was rejected)",
+      "brief": "art/briefs/brontusk-clean.json",
+      "seed": 510111,
+      "usage": 40,
+      "job": "d439561c-8528-4f64-965c-0894f00127e0",
+      "previous": {
+        "source": "art/imagegen-sources/brontusk-chroma.png",
+        "original": "art/monsters/originals/pre-redraw/brontusk.png",
+        "battle": "art/monsters/originals/pre-redraw/brontusk-battle.png",
+        "job": "exec-0583f801-3114-4fe4-b5b7-12132bed24fc",
+        "usage": "one built-in generation",
+        "prompt": "Massive armored musk-ox rhinoceros hybrid with crystal brow plate, stone-gray body, amber force cracks, and planted hooves."
+      },
       "normalized": {
-        "colors": 68,
-        "outline": true,
+        "colors": 90,
+        "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/brontusk.png"
       },
       "chromatique": {
         "final": "assets/monsters/brontusk/battle-shiny.png",
         "from": "assets/monsters/brontusk/battle.png",
-        "bodyHue": 56,
+        "bodyHue": 47,
         "hue": 250,
-        "colors": 68
+        "colors": 90
       }
     },
     {
@@ -239,23 +249,33 @@
     },
     {
       "creature": "monolith",
-      "source": "art/imagegen-sources/monolith-chroma.png",
+      "source": "art/concepts/monolith-clean/monolith-clean-candidate-1.png",
       "final": "assets/monsters/monolith/battle.png",
-      "job": "exec-7ee4d0aa-b412-4f38-84c6-6937976f62e3",
-      "usage": "one built-in generation",
-      "prompt": "Ancient squat rune golem of stacked dark stone slabs with one golden core eye and fortress shoulders.",
+      "model": "PixelLab /edit-images-v2 edit_with_text (STAGE-10 redraw from the normalised sprite)",
+      "brief": "art/briefs/monolith-clean.json",
+      "seed": 510411,
+      "usage": 20,
+      "job": "099b78ee-3947-4203-9ab0-29f947b92517",
+      "previous": {
+        "source": "art/imagegen-sources/monolith-chroma.png",
+        "original": "art/monsters/originals/pre-redraw/monolith.png",
+        "battle": "art/monsters/originals/pre-redraw/monolith-battle.png",
+        "job": "exec-7ee4d0aa-b412-4f38-84c6-6937976f62e3",
+        "usage": "one built-in generation",
+        "prompt": "Ancient squat rune golem of stacked dark stone slabs with one golden core eye and fortress shoulders."
+      },
       "normalized": {
-        "colors": 67,
-        "outline": true,
+        "colors": 89,
+        "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/monolith.png"
       },
       "chromatique": {
         "final": "assets/monsters/monolith/battle-shiny.png",
         "from": "assets/monsters/monolith/battle.png",
-        "bodyHue": 291,
+        "bodyHue": 293,
         "hue": 60,
-        "colors": 67
+        "colors": 89
       }
     },
     {
@@ -281,23 +301,33 @@
     },
     {
       "creature": "nymbloom",
-      "source": "art/imagegen-sources/nymbloom-chroma.png",
+      "source": "art/concepts/nymbloom-clean-2/nymbloom-clean-2-candidate-3.png",
       "final": "assets/monsters/nymbloom/battle.png",
-      "job": "exec-585bfb88-45a9-4ed5-8206-14d8379cfdec",
-      "usage": "one built-in generation",
-      "prompt": "Royal axolotl-deer healer with coral-pink gills, pearl-blue skin, water-lily crown, and healing bubbles.",
+      "model": "PixelLab /edit-images-v2 edit_with_text (STAGE-10 redraw from the normalised sprite, two rounds)",
+      "brief": "art/briefs/nymbloom-clean-2.json",
+      "seed": 510612,
+      "usage": 40,
+      "job": "7e775291-2185-4571-921a-75b910dabf1e",
+      "previous": {
+        "source": "art/imagegen-sources/nymbloom-chroma.png",
+        "original": "art/monsters/originals/pre-redraw/nymbloom.png",
+        "battle": "art/monsters/originals/pre-redraw/nymbloom-battle.png",
+        "job": "exec-585bfb88-45a9-4ed5-8206-14d8379cfdec",
+        "usage": "one built-in generation",
+        "prompt": "Royal axolotl-deer healer with coral-pink gills, pearl-blue skin, water-lily crown, and healing bubbles."
+      },
       "normalized": {
-        "colors": 76,
-        "outline": true,
+        "colors": 89,
+        "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/nymbloom.png"
       },
       "chromatique": {
         "final": "assets/monsters/nymbloom/battle-shiny.png",
         "from": "assets/monsters/nymbloom/battle.png",
-        "bodyHue": 253,
+        "bodyHue": 256,
         "hue": 160,
-        "colors": 76
+        "colors": 89
       }
     },
     {
@@ -344,23 +374,33 @@
     },
     {
       "creature": "magmoth",
-      "source": "art/imagegen-sources/magmoth-chroma.png",
+      "source": "art/concepts/magmoth-clean-2/magmoth-clean-2-candidate-3.png",
       "final": "assets/monsters/magmoth/battle.png",
-      "job": "exec-bc352bd3-8002-4dfa-8cac-f738189c9691",
-      "usage": "one built-in generation",
-      "prompt": "Huge gentle volcanic moth-tortoise with basalt wing-shells, lava seams, red eyes, and thick ash fur.",
+      "model": "PixelLab /edit-images-v2 edit_with_text (STAGE-10 redraw from the normalised sprite, then a molten-wing round from its first pick)",
+      "brief": "art/briefs/magmoth-clean-2.json",
+      "seed": 510212,
+      "usage": 40,
+      "job": "e83b0909-72c6-4e36-8838-f3a4b88341c1",
+      "previous": {
+        "source": "art/imagegen-sources/magmoth-chroma.png",
+        "original": "art/monsters/originals/pre-redraw/magmoth.png",
+        "battle": "art/monsters/originals/pre-redraw/magmoth-battle.png",
+        "job": "exec-bc352bd3-8002-4dfa-8cac-f738189c9691",
+        "usage": "one built-in generation",
+        "prompt": "Huge gentle volcanic moth-tortoise with basalt wing-shells, lava seams, red eyes, and thick ash fur."
+      },
       "normalized": {
-        "colors": 68,
-        "outline": true,
+        "colors": 91,
+        "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/magmoth.png"
       },
       "chromatique": {
         "final": "assets/monsters/magmoth/battle-shiny.png",
         "from": "assets/monsters/magmoth/battle.png",
-        "bodyHue": 34,
+        "bodyHue": 36,
         "hue": 200,
-        "colors": 68
+        "colors": 90
       }
     },
     {
@@ -470,44 +510,64 @@
     },
     {
       "creature": "umbrawl",
-      "source": "art/imagegen-sources/umbrawl-chroma.png",
+      "source": "art/concepts/umbrawl-clean-2/umbrawl-clean-2-candidate-3.png",
       "final": "assets/monsters/umbrawl/battle.png",
-      "job": "exec-f8dd6a32-26c9-49c6-820a-159894564d34",
-      "usage": "one built-in generation",
-      "prompt": "Low shadow panther with smoke paws, eclipse-ring collar, black-purple coat, magenta eyes, and blade tail.",
+      "model": "PixelLab /edit-images-v2 edit_with_text (STAGE-10 redraw from the normalised sprite, refined once)",
+      "brief": "art/briefs/umbrawl-clean-2.json",
+      "seed": 510512,
+      "usage": 40,
+      "job": "a62cee4e-17c1-4734-838b-7fb13d13744e",
+      "previous": {
+        "source": "art/imagegen-sources/umbrawl-chroma.png",
+        "original": "art/monsters/originals/pre-redraw/umbrawl.png",
+        "battle": "art/monsters/originals/pre-redraw/umbrawl-battle.png",
+        "job": "exec-f8dd6a32-26c9-49c6-820a-159894564d34",
+        "usage": "one built-in generation",
+        "prompt": "Low shadow panther with smoke paws, eclipse-ring collar, black-purple coat, magenta eyes, and blade tail."
+      },
       "normalized": {
-        "colors": 67,
-        "outline": true,
+        "colors": 88,
+        "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/umbrawl.png"
       },
       "chromatique": {
         "final": "assets/monsters/umbrawl/battle-shiny.png",
         "from": "assets/monsters/umbrawl/battle.png",
-        "bodyHue": 298,
+        "bodyHue": 302,
         "hue": 195,
-        "colors": 66
+        "colors": 85
       }
     },
     {
       "creature": "hexalune",
-      "source": "art/imagegen-sources/hexalune-chroma.png",
+      "source": "art/concepts/hexalune-clean-2/hexalune-clean-2-candidate-3.png",
       "final": "assets/monsters/hexalune/battle.png",
-      "job": "exec-c6f7b5e8-51d6-4427-a6b5-75195ae2fefb",
-      "usage": "one built-in generation",
-      "prompt": "Many-eyed non-humanoid owl-cephalopod mystic with crescent crown, feather mantle, rune charms, and curse wisps.",
+      "model": "PixelLab /edit-images-v2 edit_with_text (STAGE-10 redraw from the normalised sprite, two rounds)",
+      "brief": "art/briefs/hexalune-clean-2.json",
+      "seed": 510312,
+      "usage": 40,
+      "job": "bc5b759e-9649-4742-8178-46fc08b2d62e",
+      "previous": {
+        "source": "art/imagegen-sources/hexalune-chroma.png",
+        "original": "art/monsters/originals/pre-redraw/hexalune.png",
+        "battle": "art/monsters/originals/pre-redraw/hexalune-battle.png",
+        "job": "exec-c6f7b5e8-51d6-4427-a6b5-75195ae2fefb",
+        "usage": "one built-in generation",
+        "prompt": "Many-eyed non-humanoid owl-cephalopod mystic with crescent crown, feather mantle, rune charms, and curse wisps."
+      },
       "normalized": {
-        "colors": 68,
-        "outline": true,
+        "colors": 90,
+        "outline": false,
         "baseline": 125,
         "sourcePath": "art/monsters/originals/hexalune.png"
       },
       "chromatique": {
         "final": "assets/monsters/hexalune/battle-shiny.png",
         "from": "assets/monsters/hexalune/battle.png",
-        "bodyHue": 283,
+        "bodyHue": 284,
         "hue": 20,
-        "colors": 68
+        "colors": 90
       }
     },
     {
@@ -644,5 +704,5 @@
     }
   ],
   "sharedPromptConstraints": "Original creature; Orakyn supplied only as pixel-art style reference; right-facing full-body battle pose; limited palette; selective dark outline; flat chroma key; no text, logos, franchise traits, or external character references.",
-  "notes": "The built-in image tool was used because the active Codex image-generation workflow requires it. PixelLab credentials remain local and unused by the browser. Flat-key sources were chroma-processed; outputs with model-native alpha were preserved directly. All sprites were resized to canonical 128×128 RGBA and validated for transparent corners."
+  "notes": "The built-in image tool was used because the active Codex image-generation workflow requires it. PixelLab credentials remain local and unused by the browser. Flat-key sources were chroma-processed; outputs with model-native alpha were preserved directly. All sprites were resized to canonical 128×128 RGBA and validated for transparent corners. STAGE-10 (2026-09-30): brontusk, magmoth, hexalune, monolith, umbrawl and nymbloom were redrawn with PixelLab /edit-images-v2 from their normalised sprites (briefs in art/briefs/, every candidate and its cost in art/concepts/<run>/generation.json, 220 units in total); each entry's `previous` block records the replaced image-gen art, kept under art/monsters/originals/pre-redraw/."
 }
