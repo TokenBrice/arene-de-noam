@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { MAX_STEP_MS } from '../src/battle-ui/fx-clock.js';
 import {
   arenaReady,
   expectNoRuntimeLeaks,
@@ -56,24 +57,32 @@ async function controlsBack(page, timeout = 10000) {
   await expect(controls(page).first()).toBeVisible({ timeout });
 }
 
-// Real ms from a click on `locator` until the controls come back (the turn's playback).
+// Real ms from a click on `locator` until the controls come back (the turn's playback), less the
+// time the fx-clock never counts: it advances at most MAX_STEP_MS per frame (§4), so one stalled
+// frame (SwiftShader compiling a first draw while the other workers load the CPU) lengthens the
+// turn by its whole excess, whatever the speed.
 async function turnMs(page, locator, { hold = false } = {}) {
-  await page.evaluate(() => {
+  await page.evaluate((maxStepMs) => {
     window.__turn = null;
     const start = () => {
       const began = performance.now();
-      let seenLock = false;
+      let last = began,
+        stalled = 0,
+        seenLock = false;
       const tick = () => {
+        const now = performance.now();
+        stalled += Math.max(0, now - last - maxStepMs);
+        last = now;
         const locked = document.querySelector('.battle-screen.locked');
         seenLock ||= Boolean(locked);
         if (seenLock && !locked && document.querySelector('[data-move]:not([disabled])'))
-          window.__turn = performance.now() - began;
+          window.__turn = now - began - stalled;
         else requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     };
     document.addEventListener('click', start, { capture: true, once: true });
-  });
+  }, MAX_STEP_MS);
   await locator.click();
   if (hold) {
     // Press the stage as soon as the dock locks; the director also catches a pointer that is
@@ -394,23 +403,14 @@ test('×2 speed plays the same turn about twice as fast, rematches included', as
     const save = JSON.parse(localStorage.getItem('arene-de-noam-save'));
     localStorage.setItem('arene-de-noam-save', JSON.stringify({ ...save, battleSpeed: 2 }));
   });
-  // Wall-clock turns swing with the parallel suite's CPU load: a stalled frame costs real time the
-  // clock cannot win back (fx-clock.js clamps each step). So each ×2 case keeps the quicker of two
-  // runs of the same seeded turn; a turn stuck at ×1 is slow on both.
-  let fast = Infinity,
-    rematch = Infinity;
-  for (let sample = 0; sample < 2; sample++) {
-    await enter();
-    fast = Math.min(fast, await turnMs(page, arc));
-  }
+  await enter();
+  const fast = await turnMs(page, arc);
   expect(fast).toBeLessThan(normal * 0.7);
-  for (let sample = 0; sample < 2; sample++) {
-    await playVisibleBattle(page, { maxIterations: 3000 });
-    await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
-    await page.locator('[data-action="rematch"]').click();
-    await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
-    rematch = Math.min(rematch, await turnMs(page, arc));
-  }
+  await playVisibleBattle(page, { maxIterations: 3000 });
+  await expect(page.getByRole('heading', { name: /Victoire|Belle bataille/ })).toBeVisible();
+  await page.locator('[data-action="rematch"]').click();
+  await expect(controls(page, '[data-move="lucid_arc"]')).toBeVisible({ timeout: 8000 });
+  const rematch = await turnMs(page, arc);
   expect(rematch).toBeLessThan(normal * 0.7);
 });
 
@@ -431,40 +431,35 @@ test('holding the stage hurries the turn without dropping a single hit number', 
   const chorus = page.locator('[data-move="echo_chorus"]');
   await enter();
   const normal = await turnMs(page, chorus);
-  // As with ×2, the held turn keeps the quicker of two runs (CPU load stalls cost real time), and
-  // every held run must show each hit.
-  let held = Infinity;
-  for (let sample = 0; sample < 2; sample++) {
-    await enter();
-    // Record every damage number the enemy shows while the stage is held, with its pooled node.
-    await page.evaluate(() => {
-      const layer = document.querySelector('#fx-text');
-      window.__numbers = [];
-      new MutationObserver((records) => {
-        for (const record of records) {
-          const number = record.target.closest?.('.fx-number[data-side="enemy"][data-kind="damage"]');
-          if (number && record.target.matches('.fx-value'))
-            window.__numbers.push({
-              node: [...layer.children].indexOf(number),
-              text: record.target.textContent,
-            });
-        }
-      }).observe(layer, { childList: true, subtree: true });
-    });
-    held = Math.min(held, await turnMs(page, chorus, { hold: true }));
-    // Each of the three hits bumps one running chain total: same node, growing damage.
-    const numbers = await page.evaluate(() => window.__numbers);
-    expect(numbers.map(({ text }) => text)).toEqual([
-      expect.stringMatching(/^−\d+$/),
-      expect.stringMatching(/^−\d+$/),
-      expect.stringMatching(/^−\d+$/),
-    ]);
-    expect(new Set(numbers.map(({ node }) => node)).size).toBe(1);
-    const totals = numbers.map(({ text }) => Number(text.slice(1)));
-    expect(totals[1]).toBeGreaterThan(totals[0]);
-    expect(totals[2]).toBeGreaterThan(totals[1]);
-  }
+  await enter();
+  // Record every damage number the enemy shows while the stage is held, with its pooled node.
+  await page.evaluate(() => {
+    const layer = document.querySelector('#fx-text');
+    window.__numbers = [];
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const number = record.target.closest?.('.fx-number[data-side="enemy"][data-kind="damage"]');
+        if (number && record.target.matches('.fx-value'))
+          window.__numbers.push({
+            node: [...layer.children].indexOf(number),
+            text: record.target.textContent,
+          });
+      }
+    }).observe(layer, { childList: true, subtree: true });
+  });
+  const held = await turnMs(page, chorus, { hold: true });
   expect(held).toBeLessThan(normal * 0.6);
+  // Each of the three hits bumps one running chain total: same node, growing damage.
+  const numbers = await page.evaluate(() => window.__numbers);
+  expect(numbers.map(({ text }) => text)).toEqual([
+    expect.stringMatching(/^−\d+$/),
+    expect.stringMatching(/^−\d+$/),
+    expect.stringMatching(/^−\d+$/),
+  ]);
+  expect(new Set(numbers.map(({ node }) => node)).size).toBe(1);
+  const totals = numbers.map(({ text }) => Number(text.slice(1)));
+  expect(totals[1]).toBeGreaterThan(totals[0]);
+  expect(totals[2]).toBeGreaterThan(totals[1]);
 });
 
 test('quick battle rules alter the fight and remain visible in the codex', async ({ page }) => {
@@ -1024,12 +1019,18 @@ test('knockout opens a free replacement selector before the next choice', async 
   await page.getByRole('button', { name: /^Combattre/ }).click();
   await page.locator('[data-move]').first().click();
   await expect(page.getByRole('heading', { name: /Qui prend le relais/ })).toBeVisible();
-  await expect(page.locator('#fighter-player')).toHaveAttribute('data-phase', 'fainted');
-  const replacement = page.locator('[data-switch-index]').first();
-  await replacement.click();
-  await expect(page.locator('#action-line')).toContainText(/entre en jeu|À toi/);
-  await expect(page.locator('[data-move]:enabled').first()).toBeVisible();
-  await expect(page.locator('#fighter-player')).toHaveAttribute('data-phase', 'idle');
+  const fighter = page.locator('#fighter-player');
+  await expect(fighter).toHaveAttribute('data-phase', 'fainted');
+  const fallen = await fighter.getAttribute('data-creature');
+  // Under ?animations=0 the entry line shows for an instant before the next prompt (here the
+  // Marqué tip) replaces it: record the narration instead of polling it.
+  await recordLines(page);
+  await page.locator('[data-switch-index]').first().click();
+  await expect(fighter).not.toHaveAttribute('data-creature', fallen);
+  await expect(fighter).toHaveAttribute('data-phase', 'idle');
+  await controlsBack(page);
+  const incoming = await fighter.locator('img').getAttribute('alt');
+  expect(await lines(page)).toContainEqual(expect.stringMatching(new RegExp(`${incoming} entre en jeu`)));
 });
 
 test('a voluntary switch recalls the outgoing creature before the replacement lands', async ({ page }) => {
@@ -1037,14 +1038,37 @@ test('a voluntary switch recalls the outgoing creature before the replacement la
   await page.goto('/?seed=31');
   await page.locator('[data-action="quick"]').click();
   await page.getByRole('button', { name: /^Combattre/ }).click();
+  await arenaReady(page);
   const fighter = page.locator('#fighter-player');
   const outgoingId = await fighter.getAttribute('data-creature');
   await expect(controls(page, '[data-action="open-switch"]')).toBeEnabled({ timeout: 8000 });
+  // The recall lasts 180 clock ms, shorter than expect's polling steps: record every phase the
+  // player's fighter goes through instead of polling for it.
+  await page.evaluate(() => {
+    const states = (window.__fighterStates = []),
+      record = () => {
+        const node = document.querySelector('#fighter-player'),
+          state = node && { phase: node.dataset.phase, creature: node.dataset.creature };
+        const last = states.at(-1);
+        if (state && (last?.phase !== state.phase || last?.creature !== state.creature)) states.push(state);
+      };
+    record();
+    new MutationObserver(record).observe(document.querySelector('.battle-stage'), {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['data-phase', 'data-creature'],
+    });
+  });
   await page.locator('[data-action="open-switch"]').click();
   await page.locator('[data-switch-index]:enabled').first().click();
-  await expect(fighter).toHaveAttribute('data-phase', 'recall');
   await expect(fighter).not.toHaveAttribute('data-creature', outgoingId);
   await expect(fighter).toHaveAttribute('data-phase', 'idle');
+  const states = await page.evaluate(() => window.__fighterStates),
+    recalled = states.findIndex(({ phase }) => phase === 'recall'),
+    replaced = states.findIndex(({ creature }) => creature !== outgoingId);
+  expect(states[recalled]).toEqual({ phase: 'recall', creature: outgoingId });
+  expect(recalled).toBeLessThan(replaced);
 });
 
 test('a defeat produces evidence-based trainer analysis', async ({ page }) => {
