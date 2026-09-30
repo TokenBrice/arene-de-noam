@@ -369,17 +369,46 @@ export async function withTrace(browser, page, fn) {
   return { result, trace: analyzeTrace(json), path };
 }
 
+// Controls are back only when the battle screen is unlocked (the dock keeps its
+// last enabled tiles underneath the narration box while ctx.locked).
+export const MOVE_READY = '.battle-screen:not(.locked) [data-move]:enabled';
+export const SWITCH_TILE = '.battle-screen:not(.locked) [data-action="open-switch"]:enabled';
+export const SWITCH_SHEET = '#replacement-root .battle-sheet-switch';
+
+// Opens the switch bottom sheet from the dock; false when the Changer tile is unavailable.
+export async function openSwitchSheet(page) {
+  const tile = page.locator(SWITCH_TILE);
+  if (!(await tile.count())) return false;
+  await tile.first().click();
+  await page
+    .locator(SWITCH_SHEET + ' [data-switch-index]')
+    .first()
+    .waitFor({ timeout: 10000 });
+  return true;
+}
+
+export async function closeSwitchSheet(page) {
+  await page
+    .locator(SWITCH_SHEET + ' [data-action="cancel-switch"]')
+    .click({ timeout: 3000 })
+    .catch(() => {});
+  await page
+    .locator(SWITCH_SHEET)
+    .waitFor({ state: 'detached', timeout: 5000 })
+    .catch(() => {});
+}
+
 export async function enterQuickBattle(page) {
   await page.locator('[data-action="quick"]').click();
   await page.locator('[data-action="start-battle"]:visible').first().waitFor({ timeout: 60000 });
   await page.locator('[data-action="start-battle"]:visible').first().click();
-  await page.locator('[data-move]:enabled').first().waitFor({ timeout: 90000 });
+  await page.locator(MOVE_READY).first().waitFor({ timeout: 90000 });
 }
 
 export async function waitIdle(page, timeout = 120000) {
   await page.waitForFunction(
     () =>
-      document.querySelector('[data-move]:enabled') ||
+      document.querySelector('.battle-screen:not(.locked) [data-move]:enabled') ||
       document.querySelector('[data-switch-index]') ||
       document.querySelector('[data-action="rematch"]'),
     null,
@@ -396,7 +425,7 @@ export async function playUntil(page, predicate, maxSteps = 400) {
       await page.waitForTimeout(50);
       continue;
     }
-    const move = page.locator('[data-move]:visible:enabled').first();
+    const move = page.locator(MOVE_READY + ':visible').first();
     if (await move.count()) {
       await move.click({ timeout: 500 }).catch(() => {});
       await page.waitForTimeout(50);

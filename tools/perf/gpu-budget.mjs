@@ -13,7 +13,17 @@ import { spawn } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { PHONE, launchArgs, newPhonePage, snapshotLayers, waitIdle, round } from './lib.mjs';
+import {
+  PHONE,
+  launchArgs,
+  newPhonePage,
+  snapshotLayers,
+  waitIdle,
+  round,
+  MOVE_READY,
+  openSwitchSheet,
+  closeSwitchSheet,
+} from './lib.mjs';
 
 const HERE = new URL('.', import.meta.url).pathname;
 const REPO = path.resolve(HERE, '..', '..');
@@ -299,10 +309,23 @@ async function probeTier(browser, tier, hook) {
     result.layersIdle = await layerStats(cdp, layers);
     await collectFilters();
 
+    // ---- switch sheet (before the attack: the seed-7 enemy roots us afterwards and disables Changer)
+    if (
+      await openSwitchSheet(page).catch(
+        (e) => (result.notes.push('switch sheet: ' + e.message.split('\n')[0]), false)
+      )
+    ) {
+      await page.waitForTimeout(700);
+      result.sheetRenders = counting ? await renders(2000) : null;
+      await collectFilters();
+      await closeSwitchSheet(page);
+      await page.waitForTimeout(500);
+    } else result.notes.push('switch sheet not available');
+
     // ---- mid-attack: sample several times through the turn, keep the worst case
     const attackStart = counting ? await page.evaluate(() => window.__renders) : 0;
     const t0 = Date.now();
-    await page.locator('[data-move]:enabled').first().click();
+    await page.locator(MOVE_READY).first().click();
     const worst = {
       layers: 0,
       drawing: 0,
@@ -335,18 +358,6 @@ async function probeTier(browser, tier, hook) {
     await page.waitForTimeout(800);
 
     // ---- switch sheet
-    const sw = page.locator('[data-action="open-switch"]:enabled');
-    if (await sw.count()) {
-      await sw.click();
-      await page
-        .locator('.replacement')
-        .first()
-        .waitFor({ timeout: 10000 })
-        .catch(() => {});
-      await page.waitForTimeout(700);
-      result.sheetRenders = counting ? await renders(2000) : null;
-      await collectFilters();
-    } else result.notes.push('switch sheet not available');
     result.filters = [...filters];
   } finally {
     await context.close();

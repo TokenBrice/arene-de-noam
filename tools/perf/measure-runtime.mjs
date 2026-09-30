@@ -14,6 +14,9 @@ import {
   withTrace,
   waitIdle,
   playUntil,
+  MOVE_READY,
+  openSwitchSheet,
+  closeSwitchSheet,
   snapshotLayers,
   describeLayers,
   round,
@@ -86,7 +89,7 @@ for (let rep = 0; rep < REPS; rep++)
       action: async () => {
         const s = Date.now();
         await page.locator('[data-action="start-battle"]:visible').first().click();
-        await page.locator('[data-move]:enabled').first().waitFor({ timeout: 120000 });
+        await page.locator(MOVE_READY).first().waitFor({ timeout: 120000 });
         entryMs = Date.now() - s;
       },
     });
@@ -94,11 +97,20 @@ for (let rep = 0; rep < REPS; rep++)
     await page.waitForTimeout(1000);
     await measure(ctx, 'battle-idle', { ms: 5000 });
 
+    // Switch sheet is measured before the attack turn: after it the seed-7 enemy Thornox roots us and
+    // the Changer tile is legitimately disabled.
+    if (await openSwitchSheet(page).catch(() => false)) {
+      await page.waitForTimeout(600);
+      await measure(ctx, 'switch-overlay', { ms: 3000 });
+      await closeSwitchSheet(page);
+      await page.waitForTimeout(500);
+    }
+
     let turnMs = 0;
     await measure(ctx, 'attack-turn', {
       action: async () => {
         const s = Date.now();
-        await page.locator('[data-move]:enabled').first().click();
+        await page.locator(MOVE_READY).first().click();
         await page.waitForTimeout(300);
         await waitIdle(page);
         turnMs = Date.now() - s;
@@ -107,26 +119,12 @@ for (let rep = 0; rep < REPS; rep++)
     if (all.at(-1)?.screen === 'attack-turn') all.at(-1).turnMs = turnMs;
     await page.waitForTimeout(800);
 
-    const sw = page.locator('[data-action="open-switch"]:enabled');
-    if (await sw.count()) {
-      await sw.click();
-      await page
-        .locator('.replacement')
-        .first()
-        .waitFor({ timeout: 10000 })
-        .catch(() => {});
-      await page.waitForTimeout(600);
-      await measure(ctx, 'switch-overlay', { ms: 3000 });
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(500);
-    }
-
     // Results: fresh battle with enemies at 1 HP.
     await page.goto(`${BASE}/?seed=7&enemyHp=1&enemy=thornox,kordane,calderoc${QUERY}`);
     await page.locator('[data-action="quick"]').waitFor({ timeout: 120000 });
     await page.locator('[data-action="quick"]').click();
     await page.locator('[data-action="start-battle"]:visible').first().click();
-    await page.locator('[data-move]:enabled').first().waitFor({ timeout: 120000 });
+    await page.locator(MOVE_READY).first().waitFor({ timeout: 120000 });
     await playUntil(page, async () => (await page.locator('[data-action="rematch"]').count()) > 0);
     await page.waitForTimeout(1500);
     await measure(ctx, 'results', { ms: 4000 });

@@ -194,10 +194,13 @@ budget (it may end earlier, never later) and uses `waitUntil(beatStart + budget)
 | **Reduced motion** | every beat 450; action +150 per extra hit; skip and end 0 | Readout beats ≥ 450 ms; cosmetic time (cut-in, travel, hit-stop, add-on) is 0. |
 
 Not included, added by the director: the **once-per-player-creature Signature-ready banner** is non-blocking (§6.4), so it
-adds nothing. Turn pacing proof: `test/beats.test.js` runs seeded AI battles (the turn window = the turn plus the enemy's
-free replacement) and asserts median ≤ 2.4 s and p90 ≤ 3.5 s; measured nominal values are median ≈ 2.2 s and
-p90 ≈ 3.3 s across Apprentice/Standard/Champion mixes. The remaining margin is the director's only overhead allowance
-(`timing.mjs` phone ×1 must still read median ≤ 2.4 s, p90 ≤ 3.5 s).
+adds nothing. Readouts never outlive their beat: the next beat retires them as it starts, and a beat ends no earlier than
+`READOUT_MIN_REAL_MS` real ms after its last readout appeared (§6.2). At ×1 that floor only binds on lethal hand-offs; at ×2
+and under hurry it stretches short beats instead of letting the text overlap the next beat. Turn pacing proof:
+`test/beats.test.js` runs seeded AI battles (the turn window = the turn plus the enemy's free replacement) and asserts
+median ≤ 2.4 s and p90 ≤ 3.5 s; measured nominal values are median ≈ 2.2 s and p90 ≈ 3.3 s across
+Apprentice/Standard/Champion mixes. The remaining margin is the director's only overhead allowance (`timing.mjs` phone ×1
+must still read median ≤ 2.4 s, p90 ≤ 3.5 s).
 
 ### 3.5 FX randomness
 
@@ -308,27 +311,43 @@ and `reducedMotion`. Specific fields:
 
 ### 6.2 Per-beat duties
 
-For each beat: set `ctx.currentFxMove = beat`; narrate once (§6.3); push the timeline entries; run the beat timeline
-(§10) on the clock; advance and patch the HUD at presentation time; end at the budget (§3.4) with
-`waitUntil(start + budget, { minRealMs })` where `minRealMs` keeps the last readout visible ≥ `READOUT_MIN_REAL_MS`;
-set `ctx.currentFxMove = null`. The director never calls the engine, never mutates `session.state`, and never reads
-`state.rngState`.
+For each beat: set `ctx.currentFxMove = beat`; retire the previous beat's readouts (below); narrate once (§6.3); push
+the timeline entries; run the beat timeline (§10) on the clock; advance and patch the HUD at presentation time; end at the
+budget (§3.4) with `waitUntil(start + budget, { minRealMs })` where `minRealMs` keeps the last readout visible
+≥ `READOUT_MIN_REAL_MS` (every beat, so ×2 and hurry compress beats, never readouts); set `ctx.currentFxMove = null`. The
+director never calls the engine, never mutates `session.state`, and never reads `state.rngState`.
 
+- **Readout blocks** (`#fx-text`, §11.3): a readout is one block — the beat's single stamp pill over its number and chain
+  counter ("−31 ×3"), with its small tags (combo, helper, weather, absorbed, cause) underneath. It pops in at its presented
+  moment beside the creature's visible outline (its `SPRITE_METRICS` opaque box fitted to the rest anchors): candidate
+  spots on the inner flank, over the head, under the feet and on the outer flank are costed by what they would cover
+  (the creature, the other creature, the attack's path between them, the plates, the readouts already showing) and by
+  their distance from the outline; a block that fits nowhere at full size shrinks to 0.84 rather than cover its
+  creature. It then holds (WAAPI `fill: forwards`) until the next beat starts, which retires it (it keeps
+  ≥ `READOUT_MIN_REAL_MS` on screen, then drifts up and fades in 120 ms). The turn's end retires the last ones.
 - **Contact routine** (per hit, at the timeline's `contact` cue): `session.cues.emit('contact')`;
   `clock.hitStop(TIERS[tier].hitStopMs)` (hits ≥ 2: `min(hitStopMs, 40)`; none under reduced motion);
   target `react('hit')` + `react('knockback', { px: TIERS[tier].knockPx })`; `arena.punch(target, TIERS[tier])`; impact
-  emitters; then the readout: damage number in `#fx-text` (WAAPI transform/opacity, started now), `drainHp(target, from, to, clock.realMs(450))`,
-  stamps (first applicable hit), `readout` cue, combo tag on hit 1, barrier "absorbed N" on the same number when
-  `hit.barrierHit`; `blocked` hits show the shield stamp and no "−0". A `miss` replaces the contact routine with the target's
-  `dodge` reaction, the "Esquivé !" stamp and the `miss` cue (projectiles whiff past).
+  emitters; then the readout: the target's block (started now), `drainHp(target, from, to, clock.realMs(450))`, the
+  stamp cues (every fresh kind), the block's one stamp and, at the same instant, the narration's emphasis (§6.3),
+  `readout` cue, combo tag on hit 1, barrier "absorbed N" on the same number when `hit.barrierHit`. The shown stamp is the
+  first of `miss`, `blocked`, `effective`, `resisted`, `critical` in `beat.stamps` (type effectiveness is the lesson the
+  child can act on); a critical behind an effectiveness stamp keeps its gold number and a star. `blocked` hits show the
+  shield stamp and no "−0". Later hits of a multi-hit re-pop the same block with the running total and the chain count.
+  A `miss` replaces the contact routine with the target's `dodge` reaction, an "Esquivé !" block and the `miss` cue
+  (projectiles whiff past).
 - **Chip row** (timeline `chips` op): status motifs pop on the fighter (status loops, §9.5), HUD chips via `patchHud`,
   one `status+` / `status-` cue each, persistent `react('tint', { status })` with the first negative status of the target's
   view statuses in `STATUS_DISPLAY_ORDER` (`null` when none is left).
 - **Readouts** (`beat.readouts`): heal "+N" (green), barrier "+N" shield, recoil "−N" on the attacker with `react('recoil')`;
-  they overlap the contact readout window.
+  they overlap the contact readout window. Each carries its cause as a tag: the talent that fired (`passive.*`), Riposte
+  (`status.countering`), Cuir de ronces, or the damage move whose side effect it is (drain, recoil, its barrier); a
+  support move's own heal or barrier needs none.
 - **Surges**: advanced and patched when the beat's readout plays; never wait.
-- **K.O.** (KoBeat): per K.O. `react('ko')` + `ko` cue, `arena.shot('ko', { side })`, `arena.cheer()`, the softened screen flash
-  (§9.6), `react('faint')` + `faint-cry`, centred "K.O. !" stamp, HUD team balls; `shot('cut')` at the next beat.
+- **K.O.** (KoBeat): the previous number retires at the beat start; per K.O. `react('ko')` + `ko` cue,
+  `arena.shot('ko', { side })`, `arena.cheer()`, the softened screen flash (§9.6), `react('faint')` + `faint-cry`, the
+  "K.O. !" stamp on the fallen creature with the narration's "K.O. !" emphasis, HUD team balls. The stamp retires before the
+  beat ends, so a replacement never drops under it; `shot('cut')` at the next beat.
 - **Switch**: `react('recall')` (not for replacements) → empty 60 ms → `await route.patchFighters(view)` → `react('enter')` →
   "X, à toi !" banner → HUD patch on landing (±50 ms of the landing).
 - **Signature**: cut-in band (§9.6) then the tier-3 timeline; `signature-cutin` cue; the first ActionBeat with `clash` shows
@@ -339,9 +358,12 @@ set `ctx.currentFxMove = null`. The director never calls the engine, never mutat
 - One narration line per beat that carries news: ActionBeat (`battle.action.move`), KoBeat (`battle.ko`), SwitchBeat
   (`battle.action.switch` / `battle.immaculateRelay`), CutInBeat (existing relay/command/Ace keys), tick ChipBeat
   (`battle.action.tick`), EndBeat (`battle.logEnd.*`). Chip rows, surges and readouts add no line (≈ 2 lines per turn).
-  `route.narrate(text, { emphasis, minMs: clock.realMs(budget) })` (§11.4); `emphasis` = the first stamp's text
-  (`battle.hitEffective`, `battle.hitWeak`, `battle.critical`, `battle.missCallout`, `battle.blocked`, or "K.O. !").
-  `session.lastLine` is set to `text`, followed by the emphasis (space-separated) when there is one.
+  `route.narrate(text, { minMs: min(clock.realMs(budget), READOUT_MIN_REAL_MS) })` at beat start (§11.4) returns the
+  line's handle; the emphasis joins it **at the contact**, when the stage stamp lands:
+  `route.emphasizeNarration(handle, emphasis)` with the shown stamp's text (`battle.hitEffective`, `battle.hitWeak`,
+  `battle.critical`, `battle.missCallout`, `battle.blocked`, or "K.O. !" with the K.O. stamp). The narration never
+  announces a hit before its contact, and text and stage always show the same stamp.
+  `session.lastLine` is set to `text`, followed by the emphasis (space-separated) once it lands.
 - `session.timeline` is still fed **per semantic event**: every `LOG_EVENT_TYPES` event of the beat, in engine order, at
   beat start, with today's per-event line text and `type: 'combo'` for combo damage; capped at 40.
 
@@ -357,7 +379,7 @@ fighters) and `first: true`; otherwise `first: false` and the HUD glint only (3D
 | Mode | Behaviour |
 | --- | --- |
 | ×1 / ×2 | `clock.setSpeed(ctx.save.battleSpeed)`; the speed button updates it live, mid-turn included. ×1 stays the default. |
-| Hold-to-hurry | While `playEvents` runs, the director binds `pointerdown` on `.battle-stage` → `clock.setHurry(true)`; `pointerup`, `pointercancel`, `lostpointercapture` → `false`; also `Space` keydown (non-repeat) / keyup on `document`. Unbound and reset to `false` when `playEvents` returns. Every readout stays ≥ 350 real ms (`minRealMs`). Gate: holding finishes a 5-hit turn in ≤ 1.2 s. |
+| Hold-to-hurry | While `playEvents` runs, the director binds `pointerdown` on `.battle-stage` → `clock.setHurry(true)`; `pointerup`, `pointercancel`, `lostpointercapture` → `false`; also `Space` keydown (non-repeat) / keyup on `document`. Unbound and reset to `false` when `playEvents` returns. Every readout stays ≥ 350 real ms (`minRealMs` at every beat end), and every narration line is shown (the box compresses waiting lines, §11.4). Gate: holding finishes a 5-hit turn in ≤ 1.2 s. |
 | Reduced motion (`ctx.save.reducedMotion`) | Budgets from §3.4 (readout beats 450, cosmetic 0). No cut-in band, no hit-stop, no shake/punch, no travel, shots are cuts (§7.4), particles become in-place fades (§9.3), fighters: single-frame flash, fade instead of dissolve, no breathing (§8.2), no screen flash. Stamps and numbers fade in place. |
 | `?animations=0` | Clock `instant`. Readout-only path: display state, `patchHud`, `patchFighters` (end states), narration, timeline and cues only. No `#fx-text` nodes, no emits, no shots, no reactions except instant end states. Intro and outro return immediately. |
 
@@ -365,7 +387,8 @@ fighters) and `first: true`; otherwise `first: false` and the HUD glint only (3D
 
 `playIntro(session)`: portrait VS stack (3C-2 banner, ≤ 1.0 s) over `arena.shot('intro')` (1.2 s), both leads
 `switch-in` cues with `source: 'intro'`, then the arena weather banner ("Forge du volcan : Feu +20 %, Plante −20 %",
-omitted for Crystal) ≤ 800 ms. Total ≤ 2.0 s at ×1; reduced motion: static VS 300 ms + weather banner 450 ms;
+omitted for Crystal) ≤ 800 ms, starting at 900 ms as the VS stack fades (no empty stage between them). Total 1.7 s at ×1
+(tap → controls ≤ 2.0 s with the arena load); reduced motion: static VS 300 ms + weather banner 450 ms;
 `?animations=0`: returns `true` immediately. Returns `false` if the session died.
 
 ### 6.7 Outro
@@ -470,15 +493,24 @@ drives ambient motion only (motes, crowd, idle breathing). Without a clock, chor
 
 - The canvas **is** the `.battle-stage` box (no full-screen canvas, no `setViewOffset` needed); the area behind the HUD
   shows 3D's static CSS plate. Camera aspect = stage `width / height`.
-- **Portrait** (`width / height < 1.25`, the primary layout): diagonal staging. Player pad near-left, feet at ≈ (0.30 W,
-  0.93 H); enemy pad far-right, feet at ≈ (0.70 W, 0.62 H). The 128-texel sprite canvas is **65–70 %** of stage height for
-  the player and **55–60 %** for the enemy (owner decision; size classes stay visible because 2C normalised mass within
-  the canvas).
-- **Wide** (`≥ 1.25`, landscape and desktop): pads spread (≈ 0.28 W / 0.72 W), player canvas 60–65 %, enemy 52–56 % of
-  stage height (78 % / 68 % when the aspect exceeds 3.5).
+- **Portrait** (`width / height < 1.25`, the primary layout, also the 1440×900 desktop stage): diagonal staging. Player pad
+  near-left, feet on the bottom margin's pad line (≈ 0.83 H); enemy pad far-right, feet at ≈ 0.435 H with the pad's back rim
+  in front of the stands' floor line. The player's 128-texel canvas is the largest share of stage height at which the near
+  player hides no enemy pixel in any of the 30 × 30 pairings (measured per aspect, 3 % under the limit; ≈ 46 % at 360×800);
+  the enemy's is 0.86 × the player's.
+- **Wide** (`≥ 1.25`, landscape): pads spread (≈ 0.26 W / 0.74 W), player canvas 62.5 % of stage height, enemy 0.82 × the
+  player's (78 % / 0.8 × when the aspect exceeds 3.5).
+- **Creature scale** (`fitCreatures`): visible heights are normalised per side (a creature keeps 10 % of its height
+  difference from the median creature), so squat and slender creatures stand about as tall as their side's median.
+  Pads never move on a switch; a creature too wide for its pad's room shrinks, except the near player, which may first
+  slide right off its pad centre (≤ 0.6 pad radius) while its bbox stays below the enemy's feet or left of the enemy's room.
+- **Hierarchy**: the near player's visible height is ≥ 1.15 × the far enemy's in every pairing. When the stage cannot grow
+  the player (the widest few), the enemy gives way: when such a player comes in, a standing enemy eases to its new size
+  over 250 ms on the fx-clock (instant under reduced motion and `?animations=0`).
 - Precedence when constraints collide: (1) the opaque bbox of both fighters and both pads stays inside the stage with
-  ≥ 4 % margins; (2) the height ranges above; (3) integer texel snapping (`k` device px per texel from `sprite-metrics.js`)
-  applies only when an integer `k` lands inside the range; otherwise the exact range scale is used with nearest sampling.
+  ≥ 4 % margins; (2) the sizes above and the hierarchy; (3) texel snapping, enemy only: its height may shrink by ≤ 10 % to
+  land a whole number of device px per texel when the drawing buffer is not rescaled (the range passed to `setLayout` pins
+  the result).
 - Landmark visible in the upper stage at 360×800, 412×915, 800×360 and 1440×900.
 
 ---
@@ -497,7 +529,7 @@ It imports `three` itself (it lives in the lazy arena chunk; never import it fro
 | `react(side, reaction, opts = {})` → `Promise<boolean>` | Plays a reaction on the fx-clock (§8.2). `true` when it completes, `false` if superseded on the same channel or disposed. Resolves `true` immediately under `?animations=0` after applying the end state. |
 | `phase(side)` → `'idle' \| 'recall' \| 'enter' \| 'fainted'` | Mirrors the proxy `data-phase`. |
 
-Internal (3A ↔ 3B only): `setLayout({ player: { position: [x, y, z], canvasHeight }, enemy: {…} })` (world units, feet on the pad
+Internal (3A ↔ 3B only): `setLayout({ player: { position: [x, y, z], canvasHeight, canvasRange: [lo, hi] }, enemy: {…} })` (world units, feet on the pad
 top), `restAnchor(side, point, out)`, `worldAnchor(side, point, out)`, `update(fxDtMs, realDtMs)`, `isActive()`,
 `setGrade(grade)`, `setPaused(paused)`, `ready` (both current textures loaded), `dispose()`. Blob contact shadow and foot
 occlusion belong to the fighter (they follow it); the pad belongs to the stage.
@@ -572,8 +604,9 @@ arena.fx = new FxLayer({ scene, worldAnchor: (side, point, out) => arena.worldAn
 ```
 
 One `THREE.InstancedMesh` of camera-facing quads (billboarded in the vertex shader), one 1024² atlas, one custom
-`ShaderMaterial` (per-instance colour, uv cell, age/life, additive or alpha), CPU integration with a fixed 1/60 s step in
-preallocated `Float32Array`s: one draw call, no per-frame allocation.
+`ShaderMaterial` (per-instance colour, uv cell, age/life, blend, hot core), CPU integration with a fixed 1/60 s step in
+preallocated `Float32Array`s: one draw call, no per-frame allocation. The material is double-sided in a single pass
+(`forceSinglePass`): court decals and mirrored art wind clockwise on screen and must not be culled.
 
 ### 9.2 API
 
@@ -588,43 +621,67 @@ preallocated `Float32Array`s: one draw call, no per-frame allocation.
 
 ### 9.3 Emitters and options
 
-Common options: `side` (anchor owner), `at: 'feet' | 'center' | 'head'` (default `'center'`), `to: { side, at }` (target for
-travelling emitters), `cell` (atlas cell name), `color` (`'#rrggbb'`, the move type palette), `count` (quads before
-budget clamping), `life` (virtual ms), `size` / `speed` / `gravity` in **fighter heights** (h = world height of the anchor
-side's 128-texel canvas; speeds per second), `spread` (radians), `additive` (default `true`), `seed` (uint32 from §3.5).
+Common options:
+
+- `side` (anchor owner), `at: 'feet' | 'center' | 'head'` (default `'center'`), `to: { side, at }` (target of travelling
+  emitters), `cell` (atlas cell name), `color` (`'#rrggbb'`, the move type palette), `count` (quads before budget
+  clamping), `max` (caps the scaled count: one-off shapes stay single at every tier and quality), `life` (virtual ms),
+  `seed` (uint32 from §3.5).
+- `size` / `speed` / `gravity` / distances in **fighter heights** (h = the anchor side's head-to-feet world height;
+  speeds per second). The far fighter stands several times deeper and larger in the world, so travelling quads
+  (`streak`, `beamQuad`, `groundDecal` with `to`) scale from the emitter's h to the `to` fighter's h along the way: they
+  keep the on-screen scale of the fighters they pass, in both attack directions.
+- `alpha` (0–1), `hot` (0–1: whitens only the art's brightest texels, so bodies keep their type colour),
+  `additive`: `false` / `0` alpha-over, `true` / `1` additive, a number in between; the default is **0.4**
+  (partly additive: the quad hides 60 % of what its alpha covers and adds its colour, so type colours stay saturated on
+  bright courts).
+- `front: true` (`burst`, billboard `ring`): drawn in front of every fighter (a melee blade arc over the attacker that
+  lunged in front of its target). Every quad otherwise carries a small depth bias toward the camera; the bias moves it
+  along its view ray, so it changes the depth test only, never the screen footprint.
+
 Positions resolve through `worldAnchor` at emit time; `orbit` and `trailFollow` re-resolve every update.
 
-| Emitter | Extra options | Shape |
+| Emitter | Extra options (defaults) | Shape |
 | --- | --- | --- |
-| `burst` | `speed: 1.2, spread: 2π, gravity: 0.8, drag: 0.9` | Radial explosion from the anchor |
-| `ring` | `r0: 0.1, r1: 0.7` | One ring quad expanding in the fighter plane |
-| `streak` | `travelMs: 180` | Short stretched quads from `side`/`at` to `to` (bolts, projectiles, whiffs) |
-| `beamQuad` | `width: 0.18, scroll: 2` | One quad stretched between the anchors, uv-scrolled |
-| `pillar` | `height: 1.2, width: 0.25, staggerMs: 60` | Quads rising from the feet (roots, geysers), `scaleY` grow |
+| `burst` | `speed: 1.2, spread: 2π, gravity: 0.8, drag: 0.9, offset: 0.08, sizeJitter: 0.8, grow: 0.35, fade: 0.5`; `stretch`, `face`, `rot`, `rotJitter`, `spin` | Radial explosion from the anchor. `offset`: start distance (h); `grow`: end size / start size; `fade`: fraction of life spent fading out (life jitters 70–100 %); `stretch` > 0: velocity-stretched streaks. `face: 'away' \| 'toward'` aims the cone along the attack and mirrors the art (and its `spin`) when the attack runs left. `rot` ± `rotJitter` / 2 fixes the orientation, `spin` in rad/ms; without `rot` quads tumble. |
+| `ring` | `r0: 0.1, r1: 0.7`; `flat` | One ring quad expanding in the fighter plane; `flat: true` lays it on the court (a shockwave around the feet). |
+| `streak` | `travelMs: 180, length: 0.45, arc: 0`; `upright`, `grow` | Stretched quads from `side`/`at` to `to` (bolts, projectiles); `arc` lifts the path (h at mid-flight). `upright: true`: an upright sprite standing on its path (a rolling crest), mirrored to face the travel direction, swelling by `grow`. |
+| `beamQuad` | `width: 0.18, scroll: 2, grow: 0.35, fadeIn: 60`; `sky` | A strip from the anchor to `to`, each end at its own depth and as wide as its fighter's scale, overshooting by half a width; a scrolled cell tiles every ~2 widths (`beam` cell). Two quads: the tube and a fully additive white core (0.4 width). `sky`: lifts the tail `sky` h straight up, a column falling onto `to` (RAIN) or rising from it (negative `scroll`: BOOST, HEAL). |
+| `pillar` | `height: 1.2, width: 0.25, staggerMs: 60, popMs: life / 4`; `shift` | Quads rising side by side from the anchor (`shift`: h to the right of it), each `height` × 0.75–1.25, popping to full height over `popMs` (ease-out-back). |
 | `rain` | `area: 1.2, fall: 3` | Quads falling from above the target to its feet |
-| `orbit` | `radius: 0.45, periodMs: 1400, life: Infinity` | Quads circling the anchor (status loops) until `stop()` |
-| `trailFollow` | `intervalMs: 30` | Afterimage quads sampled from the live fighter position (lunges) until `life` or `stop()` |
-| `groundDecal` | `radius: 0.6` | Flat quad on the court under the anchor (impact flash, dust ring) |
+| `orbit` | `radius: 0.45, periodMs: 1400, tilt: 0.3, life: Infinity`; `rise`, `height`, `lift` | Quads circling the anchor (status loops) until `stop()`; `rise` h/s climbs them over a `height` span (embers); `lift` raises the anchor (h). |
+| `trailFollow` | `intervalMs: 30, fade: 180` | Afterimage quads sampled from the live fighter position (lunges) until `life` or `stop()` |
+| `groundDecal` | `radius: 0.6, grow: 0.7`; `to`, `staggerMs` | Flat quad on the court under the anchor (impact scorch, crack). With `to`, decal *i* of *n* lands along the court toward that fighter's feet, `staggerMs` apart (a crack racing across the floor). |
 
 Reduced motion: no travel or expansion; every emitter becomes one in-place glow quad per call that fades over `life`
 (persistent `orbit` loops show a static motif). Budget: when the live count would exceed the tier budget, the oldest
-non-persistent quads are recycled; persistent status loops are never stolen.
+non-persistent quads are recycled; persistent status loops are never stolen. Area: each frame sums the live quads'
+screen area (stage viewports; beams as their projected trapezoid, court decals foreshortened by the angle between the
+court and the view ray, travelling quads at their scaled size); above `quality.fx.quadArea` (§14) every quad shrinks by
+the same factor `√(budget / area)`, so fill cost stays bounded without changing the composition.
 
 ### 9.4 Atlas cells (3C-2 authors the image, both units use these names)
 
 `assets/fx/atlas.png`, 1024², 8 × 8 grid of 128 px cells, `index = row × 8 + column`, premultiplied alpha, white-on-alpha
-art tinted by `color`. Generic cells in index order: `glow, spark, streak, ring, shard, leaf, drop, bolt, rune, star, smoke,
-crescent, ember, bubble, petal, feather, dust, reticle, vine, eye, spike, speedline, shield, cross`; then `motif-<creatureId>`
-for the 30 creatures (indices 24–53); 54–63 free. The name → index map is exported by `src/data/choreo.js` as
-`ATLAS = { url: './assets/fx/atlas.png', size: 1024, grid: 8, cells: { glow: 0, … } }`; `fx-layer.js` imports it.
+art tinted by `color`, painted procedurally by `node tools/paint-fx-atlas.mjs [--preview <file.png>]`. Generic cells in
+index order: `glow, spark, streak, ring, shard, leaf, drop, bolt, rune, star, smoke, crescent, ember, bubble, petal,
+feather, dust, reticle, vine, eye, spike, speedline, shield, cross` (`spike` is a faceted rock spire filling the cell's
+height: QUAKE pillars and Riposte); then `motif-<creatureId>` for the 30 creatures (indices 24–53); then the archetype
+identity cells 54–63: `crack` (thick fissures, white-hot seams, dark lip), `chunk` (rock), `crest` (wave), `chain`
+(links), `sigil` (curse seal, dark-outlined), `flare` (impact core and rays), `beam` (tiles along u over texels
+4.5–123.5), `slash` (blade swoosh through the cell centre, white leading edge, dark rim, motion smear), `swirl`, `shock`
+(shockwave rim). Solid identity art carries a dark outline so it reads on bright courts. The name → index map is exported
+by `src/data/choreo.js` as `ATLAS = { url: './assets/fx/atlas.png', size: 1024, grid: 8, cells: { glow: 0, … } }`;
+`fx-layer.js` imports it.
 
 ### 9.5 Status loops (3C-2 data, director plays them)
 
 `STATUS_LOOPS` in choreo.js: one looping emitter recipe (≤ 8 quads) per status: Brûlure embers, Sonné three orbiting
 stars, Enraciné vines at the feet, Marqué reticle, Accéléré speed lines, Esquive afterimage, Concentré eye glint, Riposte
-spikes. The director starts a loop when a chip row applies the status and `stop()`s it when a removal or consumption is
-presented; it resyncs loops to `view` statuses at every beat end. Colours come from `STATUS_DEFINITIONS` (the presentation
-contract palettes stay disjoint).
+spikes. Markers float above the head (`lift`, h); the layer caps one creature's loops at 10 quads in total and starts
+each new loop phase-staggered from the ones already circling. The director starts a loop when a chip row applies the
+status and `stop()`s it when a removal or consumption is presented; it resyncs loops to `view` statuses at every beat
+end. Colours come from `STATUS_DEFINITIONS` (the presentation contract palettes stay disjoint).
 
 ### 9.6 Banners (3C-2, `src/battle-ui/banners.js`)
 
@@ -688,6 +745,16 @@ Cue = { at: number /* virtual ms from beat start, authored for T1 */, op: string
   `s × perHit.at + (i − 1) × BEAT_BUDGET_MS.extraHit[tier]` (spacing not stretched); hits after the first use a
   `min(hitStopMs[tier], 40)` hit-stop so the spacing holds at T3.
 - Actors: `who: 'actor' | 'target' | 'both'` resolve to the beat's `side` / `targetSide`.
+- Signature payoff tags: a cue with `sig: true` plays on Signature beats only, `sig: false` on plain beats only; a
+  `perHit` cue with `once: true` plays for the first entry only (the first landed hit, or the miss stand-in). The shared
+  Signature wind-up (camera lean, swelling aura, converging ring and sparks, rising glyphs) and impact (stage flash
+  `grade`, hard `punch`, oversized flare, shock and court rings, glyph burst) are authored this way in every archetype.
+- Identity first: each archetype spends the area budget on one or two large, mostly alpha-over shapes in the type colour
+  that name the verb at contact (SLASH blade arc, QUAKE crack and flanking spires, WAVE crest, RAIN sky column, HEX seal
+  and chains, HEAL/BOOST light columns, LOB glyph burst, VORTEX swirl, NOVA shock rings, BEAM ray, PROJ orb, DASH comet),
+  held near full strength through the hit-stop and ~150 ms after it; particles only garnish them. QUAKE's `perHit`
+  starts at 205 with its `contact` at +30: the spires erupt 30 ms before the contact frame, so they already tower when
+  the hit-stop freezes it.
 - Ops (the director throws on an unknown op in development):
 
 | Op | Params | Sink |
@@ -706,8 +773,9 @@ Cue = { at: number /* virtual ms from beat start, authored for T1 */, op: string
 | `cue` | `name` (a `CUE_NAMES` entry) | `session.cues.emit` |
 | `end` | – | Marks the authored end; must be ≤ the beat budget |
 
-Worked example (DASH, T1, `flash_pounce`): `fighter actor windup` @0; `cue release` + `fighter actor lunge` + `emit trailFollow`
-@120; `perHit.at` 230: `contact`, `emit burst (q 20)`, `emit groundDecal`, `punch`; `fighter actor idle` @300; `end` @650
+Worked example (DASH, T1, `flash_pounce`): `fighter actor windup` + converging `ring` @0; `dust` @90; `cue release` +
+`fighter actor lunge` + two `emit trailFollow` (comet glow, speed lines) @110; `perHit.at` 220: `contact`, the contact
+frame (flare and shock ring with `front`, sparks, scorch decal), a motif burst, dust, `punch`, `shot impact`; `end` @650
 (650 + 50 hit-stop = the 700 T1 budget). At T2 every time is × 1.415 (650 → 920, + 80 hit-stop = 1000); a K.O. hands off
 400 ms early.
 
@@ -753,19 +821,23 @@ rest bbox (check against `--*-x/y` and `--*-size`). The static plate behind the 
 | `renderCommands()` | Rebuilds the dock (2×2 type tiles, Signature tile, Changer tile, coach chip) from `session.state`. Only while unlocked (control return, settings change); never during playback. Preview parity: previews are read-only engine calls, unchanged. |
 | `refreshBattle()` | Kept as a composition. Unlocked: `patchHud` both sides, `patchFighters(view)`, `renderCommands()`, top row. Locked (playback): `patchHud` both sides and the top row only, so any caller during playback stays safe. |
 
-Ownership of text on the stage: **3C-1** owns numbers, stamps ("Super efficace !", "Peu efficace…", "Coup critique !",
-"Esquivé !", "Bloqué !", "K.O. !"; 22–26 px solid pill, clamped 8 px inside the stage box, anchored at the target's
-`--*-x` / `--*-head-y`), the chain counter and the combo tag, all in `#fx-text`. **3C-2** owns banners (§9.6).
-**3D** owns the narration box and everything outside the stage.
+Ownership of text on the stage: **3C-1** owns the readout blocks (§6.2: one stamp pill — "Super efficace !", "Peu
+efficace…", "Coup critique !", "Esquivé !", "Bloqué !", 17 px — over the number and its chain counter "−31 ×3", small tags
+underneath), placed beside the target's visible outline, clamped 8 px inside the stage box, and the "K.O. !" stamp (44 px,
+on the fallen creature), all in `#fx-text`. **3C-2** owns banners (§9.6). **3D** owns the narration box and everything
+outside the stage.
 
 ### 11.4 Narration box
 
-`narrate(text, { emphasis = null, minMs = 0 } = {})`: while `ctx.locked` the dock is replaced (transform/opacity only;
-reduced motion swaps instantly) by the narration box, which **is `#action-line`** (`role="status" aria-live="polite"`,
-text ≥ 18 px, emphasis 26 px display line rendered inside the same element so its `textContent` contains both). The line is
-replaced immediately unless the current line has been visible for less than its own `minMs`; then the new line waits, and a
-newer call replaces a waiting one (only the latest survives). `?animations=0` ignores `minMs`. When unlocked, `#action-line`
-returns to the choice-time contextual hints (simple mode) and the dock returns.
+`narrate(text, { emphasis = null, minMs = 0 } = {})` → line handle (`null` while unlocked): while `ctx.locked` the dock is
+replaced (transform/opacity only; reduced motion swaps instantly) by the narration box, which **is `#action-line`**
+(`role="status" aria-live="polite"`, text ≥ 18 px, emphasis 26 px display line rendered inside the same element so its
+`textContent` contains both). A line keeps the box for its own `minMs`; newer lines queue behind it in order and none is
+ever skipped (a K.O. line always shows). While two or more lines wait, each keeps the box for 250 ms at most, so the text
+catches up with the stage. `emphasizeNarration(handle, emphasis)` adds, swaps or (`null`) removes the emphasis of that
+line in place (only the emphasis is announced), or carries it on the line while it waits. `?animations=0` ignores `minMs`.
+When unlocked, waiting lines are dropped, `#action-line` returns to the choice-time contextual hints (simple mode) and
+the dock returns.
 
 ### 11.5 Pause sheet, speed, sheets during playback
 
@@ -775,6 +847,9 @@ returns to the choice-time contextual hints (simple mode) and the dock returns.
 - `syncArenaPause()` pairs every covering sheet: `ctx.arenaScene?.setPaused(covered)` and
   `session.clock?.[covered ? 'pause' : 'resume']('sheet')`, so a sheet opened mid-turn freezes the turn exactly.
 - Speed button: `ctx.save.battleSpeed` toggle, `persist()`, `session.clock?.setSpeed(speed)` (live mid-turn).
+- Switch, relay and replacement picks: the sheet's options are disabled at the first tap, the lock is claimed at once, and
+  the turn plays once the sheet's exit animation has finished (`handlePlayerAction` / `handleReplacement` take its
+  promise), so the recall and the drop start on a clear stage.
 - Abandon: `cancelBattleSession(session)` then the title; the clock disposes itself.
 - Wake Lock during battle (released on results/hidden).
 
@@ -801,11 +876,11 @@ returns to the choice-time contextual hints (simple mode) and the dock returns.
 | --- | --- | --- | --- | --- | --- |
 | Clock rate | 1 | 2 | speed × 3 | unchanged | instant (~1 ms per step) |
 | Beat budgets | §3.4 | ÷ 2 | ÷ 3 (÷ 6 at ×2) | 450 / beat, cosmetic 0 | 1 ms per step |
-| Readout floor | – | 350 real ms | 350 real ms | 350 real ms | none |
+| Readout floor | 350 real ms (binds on lethal hand-offs) | 350 real ms | 350 real ms | 350 real ms | none |
 | Cut-in band, hit-stop, shake, travel, screen flash | yes | yes | yes | no | no |
-| Numbers / stamps | yes | yes | yes | fade in place | no DOM text |
+| Numbers / stamps | yes, retired by the next beat | yes | yes (≥ 350 real ms) | fade in place | no DOM text |
 | HUD drain | 450 ms | 225 real ms | clock-scaled | instant + ghost fade | instant |
-| Narration | per beat | per beat | per beat (latest wins) | instant swap | per beat, no `minMs` |
+| Narration | per beat, emphasis at contact | per beat | per beat (queued, compressed, none skipped) | instant swap | per beat, no `minMs` |
 | Cues | yes | yes (`speed` 2) | yes (`speed` 3/6) | yes | yes |
 | Shots | yes | yes | yes | cuts | none |
 

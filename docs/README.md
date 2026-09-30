@@ -27,10 +27,10 @@ This directory is the implementation map for coding agents. It is intentionally 
 | --- | --- | --- |
 | Damage, turns, Surge, statuses, switching, legality | `src/battle/engine.js`, `damage.js`, `statuses.js` | Engine tests, preview parity, balance simulation |
 | AI choice/scoring | `src/battle/ai.js` | Legality, immutability, seeded-replay tests; balance simulation |
-| Creature, move, type, class, passive | `src/data/` | Both locales, presentation contracts, data tests, balance simulation; move CSS when applicable |
+| Creature, move, type, class, passive | `src/data/` | Both locales, presentation contracts, data tests, balance simulation; a `MOVE_FX` entry in `src/data/choreo.js` for new moves |
 | Mode setup or progression | Relevant `src/data/` and `src/screens/` module | Save work if persisted; e2e flow coverage |
 | Battle controls/readouts | `src/battle-ui/controller.js`, `hud.js` | Keyboard/touch and simple/expert mode checks |
-| Event animation/audio | `src/battle-ui/playback.js`, `fx.js`, `src/sound.js`, battle CSS | Reduced-motion and `?animations=0` behavior |
+| Event animation/audio | `src/battle-ui/director.js` (beats → cue timelines on `fx-clock.js`), `src/presentation/{fighters,fx-layer}.js`, `src/data/choreo.js`, `src/battle-ui/banners.js`, `src/sound.js` | `docs/battle-presentation.md`; reduced-motion, ×2, hurry and `?animations=0` behavior |
 | Screen/navigation UI | `src/screens/`, `src/app/shell.js` | `registerRoutes`, focus/escape behavior, responsive e2e |
 | Persisted shape | `src/save.js` | Bump `SAVE_VERSION`, add one migration, validate old/corrupt/future saves |
 | User-facing copy | `src/i18n.js` | Add the same key to `fr` and `en`; test `?lang=en` |
@@ -46,7 +46,7 @@ This directory is the implementation map for coding agents. It is intentionally 
 - Save changes are migrated and validated; malformed or future saves recover safely.
 - Every creature owns exactly three moves, one unique passive, and exactly one meaningful Signature.
 - Type, class, and status palettes/SVG geometry remain distinct as enforced by the presentation contract.
-- Every move keeps a unique `visual` id and a `.move-<moveId>` CSS selector.
+- Every move keeps a unique `visual` id and a `MOVE_FX` choreography entry (`src/data/choreo.js`); battle presentation follows `docs/battle-presentation.md`.
 - Simple and tactical-detail modes expose different density, never different legal actions or mechanics.
 - Mouse, touch, keyboard, reduced motion, high contrast, and friendly failure screens are product behavior, not optional polish. Gamepad support is intentionally out of scope and must not be added without a new product requirement.
 - No runtime secrets, API keys, CDN dependencies, or network generation.

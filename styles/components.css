@@ -7,378 +7,10 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  transition:
-    filter 0.15s,
-    opacity 0.15s,
-    transform 0.14s;
 }
-.arena-canvas.arena-hit {
-  animation: shake 0.16s linear;
-}
-.arena-canvas.arena-power {
-  animation: powerFlash 0.3s ease;
-}
-.battle-vignette {
-  position: absolute;
-  inset: 0;
+/* Named DOM stand-ins for the WebGL fighters (docs/battle-presentation.md §8.3). */
+.fighter-proxy {
   pointer-events: none;
-  background:
-    linear-gradient(#0005, transparent 26%, transparent 70%, #02030dcc),
-    radial-gradient(circle, transparent 50%, #0008);
-}
-.battle-top {
-  position: absolute;
-  z-index: 5;
-  left: 16px;
-  right: 16px;
-  top: max(12px, env(safe-area-inset-top));
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  pointer-events: none;
-}
-.battle-top > * {
-  pointer-events: auto;
-}
-.turn-chip {
-  padding: 9px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #090b24cc;
-  font-weight: 900;
-}
-.battle-tools {
-  display: flex;
-  gap: 8px;
-}
-.battlefield {
-  position: absolute;
-  z-index: 2;
-  inset: 64px 3% 200px;
-}
-.fighter {
-  position: absolute;
-  width: min(34vw, 390px);
-  height: min(43vh, 430px);
-  display: flex;
-  align-items: end;
-  justify-content: center;
-}
-.fighter.player {
-  left: 4%;
-  bottom: 0;
-}
-.fighter.enemy {
-  right: 4%;
-  top: 0;
-  transform: scaleX(-1);
-}
-.fighter img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  /* Feet on the floor: the sprite square sits on the box bottom, over the blob. */
-  object-position: 50% 100%;
-  image-rendering: pixelated;
-  animation: idle 2.4s ease-in-out infinite;
-}
-.fighter.player img {
-  transform-origin: 65% 80%;
-}
-.fighter.enemy img {
-  transform-origin: 65% 80%;
-  /* Out of phase with the player so the two creatures never bob in sync. */
-  animation-delay: -1.1s;
-}
-/* Soft blob shadow grounds the 2D sprite on the 3D dais (plan §5). Static and
-   unfiltered: the radial gradient alone gives the soft edge. */
-.fighter-shadow {
-  position: absolute;
-  left: 50%;
-  bottom: 3%;
-  width: 58%;
-  height: 9%;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(closest-side, #000b 0 38%, #0007 62%, #0000);
-  pointer-events: none;
-}
-.fighter.fainted .fighter-shadow {
-  width: 74%;
-  opacity: 0.85;
-}
-/* One ambient aura channel per fighter (STAGE-01): a single ring on the floor
-   around the blob, never a halo on the sprite. Priority low health > barrier >
-   Signature ready is the source order below (equal specificity, last wins).
-   A thick ring with a dark rim and a static inner glow (gradient, no filter)
-   reads on any arena floor. */
-.fighter-shadow::after {
-  position: absolute;
-  inset: -60% -18%;
-  border: 5px solid var(--aura-color);
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    #0000 40%,
-    color-mix(in srgb, var(--aura-color) 20%, transparent) 70%,
-    color-mix(in srgb, var(--aura-color) 55%, transparent) 100%
-  );
-  box-shadow: 0 0 0 2px #0a0716b3;
-}
-/* The near fighter stands on the stage's bottom edge: its ring (same size)
-   rides a little higher so the whole ellipse stays inside the stage. */
-.fighter.player .fighter-shadow::after {
-  inset: -150% -18% 30%;
-}
-@media (min-width: 601px) {
-  .fighter-shadow::after {
-    border-width: 6px;
-  }
-}
-.fighter.signature-ready .fighter-shadow::after {
-  content: '';
-  --aura-color: #ffe16b;
-}
-.fighter.has-barrier .fighter-shadow::after {
-  content: '';
-  --aura-color: #6fe9ff;
-}
-.fighter.low-health .fighter-shadow::after {
-  content: '';
-  --aura-color: #ff4057;
-  animation: auraDanger 1.1s ease-in-out infinite alternate;
-}
-.fighter.barrier-hit .fighter-shadow::after {
-  content: '';
-  --aura-color: #6fe9ff;
-  animation: auraHit 0.35s ease-out;
-}
-.fighter.fainted .fighter-shadow::after {
-  content: none;
-}
-@keyframes auraDanger {
-  to {
-    opacity: 0.6;
-  }
-}
-@keyframes auraHit {
-  0% {
-    transform: scale(0.82);
-  }
-  45% {
-    transform: scale(1.16);
-  }
-}
-/* A gained barrier pulses the ring once, in barrier colour even over the
-   low-health ring (fx.js adds .aura-gain and clears it at animationend). */
-.fighter.has-barrier .fighter-shadow.aura-gain::after {
-  --aura-color: #6fe9ff;
-  animation: auraGain 0.62s cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-@keyframes auraGain {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  40% {
-    opacity: 1;
-    transform: scale(1.24);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .fighter.low-health .fighter-shadow::after,
-  .fighter.has-barrier .fighter-shadow.aura-gain::after {
-    animation: none;
-  }
-}
-body.reduced-motion .fighter.low-health .fighter-shadow::after,
-body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
-  animation: none;
-}
-.fighter.attacking img {
-  animation: lunge 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
-}
-.fighter.hit img {
-  animation: recoil 0.42s cubic-bezier(0.2, 0.8, 0.25, 1);
-  filter: brightness(2);
-}
-.battle-screen .fighter.fainted img {
-  animation: none;
-  transform: rotate(64deg) translateY(14%) scaleY(0.8);
-  transform-origin: 50% 88%;
-  filter: grayscale(1) brightness(0.72);
-  opacity: 0.62;
-  transition: opacity 0.3s ease;
-}
-.battle-screen:has(.replacement) .fighter.fainted img {
-  opacity: 0.38;
-}
-.battle-screen .fighter.ko img {
-  animation: ko 0.68s ease-in forwards;
-  transform-origin: 50% 88%;
-  filter: grayscale(1) brightness(0.72);
-}
-.hud-card {
-  position: absolute;
-  z-index: 4;
-  width: min(330px, 42vw);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: linear-gradient(140deg, #11142dea, #080a20e8);
-  padding: 11px 13px;
-  box-shadow: 0 12px 35px #0006;
-}
-.hud-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.hud-title strong {
-  font-size: 18px;
-}
-.hp-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 7px;
-}
-.hp-track {
-  height: 13px;
-  flex: 1;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #02030c;
-  border: 1px solid #ffffff16;
-}
-.hp-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--hp-high);
-  box-shadow:
-    inset 0 -3px 0 #0002,
-    inset 0 2px 0 #fff5;
-  transition: width 0.45s ease;
-}
-.hp-fill.low {
-  background: var(--hp-low);
-}
-.hp-value {
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
-.status-row {
-  display: flex;
-  gap: 5px;
-  min-height: 23px;
-  margin-top: 5px;
-}
-.status-chip {
-  font-size: var(--text-xs);
-  padding: 3px 6px;
-  border-radius: 7px;
-  background: #ffffff14;
-  border: 1px solid #ffffff18;
-}
-.team-dots {
-  display: flex;
-  gap: 5px;
-}
-.battle-controls {
-  position: absolute;
-  z-index: 7;
-  left: 50%;
-  bottom: max(14px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  width: min(980px, calc(100% - 24px));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px;
-  gap: 11px;
-}
-.move-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.move-btn {
-  position: relative;
-  min-height: 132px;
-  text-align: left;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: linear-gradient(145deg, #202451eb, #0f1233f0);
-  padding: 13px 14px;
-  cursor: pointer;
-  overflow: hidden;
-}
-.move-btn::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 5px;
-  background: var(--move-color);
-}
-.move-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: #fff6;
-}
-.move-btn:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
-.move-name {
-  display: block;
-  font-weight: 900;
-  font-size: 16px;
-  margin-bottom: 7px;
-}
-.move-effect {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.25;
-}
-.move-tags {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  margin-top: 9px;
-}
-.tag {
-  font-size: var(--text-xs);
-  padding: 3px 6px;
-  border-radius: 7px;
-  background: #ffffff11;
-}
-.effect-label {
-  font-weight: 900;
-}
-.effect-label.good {
-  color: #8df3a4;
-}
-.effect-label.risky {
-  color: #ff9fa8;
-}
-.switch-btn {
-  min-height: 132px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 5px;
-  font-weight: 900;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: #0c102de8;
-  cursor: pointer;
-}
-.switch-btn span {
-  font-size: 25px;
 }
 .action-line {
   position: absolute;
@@ -395,10 +27,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   text-align: center;
   box-shadow: 0 8px 30px #0007;
 }
-.locked .battle-controls {
-  pointer-events: none;
-  filter: saturate(0.5);
-}
 .replacement {
   position: absolute;
   z-index: var(--z-modal);
@@ -408,24 +36,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   /* Opaque scrim, no backdrop-filter: blurring the live canvas is a full-screen
      GPU pass on every frame (PERF-04). */
   background: var(--scrim);
-}
-.replacement-card {
-  width: min(620px, calc(100% - 28px));
-  text-align: center;
-}
-.replacement-options {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-.replacement-options button {
-  min-height: 150px;
-}
-.replacement-options img {
-  width: 100px;
-  height: 100px;
-  object-fit: contain;
-  image-rendering: pixelated;
 }
 .tutorial-tip {
   position: absolute;
@@ -722,6 +332,10 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   opacity: 0;
   animation: victoryPiece 2.2s cubic-bezier(0.15, 0.65, 0.2, 1) var(--delay) backwards;
 }
+/* Hidden (not just transparent) at rest: an invisible fixed box over the arena canvas still gets
+   its own compositor layer every battle frame. `visibility` flips after the fade-out ends and
+   before the fade-in starts; notify() sets the text and `.show` together, so the live region is
+   visible when its content changes. */
 .toast {
   position: fixed;
   z-index: var(--z-toast);
@@ -729,6 +343,7 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   left: 50%;
   transform: translate(-50%, -20px);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
@@ -737,114 +352,19 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   padding: 11px 16px;
   transition:
     opacity var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    transform var(--dur-fast) var(--ease-out),
+    visibility 0s linear var(--dur-fast);
 }
 .toast.show {
   opacity: 1;
   transform: translate(-50%, 0);
+  visibility: visible;
+  transition-delay: 0s;
 }
 @keyframes pulse {
   50% {
     transform: translateY(-5px);
   }
-}
-/* Translate-only: a vertical scale would shimmer the pixel-art rows. */
-@keyframes idle {
-  50% {
-    transform: translateY(-7px);
-  }
-}
-@keyframes lunge {
-  16% {
-    transform: translate(-7%, 2%) scale(0.93, 1.06);
-  }
-  52% {
-    transform: translate(14%, -5%) scale(1.11, 0.94);
-  }
-  76% {
-    transform: translate(9%, -3%) scale(0.97, 1.03);
-  }
-}
-@keyframes recoil {
-  22% {
-    transform: translateX(-12%) scale(1.08, 0.8);
-  }
-  55% {
-    transform: translateX(3%) scale(0.95, 1.07);
-  }
-  80% {
-    transform: translateX(-1%) scale(1.01, 0.99);
-  }
-}
-/* The grey-out is a static filter on `.fighter.ko img`; only transform and
-   opacity animate. */
-@keyframes ko {
-  30% {
-    transform: rotate(14deg) translateY(1%) scale(1.03, 0.95);
-    opacity: 1;
-  }
-  72% {
-    transform: rotate(70deg) translateY(15%) scaleY(0.76);
-    opacity: 0.78;
-  }
-  to {
-    transform: rotate(64deg) translateY(14%) scaleY(0.8);
-    opacity: 0.62;
-  }
-}
-@keyframes shake {
-  25% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-}
-/* Power hit: a short camera punch on the canvas (compositor-only, no canvas filter). */
-@keyframes powerFlash {
-  50% {
-    transform: scale(1.02);
-  }
-}
-.team-dot {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 2px;
-  border-radius: 50%;
-  background: conic-gradient(var(--ok) calc(var(--team-hp) * 1%), #38394d 0);
-  box-shadow: 0 0 8px #74e38b44;
-}
-.team-dot img {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  object-fit: contain;
-  image-rendering: pixelated;
-  background: #0a0c20;
-}
-.team-dot.active {
-  outline: 2px solid #ffe37d;
-  outline-offset: 1px;
-  box-shadow: 0 0 11px #ffe37d66;
-}
-.team-dot.ko {
-  background: #4c4d63;
-  box-shadow: none;
-  filter: grayscale(1) brightness(0.45);
-}
-.team-dot.signature-ready:not(.ko)::after {
-  content: '✦';
-  position: absolute;
-  margin: -22px -18px 0 0;
-  color: #fff4a5;
-  font-size: var(--text-xs);
-  text-shadow: 0 0 7px #ffe164;
-}
-.team-dot.signature-ready:not(.ko) {
-  position: relative;
-  box-shadow: 0 0 13px #ffe06b77;
 }
 @media (max-width: 900px) {
   .hero {
@@ -870,15 +390,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   }
   .settings-grid {
     grid-template-columns: 1fr;
-  }
-  .battlefield {
-    inset: 60px 0 205px;
-  }
-  .fighter {
-    width: min(44vw, 360px);
-  }
-  .hud-card {
-    width: min(360px, 48vw);
   }
 }
 @media (max-width: 600px) {
@@ -946,66 +457,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   .bestiary-card {
     grid-column: 1/-1;
   }
-  .battle-top {
-    left: 8px;
-    right: 8px;
-  }
-  .turn-chip {
-    font-size: 12px;
-  }
-  .battlefield {
-    inset: 52px 0 242px;
-  }
-  .fighter {
-    width: 54vw;
-    height: 36vh;
-  }
-  .fighter.player {
-    left: 3%;
-    bottom: 0;
-  }
-  .fighter.enemy {
-    right: 0;
-    top: 0;
-  }
-  .hud-card {
-    width: 67vw;
-    padding: 8px 10px;
-  }
-  .hud-title strong {
-    font-size: 15px;
-  }
-  .battle-controls {
-    bottom: max(7px, env(safe-area-inset-bottom));
-    grid-template-columns: 1fr 76px;
-    gap: 6px;
-    width: calc(100% - 12px);
-  }
-  .move-grid {
-    gap: 5px;
-  }
-  .move-btn {
-    min-height: 150px;
-    padding: 10px 7px;
-  }
-  .move-name {
-    font-size: 13px;
-  }
-  .move-effect {
-    font-size: var(--text-xs);
-  }
-  .move-tags {
-    gap: 3px;
-  }
-  .tag {
-    font-size: var(--text-xs);
-    padding: 2px 4px;
-  }
-  .switch-btn {
-    min-height: 150px;
-    font-size: var(--text-xs);
-    padding: 4px;
-  }
   .action-line {
     bottom: 164px;
     font-size: 12px;
@@ -1014,9 +465,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
   .tutorial-tip {
     top: 54px;
     font-size: 12px;
-  }
-  .replacement-options button {
-    min-height: 135px;
   }
   .result-team img {
     width: 115px;
@@ -1028,22 +476,6 @@ body.reduced-motion .fighter.has-barrier .fighter-shadow.aura-gain::after {
 @media (max-width: 400px) {
   .topbar > button + .brand-small {
     display: none;
-  }
-}
-@media (orientation: portrait) and (min-width: 601px) {
-  .battlefield {
-    inset: 70px 0 260px;
-  }
-  .fighter {
-    width: 50vw;
-    height: 38vh;
-  }
-  .battle-controls {
-    grid-template-columns: 1fr 110px;
-  }
-  .move-btn,
-  .switch-btn {
-    min-height: 155px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1188,6 +620,27 @@ body.reduced-motion * {
 }
 .sheet-layer.sheet-instant :is(.sheet, .sheet-scrim) {
   animation: none;
+}
+/* Short landscape (a phone held sideways, ≤ 480 px tall): a wide, flat sheet
+   (no grab, tight padding) so its key rows fit above the fold; the screens
+   lay their rows out in columns (battle-layout.css, battle-preview.css). */
+@media (orientation: landscape) and (max-height: 480px) {
+  .sheet {
+    width: min(100%, 760px);
+    max-height: calc(100vh - 8px);
+    max-height: calc(100dvh - 8px);
+    padding-top: 4px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .sheet-grab {
+    display: none;
+  }
+  .sheet-body {
+    padding-block: 4px;
+  }
+  .sheet-actions {
+    padding-top: var(--space-2);
+  }
 }
 @keyframes sheetIn {
   from {

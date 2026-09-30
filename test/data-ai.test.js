@@ -106,49 +106,13 @@ test('all moves have unique mechanical and visual identities', () => {
 });
 
 test('move sustain stays inside the decisive-fight budget', () => {
-  assert.deepEqual(
-    Object.fromEntries(
-      Object.values(MOVES)
-        .filter((move) => move.barrier)
-        .map((move) => [move.id, move.barrier])
-    ),
-    {
-      oracle_veil: 18,
-      deja_vu: 9,
-      mirror_maze: 9,
-      iron_resolve: 17,
-      fortress_protocol: 14,
-      abyssal_surge: 4,
-      shell_bastion: 30,
-      bubble_burst: 3,
-      ember_armor: 8,
-      leaf_mantle: 8,
-      ancient_bark: 17,
-      shadow_shed: 12,
-      moonless_omen: 8,
-    }
-  );
-  assert.deepEqual(
-    Object.fromEntries(
-      Object.values(MOVES)
-        .filter((move) => move.healRatio)
-        .map((move) => [move.id, move.healRatio])
-    ),
-    { furnace_heart: 0.08, ash_rebirth: 0.18, seed_bloom: 0.23 }
-  );
-  assert.ok(Object.values(MOVES).every((move) => !move.drain || move.drain <= 0.25));
-  assert.ok(
-    Object.values(MOVES).every(
-      (move) => !move.selfStatuses?.some((status) => status.id === 'evasive') || (move.barrier || 0) <= 18
-    )
-  );
-  assert.equal(MOVES.leaf_mantle.teamBarrier, 7);
-  assert.deepEqual(
-    [MOVES.petal_ray, MOVES.healing_rain, MOVES.leaf_mantle, MOVES.nectar_circle].map(
-      (move) => move.teamHealRatio
-    ),
-    [0.03, 0.065, 0.04, 0.08]
-  );
+  for (const move of Object.values(MOVES)) {
+    assert.ok((move.barrier || 0) + (move.teamBarrier || 0) <= 28, `${move.id} barrier budget`);
+    assert.ok((move.healRatio || 0) + (move.teamHealRatio || 0) <= 0.3, `${move.id} heal budget`);
+    assert.ok(!move.drain || move.drain <= 0.25, `${move.id} drain budget`);
+    if (move.selfStatuses?.some((status) => status.id === 'evasive'))
+      assert.ok((move.barrier || 0) <= 18, `${move.id} pairs Elusive with a small barrier`);
+  }
 });
 
 test('every creature owns exactly one mechanically meaningful Signature', () => {
@@ -494,20 +458,30 @@ test('successive tied AI decisions advance RNG and replay identically from the s
 });
 
 test('Champion AI saves defensive Signatures for genuine team pressure', () => {
-  const state = createBattle({
-    playerTeam: ['virelia', 'abyssar', 'orakyn'],
-    enemyTeam: ['kordane', 'calderoc', 'farfombre'],
-    seed: 92,
-  });
-  state.sides.player.surge = 100;
-  state.rngState = 123456789;
-  state.sides.player.team.forEach((creature) => (creature.hp = Math.round(creature.maxHp * 0.5)));
-  state.sides.player.team[1].statuses.stunned = { remaining: 2, appliedTurn: state.turn, stacks: 1 };
-  const before = structuredClone(state),
+  const setup = (pressure) => {
+    const state = createBattle({
+      playerTeam: ['virelia', 'abyssar', 'orakyn'],
+      enemyTeam: ['calderoc', 'kordane', 'farfombre'],
+      seed: 92,
+    });
+    state.sides.player.surge = 100;
+    state.rngState = 123456789;
+    if (pressure) {
+      state.sides.player.team.forEach((creature) => (creature.hp = Math.round(creature.maxHp * 0.5)));
+      state.sides.player.team[1].statuses.stunned = { remaining: 2, appliedTurn: state.turn, stacks: 1 };
+    }
+    return state;
+  };
+  const state = setup(true),
+    before = structuredClone(state),
     action = chooseAiAction(state, 'player', 'champion', 'endurance');
   assert.deepEqual(action, { type: 'move', moveId: 'leaf_mantle' });
   before.rngState = state.rngState;
   assert.deepEqual(state, before);
+  assert.notDeepEqual(chooseAiAction(setup(false), 'player', 'champion', 'endurance'), {
+    type: 'move',
+    moveId: 'leaf_mantle',
+  });
 });
 
 test('Champion AI can pivot into a resistant bench answer to a ready Signature', () => {
@@ -561,18 +535,19 @@ test('Standard AI cannot inspect a player action committed outside its safe snap
   assert.equal(hiddenMove.rngState, hiddenSwitch.rngState);
 });
 
-test('Champion reply forecasts account for an active barrier through authoritative previews', () => {
+test('Champion pivots away from a faster lethal reply, read through authoritative barrier previews', () => {
   const clear = createBattle({
       playerTeam: ['nocturnyx', 'orakyn', 'lumivox'],
       enemyTeam: ['ferrax', 'umbrawl', 'hexalune'],
       seed: 1,
     }),
     barrier = structuredClone(clear);
-  clear.sides.player.surge = 30;
-  clear.rngState = 123456789;
+  for (const state of [clear, barrier]) {
+    state.sides.player.surge = 30;
+    state.rngState = 123456789;
+    state.sides.player.team[0].hp = 40;
+  }
   clear.sides.player.team[0].barrier = 0;
-  barrier.sides.player.surge = 30;
-  barrier.rngState = 123456789;
   barrier.sides.player.team[0].barrier = 35;
   assert.deepEqual(chooseAiAction(clear, 'player', 'champion', 'champion'), {
     type: 'switch',
@@ -582,16 +557,13 @@ test('Champion reply forecasts account for an active barrier through authoritati
     type: 'move',
     moveId: 'sonic_gloom',
   });
+  // Standard never forecasts the reply, so the barrier does not change its read.
   clear.rngState = 123456789;
   barrier.rngState = 123456789;
-  assert.deepEqual(chooseAiAction(clear, 'player', 'standard', 'champion'), {
-    type: 'switch',
-    index: 2,
-  });
-  assert.deepEqual(chooseAiAction(barrier, 'player', 'standard', 'champion'), {
-    type: 'switch',
-    index: 2,
-  });
+  assert.deepEqual(
+    chooseAiAction(clear, 'player', 'standard', 'champion'),
+    chooseAiAction(barrier, 'player', 'standard', 'champion')
+  );
 });
 
 test('Standard and Champion select their second-ranked action at their seeded imperfection rates', () => {

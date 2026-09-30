@@ -1,93 +1,619 @@
-/* Move-choice silhouettes. Kind, tempo, and multi-hit identity remain legible
-   before the player reads the detailed effect sentence. */
-.move-archetype {
-  position: absolute;
-  right: 11px;
-  top: 10px;
+/* Command dock tiles (docs/battle-presentation.md §11.3): a 2×2 grid of big
+   type-coloured move tiles (the Signature tile framed in gold) plus the
+   "Changer" tile with bench portraits. Names are 17 px Baloo, decision text
+   is never under 12 px, and a pressed tile drops onto its ledge. A name wraps
+   between words only (≤ 2 lines): every layout keeps its name column wider
+   than the longest single word at its font size (FR "continentale": 99 px at
+   17 px, 93 px at 16 px; hyphenated compounds break after the hyphen). */
+.battle-screen .move-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--tile-h, 88px), auto);
+  gap: var(--space-2);
+}
+.battle-screen .move-tile {
+  --tile-color: var(--move-color, var(--bg-3));
+  --tile-ledge: color-mix(in srgb, var(--tile-color) 42%, #05061a);
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-rows: minmax(38px, auto) auto;
+  align-content: center;
+  column-gap: 9px;
+  row-gap: 6px;
+  min-width: 0;
+  min-height: var(--tile-h, 88px);
+  margin: 0;
+  padding: 10px 10px 11px 9px;
+  overflow: visible;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: #fff;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tile-color) 88%, #fff) 0%,
+    color-mix(in srgb, var(--tile-color) 72%, #0b0d24) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 #ffffff66,
+    inset 0 0 0 1px #ffffff1f,
+    0 4px 0 var(--tile-ledge);
+  font-family: var(--font-text);
+  text-align: left;
+  text-shadow: 0 1px 0 #0000005c;
+  cursor: pointer;
+  opacity: 1;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+.battle-screen .move-tile::before,
+.battle-screen .move-tile::after {
+  content: none;
+}
+.battle-screen .move-tile:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 1px 0 #ffffff66,
+    inset 0 0 0 1px #ffffff1f,
+    0 1px 0 var(--tile-ledge);
+}
+.battle-screen .move-tile:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .battle-screen .move-tile:not(:disabled):hover {
+    transform: none;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tile-color) 80%, #fff) 0%,
+      color-mix(in srgb, var(--tile-color) 76%, #0b0d24) 100%
+    );
+  }
+}
+.battle-screen .tile-disc {
+  grid-row: 1;
+  align-self: center;
   display: grid;
   place-items: center;
-  min-width: 27px;
-  height: 27px;
-  padding: 0 5px;
-  border: 1px solid color-mix(in srgb, var(--move-color) 50%, #fff3);
-  border-radius: 9px;
-  color: color-mix(in srgb, var(--move-color) 65%, #fff);
-  background: color-mix(in srgb, var(--move-color) 14%, #0a0c25);
-  font-size: 12px;
-  font-weight: 1000;
-  box-shadow: 0 0 14px color-mix(in srgb, var(--move-color) 18%, transparent);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #fff;
+  background: #00000038;
+  box-shadow: inset 0 0 0 2px #ffffff80;
 }
-.move-btn .move-name {
-  padding-right: 30px;
+.battle-screen .tile-disc .affinity-icon {
+  width: 22px;
+  height: 22px;
+  filter: none;
 }
-.move-btn.kind-support {
-  background:
-    radial-gradient(circle at 90% 12%, #71e8ff1c, transparent 37%),
-    linear-gradient(145deg, #19284ce8, #0c132fe8);
+.battle-screen .move-tile .move-name {
+  grid-row: 1;
+  align-self: center;
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--weight-display);
+  line-height: 1.05;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+  text-wrap: balance;
 }
-.move-btn.kind-support::before {
-  width: 7px;
-  background: linear-gradient(#d2faff, var(--move-color), #6a80ff);
+.battle-screen .move-label {
+  display: block;
 }
-.move-btn.kind-heal {
-  background:
-    radial-gradient(circle at 90% 12%, #78f6aa22, transparent 40%),
-    linear-gradient(145deg, #173e3ae8, #0b1730e8);
+.battle-screen .tile-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 26px;
+  font-size: 13px;
+  font-weight: 900;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  white-space: nowrap;
 }
-.move-btn.kind-heal::before {
-  width: 7px;
-  background: linear-gradient(#d1ffe0, #60e795, #40bfc4);
+.battle-screen .move-effectiveness {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #b7ffd2;
+  background: #06301acc;
+  box-shadow: inset 0 0 0 1px #8dffbd33;
+  font-size: var(--text-xs);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-shadow: none;
 }
-.move-btn.kind-heal .move-archetype {
-  color: #baffd0;
-  border-color: #73eca06b;
-  background: #45de8418;
+.battle-screen .move-effectiveness.not-effective {
+  color: #dcdcec;
+  background: #1c1d33cc;
+  box-shadow: inset 0 0 0 1px #ffffff26;
 }
-.move-btn.multi-hit:not(.signature-move) {
-  background-image:
-    repeating-linear-gradient(135deg, transparent 0 18px, #ffffff035 18px 20px),
-    linear-gradient(145deg, #202451eb, #0f1233f0);
+.battle-screen .move-effectiveness.miss {
+  color: #cfe4ff;
+  background: #0e2544cc;
 }
-.move-btn.priority-move:not(.signature-move) .move-archetype {
-  clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%);
-  border-radius: 7px 3px 3px 7px;
+.battle-screen .move-effectiveness.lethal {
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  box-shadow: 0 0 0 1px #00000033;
 }
-.move-btn.drain-move:not(.signature-move) {
-  box-shadow: inset 0 0 24px #72ffa20b;
+.battle-screen .tile-damage {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  font-size: var(--text-md);
+  line-height: 1;
 }
-.signature-move .move-archetype {
-  right: 9px;
-  top: 34px;
-  color: #fff1a1;
-  border-color: #ffe06d88;
-  background: #ffd04a18;
-  box-shadow: 0 0 18px #ffd94b30;
+.battle-screen .tile-damage .ico {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.6;
+  rotate: 45deg;
 }
-@media (max-width: 600px) {
-  .move-archetype {
-    right: 5px;
-    top: 6px;
-    min-width: 21px;
-    height: 21px;
-    padding: 0 3px;
-    font-size: 9px;
+.battle-screen .move-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px 4px 6px;
+  border-radius: 999px;
+  background: #00000033;
+  font-size: var(--text-xs);
+  line-height: 1.1;
+}
+.battle-screen .move-role .ico {
+  width: 16px;
+  height: 16px;
+}
+/* Expert density: order, hits, declared cooldown, applied statuses. */
+.battle-screen .tile-detail {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: -2px;
+}
+.battle-screen .tile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #00000038;
+  font-size: var(--text-xs);
+  line-height: 1;
+}
+.battle-screen .tile-chip .ico {
+  width: 14px;
+  height: 14px;
+}
+.battle-screen .tile-chip.tile-status {
+  padding: 0;
+  background: none;
+}
+.battle-screen .tile-chip .status-badge {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+}
+/* One ribbon per tile, stuck on its top edge: COMBO or Signature ready. */
+.battle-screen .tile-ribbon {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5fa2, #d6246e);
+  box-shadow: 0 2px 0 #6e0f37;
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-shadow: none;
+}
+.battle-screen .tile-ribbon .ico {
+  width: 14px;
+  height: 14px;
+}
+.battle-screen .tile-ribbon.tile-ready {
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  box-shadow: 0 2px 0 var(--gold-ledge);
+  letter-spacing: 0;
+}
+.battle-screen .tile-cooldown {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 8px 0 5px;
+  border-radius: 999px;
+  color: #fff;
+  background: #000000b3;
+  font-size: var(--text-xs);
+  line-height: 1;
+  text-shadow: none;
+}
+.battle-screen .tile-cooldown .ico {
+  width: 15px;
+  height: 15px;
+}
+.battle-screen .move-key {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .battle-screen .move-key {
+    position: absolute;
+    right: 7px;
+    bottom: 6px;
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 5px;
+    color: #ffffffd9;
+    background: #00000040;
+    box-shadow: inset 0 -1px 0 #00000059;
+    font: 800 var(--text-xs) / 1 var(--font-text);
+    text-shadow: none;
   }
-  .move-btn .move-name {
-    padding-right: 20px;
-  }
-  .signature-move .move-archetype {
-    right: 5px;
-    top: 27px;
+  .battle-screen .move-tile:has(.tile-damage, .move-role) .move-key,
+  .battle-screen .move-tile.is-cooldown .move-key {
+    display: none;
   }
 }
-@media (max-width: 600px) and (orientation: portrait) {
-  .battle-screen .action-line {
-    top: 80px;
-    bottom: auto;
-    max-width: 190px;
-    padding: 5px 10px;
-    font-size: 10px;
-    line-height: 1.2;
-    pointer-events: none;
+/* Disabled tiles stay legible: desaturated colour, no press. */
+.battle-screen .move-tile:disabled {
+  --tile-color: color-mix(in srgb, var(--move-color, #3a3f66) 28%, #3b3f63);
+  color: #e3e4f2;
+  cursor: not-allowed;
+  opacity: 1;
+  filter: none;
+}
+.battle-screen .move-tile:disabled .tile-disc {
+  box-shadow: inset 0 0 0 2px #ffffff40;
+}
+/* Signature: gold-framed night tile with its gauge as a fill bar. */
+.battle-screen .move-tile.signature-move {
+  background: linear-gradient(180deg, #3a3470, #231f4d);
+  box-shadow:
+    inset 0 0 0 2px #ffcb3d80,
+    inset 0 1px 0 #ffffff33,
+    0 4px 0 #120f2e;
+  padding-bottom: 18px;
+}
+.battle-screen .move-tile.signature-move .tile-disc {
+  color: var(--gold);
+  background: #ffcb3d1f;
+  box-shadow: inset 0 0 0 2px #ffcb3d99;
+}
+.battle-screen .move-tile.signature-move .tile-disc .ico {
+  width: 24px;
+  height: 24px;
+}
+.battle-screen .tile-sig-state {
+  color: #ffe9a6;
+  font-size: 13px;
+  font-weight: 900;
+}
+.battle-screen .tile-sig-fill {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #00000073;
+}
+.battle-screen .tile-sig-fill > i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold-2), var(--gold-bright));
+  transform-origin: left center;
+}
+.battle-screen .move-tile.signature-ready {
+  background: linear-gradient(180deg, #4a3d7e, #2c2459);
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    inset 0 1px 0 #ffffff4d,
+    0 0 0 3px #ffcb3d40,
+    0 4px 0 #120f2e;
+}
+.battle-screen .move-tile.signature-ready:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 0 0 3px #ffcb3d40,
+    0 1px 0 #120f2e;
+}
+.battle-screen .move-tile.signature-move:disabled {
+  --tile-color: #3a3470;
+  color: #e7e3ff;
+}
+/* Cooldown: greyed tile with the turns left on a clock badge. */
+.battle-screen .move-tile.is-cooldown .tile-meta {
+  opacity: 0.75;
+}
+/* Tutorial: the one move the lesson asks for glows. */
+.battle-screen .move-tile.tutorial-target:not(:disabled) {
+  outline: 3px solid var(--cyan);
+  outline-offset: 2px;
+}
+/* "Changer": bench portraits ringed by their HP colour. */
+.battle-screen .switch-tile {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  justify-items: center;
+  row-gap: 6px;
+  background: linear-gradient(180deg, #2a3070, #1b2050);
+  box-shadow:
+    inset 0 1px 0 #ffffff33,
+    inset 0 0 0 1px #ffffff1a,
+    0 4px 0 #0a0c26;
+}
+.battle-screen .switch-tile:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 1px 0 #ffffff33,
+    0 1px 0 #0a0c26;
+}
+.battle-screen .switch-tile:disabled {
+  --tile-color: #2a2f5a;
+}
+.battle-screen .bench {
+  display: flex;
+  gap: 6px;
+}
+.battle-screen .bench-mon {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #0b0d24;
+  box-shadow: inset 0 0 0 2px var(--hp-high);
+}
+.battle-screen .bench-mon[data-hp-state='mid'] {
+  box-shadow: inset 0 0 0 2px var(--hp-mid);
+}
+.battle-screen .bench-mon[data-hp-state='low'] {
+  box-shadow: inset 0 0 0 2px var(--hp-low);
+}
+.battle-screen .bench-mon[data-hp-state='ko'] {
+  box-shadow: inset 0 0 0 2px #ffffff33;
+}
+.battle-screen .bench-mon img {
+  width: 46px;
+  height: 46px;
+  margin: -4px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.battle-screen .bench-mon[data-hp-state='ko'] img {
+  opacity: 0.3;
+}
+.battle-screen .switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--weight-display);
+  line-height: 1;
+}
+.battle-screen .switch-label .ico {
+  width: 20px;
+  height: 20px;
+}
+body.high-contrast .battle-screen .move-tile {
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 4px 0 #000;
+}
+body.high-contrast .battle-screen .move-tile:disabled {
+  color: #fff;
+  background: #16182c;
+  border: 0;
+  box-shadow: inset 0 0 0 2px #ffffff99;
+  outline: 2px dashed #fff;
+  outline-offset: -6px;
+}
+body.high-contrast .battle-screen .move-tile.signature-ready {
+  box-shadow:
+    inset 0 0 0 3px #ffe56f,
+    0 4px 0 #000;
+}
+body.high-contrast .battle-screen .move-effectiveness,
+body.high-contrast .battle-screen .tile-cooldown {
+  color: #fff;
+  background: #000;
+  box-shadow: inset 0 0 0 1px #fff;
+}
+/* Landscape 2×2 (the dock column is ~300 px, tiles ~143 px): a small type
+   disc keeps a ≥ 97 px name column for 16 px names; the rows share the
+   column's height. */
+@media (orientation: landscape) {
+  .battle-screen .move-grid {
+    --tile-h: 80px;
+    grid-auto-rows: minmax(var(--tile-h), 1fr);
+    gap: 6px;
+    height: 100%;
   }
+  .battle-screen .move-tile {
+    grid-template-columns: 26px minmax(0, 1fr);
+    column-gap: 6px;
+    row-gap: 5px;
+    padding: 8px 7px 9px;
+  }
+  .battle-screen .move-tile.signature-move {
+    padding-bottom: 16px;
+  }
+  .battle-screen .tile-sig-fill {
+    left: 8px;
+    right: 8px;
+    bottom: 7px;
+    height: 4px;
+  }
+  .battle-screen .tile-disc {
+    width: 26px;
+    height: 26px;
+  }
+  .battle-screen .tile-disc .affinity-icon,
+  .battle-screen .move-tile.signature-move .tile-disc .ico {
+    width: 16px;
+    height: 16px;
+  }
+  .battle-screen .move-tile .move-name,
+  .battle-screen .switch-label {
+    font-size: 16px;
+  }
+  .battle-screen .tile-meta {
+    gap: 4px;
+    min-height: 24px;
+  }
+  .battle-screen .move-effectiveness {
+    padding: 4px 7px;
+  }
+  .battle-screen .switch-tile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Tall landscape: one full-width card per move, filling the dock column. The
+   disc sits left of the name, the preview under it, the damage on the right. */
+@media (orientation: landscape) and (min-height: 600px) {
+  .battle-screen .move-grid {
+    grid-template-columns: minmax(0, 1fr);
+    --tile-h: 88px;
+    gap: 12px;
+  }
+  .battle-screen .move-tile {
+    grid-template-columns: clamp(48px, 4vw, 64px) minmax(0, 1fr);
+    grid-template-rows: auto;
+    column-gap: 16px;
+    row-gap: 8px;
+    padding: 12px 18px 14px 16px;
+  }
+  .battle-screen .move-tile.signature-move {
+    padding-bottom: 22px;
+  }
+  .battle-screen .tile-sig-fill {
+    left: 16px;
+    right: 18px;
+    bottom: 10px;
+    height: 6px;
+  }
+  .battle-screen .move-tile.signature-move .move-key {
+    bottom: 22px;
+  }
+  .battle-screen .tile-disc {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: clamp(48px, 4vw, 64px);
+    height: clamp(48px, 4vw, 64px);
+  }
+  .battle-screen .tile-disc .affinity-icon,
+  .battle-screen .move-tile.signature-move .tile-disc .ico {
+    width: 55%;
+    height: 55%;
+  }
+  .battle-screen .move-tile .move-name {
+    grid-column: 2;
+    align-self: end;
+  }
+  .battle-screen .move-tile .move-name,
+  .battle-screen .switch-label {
+    font-size: clamp(20px, 1.7vw, 28px);
+  }
+  .battle-screen .tile-meta,
+  .battle-screen .tile-detail {
+    grid-column: 2;
+  }
+  .battle-screen .tile-meta {
+    align-self: start;
+    gap: 10px;
+    font-size: var(--text-md);
+  }
+  .battle-screen .move-effectiveness,
+  .battle-screen .move-role {
+    padding: 5px 11px;
+    font-size: 15px;
+  }
+  .battle-screen .move-role .ico {
+    width: 18px;
+    height: 18px;
+  }
+  .battle-screen .tile-damage {
+    font-size: clamp(20px, 1.7vw, 26px);
+  }
+  .battle-screen .tile-damage .ico {
+    width: 22px;
+    height: 22px;
+  }
+  .battle-screen .tile-sig-state {
+    font-size: var(--text-md);
+  }
+  .battle-screen .switch-tile {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: start;
+  }
+  .battle-screen .switch-tile .bench {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .battle-screen .switch-tile .switch-label {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 10px;
+  }
+  .battle-screen .bench-mon {
+    width: 48px;
+    height: 48px;
+  }
+  .battle-screen .bench-mon img {
+    width: 58px;
+    height: 58px;
+    margin: -5px;
+  }
+}
+@media (max-width: 340px) {
+  .battle-screen .move-tile {
+    grid-template-columns: 32px minmax(0, 1fr);
+    column-gap: 7px;
+    padding-inline: 8px;
+  }
+  .battle-screen .tile-disc {
+    width: 32px;
+    height: 32px;
+  }
+  .battle-screen .move-tile .move-name {
+    font-size: 16px;
+  }
+}
+body.high-contrast .battle-screen .move-tile::after {
+  content: none;
 }

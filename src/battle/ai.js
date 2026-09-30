@@ -8,11 +8,24 @@ import {
   previewAllySwitch,
   previewIncomingAfterSwitch,
   previewMove,
+  previewMoveOrder,
   safeBattleSnapshot,
   signatureCostFor,
 } from './engine.js';
 import { STATUS_DEFINITIONS } from './statuses.js';
 import { randomIndex, randomFromState } from './rng.js';
+
+// Matchups read the damaging moves a creature can actually use right now
+// (coverage moves included), never the creature's own type.
+function bestMoveAffinity(attacker, defender) {
+  let best = 0;
+  for (const id of attacker.moves) {
+    const move = MOVES[id];
+    if (move.kind === 'damage' && !move.signature && !attacker.cooldowns[id]?.remaining)
+      best = Math.max(best, affinityMultiplier(move.affinity, defender.affinity));
+  }
+  return best || 1;
+}
 
 // Applying Marqué is worth a setup score while a conscious teammate can cash it
 // in with a ready damaging move; refreshing a longer-lasting mark is wasted.
@@ -119,7 +132,8 @@ function scoreMove(state, side, action, difficulty, style) {
       const readyDamage = candidate.moves.some(
           (id) => MOVES[id].kind === 'damage' && !candidate.cooldowns[id]?.remaining
         ),
-        usefulMatchup = (preview.outgoingAffinity - 1) * 22 - (preview.incomingAffinity - 1) * 14,
+        usefulMatchup =
+          (bestMoveAffinity(candidate, defender) - 1) * 22 - (bestMoveAffinity(defender, candidate) - 1) * 14,
         lowHealthEscape = attacker.hp / attacker.maxHp < 0.35 ? 65 : 0,
         emptyPenalty =
           preview.removedPenalties === 0 && candidate.hp === candidate.maxHp && usefulMatchup <= 0 ? 28 : 0;
@@ -173,8 +187,8 @@ function scoreSwitch(state, side, action, difficulty, style) {
   const lastOwnDecision = [...state.history]
     .reverse()
     .find((event) => event.side === side && ['move-start', 'switch'].includes(event.type));
-  const outgoing = affinityMultiplier(candidate.affinity, defender.affinity);
-  const incoming = affinityMultiplier(defender.affinity, candidate.affinity);
+  const outgoing = bestMoveAffinity(candidate, defender);
+  const incoming = bestMoveAffinity(defender, candidate);
   const relayFever = state.modifiers?.includes('relay_fever'),
     hasAffordableSignature = candidate.moves.some(
       (id) => MOVES[id].signature && state.sides[side].surge >= signatureCostFor(candidate)
@@ -207,10 +221,7 @@ function scoreSwitch(state, side, action, difficulty, style) {
     (relayReadiesSignature ? 25 : 0) +
     (style === 'deception' ? 8 : 0) +
     (lastOwnDecision?.type === 'switch' ? -30 : 0) +
-    (difficulty === 'champion' ? signatureRead : 0) +
-    // Without a response forecast, Standard overvalues a visibly favorable
-    // matchup and pivots a little too eagerly—a readable, human mistake.
-    (difficulty === 'standard' ? 5 : 0)
+    (difficulty === 'champion' ? signatureRead : 0)
   );
 }
 
@@ -252,30 +263,59 @@ export function chooseAiAction(sourceState, side = 'enemy', difficulty = 'appren
     }
   }
   if (difficulty === 'standard' || difficulty === 'champion') {
+    const opponentSide = side === 'player' ? 'enemy' : 'player',
+      opponent = activeOf(state, opponentSide),
+      self = activeOf(state, side),
+      readyReplies = opponent.moves
+        .map((id) => MOVES[id])
+        .filter(
+          (move) =>
+            move.kind === 'damage' &&
+            !opponent.cooldowns[move.id]?.remaining &&
+            (!move.signature || state.sides[opponentSide].surge >= signatureCostFor(opponent))
+        ),
+      // Champion only: the strongest reply to the current active creature.
+      standingReplies =
+        difficulty === 'champion'
+          ? readyReplies.map((move) => ({
+              move,
+              damage: previewMove(state, opponentSide, move.id)?.damage || 0,
+            }))
+          : [];
     for (const item of scored) {
+      // Champion still leads with attacks, but a heal, guard or setup that is
+      // clearly worth more than a hit can now win the turn.
       if (item.action.type === 'move' && MOVES[item.action.moveId].kind === 'damage')
-        item.score += difficulty === 'champion' ? 40 : 3;
-      if (item.action.type === 'switch' && activeOf(state, side).hp < activeOf(state, side).maxHp * 0.3)
-        item.score += 13;
-      const opponentSide = side === 'player' ? 'enemy' : 'player',
-        opponent = activeOf(state, opponentSide);
+        item.score += difficulty === 'champion' ? 30 : 3;
+      if (item.action.type === 'switch' && self.hp < self.maxHp * 0.3) item.score += 13;
       // Standard never runs the opponent-response forecast. It uses the same
       // tactical scoring vocabulary as Champion, but reacts only to visible
       // board fundamentals and therefore cannot optimize a hypothetical pivot.
       const replyDamage =
-        difficulty === 'champion'
-          ? opponent.moves
-              .map((id) => MOVES[id])
-              .filter((move) => move.kind === 'damage' && !opponent.cooldowns[move.id]?.remaining)
-              .reduce((best, move) => {
-                const forecast =
-                  item.action.type === 'switch'
-                    ? previewIncomingAfterSwitch(state, side, item.action.index, move.id)
-                    : previewMove(state, opponentSide, move.id);
-                return Math.max(best, forecast?.damage || 0);
-              }, 0)
-          : 0;
+        difficulty !== 'champion'
+          ? 0
+          : item.action.type === 'switch'
+            ? readyReplies.reduce(
+                (best, move) =>
+                  Math.max(
+                    best,
+                    previewIncomingAfterSwitch(state, side, item.action.index, move.id)?.damage || 0
+                  ),
+                0
+              )
+            : standingReplies.reduce((best, reply) => Math.max(best, reply.damage), 0);
       item.score -= replyDamage * 0.35;
+      // A move that a faster lethal reply would pre-empt never happens: Champion
+      // weighs it as lost and looks for a priority hit, a guard or a pivot.
+      if (
+        item.action.type === 'move' &&
+        standingReplies.some(
+          (reply) =>
+            reply.damage >= self.hp &&
+            previewMoveOrder(state, opponentSide, reply.move.id, item.action.moveId) === 'first'
+        )
+      )
+        item.score -= 45;
       const lastOwnMove = [...state.history]
         .reverse()
         .find((event) => event.type === 'move-start' && event.side === side)?.moveId;

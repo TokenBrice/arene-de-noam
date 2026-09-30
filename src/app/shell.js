@@ -39,8 +39,7 @@ const {
   openMoveTheater,
   renderBestiary,
   renderSettings,
-  closeSwitch,
-  closeBattleOverlay,
+  openBattlePause,
 } = route;
 
 installIconSprite();
@@ -414,17 +413,12 @@ function handleEscape() {
     closeMoveTheater();
     return;
   }
-  const replacementRoot = screen.querySelector('#replacement-root'),
-    pendingReplacement = ctx.battleSession?.state.sides.player.pendingReplacement;
-  if (replacementRoot?.querySelector('.replacement-card')) {
-    if (!pendingReplacement) closeSwitch();
+  // Battle with no sheet open: Escape (like the Phase 4 back gesture) pauses.
+  if (screen.dataset.page === 'battle') {
+    openBattlePause();
     return;
   }
-  if (replacementRoot?.childElementCount) {
-    closeBattleOverlay();
-    return;
-  }
-  if (screen.dataset.page !== 'title' && screen.dataset.page !== 'battle') renderTitle();
+  if (screen.dataset.page !== 'title') renderTitle();
 }
 function trapModalTab(event) {
   const dialog =

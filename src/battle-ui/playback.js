@@ -1,60 +1,11 @@
-import { ctx, registerRoutes, route } from '../app/context.js';
+import { ctx, registerRoutes } from '../app/context.js';
+import { playBeats, playIntro } from './director.js';
 
-const {
-  CREATURES,
-  MOVES,
-  activeOf,
-  testAnimationScale,
-  t,
-  screen,
-  sound,
-  LOG_EVENT_TYPES,
-  creatureName,
-  wait,
-} = ctx;
-const {
-  refreshBattle,
-  beginMoveFx,
-  impactMoveFx,
-  effectivenessCalloutFx,
-  tacticalFx,
-  comboCreditFx,
-  perfectRelayFx,
-  relayRushFx,
-  immaculateRelayFx,
-  trainerCommandFx,
-  signatureReadyFx,
-  surgeFlashFx,
-  aceFx,
-  statusTickFx,
-  missWhiffFx,
-  barrierShatterFx,
-  landMoveFx,
-  signatureClashIntro,
-  faintFx,
-  switchOutFx,
-  switchInFx,
-  moveStartBeatMs,
-  isBlockedHit,
-  settleReadouts,
-  syncBattleAnimationSpeed,
-  clearBattleFx,
-} = route;
+const { screen } = ctx;
 
-// Events that open a new action beat. The FX stage is cleared only right
-// before one of these (or after a turn's last event), never between a move
-// and its own follow-up statuses, passives, barriers, heals or K.O.
-const BEAT_OPENERS = new Set([
-  'move-start',
-  'move-skip',
-  'switch',
-  'replace',
-  'trainer-command',
-  'perfect-relay',
-  'ace',
-  'status-tick',
-  'battle-end',
-]);
+// Event presentation (docs/battle-presentation.md §6.1): the engine resolves a turn at once; the
+// director (director.js) replays it beat by beat and advances this display-state projection as
+// each event is presented, so the HUD shows the battle as the player sees it.
 
 function sessionIsActive(session) {
   return Boolean(
@@ -64,6 +15,7 @@ function sessionIsActive(session) {
     screen.classList.contains('battle-screen')
   );
 }
+
 function beginPresentation(session, preTurnState) {
   if (!session || !preTurnState) return;
   session.displayState = structuredClone(preTurnState);
@@ -133,316 +85,20 @@ function advancePresentation(session, event) {
   }
 }
 
-function eventPresentationDelay(event) {
-  if (testAnimationScale === 0) return 1;
-  if (ctx.save.reducedMotion) return 190 / ctx.save.battleSpeed;
-  if (event.type === 'status' && event.consumed && event.source === 'combo') return 60 / ctx.save.battleSpeed;
-  if (event.type === 'move-skip') return 120 / ctx.save.battleSpeed;
-  if (event.type === 'move-start') return moveStartBeatMs(MOVES[event.moveId]) / ctx.save.battleSpeed;
-  if (event.type === 'trainer-command') return 760 / ctx.save.battleSpeed;
-  if (event.type === 'damage')
-    return (
-      (event.hp <= 0 ? 900 : event.affinity !== 1 ? 700 : ctx.currentFxMove?.strong ? 620 : 300) /
-      ctx.save.battleSpeed
-    );
-  if (event.type === 'surge')
-    return (
-      (event.source === 'switch' && event.amount >= 24 ? 650 : event.ready ? 760 : 60) / ctx.save.battleSpeed
-    );
-  if (event.type === 'assist') return 480 / ctx.save.battleSpeed;
-  if (event.type === 'perfect-relay') return 620 / ctx.save.battleSpeed;
-  if (event.type === 'ace') return 1050 / ctx.save.battleSpeed;
-  if (event.type === 'ko') return 700 / ctx.save.battleSpeed;
-  if (event.type === 'switch' || event.type === 'replace') return 640 / ctx.save.battleSpeed;
-  if (
-    ['heal', 'status', 'barrier', 'barrier-hit', 'barrier-break', 'miss', 'recoil', 'status-tick'].includes(
-      event.type
-    )
-  )
-    return 250 / ctx.save.battleSpeed;
-  return 180 / ctx.save.battleSpeed;
-}
-
-// Time (ms at the current speed) until this playback hands control back: the
-// rest of the current beat plus every later beat.
-function turnTimeLeft(events, eventIndex, beatMs) {
-  let left = beatMs;
-  for (let index = eventIndex + 1; index < events.length; index++) {
-    const event = events[index];
-    if (event.type === 'move-skip' && event.reason === 'ko') continue;
-    left += eventPresentationDelay(event);
-  }
-  return left;
-}
-
+// Plays one engine result (resolveTurn, applyReplacement or applyTrainerCommand) through the
+// director, then hands the HUD back to the resolved state.
 async function playEvents(events) {
-  const session = ctx.battleSession,
-    clearPresentation = () => {
-      if (session) session.displayState = null;
-    };
-  if (!sessionIsActive(session)) {
-    clearPresentation();
-    return;
+  const session = ctx.battleSession;
+  try {
+    if (sessionIsActive(session)) await playBeats(session, events);
+  } finally {
+    if (session) session.displayState = null;
   }
-  refreshBattle();
-  await signatureClashIntro(events);
-  if (!sessionIsActive(session)) {
-    clearPresentation();
-    return;
-  }
-  for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
-    const event = events[eventIndex],
-      switchLeadIn =
-        event.type === 'switch' || event.type === 'replace'
-          ? (ctx.save.reducedMotion ? 70 : 220) / ctx.save.battleSpeed
-          : 0,
-      deferRefresh = event.type === 'status' && !event.applied,
-      deferProjection = Boolean(switchLeadIn || deferRefresh);
-    // A creature that fainted earlier this turn simply does not act: its K.O.
-    // beat already told the story, so the skip gets no line and no wait.
-    if (event.type === 'move-skip' && event.reason === 'ko') continue;
-    while (document.hidden) {
-      await wait(150);
-      if (!sessionIsActive(session)) {
-        clearPresentation();
-        return;
-      }
-    }
-    if (!sessionIsActive(session)) {
-      clearPresentation();
-      return;
-    }
-    if (!deferProjection) advancePresentation(session, event);
-    const actorSide = event.side;
-    const fighter = screen.querySelector(`#fighter-${actorSide}`);
-    if (event.type === 'trainer-command') {
-      session.lastLine = t('battle.commandLine', { command: t(`command.${event.command}`) });
-      trainerCommandFx(event);
-    }
-    if (event.type === 'move-start') {
-      session.lastLine = t('battle.action.move', {
-        actor: creatureName(event.creatureId),
-        move: t(`move.${event.moveId}`),
-      });
-      beginMoveFx(event);
-      fighter?.classList.add('attacking');
-      // Cries mark entrances, Signatures and faints, never ordinary attacks.
-      if (MOVES[event.moveId]?.signature) sound.call(event.creatureId);
-      sound.move(MOVES[event.moveId]);
-    }
-    if (event.type === 'assist' && event.combo === true) {
-      session.lastLine = t('battle.comboCredit', { helper: creatureName(event.creatureId) });
-      comboCreditFx(event);
-    }
-    if (event.type === 'perfect-relay') {
-      session.lastLine = t('battle.perfectRelay', { actor: creatureName(event.creatureId) });
-      perfectRelayFx(event);
-    }
-    if (event.type === 'damage') {
-      const blocked = isBlockedHit(event),
-        affinityNote = blocked
-          ? ''
-          : event.affinity > 1
-            ? `↑ ${t('battle.effective')} · `
-            : event.affinity < 1
-              ? `↓ ${t('battle.resisted')} · `
-              : '',
-        criticalNote = event.critical && !blocked ? `${t('battle.critical')} · ` : '',
-        comboNote = event.combo
-          ? `${t('battle.combo', { percent: Math.round((event.combo.multiplier - 1) * 100) })} · `
-          : '';
-      session.lastLine = `${criticalNote}${affinityNote}${comboNote}${blocked ? t('battle.action.blocked', { target: creatureName(event.creatureId) }) : t('battle.action.damage', { target: creatureName(event.creatureId), amount: event.amount })}${event.hits > 1 ? ` · ${t('battle.hit', { hit: event.hit, hits: event.hits })}` : ''}`;
-      fighter?.classList.add('hit');
-      impactMoveFx(event);
-      // A lethal hit shows its K.O. stamp alone; a blocked one its shield stamp.
-      if (!blocked && event.hp > 0) effectivenessCalloutFx(event);
-      sound.impact(MOVES[ctx.currentFxMove?.moveId], event);
-    }
-    if (event.type === 'heal') {
-      session.lastLine = t('battle.action.heal', {
-        actor: creatureName(event.creatureId),
-        amount: event.amount,
-      });
-      tacticalFx(event);
-      sound.heal();
-    }
-    if (event.type === 'status' && !(event.consumed && event.source === 'combo')) {
-      session.lastLine = event.consumed
-        ? t('battle.action.consumed', {
-            actor: creatureName(event.creatureId),
-            status: t(`status.${event.status}`),
-          })
-        : event.applied
-          ? t('battle.action.status', {
-              actor: creatureName(event.creatureId),
-              status: t(`status.${event.status}`),
-            })
-          : t('battle.action.cleanse', {
-              actor: creatureName(event.creatureId),
-              status: t(`status.${event.status}`),
-            });
-      tacticalFx(event);
-      sound.guard();
-    }
-    if (event.type === 'barrier') {
-      session.lastLine = t('battle.action.barrier', {
-        actor: creatureName(event.creatureId),
-        amount: event.amount,
-      });
-      tacticalFx(event);
-      sound.guard();
-    }
-    if (event.type === 'barrier-hit') {
-      session.lastLine = t('battle.action.absorb', { amount: event.amount });
-      fighter?.classList.add('barrier-hit');
-      landMoveFx();
-      ctx.arenaScene?.flash('hit', '#73eaff', event.side);
-      if (event.total <= 0) {
-        // The dome just broke: glass shatter instead of the usual guard hum.
-        barrierShatterFx(event);
-        sound.shatter();
-      } else sound.guard();
-    }
-    if (event.type === 'barrier-break') {
-      session.lastLine = t('battle.action.barrierBreak', {
-        actor: creatureName(event.creatureId),
-        amount: event.amount,
-      });
-      fighter?.classList.add('barrier-hit');
-      tacticalFx(event);
-      if (event.total <= 0) barrierShatterFx(event);
-      sound.shatter();
-    }
-    if (event.type === 'miss') {
-      session.lastLine = t('battle.action.miss', { actor: creatureName(event.creatureId) });
-      fighter?.classList.add('dodging');
-      missWhiffFx(event);
-      sound.ui();
-    }
-    if (event.type === 'recoil') {
-      session.lastLine = t('battle.action.recoil', {
-        actor: creatureName(event.creatureId),
-        amount: event.amount,
-      });
-      fighter?.classList.add('hit');
-      statusTickFx({ ...event, status: 'countering' });
-      sound.hit('force');
-    }
-    if (event.type === 'status-tick') {
-      session.lastLine = t('battle.action.tick', {
-        actor: creatureName(event.creatureId),
-        amount: event.amount,
-        status: t(`status.${event.status}`),
-      });
-      fighter?.classList.add('status-hit');
-      statusTickFx(event);
-      sound.hit(CREATURES[event.creatureId].affinity);
-    }
-    if (event.type === 'surge' && event.source === 'switch' && event.amount >= 24) {
-      const incoming = activeOf(session.state, event.side);
-      session.lastLine = t('battle.relayRushLine', { actor: creatureName(incoming.id) });
-      relayRushFx(event);
-      surgeFlashFx(event.side);
-    }
-    if (event.type === 'surge' && event.ready) {
-      session.lastLine = t('battle.surgeReady');
-      surgeFlashFx(event.side);
-      signatureReadyFx(event);
-    }
-    if (event.type === 'ace') {
-      session.lastLine = t('battle.ace', {
-        actor: creatureName(event.creatureId),
-        ace: t(`ace.${event.ace}`),
-      });
-      aceFx(event);
-    }
-    if (event.type === 'passive') {
-      session.lastLine = t('battle.passive', {
-        actor: creatureName(event.creatureId),
-        passive: t(`passive.${event.passive}`),
-      });
-      tacticalFx({ ...event, status: 'focused' });
-      sound.guard();
-    }
-    if (event.type === 'switch' || event.type === 'replace') {
-      session.lastLine =
-        event.source === 'signature'
-          ? t('battle.immaculateRelay', { actor: creatureName(event.creatureId) })
-          : t('battle.action.switch', { actor: creatureName(event.creatureId) });
-      if (event.source === 'signature') immaculateRelayFx(event);
-      switchOutFx(event);
-      sound.ui();
-    }
-    if (event.type === 'ko') {
-      session.lastLine = t('battle.ko', { name: creatureName(event.creatureId) });
-      fighter?.classList.add('ko');
-      screen.classList.add('ko-shock');
-      faintFx(event);
-      sound.call(event.creatureId, { fall: true });
-      sound.ko();
-    }
-    if (event.type === 'move-skip') {
-      const skipped = activeOf(session.state, event.side);
-      session.lastLine = t('battle.action.skip', { name: creatureName(skipped.id) });
-    }
-    if (event.type === 'battle-end') {
-      session.lastLine =
-        event.reason === 'turn-cap'
-          ? t('battle.logEnd.cap')
-          : event.winner === 'player'
-            ? t('battle.logEnd.win')
-            : t('battle.logEnd.loss');
-    }
-    if (LOG_EVENT_TYPES.has(event.type)) {
-      const timelineCreature =
-        event.creatureId || (event.type === 'move-skip' ? activeOf(session.state, event.side)?.id : null);
-      session.timeline.push({
-        type: event.type === 'damage' && event.combo ? 'combo' : event.type,
-        side: event.side,
-        creatureId: timelineCreature,
-        turn: event.turn || session.state.turn,
-        text: session.lastLine,
-      });
-      if (session.timeline.length > 40) session.timeline.shift();
-    }
-    if (switchLeadIn) {
-      // Let the outgoing recall read before revealing the already-resolved
-      // incoming fighter. The overlap begins near the end of the light beam.
-      await wait(switchLeadIn);
-      if (!sessionIsActive(session)) {
-        clearPresentation();
-        return;
-      }
-    }
-    if (!deferProjection) refreshBattle();
-    else if (switchLeadIn) {
-      advancePresentation(session, event);
-      refreshBattle();
-    }
-    if (event.type === 'switch' || event.type === 'replace') switchInFx(event);
-    const beatMs = Math.max(1, eventPresentationDelay(event) - switchLeadIn);
-    settleReadouts(turnTimeLeft(events, eventIndex, beatMs) * ctx.save.battleSpeed);
-    await wait(beatMs);
-    if (!sessionIsActive(session)) {
-      clearPresentation();
-      return;
-    }
-    if (deferRefresh) {
-      advancePresentation(session, event);
-      refreshBattle();
-    }
-    fighter?.classList.remove('attacking', 'hit', 'ko', 'barrier-hit', 'dodging', 'status-hit', 'entering');
-    const next = events[eventIndex + 1];
-    if (!next || BEAT_OPENERS.has(next.type))
-      clearBattleFx({ preservePresentation: true, keepReadouts: true });
-    else syncBattleAnimationSpeed();
-  }
-  clearPresentation();
 }
 
 registerRoutes({
-  eventPresentationDelay,
   playEvents,
+  playIntro,
   beginPresentation,
   advancePresentation,
 });

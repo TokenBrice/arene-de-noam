@@ -1,340 +1,71 @@
-/* Once-per-battle Trainer Command */
-.trainer-command-btn {
-  display: grid;
-  grid-template-columns: auto auto;
+/* Coup de pouce (once-per-battle Trainer Command): a green chip at the end of
+   the dock's head row, present only while the command is usable. The button
+   is a full 48 px target; the pill is drawn 4 px inside it. */
+.battle-screen .coach-chip {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  max-width: 150px;
-  border-color: #ffe27b55 !important;
-  background: linear-gradient(135deg, #7251b43d, #ffda6820) !important;
+  gap: 8px;
+  height: var(--hit);
+  padding: 0 16px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #06301a;
+  background: none;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--weight-display);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
 }
-.trainer-command-btn span {
-  color: #ffe68b;
-  font-size: 17px;
-}
-.trainer-command-btn small {
-  overflow: visible;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 0.9;
-  text-overflow: clip;
-  white-space: normal;
-}
-.trainer-command-btn.used {
-  border-color: #7feaa73b !important;
-  opacity: 0.7;
-}
-.trainer-command-btn.used span {
-  color: #91f4ad;
-}
-.trainer-command-codex {
-  border-color: #ffe37942 !important;
-  background: linear-gradient(120deg, #ffd85614, #9565ff10) !important;
-}
-.trainer-command-codex.used {
-  border-color: #75e6a33c !important;
-}
-.trainer-command-codex strong {
-  color: var(--gold-bright);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.trainer-command-fx {
-  z-index: 16;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(
-    115deg,
-    #02030ce8 0 23%,
-    color-mix(in srgb, var(--fx-color) 18%, #070819e8) 23% 77%,
-    #02030ce8 77%
-  );
-}
-.trainer-command-fx::before,
-.trainer-command-fx::after {
+.battle-screen .coach-chip::before {
   content: '';
   position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(115deg, transparent 0 80px, #ffffff08 81px 83px);
-  animation: commandSweep 0.8s ease-out forwards;
+  z-index: -1;
+  inset: 4px 0 6px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #8ff5c8, #3ddc84);
+  box-shadow:
+    inset 0 1px 0 #ffffff99,
+    0 3px 0 #1b7a45;
 }
-.trainer-command-fx::after {
-  background: linear-gradient(110deg, transparent 40%, #fff8 49%, var(--fx-color) 51%, transparent 60%);
+.battle-screen .coach-chip .ico {
+  width: 20px;
+  height: 20px;
 }
-.command-stripe {
-  position: relative;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: 110px minmax(220px, 430px) minmax(130px, 270px);
+.battle-screen .coach-chip:not(:disabled):is(:active, .is-pressed)::before {
+  box-shadow:
+    inset 0 1px 0 #ffffff99,
+    0 1px 0 #1b7a45;
+}
+.battle-screen.locked .coach-chip {
+  visibility: hidden;
+}
+body.high-contrast .battle-screen .coach-chip {
+  color: #000;
+}
+body.high-contrast .battle-screen .coach-chip::before {
+  background: #7dffb0;
+  box-shadow:
+    inset 0 0 0 3px #000,
+    0 3px 0 #fff;
+}
+.trainer-command-codex strong {
+  display: inline-flex;
   align-items: center;
-  width: min(850px, 92vw);
-  padding: 14px 30px;
-  border-block: 1px solid color-mix(in srgb, var(--fx-color) 65%, #fff);
-  background: linear-gradient(90deg, transparent, #090b23ef 14% 86%, transparent);
-  animation: commandEnter 0.72s cubic-bezier(0.15, 0.85, 0.2, 1);
+  gap: 4px;
+  color: var(--gold-bright);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.command-stripe > i {
-  display: grid;
-  place-items: center;
-  width: 90px;
-  height: 90px;
-  border: 2px solid #ffe887;
-  border-radius: 50%;
-  color: #fff2a8;
-  background: #ffe36d14;
-  font-size: 42px;
-  font-style: normal;
-  box-shadow: 0 0 30px #ffdf6635;
+.trainer-command-codex.used strong {
+  color: #91f4ad;
 }
-.command-stripe > span {
-  display: grid;
-}
-.command-stripe small {
-  color: #ffe58a;
-  font-size: 9px;
-  font-weight: 1000;
-  letter-spacing: 0.24em;
-}
-.command-stripe b {
-  font-family: var(--font-display);
-  font-weight: var(--weight-display);
-  font-size: clamp(28px, 5vw, 58px);
-  line-height: 1;
-  color: #fff;
-  text-shadow: 0 0 20px var(--fx-color);
-}
-.command-stripe em {
-  margin-top: 5px;
-  color: #cfd0e2;
-  font-size: 11px;
-  font-style: normal;
-  letter-spacing: 0.1em;
-}
-.command-stripe img {
-  width: 100%;
-  height: 190px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 0 25px var(--fx-color));
-}
-.command-mode .battle-top,
-.command-mode .battle-controls,
-.command-mode .hud-card {
-  filter: brightness(0.38);
-}
-@keyframes commandEnter {
-  0% {
-    opacity: 0;
-    transform: translateX(-35vw) skewX(-10deg);
-  }
-  55% {
-    opacity: 1;
-    transform: translateX(2vw) skewX(2deg);
-  }
-  100% {
-    transform: none;
-  }
-}
-@keyframes commandSweep {
-  0% {
-    opacity: 0;
-    transform: translateX(-30%);
-  }
-  50% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(30%);
-  }
-}
-@media (max-width: 600px) {
-  .trainer-command-btn {
-    grid-template-columns: 1fr;
-    width: 44px;
-    min-width: 44px;
-    max-width: 44px;
-    min-height: 44px;
-    gap: 2px;
-    padding: 2px 1px;
-  }
-  .trainer-command-btn span {
-    font-size: 14px;
-    line-height: 1;
-  }
-  .trainer-command-btn small {
-    display: block;
-    max-width: none;
-    overflow: visible;
-    font-size: 10px;
-    line-height: 0.9;
-    text-align: center;
-    text-overflow: clip;
-    white-space: normal;
-  }
-  .command-stripe {
-    grid-template-columns: 58px 1fr 95px;
-    width: 100vw;
-    padding: 10px 8px;
-  }
-  .command-stripe > i {
-    width: 52px;
-    height: 52px;
-    font-size: 25px;
-  }
-  .command-stripe b {
-    font-size: 23px;
-  }
-  .command-stripe small {
-    font-size: 6px;
-  }
-  .command-stripe img {
-    height: 125px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .command-stripe,
-  .trainer-command-fx::before,
-  .trainer-command-fx::after {
-    animation: none !important;
-  }
-}
-body.reduced-motion .command-stripe,
-body.reduced-motion .trainer-command-fx::before,
-body.reduced-motion .trainer-command-fx::after {
-  animation: none !important;
-}
-.signature-ready-call {
-  position: absolute;
-  z-index: 31;
-  top: 13%;
-  left: 0;
-  display: grid;
-  grid-template-columns: 48px 112px minmax(190px, 330px);
-  align-items: center;
-  width: min(535px, 72vw);
-  height: 125px;
-  padding: 7px 22px 7px 8px;
-  border: 1px solid color-mix(in srgb, var(--ready-color) 70%, #fff);
-  border-left: 0;
-  border-radius: 0 22px 22px 0;
-  background: linear-gradient(105deg, color-mix(in srgb, var(--ready-color) 42%, #0b0d2a), #080a20f2 72%);
-  box-shadow: 0 0 45px color-mix(in srgb, var(--ready-color) 34%, transparent);
-  animation: signatureReadyCut 0.62s cubic-bezier(0.15, 0.85, 0.2, 1) forwards;
-  overflow: hidden;
-}
-.signature-ready-call.enemy {
-  left: auto;
-  right: 0;
-  border-right: 0;
-  border-left: 1px solid color-mix(in srgb, var(--ready-color) 70%, #fff);
-  border-radius: 22px 0 0 22px;
-  animation-name: signatureReadyCutEnemy;
-}
-.signature-ready-call > i {
-  color: var(--gold-soft);
-  font-size: 42px;
-  font-style: normal;
-  text-align: center;
-  text-shadow: 0 0 19px #ffe064;
-}
-.signature-ready-call img {
-  width: 112px;
-  height: 112px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 0 17px var(--ready-color));
-}
-.signature-ready-call span {
-  display: grid;
-  min-width: 0;
-}
-.signature-ready-call small {
-  color: #ffe578;
-  font-size: 8px;
-  font-weight: 1000;
-  letter-spacing: 0.16em;
-}
-.signature-ready-call b {
-  font-family: var(--font-display);
-  font-weight: var(--weight-display);
-  font-size: 26px;
-  line-height: 1;
-}
-.signature-ready-call em {
-  overflow: hidden;
-  margin-top: 3px;
-  color: #fff;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@keyframes signatureReadyCut {
-  0% {
-    opacity: 0;
-    transform: translateX(-100%) skewX(-10deg);
-  }
-  55%,
-  78% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(6%);
-  }
-}
-@keyframes signatureReadyCutEnemy {
-  0% {
-    opacity: 0;
-    transform: translateX(100%) skewX(10deg);
-  }
-  55%,
-  78% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(-6%);
-  }
-}
-@media (max-width: 600px) {
-  .signature-ready-call,
-  .signature-ready-call.enemy {
-    top: 31%;
-    grid-template-columns: 34px 76px 1fr;
-    width: 94vw;
-    height: 92px;
-    padding: 5px 10px;
-  }
-  .signature-ready-call > i {
-    font-size: 29px;
-  }
-  .signature-ready-call img {
-    width: 76px;
-    height: 76px;
-  }
-  .signature-ready-call b {
-    font-size: 20px;
-  }
-  .signature-ready-call small {
-    font-size: 6px;
-  }
-  .signature-ready-call em {
-    font-size: 9px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .signature-ready-call {
-    animation: none;
-    opacity: 1;
-  }
-}
-body.reduced-motion .signature-ready-call {
-  animation: none;
-  opacity: 1;
+.trainer-command-codex strong .ico {
+  width: 16px;
+  height: 16px;
 }

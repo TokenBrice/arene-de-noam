@@ -1,18 +1,9 @@
 import { ctx, registerRoutes, route } from '../app/context.js';
 
 const {
-  AFFINITIES,
-  CLASSES,
-  affinityMultiplier,
   MOVES,
-  PASSIVES,
-  masteryRank,
-  quickRule,
   difficultyModifiers,
   TRAINERS,
-  TRIALS,
-  GAUNTLET_STAGES,
-  circuitMatch,
   createBattle,
   activeOf,
   resolveTurn,
@@ -20,46 +11,46 @@ const {
   applyTrainerCommand,
   canUseTrainerCommand,
   getLegalActions,
-  signatureCostFor,
-  previewIncomingAfterSwitch,
-  previewAllySwitch,
   chooseAiAction,
-  STATUS_DEFINITIONS,
-  sortStatusIds,
-  statusBadgeHtml,
-  statusIcon,
   params,
   testAnimationScale,
   t,
   screen,
   sound,
-  LADDER_COUNT,
-  LOG_TYPE_GROUPS,
   sprite,
   creatureName,
-  affinityIcon,
-  classIcon,
-  className,
   actionButton,
-  wait,
   persist,
   escapeHtml,
   disposeArena,
   ensureBattleStyles,
-  statusVisuals,
 } = ctx;
 const {
   bindCommon,
   renderTitle,
-  enemyPlan,
+  openSheet,
+  icon,
   plannedEnemyAction,
-  hudHtml,
-  hudDetailHtml,
-  moveButton,
-  exchangeForecastHtml,
+  tutorialAllows,
+  plateHtml,
+  topRowHtml,
+  patchHud,
+  patchTopRow,
+  openNarration,
+  narrate,
+  renderCommands,
+  moveInfoHtml,
+  switchSheetHtml,
+  plateDetailHtml,
+  weatherSheetHtml,
+  pauseSheetHtml,
+  codexHtml,
+  battleLogHtml,
+  resetHud,
   tutorialEnemyAction,
   clearBattleFx,
   playEvents,
+  playIntro,
   beginPresentation,
   completeTutorial,
   finishBattle,
@@ -67,9 +58,10 @@ const {
 
 let battleSessionSequence = 0,
   battleStartPending = false,
-  switchOpener = null,
-  switchFocusAfterUnlock = null,
-  battleRenderCache = { session: null, key: null, locked: false };
+  // The command the player last activated from a focused dock button; focus
+  // returns to it when the dock is rebuilt after the turn.
+  commandFocusKey = null,
+  wakeLock = null;
 
 function sessionIsActive(session) {
   return Boolean(
@@ -85,33 +77,96 @@ function cancelBattleSession(session) {
     session.displayState = null;
   }
   ctx.locked = false;
+  releaseWakeLock();
   clearBattleFx();
 }
-// Every covering battle overlay lives in #replacement-root; the arena stops
-// rendering while one is open and resumes when it closes.
-function syncArenaPause() {
-  ctx.arenaScene?.setPaused(screen.querySelector('#replacement-root')?.childElementCount > 0);
+
+/* Screen Wake Lock: the phone stays awake while a battle is on screen. The
+   browser drops the lock when the page is hidden; it is asked again on return
+   and released when the battle ends or is left. */
+async function requestWakeLock() {
+  if (wakeLock || document.hidden || !navigator.wakeLock || !sessionIsActive(ctx.battleSession)) return;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    if (!sessionIsActive(ctx.battleSession)) {
+      void lock.release();
+      return;
+    }
+    wakeLock = lock;
+    lock.addEventListener('release', () => {
+      if (wakeLock === lock) wakeLock = null;
+    });
+  } catch {
+    // Refused (power saver, permissions policy): the battle simply runs without it.
+    wakeLock = null;
+  }
 }
-// On-screen box of the visible sprite inside a fighter's <img> (object-fit:
-// contain letterboxes it); the arena anchors bursts and flashes on it.
-function fighterSpriteRect(side) {
-  const img = screen.querySelector(`#fighter-${side} > img`);
-  if (!img) return null;
-  const box = img.getBoundingClientRect(),
-    style = getComputedStyle(img);
-  if (!img.naturalWidth || !img.naturalHeight || !box.width || !box.height || style.objectFit !== 'contain')
-    return box;
-  const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight),
-    width = img.naturalWidth * scale,
-    height = img.naturalHeight * scale,
-    [x = '50%', y = '50%'] = style.objectPosition.split(' '),
-    offset = (value, free) =>
-      value.endsWith('%') ? (free * parseFloat(value)) / 100 : parseFloat(value) || 0;
-  return new DOMRect(
-    box.left + offset(x, box.width - width),
-    box.top + offset(y, box.height - height),
-    width,
-    height
+function releaseWakeLock() {
+  const lock = wakeLock;
+  wakeLock = null;
+  if (lock) void lock.release();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void requestWakeLock();
+});
+
+// Every covering battle sheet lives in #replacement-root: while one is open the
+// arena stops rendering and the turn's clock is held, so a sheet opened
+// mid-turn freezes the turn exactly (§11.5).
+function syncArenaPause() {
+  const covered = screen.querySelector('#replacement-root')?.childElementCount > 0;
+  ctx.arenaScene?.setPaused(covered);
+  ctx.battleSession?.clock?.[covered ? 'pause' : 'resume']('sheet');
+}
+function openBattleSheet({ title, body, actions = [], variant, onClose }) {
+  const root = screen.querySelector('#replacement-root');
+  if (!root) return null;
+  const content =
+    typeof body === 'string' ? Object.assign(document.createElement('div'), { innerHTML: body }) : body;
+  const close = openSheet({
+    title,
+    body: content,
+    actions,
+    root,
+    onClose: (reason) => {
+      syncArenaPause();
+      onClose?.(reason);
+    },
+  });
+  root.lastElementChild.classList.add('battle-sheet', `battle-sheet-${variant}`);
+  syncArenaPause();
+  return close;
+}
+
+// Visually hidden stand-ins for the WebGL fighters: names for assistive tech and
+// e2e hooks (docs/battle-presentation.md §8.3). FighterLayer writes data-phase.
+function fighterProxyHtml(side, creature) {
+  return `<div class="fighter-proxy visually-hidden ${side}" id="fighter-${side}" data-creature="${creature.id}" data-affinity="${creature.affinity}" data-phase="idle"><img src="${sprite(creature.id)}" alt="${escapeHtml(creatureName(creature.id))}" width="128" height="128"></div>`;
+}
+// Idempotent sync of both fighters to `view` (§8.4): the proxy is written at the
+// swap, then the scene places the sprite. A K.O.'d active creature is shown
+// fainted without animation; outside playback a living one is shown at rest.
+async function patchFighters(view) {
+  if (!screen.classList.contains('battle-screen')) return;
+  const fighters = ctx.arenaScene?.fighters;
+  await Promise.all(
+    ['player', 'enemy'].map(async (side) => {
+      const creature = activeOf(view, side),
+        proxy = screen.querySelector(`#fighter-${side}`),
+        img = proxy?.querySelector('img');
+      if (!img) return;
+      if (proxy.dataset.creature !== creature.id) {
+        proxy.dataset.creature = creature.id;
+        proxy.dataset.affinity = creature.affinity;
+        img.src = sprite(creature.id);
+      }
+      img.alt = creatureName(creature.id);
+      if (!fighters || !(await fighters.setCreature(side, creature.id))) return;
+      const phase = fighters.phase(side);
+      if (creature.hp <= 0) {
+        if (phase !== 'fainted') await fighters.react(side, 'faint', { instant: true });
+      } else if (!ctx.locked && phase !== 'idle') await fighters.react(side, 'enter', { instant: true });
+    })
   );
 }
 
@@ -158,7 +213,7 @@ function startBattle(config) {
     style: ['ladder', 'gauntlet', 'circuit'].includes(config.mode)
       ? TRAINERS[config.trainerIndex]?.style || 'direct'
       : 'direct',
-    lastLine: t('battle.yourTurn'),
+    lastLine: '',
     timeline: [],
     tutorialStep: config.tutorialStep ?? null,
     sessionToken: ++battleSessionSequence,
@@ -185,7 +240,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
   // battle. A failed arena load takes the friendly WebGL error path.
   screen.dataset.page = 'battle-loading';
   screen.className = 'screen boot-screen';
-  screen.innerHTML = '<div class="brand-glyph" aria-hidden="true">✦</div>';
+  screen.innerHTML = `<div class="brand-glyph" aria-hidden="true">${icon('sparkle')}</div>`;
   const [, arena] = await Promise.all([
     ensureBattleStyles(),
     ctx.loadArena().catch((error) => {
@@ -201,65 +256,24 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     battleStartPending = false;
     return;
   }
-  battleRenderCache = { session, key: null, locked: false };
   battleStartPending = false;
   disposeArena();
+  resetHud();
+  commandFocusKey = null;
+  const state = session.state;
   screen.dataset.page = 'battle';
   screen.className = `screen battle-screen ${ctx.save.expertMode ? 'expert-mode' : 'simple-mode'}`;
-  const trial =
-    ctx.battleSession.mode === 'trial' ? TRIALS.find((x) => x.id === ctx.battleSession.trialId) : null;
-  const gauntlet =
-    ctx.battleSession.mode === 'gauntlet' ? GAUNTLET_STAGES[ctx.battleSession.gauntletStage] : null;
-  const circuit =
-    ctx.battleSession.mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null;
-  const arenaHeading = trial
-      ? `${trial.icon} ${t(trial.nameKey)}`
-      : gauntlet
-        ? `↟ ${t(gauntlet.nameKey)} · ${ctx.battleSession.gauntletStage + 1}/${GAUNTLET_STAGES.length}`
-        : circuit
-          ? `${circuit.condition.icon} ${t('circuit.round', { round: circuit.round })}`
-          : t(`arena.${ctx.battleSession.arena}`),
-    arenaRule = trial
-      ? t(trial.descKey)
-      : gauntlet
-        ? t('gauntlet.battleRule', { boons: ctx.gauntletRun?.boons.length || 0 })
-        : circuit
-          ? t(`circuit.effect.${circuit.condition.id}`)
-          : t(`arena.rule.${ctx.battleSession.arena}`);
-  screen.innerHTML = `<canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas><div class="battle-vignette"></div><div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info"><div class="battle-top"><span class="turn-chip" id="turn-chip"></span><div class="arena-nameplate" tabindex="0" title="${escapeHtml(arenaRule)}" aria-label="${escapeHtml(`${arenaHeading} — ${arenaRule}`)}"><b>${arenaHeading}</b><small>${arenaRule}</small></div><div class="battle-tools"><button class="icon-btn" data-action="battle-help" aria-label="${t('battle.codex')}">?</button><button class="icon-btn" data-action="battle-speed" aria-pressed="${ctx.save.battleSpeed === 2}">×${ctx.save.battleSpeed}</button><button class="icon-btn" data-action="toggle-mute" aria-label="${t('settings.mute')}">${ctx.save.muted ? '🔇' : '🔊'}</button><button class="icon-btn" data-action="battle-exit" aria-label="${t('app.back')}">✕</button></div></div><div class="battle-plates"><div class="hud-card player-hud" id="hud-player"></div><div class="hud-card enemy-hud" id="hud-enemy"></div></div></section><section class="battle-stage" data-battle-zone="stage"><div class="battle-stage-camera"><div class="battlefield"><div class="fighter enemy" id="fighter-enemy" data-last-label="${escapeHtml(t('battle.lastBadge'))}"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div><div class="fighter player" id="fighter-player" data-last-label="${escapeHtml(t('battle.lastBadge'))}"><i class="fighter-shadow" aria-hidden="true"></i><div class="status-orbits"></div><img alt=""></div></div><div id="fx-stage" class="fx-stage" aria-hidden="true"></div></div></section><section class="battle-command-dock" data-battle-zone="controls"><div id="tutorial-root"></div><div class="action-line" id="action-line" role="status" aria-live="polite"></div><div class="battle-controls"><div class="move-grid" id="moves"></div><button class="switch-btn" data-action="open-switch"><span>↺</span><b>${t('battle.switch')}</b></button></div></section></div><div id="replacement-root"></div>`;
-  if (ctx.battleSession.quickRuleId && ctx.battleSession.quickRuleId !== 'standard') {
-    const rule = quickRule(ctx.battleSession.quickRuleId);
-    screen
-      .querySelector('.arena-nameplate')
-      ?.insertAdjacentHTML(
-        'beforeend',
-        `<span class="quick-rule-chip">${rule.icon} ${t(`quickRule.${rule.id}`)}</span>`
-      );
-  }
-  const logButton = document.createElement('button');
-  logButton.type = 'button';
-  logButton.className = 'icon-btn';
-  logButton.dataset.action = 'battle-log';
-  logButton.setAttribute('aria-label', t('battle.log'));
-  logButton.textContent = '≡';
-  screen.querySelector('[data-action="battle-help"]')?.before(logButton);
-  screen
-    .querySelector('.battle-tools')
-    ?.insertAdjacentHTML(
-      'afterbegin',
-      `<button class="icon-btn trainer-command-btn command-coach" data-action="trainer-command" aria-label="${t('battle.command')}"><span>⚑</span><small>${t('command.coach')}</small></button>`
-    );
+  screen.innerHTML = `<div class="battle-layout"><section class="battle-info-zone" data-battle-zone="info">${topRowHtml(state)}<div class="battle-plate-slot enemy" id="hud-enemy">${plateHtml('enemy', state)}</div><div class="battle-plate-slot player" id="hud-player">${plateHtml('player', state)}</div></section><section class="battle-stage" data-battle-zone="stage"><canvas id="arena" class="arena-canvas" aria-hidden="true"></canvas>${fighterProxyHtml('enemy', activeOf(state, 'enemy'))}${fighterProxyHtml('player', activeOf(state, 'player'))}<div id="fx-text" class="fx-text" aria-hidden="true"></div></section><section class="battle-command-dock" data-battle-zone="controls"><div class="dock-head" id="dock-head"><div class="action-line" id="action-line" role="status" aria-live="polite"></div></div><div id="tutorial-root"></div><div class="battle-controls"><div class="move-grid" id="moves"></div></div></section></div><div id="replacement-root"></div>`;
   try {
     if (!arena) throw new Error('ARENA_LOAD_FAILED');
     if (params.get('failWebgl') === '1') throw new Error('WEBGL_UNAVAILABLE');
-    ctx.arenaScene = new arena.ArenaScene(screen.querySelector('#arena'), ctx.battleSession.arena, {
+    ctx.arenaScene = new arena.ArenaScene(screen.querySelector('#arena'), session.arena, {
       reducedMotion: ctx.save.reducedMotion,
       testAnimationScale,
       quality: ctx.quality,
       governor: ctx.qualityGovernor,
+      highContrast: ctx.save.highContrast,
     });
-    ctx.arenaScene.setAnchorResolver(fighterSpriteRect);
-    void ctx.arenaScene.warmUp();
   } catch (error) {
     cancelBattleSession(session);
     ctx.battleSession = null;
@@ -271,7 +285,7 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
   }
   // Arena battle theme (setScreen is a no-op when that theme already plays,
   // so rematches and re-renders of the same arena keep the music going).
-  sound.setScreen(`battle:${ctx.battleSession.arena}`);
+  sound.setScreen(`battle:${session.arena}`);
   screen.querySelector('#arena').addEventListener('arena-context-lost', () => {
     if (!sessionIsActive(session)) return;
     cancelBattleSession(session);
@@ -280,677 +294,367 @@ async function renderBattle(session = ctx.battleSession, originPage = null) {
     screen.innerHTML = `<div class="shell"><section class="boot-card error-card"><h1>Oups !</h1><p>${t('error.context')}</p>${actionButton(t('app.back'), 'title', 'primary-btn')}</section></div>`;
     bindCommon();
   });
-  screen.querySelector('[data-action="toggle-mute"]').addEventListener('click', () => {
-    if (!sessionIsActive(session)) return;
-    ctx.save.muted = !ctx.save.muted;
-    persist();
-    refreshBattle();
-  });
-  screen.querySelector('[data-action="battle-speed"]').addEventListener('click', () => {
-    if (!sessionIsActive(session)) return;
-    ctx.save.battleSpeed = ctx.save.battleSpeed === 2 ? 1 : 2;
-    persist();
-    refreshBattle();
-  });
-  screen.querySelector('[data-action="battle-help"]').addEventListener('click', openBattleCodex);
-  screen.querySelector('[data-action="battle-log"]').addEventListener('click', openBattleLog);
-  screen.querySelector('[data-action="trainer-command"]').addEventListener('click', handleTrainerCommand);
-  screen.querySelector('[data-action="battle-exit"]').addEventListener('click', () => {
-    if (!sessionIsActive(session) || !confirm(t('battle.exitConfirm'))) return;
-    cancelBattleSession(session);
-    renderTitle();
-  });
+  bindInfoZone(session);
+  bindCommandDock(session);
   refreshBattle();
   sound.unlock();
+  void requestWakeLock();
+  // Both fighters are on the GPU before the programs compile and the intro plays.
+  await patchFighters(state);
+  if (!sessionIsActive(session)) return;
+  void ctx.arenaScene.warmUp();
   battleEntrance(session);
 }
 
-function openBattleCodex() {
-  if (ctx.locked) return;
-  const state = ctx.battleSession.state,
-    root = screen.querySelector('#replacement-root'),
-    statusIds = sortStatusIds([
-      ...new Set(['player', 'enemy'].flatMap((side) => Object.keys(activeOf(state, side).statuses))),
-    ]),
-    boons = ctx.gauntletRun?.boons || [],
-    activeRule = ctx.battleSession.quickRuleId ? quickRule(ctx.battleSession.quickRuleId) : null,
-    circuit = ctx.battleSession.mode === 'circuit' ? circuitMatch(ctx.save.circuitWins, LADDER_COUNT) : null,
-    trainerAce = state.enemyAce;
-  const activeStatuses = statusIds.length
-    ? statusIds
-        .map((id) => {
-          const meta = STATUS_DEFINITIONS[id];
-          const polarity = meta.positive ? 'positive' : 'negative';
-          return `<div class="codex-status ${polarity}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}"><i>${statusIcon(id)}</i><span><em class="status-polarity-label">${meta.positive ? '▲' : '▼'} ${t(meta.positive ? 'status.polarity.positive' : 'status.polarity.negative')}</em><b>${t(`status.${id}`)}</b><small>${t(`status.effect.${id}`)}</small></span></div>`;
-        })
-        .join('')
-    : `<p>${t('battle.codexNoStatus')}</p>`;
-  root.innerHTML = `<div class="replacement codex-overlay"><section class="glass-panel battle-codex" role="dialog" aria-modal="true" aria-labelledby="codex-title"><button class="codex-close icon-btn" data-action="close-codex" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.fieldState')}</span><h2 id="codex-title">${t('battle.codex')}</h2><div class="codex-grid"><article><h3>⚡ ${t('arena.ruleTitle')}</h3><b>${t(`arena.${state.arena}`)}</b><p>${t(`arena.rule.${state.arena}`)}</p></article><article><h3>✦ ${t('battle.surge')}</h3><p>${t('academy.surge')}</p></article><article class="codex-wide"><h3>↺ ${t('battle.switchRead')}</h3><p>${t('battle.perfectRelayHint')}</p></article>${boons.length ? `<article class="codex-wide"><h3>↟ ${t('gauntlet.boons')}</h3><ul>${boons.map((id) => `<li><b>${t(`boon.${id}`)}</b> — ${t(`boon.effect.${id}`)}</li>`).join('')}</ul></article>` : ''}<article class="codex-wide"><h3>☿ ${t('battle.activeStatuses')}</h3><div class="codex-statuses">${activeStatuses}</div></article><article class="codex-wide affinity-reminder"><h3>△ ${t('battle.affinityCycle')}</h3><p>${t('settings.affinities')}</p></article></div></section></div>`;
-  root
-    .querySelector('.codex-grid')
-    ?.insertAdjacentHTML(
-      'afterbegin',
-      `<article class="codex-wide trainer-command-codex command-coach ${state.sides.player.commandUsed ? 'used' : ''}"><h3>⚑ ${t('command.coach')}</h3><p>${t('command.effect.coach')}</p><strong>${state.sides.player.commandUsed ? '✓ ' + t('battle.commandUsed') : t('battle.command')}</strong></article>`
-    );
-  if (activeRule && activeRule.id !== 'standard')
-    root
-      .querySelector('.codex-grid')
-      ?.insertAdjacentHTML(
-        'afterbegin',
-        `<article class="codex-wide quick-rule-codex"><h3>${activeRule.icon} ${t('quickRule.title')}</h3><b>${t(`quickRule.${activeRule.id}`)}</b><p>${t(`quickRule.effect.${activeRule.id}`)}</p></article>`
-      );
-  if (circuit)
-    root
-      .querySelector('.codex-grid')
-      ?.insertAdjacentHTML(
-        'afterbegin',
-        `<article class="codex-wide circuit-codex"><h3>${circuit.condition.icon} ${t('circuit.condition')}</h3><b>${t(`circuit.${circuit.condition.id}`)}</b><p>${t(`circuit.effect.${circuit.condition.id}`)}</p></article>`
-      );
-  if (trainerAce)
-    root
-      .querySelector('.codex-grid')
-      ?.insertAdjacentHTML(
-        'afterbegin',
-        `<article class="codex-wide ace-codex ${state.aceTriggered ? 'triggered' : ''}"><h3>♛ ${t('ace.title')}</h3><b>${t(`ace.${trainerAce}`)}</b><p>${t(`ace.effect.${trainerAce}`)}</p></article>`
-      );
-  const close = () => {
-    root.innerHTML = '';
-    syncArenaPause();
-    screen.querySelector('[data-action="battle-help"]')?.focus();
-  };
-  syncArenaPause();
-  root.querySelector('[data-action="close-codex"]').addEventListener('click', close);
-  root.querySelector('.codex-overlay').addEventListener('click', (e) => {
-    if (e.target.classList.contains('codex-overlay')) close();
+/* ------------------------------------------------------------------ sheets */
+
+// Pause sheet (§11.5): opens from the top-row button, Escape and (Phase 4) the
+// back gesture, including while a turn plays; the covering sheet freezes it.
+function openBattlePause() {
+  const session = ctx.battleSession,
+    root = screen.querySelector('#replacement-root');
+  if (!sessionIsActive(session) || root.querySelector('.pause-sheet')) return;
+  const body = Object.assign(document.createElement('div'), {
+      innerHTML: pauseSheetHtml(session),
+    }).firstElementChild,
+    confirmBox = body.querySelector('.abandon-confirm'),
+    abandon = body.querySelector('[data-action="battle-abandon"]'),
+    press = (selector, value) =>
+      body
+        .querySelectorAll(selector)
+        .forEach((button) => button.setAttribute('aria-pressed', String(button.matches(value))));
+  const close = openBattleSheet({
+    title: t('battle.pause'),
+    body,
+    variant: 'pause',
+    actions: [{ label: t('battle.resume'), variant: 'primary', icon: 'play', action: 'battle-resume' }],
   });
-  root.querySelector('[data-action="close-codex"]').focus();
+  body.addEventListener('click', (event) => {
+    const button = event.target instanceof Element ? event.target.closest('button') : null;
+    if (!button || !sessionIsActive(session)) return;
+    const action = button.dataset.action;
+    if (action === 'battle-help') openBattleCodex();
+    else if (action === 'battle-log') openBattleLog();
+    else if (button.dataset.speed) {
+      setBattleSpeed(Number(button.dataset.speed));
+      press('[data-speed]', `[data-speed="${ctx.save.battleSpeed}"]`);
+    } else if (button.dataset.sound) setBattleMuted(button.dataset.sound === 'off');
+    else if (action === 'battle-abandon') {
+      const open = confirmBox.hidden;
+      confirmBox.hidden = !open;
+      abandon.setAttribute('aria-expanded', String(open));
+      if (open) confirmBox.querySelector('[data-action="battle-abandon-cancel"]').focus();
+    } else if (action === 'battle-abandon-cancel') {
+      confirmBox.hidden = true;
+      abandon.setAttribute('aria-expanded', 'false');
+      abandon.focus();
+    } else if (action === 'battle-abandon-confirm') {
+      close();
+      cancelBattleSession(session);
+      renderTitle();
+    }
+  });
 }
 
+// ×1 / ×2: persisted, and live on the running turn's clock (§11.5).
+function setBattleSpeed(speed) {
+  ctx.save.battleSpeed = speed === 2 ? 2 : 1;
+  persist();
+  ctx.battleSession?.clock?.setSpeed(ctx.save.battleSpeed);
+  patchTopRow();
+}
+
+// Sound on/off from the pause sheet or the M key; an open pause sheet follows.
+function setBattleMuted(muted) {
+  ctx.save.muted = muted;
+  persist();
+  const toggle = screen
+    .querySelector('#replacement-root .pause-sheet [data-sound]')
+    ?.closest('.pause-toggle');
+  if (!toggle) return;
+  toggle
+    .querySelectorAll('[data-sound]')
+    .forEach((segment) =>
+      segment.setAttribute('aria-pressed', String((segment.dataset.sound === 'off') === muted))
+    );
+  toggle
+    .querySelector('.ico')
+    .replaceWith(
+      Object.assign(document.createElement('template'), { innerHTML: icon(muted ? 'sound-off' : 'sound-on') })
+        .content
+    );
+}
+
+function openBattleCodex() {
+  const session = ctx.battleSession;
+  if (!session) return;
+  openBattleSheet({ title: t('battle.codex'), body: codexHtml(session), variant: 'codex' });
+}
+
+// Also opened from the results screen (its own #replacement-root).
 function openBattleLog() {
-  if (ctx.locked) return;
-  const root = screen.querySelector('#replacement-root');
-  if (!root) return;
-  const entries = [...(ctx.battleSession.timeline || [])].reverse(),
-    icons = { player: '◆', enemy: '◇' };
-  root.innerHTML = `<div class="replacement battle-log-overlay"><section class="glass-panel battle-log" role="dialog" aria-modal="true" aria-labelledby="battle-log-title"><button class="codex-close icon-btn" data-action="close-log" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.logSubtitle')}</span><h2 id="battle-log-title">${t('battle.log')}</h2><p>${t('battle.logHint')}</p><ol>${
-    entries.length
-      ? entries
-          .map((entry, index) => {
-            const turn = entry.turn || 1,
-              turnStart = index === 0 || entries[index - 1].turn !== turn,
-              active = entry.side ? activeOf(ctx.battleSession.state, entry.side) : null,
-              sideCreature = entry.creatureId || active?.id,
-              sideLabel =
-                entry.side && sideCreature
-                  ? t(`battle.logSide.${entry.side}`, { name: creatureName(sideCreature) })
-                  : '';
-            return `<li class="log-${entry.side || 'field'} ${index === 0 ? 'latest' : ''} ${turnStart ? 'turn-start' : ''}" data-turn="${t('battle.turn', { turn })}"><i>${icons[entry.side] || '✦'}</i><span><small>${t(`battle.logType.${LOG_TYPE_GROUPS[entry.type] || 'effect'}`)}</small>${sideLabel ? `<b class="log-side-label">${escapeHtml(sideLabel)}</b> ` : ''}${escapeHtml(entry.text)}</span></li>`;
-          })
-          .join('')
-      : `<li class="empty">${t('battle.logEmpty')}</li>`
-  }</ol></section></div>`;
-  const close = () => {
-    root.innerHTML = '';
-    syncArenaPause();
-    screen.querySelector('[data-action="battle-log"],[data-action="result-log"]')?.focus();
-  };
-  syncArenaPause();
-  root.querySelector('[data-action="close-log"]').addEventListener('click', close);
-  root.querySelector('.battle-log-overlay').addEventListener('click', (event) => {
-    if (event.target.classList.contains('battle-log-overlay')) close();
-  });
-  root.querySelector('[data-action="close-log"]').focus();
+  const session = ctx.battleSession;
+  if (!session) return;
+  openBattleSheet({ title: t('battle.log'), body: battleLogHtml(session), variant: 'log' });
 }
 
 function openPlateDetails(side) {
-  if (ctx.locked || !ctx.battleSession) return;
-  const session = ctx.battleSession,
-    root = screen.querySelector('#replacement-root'),
-    trigger = screen.querySelector(`[data-plate-side="${side}"]`),
-    view = session.displayState ?? session.state,
-    creature = activeOf(view, side);
-  if (!root || !trigger || !creature) return;
-  trigger.setAttribute('aria-expanded', 'true');
-  root.innerHTML = `<div class="replacement plate-detail-overlay"><section class="glass-panel plate-detail-card" role="dialog" aria-modal="true" aria-labelledby="plate-detail-title"><button type="button" class="codex-close icon-btn" data-action="close-plate" aria-label="${t('app.close')}">✕</button><span class="eyebrow">${t('battle.plateHint')}</span><h2 id="plate-detail-title">${t('battle.plateTitle', { name: creatureName(creature.id) })}</h2>${hudDetailHtml(side, view)}</section></div>`;
-  const close = () => {
-    if (!sessionIsActive(session)) return;
-    root.innerHTML = '';
-    syncArenaPause();
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.focus();
-  };
-  syncArenaPause();
-  root.querySelector('[data-action="close-plate"]')?.addEventListener('click', close);
-  root.querySelector('.plate-detail-overlay')?.addEventListener('click', (event) => {
-    if (event.target.classList.contains('plate-detail-overlay')) close();
+  const session = ctx.battleSession;
+  if (!sessionIsActive(session)) return;
+  const view = session.displayState ?? session.state,
+    trigger = screen.querySelector(`[data-plate-side="${side}"]`);
+  trigger?.setAttribute('aria-expanded', 'true');
+  openBattleSheet({
+    title: t('battle.plateTitle', { name: creatureName(activeOf(view, side).id) }),
+    body: plateDetailHtml(side, view),
+    variant: 'plate',
+    onClose: () => trigger?.setAttribute('aria-expanded', 'false'),
   });
-  root.querySelector('[data-action="close-plate"]')?.focus();
-}
-function closeBattleOverlay() {
-  const closeButton = screen
-    .querySelector('#replacement-root')
-    ?.querySelector('[data-action="close-codex"],[data-action="close-log"],[data-action="close-plate"]');
-  if (!closeButton) return false;
-  closeButton.click();
-  return true;
 }
 
-function bindBattleChoiceContext(session) {
-  const moves = screen.querySelector('#moves'),
-    line = screen.querySelector('#action-line');
-  if (!moves || !line || moves.dataset.bound === 'true') return;
-  moves.dataset.bound = 'true';
-  let longPressTimer = 0,
-    longPressedButton = null;
-  const buttonFor = (target) => target instanceof Element && target.closest('[data-move]');
-  const restore = () => {
-    if (!sessionIsActive(session)) return;
-    line.classList.remove('contextual');
-    line.textContent = session.lastLine;
-  };
-  const show = (button) => {
-    if (!sessionIsActive(session)) return;
-    const source = button?.querySelector('.move-context-source');
-    if (!source) return;
-    line.classList.add('contextual');
-    line.innerHTML = source.innerHTML;
-  };
-  const endLongPress = () => {
-    clearTimeout(longPressTimer);
-    longPressTimer = 0;
-    longPressedButton = null;
-  };
-  moves.addEventListener('pointerover', (event) => {
-    const button = buttonFor(event.target);
-    if (button) show(button);
+function openWeatherSheet() {
+  const session = ctx.battleSession;
+  if (!sessionIsActive(session)) return;
+  openBattleSheet({ title: t('arena.ruleTitle'), body: weatherSheetHtml(session.state), variant: 'weather' });
+}
+
+function moveIsLaunchable(session, moveId) {
+  return (
+    !ctx.locked &&
+    tutorialAllows(session, { type: 'move', moveId }) &&
+    getLegalActions(session.state, 'player').some(
+      (action) => action.type === 'move' && action.moveId === moveId
+    )
+  );
+}
+
+// Long-press / right-click / I key: the move's plain-language sheet.
+function openMoveInfo(moveId) {
+  const session = ctx.battleSession;
+  if (!sessionIsActive(session) || ctx.locked || screen.querySelector('#replacement-root .move-info')) return;
+  openBattleSheet({
+    title: t(`move.${moveId}`),
+    body: moveInfoHtml(moveId),
+    variant: 'move',
+    actions: [
+      { label: t('app.close'), variant: 'subtle', action: 'move-info-close' },
+      ...(moveIsLaunchable(session, moveId)
+        ? [
+            {
+              label: t('battle.moveLaunch'),
+              variant: 'primary',
+              action: 'move-launch',
+              onSelect: (close) => {
+                close();
+                chooseMove(moveId);
+              },
+            },
+          ]
+        : []),
+    ],
   });
-  moves.addEventListener('pointerout', (event) => {
-    const button = buttonFor(event.target);
-    if (!button || button.contains(event.relatedTarget)) return;
-    endLongPress();
-    if (document.activeElement !== button) restore();
+}
+
+function chooseMove(moveId) {
+  const move = MOVES[moveId];
+  if (!move) return;
+  if (move.allySwitch) openSwitch(move.id);
+  else handlePlayerAction({ type: 'move', moveId: move.id });
+}
+
+// Switch, replacement and Immaculate Relay picks share one bottom sheet.
+function openSwitch(relayMoveId = null) {
+  const session = ctx.battleSession;
+  if (!sessionIsActive(session) || ctx.locked) return;
+  const replacement = Boolean(session.state.sides.player.pendingReplacement),
+    sheet = switchSheetHtml(relayMoveId);
+  if (!sheet.count) return;
+  closeSwitch();
+  const body = Object.assign(document.createElement('div'), { innerHTML: sheet.html });
+  const close = openBattleSheet({
+    title: sheet.title,
+    body,
+    variant: 'switch',
+    actions: replacement ? [] : [{ label: t('battle.cancel'), variant: 'subtle', action: 'cancel-switch' }],
   });
-  moves.addEventListener('focusin', (event) => show(buttonFor(event.target)));
-  moves.addEventListener('focusout', (event) => {
-    const button = buttonFor(event.target);
-    if (button && !button.contains(event.relatedTarget)) restore();
+  body.addEventListener('click', (event) => {
+    const option = event.target instanceof Element ? event.target.closest('[data-switch-index]') : null;
+    if (!option || !sessionIsActive(session)) return;
+    const index = Number(option.dataset.switchIndex),
+      layer = body.closest('.sheet-layer');
+    // One pick per sheet: the options are dead from the first tap, and the turn (recall, drop)
+    // starts once the sheet has left the stage.
+    for (const button of body.querySelectorAll('[data-switch-index]')) button.disabled = true;
+    close();
+    const closed = sheetExit(layer);
+    if (relayMoveId) handlePlayerAction({ type: 'move', moveId: relayMoveId, allyIndex: index }, closed);
+    else if (replacement) handleReplacement(index, closed);
+    else handlePlayerAction({ type: 'switch', index }, closed);
   });
-  moves.addEventListener('pointerdown', (event) => {
-    const button = buttonFor(event.target);
-    if (!button || event.pointerType !== 'touch') return;
-    endLongPress();
-    longPressedButton = button;
-    longPressTimer = window.setTimeout(() => {
-      if (!sessionIsActive(session) || ctx.locked || !longPressedButton) return;
-      longPressedButton.dataset.longPressed = 'true';
-      show(longPressedButton);
+  body.querySelector('[data-switch-index]')?.focus();
+}
+// A dismissed sheet plays its exit from <body> and leaves at its animationend (shell openSheet).
+function sheetExit(layer) {
+  if (!layer?.isConnected) return Promise.resolve();
+  return Promise.all(
+    layer.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => {}))
+  );
+}
+function closeSwitch() {
+  screen
+    .querySelector('#replacement-root .switch-options')
+    ?.closest('.sheet')
+    ?.querySelector('.sheet-close')
+    ?.click();
+}
+
+/* ------------------------------------------------------------------ wiring */
+
+function bindInfoZone(session) {
+  screen.querySelector('.battle-info-zone').addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target.closest('button') : null;
+    if (!target || !sessionIsActive(session)) return;
+    const action = target.dataset.action;
+    if (action === 'battle-pause') openBattlePause();
+    else if (action === 'battle-speed') setBattleSpeed(ctx.save.battleSpeed === 2 ? 1 : 2);
+    else if (action === 'battle-weather') openWeatherSheet();
+    else if (target.dataset.plateSide) openPlateDetails(target.dataset.plateSide);
+  });
+}
+
+// A long-press (420 ms, touch) opens the move sheet; the click the release
+// produces must not also play the move or hit the new sheet's scrim.
+function swallowNextClick() {
+  const until = performance.now() + 700,
+    swallow = (event) => {
+      document.removeEventListener('click', swallow, true);
+      if (performance.now() > until) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+  document.addEventListener('click', swallow, true);
+  setTimeout(() => document.removeEventListener('click', swallow, true), 700);
+}
+
+function bindCommandDock(session) {
+  const grid = screen.querySelector('#moves');
+  let pressTimer = 0;
+  const tileFor = (target) => (target instanceof Element ? target.closest('[data-move]') : null),
+    endPress = () => {
+      clearTimeout(pressTimer);
+      pressTimer = 0;
+    };
+  // The coach chip lives in the dock's head row, next to the prompt.
+  screen.querySelector('#dock-head').addEventListener('click', (event) => {
+    const button = event.target instanceof Element ? event.target.closest('button') : null;
+    if (button?.dataset.action === 'trainer-command' && sessionIsActive(session)) handleTrainerCommand();
+  });
+  grid.addEventListener('pointerdown', (event) => {
+    const tile = tileFor(event.target);
+    endPress();
+    if (!tile || event.pointerType === 'mouse') return;
+    pressTimer = setTimeout(() => {
+      pressTimer = 0;
+      if (!sessionIsActive(session) || ctx.locked) return;
+      // The finger is still down: the click its release makes lands on the
+      // new sheet, so only that one click is swallowed.
+      const release = (up) => {
+        if (up.pointerId !== event.pointerId) return;
+        document.removeEventListener('pointerup', release, true);
+        document.removeEventListener('pointercancel', release, true);
+        if (up.type === 'pointerup') swallowNextClick();
+      };
+      document.addEventListener('pointerup', release, true);
+      document.addEventListener('pointercancel', release, true);
+      openMoveInfo(tile.dataset.move);
     }, 420);
   });
-  moves.addEventListener('pointerup', endLongPress);
-  moves.addEventListener('pointercancel', endLongPress);
-  moves.addEventListener('click', (event) => {
-    const button = buttonFor(event.target);
-    if (!button || ctx.locked) return;
-    if (button.dataset.longPressed === 'true') {
-      delete button.dataset.longPressed;
-      return;
-    }
-    const move = MOVES[button.dataset.move];
-    if (!move) return;
-    if (move.allySwitch) openSwitch(move.id);
-    else handlePlayerAction({ type: 'move', moveId: move.id });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) grid.addEventListener(type, endPress);
+  grid.addEventListener('contextmenu', (event) => {
+    const tile = tileFor(event.target);
+    if (!tile) return;
+    event.preventDefault();
+    openMoveInfo(tile.dataset.move);
+  });
+  grid.addEventListener('keydown', (event) => {
+    const tile = tileFor(event.target);
+    if (!tile || event.key.toLowerCase() !== 'i' || event.repeat) return;
+    event.preventDefault();
+    openMoveInfo(tile.dataset.move);
+  });
+  grid.addEventListener('click', (event) => {
+    const button = event.target instanceof Element ? event.target.closest('button') : null;
+    if (!button || ctx.locked || !sessionIsActive(session)) return;
+    commandFocusKey =
+      document.activeElement === button
+        ? button.dataset.move
+          ? `[data-move="${button.dataset.move}"]`
+          : `[data-action="${button.dataset.action}"]`
+        : null;
+    if (button.dataset.action === 'open-switch') openSwitch();
+    else chooseMove(button.dataset.move);
   });
 }
 
+function restoreCommandFocus() {
+  if (!commandFocusKey || ctx.locked) return;
+  if (document.activeElement && document.activeElement !== document.body) return;
+  const target = screen.querySelector(`#moves ${commandFocusKey}`);
+  commandFocusKey = null;
+  if (target && !target.disabled) target.focus({ preventScroll: true });
+}
+
+// The intro (§6.6) plays with the dock locked and the plates tucked away: the
+// narration box announces the rival while the VS stack owns the stage.
 async function battleEntrance(session = ctx.battleSession) {
-  if (testAnimationScale === 0 || !sessionIsActive(session)) return;
+  if (!sessionIsActive(session)) return;
   ctx.locked = true;
   refreshBattle();
-  const stage = screen.querySelector('#fx-stage'),
-    state = session.state,
-    player = activeOf(state, 'player'),
-    enemy = activeOf(state, 'enemy'),
-    trainer = ['ladder', 'circuit'].includes(session.mode) ? TRAINERS[session.trainerIndex] : null,
-    trial = session.mode === 'trial' ? TRIALS.find((x) => x.id === session.trialId) : null;
-  const gauntletTrainer = session.mode === 'gauntlet' ? TRAINERS[session.trainerIndex] : null,
-    rival = trainer || gauntletTrainer,
-    rivalName = rival ? t(rival.nameKey) : trial ? t(trial.nameKey) : t('battle.freeRival'),
-    quote = rival ? t(`style.taunt.${rival.style}`) : trial ? t(trial.descKey) : t('battle.freeTaunt');
-  stage.className = 'fx-stage active battle-intro-fx';
-  stage.innerHTML = `<div class="intro-side player"><span>${t('battle.yourTeam')}</span><img src="${sprite(player.id)}" alt=""><b>${creatureName(player.id)}</b></div><div class="intro-vs"><i>VS</i><small>${escapeHtml(quote)}</small></div><div class="intro-side enemy"><span>${escapeHtml(rivalName)}</span><img src="${sprite(enemy.id)}" alt=""><b>${creatureName(enemy.id)}</b></div>`;
-  screen.classList.add('intro-mode');
-  sound.call(player.id);
-  setTimeout(() => {
-    if (sessionIsActive(session)) sound.call(enemy.id);
-  }, 220 / ctx.save.battleSpeed);
-  await wait((ctx.save.reducedMotion ? 300 : 1380) / ctx.save.battleSpeed);
-  if (!sessionIsActive(session)) return;
-  clearBattleFx();
+  const trainer = ['ladder', 'circuit', 'gauntlet'].includes(session.mode)
+    ? TRAINERS[session.trainerIndex]
+    : null;
+  narrate(trainer ? t('battle.introChallenge', { rival: t(trainer.nameKey) }) : t('battle.introFree'));
+  screen.classList.add('battle-intro');
+  const alive = await playIntro(session);
+  screen.classList.remove('battle-intro');
+  if (!alive || !sessionIsActive(session)) return;
   ctx.locked = false;
-  if (session.state.phase === 'choice') {
-    session.lastLine = t('battle.yourTurn');
-    refreshBattle();
-  }
+  if (session.state.phase === 'choice') refreshBattle();
 }
 
-function patchBattleHud(hud, side, view) {
-  const owner = view.sides[side],
-    c = activeOf(view, side),
-    plate = hud.querySelector('[data-plate-side]');
-  if (!plate) return;
-  const hpNumber = plate.querySelector('.plate-hp-number'),
-    hpFill = plate.querySelector('.hp-fill'),
-    barrierFill = plate.querySelector('.barrier-fill'),
-    surgeRow = plate.querySelector('.surge-row'),
-    surgeFill = plate.querySelector('.surge-track i'),
-    surgeNumber = plate.querySelector('.plate-surge-number');
-  if (hpNumber) hpNumber.textContent = `${c.hp}/${c.maxHp}`;
-  if (hpFill) {
-    hpFill.style.width = `${Math.max(0, (c.hp / c.maxHp) * 100)}%`;
-    hpFill.classList.toggle('low', c.hp / c.maxHp < 0.3);
-  }
-  if (c.barrier) {
-    const track = plate.querySelector('.hp-track'),
-      fill = barrierFill || document.createElement('i');
-    if (!barrierFill) {
-      fill.className = 'barrier-fill';
-      track?.append(fill);
-    }
-    fill.style.width = `${Math.min(100, (c.barrier / c.maxHp) * 100)}%`;
-  } else barrierFill?.remove();
-  const cost = signatureCostFor(c);
-  surgeRow?.classList.toggle('ready', owner.surge >= cost);
-  if (surgeFill) surgeFill.style.width = `${owner.surge}%`;
-  if (surgeNumber) surgeNumber.textContent = `✦ ${owner.surge}/${cost}`;
-  const pips = [...plate.querySelectorAll('.team-dot')];
-  owner.team.forEach((teamCreature, index) => {
-    const pip = pips[index];
-    if (!pip) return;
-    const ready =
-      teamCreature.hp > 0 &&
-      owner.surge >= signatureCostFor(teamCreature) &&
-      teamCreature.moves.some((id) => MOVES[id].signature);
-    pip.classList.toggle('active', index === owner.active);
-    pip.classList.toggle('ko', teamCreature.hp <= 0);
-    pip.classList.toggle('signature-ready', ready);
-    pip.style.setProperty('--team-hp', `${Math.max(0, (teamCreature.hp / teamCreature.maxHp) * 100)}`);
-    pip.setAttribute(
-      'aria-label',
-      `${creatureName(teamCreature.id)} · ${className(teamCreature.classId)} · ${teamCreature.hp}/${teamCreature.maxHp} ${t('battle.hpUnit')}${ready ? ` · ${t('battle.surgeReady')}` : ''}`
-    );
-  });
-  const statusIds = sortStatusIds(Object.keys(c.statuses)),
-    statusNames = [
-      ...(c.barrier ? [t('battle.barrierName')] : []),
-      ...statusIds.map((id) => t(`status.${id}`)),
-    ],
-    pipLabels = pips.map((pip) => pip.getAttribute('aria-label'));
-  plate.setAttribute(
-    'aria-label',
-    [
-      creatureName(c.id),
-      `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`,
-      statusNames.join(' · ') || t('battle.noStatuses'),
-      pipLabels.join(' · '),
-    ]
-      .filter(Boolean)
-      .join(' · ')
-  );
-}
-
+/* refreshBattle is a composition (§11.3). Unlocked: both plates, the fighters,
+   the dock and the top row. Locked (playback): plates and top row only, so
+   any caller during a turn stays cheap and never rebuilds the dock. */
 function refreshBattle() {
-  if (!ctx.battleSession || !screen.classList.contains('battle-screen')) return;
-  const session = ctx.battleSession,
-    state = session.state,
-    view = session.displayState ?? state,
-    p = activeOf(view, 'player'),
-    e = activeOf(view, 'enemy'),
-    expertMode = Boolean(ctx.save.expertMode);
-  const sideRatio = (side) =>
-      view.sides[side].team.reduce((sum, c) => sum + c.hp, 0) /
-      view.sides[side].team.reduce((sum, c) => sum + c.maxHp, 1),
-    lastStand = ['player', 'enemy'].some(
-      (side) => view.sides[side].team.filter((c) => c.hp > 0).length === 1
-    ),
-    tension = Math.min(
-      1,
-      (view.turn - 1) / 25 +
-        (1 - Math.min(sideRatio('player'), sideRatio('enemy'))) * 0.58 +
-        (lastStand ? 0.3 : 0)
-    );
-  const hpBucket = (creature) => Math.floor((Math.max(0, creature.hp) / creature.maxHp) * 10),
-    statusSet = (creature) =>
-      `${creature.barrier ? `barrier:${creature.barrier}|` : ''}${Object.entries(creature.statuses)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([id, status]) => `${id}:${status.stacks || 1}:${status.remaining || 0}`)
-        .join(',')}`,
-    legalMoveIds = new Set(
-      getLegalActions(state, 'player')
-        .filter((action) => action.type === 'move')
-        .map((action) => action.moveId)
-    ),
-    moveStateKey = p.moves
-      .map((moveId) => {
-        const cooldown = p.cooldowns[moveId]?.remaining || 0,
-          tutorialAllowed =
-            session.mode !== 'tutorial' ||
-            session.tutorialStep >= 4 ||
-            (session.tutorialStep === 0 && moveId === 'lucid_arc') ||
-            (session.tutorialStep === 1 && moveId === 'slowing_riddle') ||
-            (session.tutorialStep === 2 && moveId === 'oracle_veil');
-        return `${moveId}:${cooldown}:${legalMoveIds.has(moveId) ? 0 : 1}:${tutorialAllowed ? 0 : 1}`;
-      })
-      .join('|'),
-    moveRenderKey = [
-      p.id,
-      e.id,
-      hpBucket(p),
-      hpBucket(e),
-      statusSet(p),
-      statusSet(e),
-      moveStateKey,
-      view.sides.player.surge,
-      view.sides.enemy.surge,
-    ].join('::'),
-    reuseLockedMoves =
-      ctx.locked &&
-      battleRenderCache.session === session &&
-      battleRenderCache.locked &&
-      battleRenderCache.key === moveRenderKey;
+  const session = ctx.battleSession;
+  if (!session || !screen.classList.contains('battle-screen')) return;
+  const view = session.displayState ?? session.state;
   screen.classList.toggle('locked', ctx.locked);
-  screen.classList.toggle('expert-mode', expertMode);
-  screen.classList.toggle('player-last-stand', view.sides.player.team.filter((c) => c.hp > 0).length === 1);
-  screen.classList.toggle('enemy-last-stand', view.sides.enemy.team.filter((c) => c.hp > 0).length === 1);
-  // Final showdown (plan §5): both sides down to their last creature.
-  const showdown = ['player', 'enemy'].every(
-    (side) => view.sides[side].team.filter((c) => c.hp > 0).length === 1
-  );
-  screen.classList.toggle('final-showdown', showdown);
-  screen.classList.toggle('tension-rising', tension >= 0.38);
-  screen.classList.toggle('tension-high', tension >= 0.68);
-  screen.style.setProperty('--battle-tension', tension.toFixed(2));
-  ctx.arenaScene?.setBattleState({ tension, showdown });
-  screen.querySelector('#turn-chip').innerHTML = `<b>${t('battle.turn', { turn: view.turn })}</b>`;
-  screen.querySelector('#action-line').textContent = ctx.battleSession.lastLine;
-  for (const side of ['player', 'enemy']) {
-    const owner = view.sides[side],
-      c = activeOf(view, side),
-      fighter = screen.querySelector(`#fighter-${side}`),
-      img = fighter.querySelector('img'),
-      rank = side === 'player' ? masteryRank(ctx.save.mastery[c.id] || 0) : 0;
-    img.src = sprite(c.id);
-    img.alt = creatureName(c.id);
-    fighter.dataset.creature = c.id;
-    fighter.dataset.affinity = c.affinity;
-    fighter.style.setProperty('--mastery-rank', rank);
-    fighter.querySelector('.status-orbits').innerHTML = statusVisuals(c);
-    fighter.classList.toggle('has-barrier', c.barrier > 0);
-    fighter.classList.toggle(
-      'has-negative',
-      Object.keys(c.statuses).some((id) => !STATUS_DEFINITIONS[id].positive)
-    );
-    fighter.classList.toggle(
-      'has-positive',
-      Object.keys(c.statuses).some((id) => STATUS_DEFINITIONS[id].positive)
-    );
-    fighter.classList.toggle('mastered', rank >= 3);
-    fighter.classList.toggle('low-health', c.hp / c.maxHp <= 0.25);
-    fighter.classList.toggle('fainted', c.hp <= 0);
-    fighter.classList.toggle(
-      'signature-ready',
-      owner.surge >= signatureCostFor(c) && c.moves.some((id) => MOVES[id].signature)
-    );
-    const hud = screen.querySelector(`#hud-${side}`);
-    if (reuseLockedMoves) {
-      patchBattleHud(hud, side, view);
-      continue;
-    }
-    hud.innerHTML = hudHtml(side, expertMode, view);
-    const plate = hud.querySelector('[data-plate-side]');
-    if (plate) {
-      const statusIds = sortStatusIds(Object.keys(c.statuses)),
-        statusNames = [
-          ...(c.barrier ? [t('battle.barrierName')] : []),
-          ...statusIds.map((id) => t(`status.${id}`)),
-        ],
-        pipLabels = [...plate.querySelectorAll('.team-dot[aria-label]')].map((pip) =>
-          pip.getAttribute('aria-label')
-        );
-      plate.setAttribute(
-        'aria-label',
-        [
-          creatureName(c.id),
-          `${c.hp}/${c.maxHp} ${t('battle.hpUnit')}`,
-          statusNames.join(' · ') || t('battle.noStatuses'),
-          pipLabels.join(' · '),
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      );
-      if (!expertMode) {
-        const overflowChip = plate.querySelector('.plate-status-more'),
-          hiddenStatusNames = statusNames.slice(2);
-        if (overflowChip && hiddenStatusNames.length) {
-          const overflowButton = document.createElement('button');
-          overflowButton.type = 'button';
-          overflowButton.className = 'plate-status-more';
-          overflowButton.textContent = overflowChip.textContent;
-          overflowButton.setAttribute(
-            'aria-label',
-            t('battle.statusOverflow', { statuses: hiddenStatusNames.join(', ') })
-          );
-          const plateWrap = document.createElement('div');
-          plateWrap.className = 'battle-plate-wrap';
-          plate.replaceWith(plateWrap);
-          plateWrap.append(plate, overflowButton);
-          overflowButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            openPlateDetails(side);
-          });
-        }
-      }
-    }
-    hud.querySelector('[data-plate-side]')?.addEventListener('click', () => openPlateDetails(side));
+  patchHud('player', view);
+  patchHud('enemy', view);
+  if (ctx.locked) {
+    openNarration();
+    return;
   }
-  if (!reuseLockedMoves) {
-    screen.querySelector('#moves').innerHTML = p.moves
-      .map((moveId, index) => moveButton(moveId, index, view, state))
-      .join('');
-    const forecastPlan = ctx.battleSession.difficulty === 'apprentice' && !ctx.locked ? enemyPlan() : null;
-    if (forecastPlan && expertMode)
-      screen
-        .querySelectorAll('[data-move]')
-        .forEach((button) =>
-          button
-            .querySelector('.move-tags')
-            ?.insertAdjacentHTML('afterbegin', exchangeForecastHtml(button.dataset.move, forecastPlan, state))
-        );
-  }
-  battleRenderCache = { session, key: moveRenderKey, locked: ctx.locked };
-  bindBattleChoiceContext(session);
-  const switchButton = screen.querySelector('[data-action="open-switch"]');
-  switchButton.disabled =
-    ctx.locked ||
-    (ctx.battleSession.mode === 'tutorial' && ctx.battleSession.tutorialStep < 3) ||
-    !getLegalActions(state, 'player').some((action) => action.type === 'switch');
-  if (!ctx.locked && switchFocusAfterUnlock) {
-    const focusTarget = screen.querySelector(switchFocusAfterUnlock);
-    switchFocusAfterUnlock = null;
-    focusTarget?.focus();
-  }
-  switchButton.onclick = () => openSwitch();
-  const speedButton = screen.querySelector('[data-action="battle-speed"]');
-  speedButton.textContent = `×${ctx.save.battleSpeed}`;
-  speedButton.setAttribute('aria-pressed', String(ctx.save.battleSpeed === 2));
-  speedButton.setAttribute('aria-label', t('battle.speedLabel', { speed: ctx.save.battleSpeed }));
-  const mute = screen.querySelector('[data-action="toggle-mute"]');
-  mute.textContent = ctx.save.muted ? '🔇' : '🔊';
-  mute.setAttribute('aria-pressed', String(ctx.save.muted));
-  const commandButton = screen.querySelector('[data-action="trainer-command"]');
-  if (commandButton) {
-    const used = state.sides.player.commandUsed,
-      available = canUseTrainerCommand(state, 'player'),
-      disabled = ctx.locked || !available;
-    commandButton.disabled = disabled;
-    commandButton.classList.toggle('used', used);
-    commandButton.innerHTML = `<span>${used ? '✓' : '⚑'}</span><small>${used ? t('battle.commandUsed') : t('command.coach')}</small>`;
-    if (disabled && !used) {
-      const unavailable = t('command.unavailable');
-      commandButton.title = unavailable;
-      commandButton.setAttribute('aria-label', unavailable);
-    } else {
-      commandButton.title = t('command.effect.coach');
-      commandButton.setAttribute('aria-label', used ? t('battle.commandUsed') : t('battle.command'));
-    }
-  }
+  void patchFighters(view);
+  renderCommands();
   renderTutorialTip();
-  route.syncBattleAnimationSpeed?.();
+  restoreCommandFocus();
 }
 
 function renderTutorialTip() {
   const root = screen.querySelector('#tutorial-root');
-  if (!root || ctx.battleSession.mode !== 'tutorial') {
-    if (root) root.innerHTML = '';
+  if (!root) return;
+  if (ctx.battleSession.mode !== 'tutorial') {
+    root.replaceChildren();
     return;
   }
   const step = Math.min(4, ctx.battleSession.tutorialStep);
-  root.innerHTML = `<div class="tutorial-tip"><strong>${t('tutorial.title')}</strong><br>${t(`tutorial.${step + 1}`)} ${step < 4 ? `<button class="subtle-btn" data-action="skip-tutorial">${t('app.skip')}</button>` : ''}</div>`;
+  root.innerHTML = `<div class="tutorial-tip">${icon('school')}<p><strong>${escapeHtml(t('tutorial.title'))}</strong> ${escapeHtml(t(`tutorial.${step + 1}`))}</p>${step < 4 ? `<button type="button" class="subtle-btn" data-action="skip-tutorial">${escapeHtml(t('app.skip'))}</button>` : ''}</div>`;
   root.querySelector('[data-action="skip-tutorial"]')?.addEventListener('click', completeTutorial);
 }
 
-function closeSwitch({ restoreFocus = true, focusAfterUnlock = false } = {}) {
-  const root = screen.querySelector('#replacement-root');
-  if (!root?.querySelector('.replacement-card')) return false;
-  root.innerHTML = '';
-  syncArenaPause();
-  const opener = switchOpener;
-  switchOpener = null;
-  if (focusAfterUnlock && opener?.dataset) {
-    switchFocusAfterUnlock = opener.dataset.move
-      ? `[data-move="${opener.dataset.move}"]`
-      : opener.dataset.action
-        ? `[data-action="${opener.dataset.action}"]`
-        : null;
-  }
-  if (restoreFocus && opener?.isConnected) opener.focus();
-  return true;
-}
-
-function openSwitch(relayMoveId = null) {
-  if (ctx.locked) return;
-  const returnFocus = relayMoveId
-    ? screen.querySelector(`[data-move="${relayMoveId}"]`)
-    : screen.querySelector('[data-action="open-switch"]');
-  const state = ctx.battleSession.state,
-    legal = getLegalActions(state, 'player'),
-    foe = activeOf(state, 'enemy'),
-    options = legal
-      .filter((action) =>
-        relayMoveId
-          ? action.type === 'move' && action.moveId === relayMoveId
-          : action.type === 'switch' || action.type === 'replace'
-      )
-      .map((action) => {
-        const index = relayMoveId ? action.allyIndex : action.index;
-        return { c: state.sides.player.team[index], index };
-      }),
-    plan =
-      !relayMoveId && !state.sides.player.pendingReplacement && ctx.battleSession.difficulty === 'apprentice'
-        ? enemyPlan()
-        : null;
-  if (!options.length) return;
-  switchOpener = returnFocus;
-  const forecastFor = (index) => {
-    if (!plan) return null;
-    if (plan.type === 'switch') return { icon: '↺', text: t('battle.switchIncomingSwitch'), lethal: false };
-    if (MOVES[plan.moveId]?.kind !== 'damage')
-      return { icon: '✦', text: t('battle.switchIncomingTactic'), lethal: false };
-    const incoming = previewIncomingAfterSwitch(state, 'player', index, plan.moveId);
-    if (!incoming) return null;
-    if (!ctx.save.expertMode)
-      return {
-        icon: '⚔',
-        text: t('battle.switchIncomingAttack'),
-        lethal: false,
-        read: incoming.perfectRelay,
-      };
-    return {
-      icon: incoming.lethal ? '☠' : '⚔',
-      lethal: incoming.lethal,
-      read: incoming.perfectRelay,
-      text: incoming.miss
-        ? t('battle.switchIncomingMiss')
-        : incoming.lethal
-          ? t('battle.switchIncomingKo')
-          : incoming.absorbed
-            ? t('battle.switchIncomingShield', { damage: incoming.damage, shield: incoming.absorbed })
-            : t('battle.switchIncoming', { damage: incoming.damage }),
-    };
-  };
-  const scouted = options.map(({ c, index }) => {
-      const mult = affinityMultiplier(c.affinity, foe.affinity),
-        incoming = affinityMultiplier(foe.affinity, c.affinity),
-        forecast = relayMoveId
-          ? {
-              icon: '✦',
-              text: t('battle.relayProtected'),
-              protected: true,
-              ...previewAllySwitch(state, 'player', index, relayMoveId),
-            }
-          : forecastFor(index),
-        score =
-          (mult > 1 ? 24 : mult < 1 ? -8 : 0) +
-          (incoming < 1 ? 18 : incoming > 1 ? -20 : 0) +
-          (c.hp / c.maxHp) * 12 +
-          c.barrier * 0.18 +
-          (forecast?.read ? 38 : 0) -
-          (forecast?.lethal ? 90 : ((forecast?.damage || 0) / c.maxHp) * 36);
-      return { c, index, mult, forecast, score };
-    }),
-    recommended = scouted.slice().sort((a, b) => b.score - a.score || a.index - b.index)[0]?.index;
-  const optionHtml = scouted
-    .map(({ c, index, mult, forecast }) => {
-      const match = mult > 1 ? 'good' : mult < 1 ? 'risky' : 'neutral',
-        passive = PASSIVES[c.passive],
-        statusIds = ctx.save.expertMode ? sortStatusIds(Object.keys(c.statuses)) : [],
-        statusNames = statusIds.map((id) => t(`status.${id}`)).join(', '),
-        statuses = statusIds.length
-          ? `<span class="switch-statuses" aria-hidden="true">${statusIds.map((id) => statusBadgeHtml(id, { compact: true, className: 'switch-status', title: escapeHtml(t(`status.${id}`)) })).join('')}</span><span class="visually-hidden switch-status-names">${escapeHtml(statusNames)}</span>`
-          : '';
-      return `<button class="switch-option matchup-${match} ${forecast?.read ? 'perfect-read' : ''} ${forecast?.protected ? 'protected-relay' : ''} ${index === recommended ? 'recommended' : ''}" data-switch-index="${index}">${index === recommended ? `<b class="switch-recommended">★ ${t('battle.switchRecommended')}</b>` : ''}<div class="switch-portrait"><img src="${sprite(c.id)}" alt=""><i style="--switch-color:${AFFINITIES[c.affinity].color}">${affinityIcon(c.affinity)}</i></div><strong>${creatureName(c.id)}</strong><span>${c.hp}/${c.maxHp} PV${c.barrier ? ` · +${c.barrier} ⬡` : ''}</span><small class="class-chip" style="--class-color:${CLASSES[c.classId].color}">${classIcon(c.classId)} ${className(c.classId)}</small>${relayMoveId ? '' : `<small class="switch-match ${match}">${mult > 1 ? '↑ ' + t('battle.switchGood') : mult < 1 ? '↓ ' + t('battle.switchRisky') : '◆ ' + t('battle.switchNeutral')}</small>`}${forecast ? `<em class="switch-incoming ${forecast.lethal ? 'lethal' : ''}">${forecast.icon} ${forecast.text}</em>` : ''}${forecast?.read ? `<em class="perfect-read-bonus">↺ ${t('battle.switchRead')}</em>` : ''}<small class="switch-passive" ${ctx.save.expertMode ? `title="${escapeHtml(t(`passive.effect.${c.passive}`))}"` : ''}>${passive.icon} ${t(`passive.${c.passive}`)}</small>${statuses}</button>`;
-    })
-    .join('');
-  const switchBonusKey = state.modifiers?.includes('relay_fever')
-    ? 'battle.switchBonusFever'
-    : 'battle.switchBonus';
-  screen.querySelector('#replacement-root').innerHTML =
-    `<div class="replacement ${relayMoveId ? 'signature-relay' : ''}"><section class="glass-panel replacement-card"><span class="eyebrow">${relayMoveId ? t('move.immaculate_relay') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchForecast')}</span><h2>${relayMoveId ? t('battle.relayChoose') : state.sides.player.pendingReplacement ? t('battle.chooseReplacement') : t('battle.switchTitle')}</h2><p>${relayMoveId ? t('battle.relayHint') : state.sides.player.pendingReplacement ? t('battle.replacementHint') : t('battle.switchHint')}</p><div class="replacement-options">${optionHtml}</div>${!state.sides.player.pendingReplacement ? `${relayMoveId ? '' : `<div class="switch-bonus">✦ ${t(switchBonusKey)}</div>`}${actionButton(t('battle.cancel'), 'cancel-switch', 'subtle-btn')}` : ''}</section></div>`;
-  const replacementCard = screen.querySelector('.replacement-card'),
-    replacementTitle = replacementCard?.querySelector('h2');
-  replacementCard?.setAttribute('role', 'dialog');
-  replacementCard?.setAttribute('aria-modal', 'true');
-  replacementTitle?.setAttribute('id', 'replacement-title');
-  replacementCard?.setAttribute('aria-labelledby', 'replacement-title');
-  screen
-    .querySelectorAll('.switch-option>span')
-    .forEach((label) => (label.textContent = label.textContent.replace(/\bPV\b/, t('battle.hpUnit'))));
-  screen.querySelectorAll('[data-switch-index]').forEach((button) =>
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      closeSwitch({
-        restoreFocus: !state.sides.player.pendingReplacement,
-        focusAfterUnlock: !state.sides.player.pendingReplacement,
-      });
-      const index = Number(button.dataset.switchIndex);
-      if (relayMoveId) handlePlayerAction({ type: 'move', moveId: relayMoveId, allyIndex: index });
-      else if (state.sides.player.pendingReplacement) handleReplacement(index);
-      else handlePlayerAction({ type: 'switch', index });
-    })
-  );
-  screen.querySelector('[data-action="cancel-switch"]')?.addEventListener('click', () => closeSwitch());
-  syncArenaPause();
-  screen.querySelector('[data-switch-index]')?.focus();
-}
+/* ------------------------------------------------------------------- turns */
 
 function claimBattleLock() {
   if (ctx.locked) return false;
@@ -973,7 +677,6 @@ async function handleTrainerCommand() {
     await playEvents(result.events);
     if (!sessionIsActive(session)) return;
     ctx.locked = false;
-    session.lastLine = t('battle.yourTurn');
     refreshBattle();
   } catch (error) {
     if (sessionIsActive(session)) ctx.locked = false;
@@ -981,12 +684,14 @@ async function handleTrainerCommand() {
   }
 }
 
-async function handlePlayerAction(action) {
+// `sheetClosed`: the exit of the sheet the action was picked from; the lock is claimed at once, the
+// turn plays once the sheet has left the stage.
+async function handlePlayerAction(action, sheetClosed = null) {
   if (!claimBattleLock()) return;
   const session = ctx.battleSession;
   try {
     refreshBattle();
-    await sound.unlock();
+    await Promise.all([sound.unlock(), sheetClosed]);
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
       tutorialStep = session.tutorialStep;
@@ -998,16 +703,6 @@ async function handlePlayerAction(action) {
       else if (tutorialStep === 2 && action.moveId === 'oracle_veil') session.tutorialStep = 3;
       else if (tutorialStep === 3 && action.type === 'switch') session.tutorialStep = 4;
     }
-    if (
-      action?.type === 'move' &&
-      MOVES[action.moveId]?.signature &&
-      enemyAction?.type === 'move' &&
-      MOVES[enemyAction.moveId]?.signature
-    )
-      session.committedClash = {
-        left: { creatureId: activeOf(session.state, 'player').id, moveId: action.moveId },
-        right: { creatureId: activeOf(session.state, 'enemy').id, moveId: enemyAction.moveId },
-      };
     const result = resolveTurn(session.state, action, enemyAction);
     session.state = result.state;
     beginPresentation(session, preTurnState);
@@ -1015,15 +710,13 @@ async function handlePlayerAction(action) {
     if (!sessionIsActive(session)) return;
     if (session.state.phase === 'ended') {
       ctx.locked = false;
+      releaseWakeLock();
       finishBattle();
       return;
     }
     await resolvePendingReplacements(session);
     if (!sessionIsActive(session)) return;
-    if (session.state.phase !== 'ended') {
-      session.lastLine = t('battle.yourTurn');
-      refreshBattle();
-    }
+    if (session.state.phase !== 'ended') refreshBattle();
   } catch (error) {
     if (sessionIsActive(session)) ctx.locked = false;
     throw error;
@@ -1045,7 +738,6 @@ async function resolvePendingReplacements(session = ctx.battleSession) {
   }
   if (state.sides.player.pendingReplacement) {
     ctx.locked = false;
-    session.lastLine = t('battle.chooseReplacement');
     refreshBattle();
     openSwitch();
     return;
@@ -1053,11 +745,12 @@ async function resolvePendingReplacements(session = ctx.battleSession) {
   ctx.locked = false;
 }
 
-async function handleReplacement(index) {
+async function handleReplacement(index, sheetClosed = null) {
   if (!claimBattleLock()) return;
   const session = ctx.battleSession;
   try {
     refreshBattle();
+    await sheetClosed;
     if (!sessionIsActive(session)) return;
     const preTurnState = structuredClone(session.state),
       result = applyReplacement(session.state, 'player', { type: 'replace', index });
@@ -1077,15 +770,16 @@ async function handleReplacement(index) {
 registerRoutes({
   startBattle,
   renderBattle,
+  openBattlePause,
+  setBattleMuted,
   openBattleCodex,
   openBattleLog,
   openPlateDetails,
-  closeBattleOverlay,
   battleEntrance,
   refreshBattle,
+  patchFighters,
   renderTutorialTip,
   openSwitch,
-  closeSwitch,
   handleTrainerCommand,
   handlePlayerAction,
   resolvePendingReplacements,

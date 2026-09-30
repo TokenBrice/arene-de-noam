@@ -1,7 +1,9 @@
-/* Battle spectacle: one semantic engine event drives a layered, affinity-specific
-   visual. These elements never decide damage and are discarded after each beat.
-   Everything that moves here animates transform/opacity only: flights translate
-   by the --fx-dx/--fx-dy vector that beginMoveFx computes once per move. */
+/* Move Theater spectacle (bestiary, docs/battle-presentation.md §8.5) and the battle's #fx-text
+   readouts. The theater keeps its DOM fighters and this archetype scaffold: one move drives a
+   layered, affinity-tinted visual on its #fx-stage (the `move-<id>` class stays as a hook). Battles
+   draw their effects on the GPU FX layer (src/presentation/fx-layer.js) and only their text lives
+   here. Everything that moves animates transform/opacity only: theater flights translate by the
+   --fx-dx/--fx-dy vector that beginMoveFx computes once per replay. */
 .fx-stage {
   position: absolute;
   z-index: 3;
@@ -143,12 +145,10 @@
 .tactical-fx .fx-impact {
   opacity: 1;
 }
-/* At the hit (or on a barrier) the projectile and trail are gone at once:
-   !important beats the forwards fill of their flight animations. */
+/* At the hit the projectile and trail are gone at once: !important beats the forwards fill of
+   their flight animations. */
 .fx-stage.impact .fx-projectile,
-.fx-stage.impact .fx-trail,
-.fx-stage.landed .fx-projectile,
-.fx-stage.landed .fx-trail {
+.fx-stage.impact .fx-trail {
   opacity: 0 !important;
 }
 /* The impact burst waits for the hit: its animations start with .impact, not
@@ -252,17 +252,10 @@
   height: 100%;
 }
 
-/* --- Impact readouts. Numbers, stamps and callouts live on .fx-readouts,
-   outside the stage camera and never rebuilt. Each node starts its own
-   animation at the hit, stays readable (≥ 0.9 opacity for ≥ 450 ms at ×1) and
-   removes itself when that animation ends. Every box has a fixed width and is
-   clamped 8 px inside the stage, so nothing is clipped at 360 px. Text is
-   white with a hard 0-blur outline: no glow blur. --- */
+/* --- Move Theater readouts: its damage number rides .fx-readouts next to its #fx-stage and
+   removes itself when its animation ends (battles use #fx-text below). --- */
 .fx-readouts {
-  --ink: #160c26;
-  --ink-ring:
-    0 3px 0 var(--ink), 2px 2px 0 var(--ink), -2px 2px 0 var(--ink), 2px -2px 0 var(--ink),
-    -2px -2px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink);
+  --outline: #160c26;
   position: absolute;
   z-index: 4;
   inset: 0;
@@ -272,199 +265,50 @@
 .fx-readout {
   --ax: 50%;
   --ay: 50%;
-  --half: 60px;
-  --h: 44px;
-  --ox: 0px;
-  --oy: 0px;
+  --half: 64px;
+  --h: 46px;
   --box: min(var(--half), 50% - 8px);
   position: absolute;
-  left: clamp(calc(8px + var(--box)), calc(var(--ax) + var(--ox)), calc(100% - 8px - var(--box)));
-  top: clamp(20px, calc(var(--ay) + var(--oy)), calc(100% - 10px - var(--h)));
+  left: clamp(calc(8px + var(--box)), var(--ax), calc(100% - 8px - var(--box)));
+  top: clamp(20px, calc(var(--ay) + var(--number-y)), calc(100% - 10px - var(--h)));
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   width: calc(2 * var(--box));
   height: var(--h);
   margin-left: calc(-1 * var(--box));
   color: #fff;
-  font-weight: 1000;
-  line-height: 1;
-  text-align: center;
+  font: 800 34px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   white-space: nowrap;
-  text-shadow: var(--ink-ring);
+  text-shadow:
+    0 3px 0 var(--outline),
+    2px 2px 0 var(--outline),
+    -2px 2px 0 var(--outline),
+    2px -2px 0 var(--outline),
+    -2px -2px 0 var(--outline);
+  animation: readoutPop 0.82s cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
-/* Each side reserves one slot per readout kind, so two readouts never share a
-   box: the stamp band (K.O., "Bloqué !", effectiveness and dodge callouts)
-   sits above the head, numbers sit on the body and cascade down (--stack
-   0–2), and the multi-hit counter sits level with the first number on the
-   stage-centre side (--toward), clear of the number column. fx.js retires the
-   previous hit's stamp band when a newer hit lands. */
 .fx-readout.side-player {
   --ax: 23%;
   --ay: 68%;
-  --toward: 1;
-  --stamp-y: -122px;
   --number-y: -54px;
 }
 .fx-readout.side-enemy {
   --ax: 77%;
   --ay: 30%;
-  --toward: -1;
-  --stamp-y: -86px;
   --number-y: -20px;
 }
-.fx-number {
-  --half: 64px;
-  --h: 46px;
-  --oy: calc(var(--number-y) + var(--stack, 0) * 32px);
-  font-size: 34px;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  animation: readoutPop 0.82s cubic-bezier(0.2, 0.9, 0.25, 1) both;
-}
-.fx-number.strong {
+.fx-readout.strong {
   font-size: 40px;
 }
-.fx-number small {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -12px;
-  color: #ffe47a;
-  font-size: 13px;
-  letter-spacing: 0.12em;
-}
-/* Heals and barriers read clearly but never out-shout a hit. */
-.fx-number.heal,
-.fx-number.barrier {
-  --oy: calc(var(--number-y) + 6px + var(--stack, 0) * 28px);
-  font-size: 26px;
-}
-.fx-number.heal {
-  color: #b9ffcf;
-}
-.fx-number.barrier {
-  color: #c4f4ff;
-}
-.fx-number.barrier.loss {
-  color: #9ccde0;
-}
-.fx-number.barrier::after {
-  content: '';
-  width: 0.6em;
-  height: 0.68em;
-  padding: 2px;
-  background:
-    linear-gradient(currentColor 0 0) content-box,
-    var(--ink);
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-}
-/* Stamps: K.O. and a fully absorbed hit, in the stamp band. */
-.fx-stamp.ko {
-  --half: 100px;
-  --h: 72px;
-  --oy: var(--stamp-y);
-  color: #fff3a1;
-  font-size: clamp(42px, 12vw, 72px);
-  font-style: italic;
-  letter-spacing: -0.02em;
-  text-shadow:
-    var(--ink-ring),
-    5px 5px 0 #d92d67,
-    -4px -4px 0 #5439c6;
-  animation: stampKo 1.05s cubic-bezier(0.15, 0.8, 0.2, 1) both;
-}
-.fx-stamp.blocked {
-  --half: 100px;
-  --h: 42px;
-  --oy: var(--stamp-y);
-  animation: readoutPop 0.82s cubic-bezier(0.2, 0.9, 0.25, 1) both;
-}
-.fx-stamp.blocked span,
-.fx-callout span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  border: 2px solid currentColor;
-  border-radius: 999px;
-  background: #150d27;
-  font-size: 20px;
-  letter-spacing: 0.01em;
-  text-shadow: none;
-}
-.fx-stamp.blocked span {
-  padding-left: 10px;
-  color: #bdf2ff;
-  background: #0b1a2e;
-  font-size: 22px;
-}
-.fx-stamp.blocked span::before {
-  content: '';
-  width: 18px;
-  height: 21px;
-  background: linear-gradient(160deg, #fff, #8fe9ff 55%, #3d7fa8);
-  clip-path: polygon(50% 0, 100% 16%, 94% 62%, 50% 100%, 6% 62%, 0 16%);
-}
-/* Callouts: effectiveness and dodge, ~20 px on a solid dark pill, in the
-   stamp band (a lethal or fully blocked hit shows its stamp instead). */
-.fx-callout {
-  --half: 128px;
-  --h: 38px;
-  --oy: calc(var(--stamp-y) + 2px);
-  animation: calloutPop 0.9s cubic-bezier(0.15, 0.8, 0.2, 1) both;
-}
-.affinity-callout.effective {
-  color: #ffe066;
-}
-.affinity-callout.weak {
-  color: #a9dcff;
-}
-.whiff-callout.fx-callout {
-  color: #b8ecff;
-}
-/* Multi-hit counter: level with the first number, one number-width toward
-   the stage centre. */
-.hit-chain {
-  --half: 40px;
-  --h: 38px;
-  --ox: calc(108px * var(--toward));
-  --oy: calc(var(--number-y) + 4px);
-  align-items: baseline;
-  gap: 1px;
-  font-style: italic;
-  text-shadow:
-    var(--ink-ring),
-    4px 4px 0 #432464;
-  animation: hitChainPop 0.7s cubic-bezier(0.12, 0.85, 0.2, 1) both;
-}
-.hit-chain b {
-  font-size: 30px;
-}
-.hit-chain small {
-  font-size: 13px;
-}
-.hit-chain.final {
-  color: #fff49a;
-}
 @media (max-width: 600px) {
-  .fx-number {
+  .fx-readout {
     font-size: 30px;
   }
-  .fx-number.strong {
+  .fx-readout.strong {
     font-size: 34px;
-  }
-  .fx-number.heal,
-  .fx-number.barrier {
-    font-size: 22px;
-  }
-  .fx-callout span {
-    padding: 5px 12px;
-    font-size: 19px;
-  }
-  .fx-stamp.blocked span {
-    font-size: 20px;
   }
 }
 .multi-hit-impact .fx-impact::after {
@@ -489,69 +333,6 @@
   100% {
     opacity: 0;
     transform: translateY(-16px) scale(0.96);
-  }
-}
-@keyframes stampKo {
-  0% {
-    opacity: 0;
-    transform: scale(0.25) rotate(-14deg);
-  }
-  14% {
-    opacity: 1;
-    transform: scale(1.22) rotate(4deg);
-  }
-  26% {
-    transform: scale(1) rotate(-3deg);
-  }
-  84% {
-    opacity: 1;
-    transform: scale(1) rotate(-3deg);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.06) rotate(-3deg);
-  }
-}
-@keyframes calloutPop {
-  0% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.7);
-  }
-  16% {
-    opacity: 1;
-    transform: translateY(0) scale(1.08);
-  }
-  28% {
-    transform: translateY(0) scale(1);
-  }
-  82% {
-    opacity: 1;
-    transform: translateY(-3px) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-10px) scale(1);
-  }
-}
-@keyframes hitChainPop {
-  0% {
-    opacity: 0;
-    transform: translateY(13px) rotate(13deg) scale(0.45);
-  }
-  20% {
-    opacity: 1;
-    transform: translateY(0) rotate(4deg) scale(1.16);
-  }
-  32% {
-    transform: translateY(0) rotate(7deg) scale(1);
-  }
-  78% {
-    opacity: 1;
-    transform: translateY(0) rotate(7deg) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-12px) rotate(7deg) scale(1);
   }
 }
 /* Reduced motion: readouts fade in place, same lifetime. */
@@ -768,41 +549,8 @@ body.reduced-motion .fx-readout {
 .tactical-fx.status-application .fx-core {
   animation: statusApplyCore 0.55s cubic-bezier(0.12, 0.8, 0.2, 1) forwards;
 }
-.tactical-fx.status-remove .fx-core {
-  animation: statusRemoveCore 0.42s ease-in forwards;
-}
-.tactical-burning.status-application .fx-core,
-.status-tick-fx.status-burning .status-tick-icon {
+.tactical-burning.status-application .fx-core {
   animation: statusFxBurningPulse 0.7s ease-out forwards;
-}
-.status-tick-icon {
-  position: absolute;
-  z-index: 1;
-  left: 0;
-  top: 0;
-  display: grid;
-  place-items: center;
-  width: 70px;
-  height: 70px;
-  margin: -35px;
-  border: 2px solid var(--fx-color);
-  border-radius: 18px;
-  color: #07091d;
-  background: color-mix(in srgb, var(--fx-color) 80%, transparent);
-  opacity: 0.6;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fx-color) 35%, transparent);
-}
-.status-tick-icon.light-ink {
-  color: #fff;
-}
-.status-tick-icon .status-icon {
-  width: 42px;
-  height: 42px;
-}
-.status-tick-fx .fx-impact {
-  left: var(--from-x);
-  top: var(--from-y);
-  opacity: 1;
 }
 .tactical-guarded .fx-impact::before {
   border: 5px solid var(--fx-color);
@@ -821,44 +569,15 @@ body.reduced-motion .fx-readout {
   font-size: 42px;
 }
 
-/* Cinematic dim: no filter on the WebGL canvas. The vignette overlay gains a
-   flat dark layer instead (same dim as the old brightness(0.78)/(0.58)). */
-.battle-screen.cinematic .arena-canvas {
-  transform: scale(1.018);
-}
-.battle-screen.cinematic-signature .arena-canvas {
-  transform: scale(1.045);
-}
-.battle-screen.cinematic .battle-vignette {
-  background:
-    linear-gradient(#0009, transparent 28%, transparent 65%, #000),
-    radial-gradient(circle at center, transparent 35%, #000c), linear-gradient(#02041038, #02041038);
-}
-.battle-screen.cinematic-signature .battle-vignette {
-  background:
-    linear-gradient(#0009, transparent 28%, transparent 65%, #000),
-    radial-gradient(circle at center, transparent 35%, #000c), linear-gradient(#0204106b, #0204106b);
-}
-.fighter.windup img {
+.theater-battlefield .fighter.windup img {
   animation: fxCreatureWindup 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   filter: brightness(1.25);
 }
-.fighter.hit img {
-  animation: fxCreatureHit 0.45s cubic-bezier(0.1, 0.8, 0.2, 1) !important;
-}
-.action-line.epic {
-  font-size: 18px;
-  color: #fff7c6;
-  border-color: var(--gold);
-  box-shadow: 0 0 28px #ffca5555;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-/* Hit-stop freezes only the FX stage and the two fighters. */
+/* Hit-stop freezes only the theater stage and its two fighters. */
 .fx-stage.hit-stop,
 .fx-stage.hit-stop *,
-.fighter.hit-stop,
-.fighter.hit-stop img {
+.theater-battlefield .fighter.hit-stop,
+.theater-battlefield .fighter.hit-stop img {
   animation-play-state: paused !important;
 }
 
@@ -985,28 +704,6 @@ body.reduced-motion .fx-readout {
     transform: translate(12%, -5%) scale(1.04);
   }
 }
-@keyframes fxCreatureHit {
-  0% {
-    transform: translate(0) scale(1);
-    filter: brightness(1);
-  }
-  14% {
-    transform: translate(-8%, 2%) scale(1.12, 0.82);
-    filter: brightness(4);
-  }
-  36% {
-    transform: translate(7%, -2%) scale(0.9, 1.1);
-    filter: brightness(1.5);
-  }
-  62% {
-    transform: translate(-2%, 1%) scale(1.03, 0.96);
-    filter: brightness(1.15);
-  }
-  100% {
-    transform: translate(0) scale(1);
-    filter: brightness(1);
-  }
-}
 
 @media (max-width: 600px) {
   .signature .fx-impact {
@@ -1017,9 +714,6 @@ body.reduced-motion .fx-readout {
     width: 110px;
     height: 110px;
     margin: -55px;
-  }
-  .action-line.epic {
-    font-size: 13px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1034,17 +728,10 @@ body.reduced-motion .fx-readout {
   .fx-ring {
     animation: fxReduced 0.2s ease forwards;
   }
-  .battle-screen.cinematic .arena-canvas,
-  .battle-screen.cinematic-signature .arena-canvas {
-    transform: none;
-  }
-  .fighter.windup img,
-  .fighter.attacking img,
-  .fighter.hit img {
+  .theater-battlefield .fighter.windup img {
     animation: fxReduced 0.2s ease !important;
   }
-  .tactical-fx .fx-core,
-  .status-tick-icon {
+  .tactical-fx .fx-core {
     animation: none !important;
     transform: none;
     opacity: 1;
@@ -1058,19 +745,12 @@ body.reduced-motion .fx-impact::after,
 body.reduced-motion .fx-particle {
   display: none;
 }
-body.reduced-motion .battle-screen.cinematic .arena-canvas,
-body.reduced-motion .battle-screen.cinematic-signature .arena-canvas {
-  transform: none;
-}
-body.reduced-motion .tactical-fx .fx-core,
-body.reduced-motion .status-tick-icon {
+body.reduced-motion .tactical-fx .fx-core {
   animation: none !important;
   transform: none;
   opacity: 1;
 }
-body.reduced-motion .fighter.windup img,
-body.reduced-motion .fighter.attacking img,
-body.reduced-motion .fighter.hit img {
+body.reduced-motion .theater-battlefield .fighter.windup img {
   animation: fxReduced 0.2s ease !important;
 }
 @keyframes statusApplyCore {
@@ -1087,16 +767,6 @@ body.reduced-motion .fighter.hit img {
     transform: scale(1) translateY(0);
   }
 }
-@keyframes statusRemoveCore {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.45);
-  }
-}
 @keyframes statusFxBurningPulse {
   45% {
     transform: translateY(-7px) scale(1.12);
@@ -1111,14 +781,11 @@ body.reduced-motion .fighter.hit img {
   }
 }
 
-/* --- Visual archetypes (plan §4.1): the fifty-four moves without bespoke
-   .move-<id> styling share one of nine choreographies via the visual-<arch>
-   class on the FX root. Each archetype re-times and re-shapes the shared
-   scaffolding (projectile, trail, rings, particles, impact); the per-move
-   .fx-detail identity layer in battle-presentation.css stays untouched.
-   Extra bodies (slashes, pillars, drops, dash ghost) are built by beginMoveFx
-   and, except for self-targeted moves, gated on the .impact class so they land
-   exactly with the damage moment. --- */
+/* --- Visual archetypes: the theater moves that data/moves.js maps to one of nine
+   choreographies get the visual-<arch> class on the FX root. Each archetype re-times and
+   re-shapes the shared scaffolding (projectile, trail, rings, particles, impact). Extra bodies
+   (slashes, pillars, drops, dash ghost) are built by beginMoveFx and, except for self-targeted
+   moves, gated on the .impact class so they land exactly with the damage moment. --- */
 .fx-arch {
   position: absolute;
   inset: 0;
@@ -1511,1098 +1178,344 @@ body.reduced-motion .visual-veil .fx-source-aura .fx-ring {
   border: 2px solid var(--fx-color);
   opacity: 0;
 }
-/* Orakyn: clean divination geometry, crescents, and measured timing. */
-.move-lucid_arc .fx-projectile {
-  clip-path: polygon(0 8%, 38% 50%, 0 92%, 48% 78%, 100% 50%, 48% 22%);
-  background: linear-gradient(90deg, transparent, #fff, var(--fx-color));
-  border-radius: 0;
-}
-.move-lucid_arc .fx-projectile span {
-  display: none;
-}
-.move-lucid_arc .fx-detail > i {
-  border-radius: 50%;
-  border-width: 2px 0 2px 5px;
-  animation: oracleMarks 0.48s ease calc(var(--detail) * 35ms) forwards;
-}
-.move-slowing_riddle .fx-projectile b {
-  font-size: 0;
-}
-.move-slowing_riddle .fx-projectile b::after {
-  content: '?';
-  font-size: 44px;
-}
-.move-slowing_riddle .fx-detail > i {
-  left: var(--to-x);
-  top: var(--to-y);
-  border-radius: 20%;
-  animation: riddleOrbit 0.68s ease calc(var(--detail) * 45ms) forwards;
-}
-.move-oracle_veil .fx-detail > i {
-  width: 75px;
-  height: 120px;
-  margin: -60px -38px;
-  border: 5px solid var(--fx-color);
-  border-left-color: transparent;
-  border-radius: 50%;
-  animation: veilRise 0.65s ease calc(var(--detail) * 40ms) forwards;
-}
-/* Kordane: bracer-first impacts, weight, and fractures. */
-.move-crystal_strike .fx-projectile {
-  clip-path: none;
-  background: none;
-}
-.move-crystal_strike .fx-projectile::before,
-.move-crystal_strike .fx-projectile::after {
-  content: '';
+
+/* --- #fx-text readouts (docs/battle-presentation.md §11.3; director.js). Pooled nodes: per side
+   three readout blocks and one K.O. stamp, one bench-ally chip. A block is one readout — the
+   beat's single stamp pill over its number and chain counter ("−31 ×3"), small tags underneath —
+   placed by the director beside the creature's visible outline (clamped 8 px inside
+   .battle-stage, which clips) and animated with WAAPI (transform/opacity): it pops in, holds and
+   bows out when the next beat starts. The layer and its resting nodes are hidden: only a showing
+   readout (and a shown banner) paints, so neither the empty layer nor an idle node becomes an
+   overlap layer above the canvas (§14: ≤ 16 composited layers during FX). Numbers are
+   Pokémon-plain: display face, white, a hard 0-blur outline; meaning rides on colour and on the
+   solid stamp pill, never on glow. --- */
+.fx-text {
   position: absolute;
-  width: 47px;
-  height: 58px;
-  background: linear-gradient(135deg, #fff, var(--fx-color) 42%, #40345f);
-  clip-path: polygon(50% 0, 100% 32%, 82% 100%, 18% 100%, 0 32%);
-  transform: translateX(-24px) rotate(25deg);
+  z-index: 4;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
-.move-crystal_strike .fx-projectile::after {
-  transform: translateX(24px) rotate(-25deg);
-}
-.move-crystal_strike .fx-detail > i {
-  clip-path: polygon(50% 0, 100% 100%, 0 72%);
-  background: var(--fx-color);
-  animation: bracerShard 0.48s ease calc(var(--detail) * 22ms) forwards;
-}
-.move-fault_charge .fx-projectile {
-  clip-path: polygon(0 40%, 28% 8%, 62% 30%, 100% 50%, 62% 70%, 28% 92%);
-  background: linear-gradient(90deg, #fff, var(--fx-color), #422a20);
-}
-.move-fault_charge .fx-detail > i {
-  left: calc(18% + var(--detail) * 12%);
-  top: 72%;
-  width: 55px;
-  height: 8px;
-  border: 0;
-  border-top: 5px solid var(--fx-color);
-  transform: rotate(calc((var(--detail) - 2) * 9deg));
-  animation: groundFracture 0.55s ease calc(var(--detail) * 30ms) forwards;
-}
-.move-resonant_focus .fx-detail > i {
-  width: calc(38px + var(--detail) * 13px);
-  height: calc(38px + var(--detail) * 13px);
-  margin: calc(-19px - var(--detail) * 6px);
-  border-style: dashed;
-  border-radius: 50%;
-  animation: resonancePulse 0.7s ease calc(var(--detail) * 55ms) forwards;
-}
-/* Farfombre: the lantern fires, while its detached shadow arrives elsewhere. */
-.move-shade_spark .fx-projectile {
-  border-radius: 50% 50% 50% 8%;
-  background: radial-gradient(circle at 45% 42%, #fff8a8 0 8%, #ffb53d 12%, var(--fx-color) 34%, #140d25 72%);
-}
-.move-shade_spark .fx-detail > i {
-  border: 0;
-  border-radius: 50% 50% 50% 0;
-  background: var(--fx-color);
-  animation: lanternWisp 0.7s ease calc(var(--detail) * 45ms) forwards;
-}
-.move-crooked_glimmer .fx-projectile {
-  background: linear-gradient(140deg, #120d25, var(--fx-color));
-  clip-path: polygon(10% 0, 82% 16%, 100% 74%, 52% 100%, 0 72%);
-}
-.move-crooked_glimmer .fx-detail::before {
-  content: '◉  ◉';
+.fx-text > .fx-number,
+.fx-text > .fx-stamp,
+.fx-text > .fx-ally {
   position: absolute;
-  left: var(--to-x);
-  top: var(--to-y);
-  transform: translate(-50%, -50%);
-  color: #ffe76a;
-  font-size: 26px;
-  letter-spacing: 18px;
-  text-shadow: 0 0 14px var(--fx-color);
-  animation: shadowEyes 0.7s steps(2) forwards;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  white-space: nowrap;
+  transform-origin: 50% 50%;
 }
-.move-crooked_glimmer .fx-detail > i {
-  left: var(--to-x);
-  top: var(--to-y);
-  border: 0;
-  border-radius: 50%;
-  background: #100b20;
-  animation: shadowClone 0.6s ease calc(var(--detail) * 35ms) forwards;
+.fx-text > .showing,
+.fx-text > .fx-banner {
+  visibility: visible;
 }
-.move-shadow_shed .fx-detail > i {
-  width: 72px;
-  height: 100px;
-  margin: -50px -36px;
-  border: 0;
-  border-radius: 48% 48% 35% 35%;
-  background: #120b20aa;
-  animation: shedEcho 0.72s ease calc(var(--detail) * 55ms) forwards;
+.fx-text .ico {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-/* Abyssar: broad water mass, spiralling currents, and overlapping shell plates. */
-.move-abyssal_surge .fx-detail::before {
-  content: '';
-  position: absolute;
-  left: 5%;
-  right: 5%;
-  top: 43%;
-  height: 34%;
-  border-radius: 55% 55% 0 0;
-  background: radial-gradient(
-    ellipse at 50% 100%,
-    transparent 42%,
-    #d7ffff 44% 48%,
-    var(--fx-color) 51% 65%,
-    transparent 68%
-  );
-  animation: tidalWall 0.62s ease forwards;
-}
-.move-abyssal_surge .fx-projectile {
-  opacity: 0.25;
-}
-.move-undertow .fx-projectile {
-  border: 8px double var(--fx-color);
-  background: conic-gradient(#fff, transparent, var(--fx-color), transparent, #fff);
-  animation: whirlpoolFlight 0.55s ease forwards;
-}
-.move-undertow .fx-detail > i {
-  left: var(--to-x);
-  top: var(--to-y);
-  width: calc(45px + var(--detail) * 14px);
-  height: calc(18px + var(--detail) * 7px);
-  margin: calc(-9px - var(--detail) * 3px) calc(-22px - var(--detail) * 7px);
-  border-radius: 50%;
-  animation: undertowSpin 0.72s ease calc(var(--detail) * 35ms) forwards;
-}
-.move-shell_bastion .fx-detail > i {
-  width: calc(88px + var(--detail) * 12px);
-  height: calc(65px + var(--detail) * 9px);
-  margin: calc(-32px - var(--detail) * 4px) calc(-44px - var(--detail) * 6px);
-  border: 5px solid var(--fx-color);
-  border-radius: 52% 52% 18% 18%;
-  clip-path: polygon(50% 0, 92% 25%, 100% 82%, 50% 100%, 0 82%, 8% 25%);
-  animation: shellLayer 0.72s ease calc(var(--detail) * 60ms) forwards;
-}
-/* Calderoc: salvos, vents, and an arena-filling eruption. */
-.move-cinder_burst .fx-projectile {
-  width: 48px;
-  height: 48px;
-  margin: -24px;
-}
-.move-cinder_burst .fx-detail > i {
-  border: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff 0 8%, #ffe152 20%, var(--fx-color) 50%, #241016 72%);
-  animation: cinderSalvo 0.55s cubic-bezier(0.3, 0, 0.7, 1) calc(var(--detail) * 48ms) forwards;
-}
-.move-caldera_roar .fx-projectile {
-  opacity: 0.3;
-}
-.move-caldera_roar .fx-detail > i {
-  left: calc(55% + var(--detail) * 5%);
-  top: var(--to-y);
-  width: 30px;
-  height: 180px;
-  margin: -20px -15px;
-  border: 0;
-  background: linear-gradient(0deg, transparent, var(--fx-color) 25%, #ffe45c 64%, #fff 80%, transparent);
-  clip-path: polygon(45% 0, 70% 35%, 55% 52%, 100% 100%, 0 100%, 35% 50%, 20% 32%);
-  transform-origin: bottom;
-  animation: eruptionPillar 0.72s ease calc(var(--detail) * 45ms) forwards;
-}
-.move-furnace_heart .fx-detail > i {
-  width: calc(28px + var(--detail) * 16px);
-  height: calc(28px + var(--detail) * 16px);
-  margin: calc(-14px - var(--detail) * 8px);
-  border: 5px dotted var(--fx-color);
-  border-radius: 50%;
-  animation: heatVent 0.72s ease calc(var(--detail) * 50ms) forwards;
-}
-/* Virelia: cutting petal fans, luminous seed pods, and woven leaf cover. */
-.move-petal_ray .fx-projectile {
-  display: none;
-}
-.move-petal_ray .fx-detail > i {
-  width: 54px;
-  height: 20px;
-  border: 0;
-  border-radius: 100% 0;
-  background: linear-gradient(90deg, #efffc8, var(--fx-color), #1e6b47);
-  animation: petalFan 0.58s ease calc(var(--detail) * 42ms) forwards;
-}
-.move-seed_bloom .fx-detail > i {
-  width: 32px;
-  height: 42px;
-  margin: -21px -16px;
-  border: 3px solid #f4ffd4;
-  border-radius: 55% 55% 48% 48%;
-  background: radial-gradient(circle at 50% 38%, #fff, var(--fx-color) 34%, #285e45 72%);
-  animation: seedBloom 0.8s ease calc(var(--detail) * 65ms) forwards;
-}
-.move-leaf_mantle .fx-detail > i {
-  width: 66px;
-  height: 28px;
-  margin: -14px -33px;
-  border: 2px solid #eaffc9;
-  border-radius: 100% 0;
-  background: linear-gradient(90deg, var(--fx-color), #236947);
-  transform-origin: right center;
-  animation: leafWeave 0.75s ease calc(var(--detail) * 55ms) forwards;
+.fx-text .affinity-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
 
-@keyframes oracleMarks {
-  0% {
-    opacity: 0;
-    transform: translate(0) scale(0.2);
-  }
-  45% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) + 1) * 65px), calc((var(--detail) - 3) * -18px)) rotate(160deg)
-      scale(1.3);
-  }
+/* Numbers: −N damage, +N heal (green), shield +N barrier (cyan), recoil and burn ticks. A block
+   stacks its stamp pill, the number row (value + chain counter) and the tags. */
+.fx-number {
+  --outline: #140a24;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: #fff;
+  font: 800 var(--fx-number-size, 34px) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
-@keyframes riddleOrbit {
-  0% {
-    opacity: 0;
-    transform: rotate(0) translateX(10px);
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(300deg) translateX(calc(45px + var(--detail) * 5px)) scale(0.5);
-  }
-}
-@keyframes veilRise {
-  0% {
-    opacity: 0;
-    transform: scale(0.3) rotate(-30deg);
-  }
-  55% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.2) rotate(18deg);
-  }
-}
-@keyframes bracerShard {
-  0% {
-    opacity: 1;
-    transform: translate(0) rotate(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) + 1) * 70px), calc((var(--detail) - 3) * -20px)) rotate(180deg);
-  }
-}
-@keyframes groundFracture {
-  0% {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-  40% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: scaleX(1.7);
-  }
-}
-@keyframes resonancePulse {
-  0% {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-  50% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.4) rotate(90deg);
-  }
-}
-@keyframes lanternWisp {
-  0% {
-    opacity: 0;
-    transform: translate(0) scale(0.3);
-  }
-  35% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) + 1) * 52px), calc(sin(var(--detail)) * 40px)) scale(1.8);
-  }
-}
-@keyframes shadowEyes {
-  0%,
-  30% {
-    opacity: 0;
-  }
-  31%,
-  70% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.5);
-  }
-}
-@keyframes shadowClone {
-  0% {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-  40% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) - 3) * 18px), calc(var(--detail) * -12px)) scale(4, 2);
-  }
-}
-@keyframes shedEcho {
-  0% {
-    opacity: 0.7;
-    transform: translate(0) scale(0.8);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) + 1) * -22px), -12px) scale(1.2);
-  }
-}
-@keyframes tidalWall {
-  0% {
-    opacity: 0;
-    transform: translateY(70%) scaleY(0.2);
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-18%) scaleY(1.25);
-  }
-}
-@keyframes whirlpoolFlight {
-  0% {
-    translate: 0 0;
-    opacity: 0;
-    transform: rotate(0) scale(0.2);
-  }
-  100% {
-    translate: var(--fx-dx) var(--fx-dy);
-    opacity: 1;
-    transform: rotate(620deg) scale(1.15);
-  }
-}
-@keyframes undertowSpin {
-  0% {
-    opacity: 0;
-    transform: rotate(0) scale(0.2);
-  }
-  45% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(-420deg) scale(1.4);
-  }
-}
-@keyframes shellLayer {
-  0% {
-    opacity: 0;
-    transform: translateY(35px) scale(0.7);
-  }
-  45% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-10px) scale(1.08);
-  }
-}
-@keyframes cinderSalvo {
-  0% {
-    translate: 0 0;
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    translate: var(--fx-dx) calc(var(--fx-dy) + (var(--detail, 3) - 3) * 9px);
-    opacity: 0;
-    transform: scale(1.2);
-  }
-}
-@keyframes eruptionPillar {
-  0% {
-    opacity: 0;
-    transform: scaleY(0);
-  }
-  45% {
-    opacity: 1;
-    transform: scaleY(1.2);
-  }
-  100% {
-    opacity: 0;
-    transform: scaleY(0.4) translateY(-80px);
-  }
-}
-@keyframes heatVent {
-  0% {
-    opacity: 0;
-    transform: scale(0.3) rotate(0);
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.55) rotate(140deg);
-  }
-}
-@keyframes petalFan {
-  0% {
-    translate: 0 0;
-    opacity: 0;
-    transform: rotate(calc((var(--detail, 3) - 3) * 8deg)) scale(0.2);
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    translate: var(--fx-dx) calc(var(--fx-dy) + (var(--detail, 3) - 3) * 18px);
-    opacity: 0;
-    transform: rotate(calc((var(--detail, 3) - 3) * 22deg)) scale(1.25);
-  }
-}
-@keyframes seedBloom {
-  0% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) - 3) * 16px), 25px) scale(0.2);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(calc((var(--detail) - 3) * 16px), calc((var(--detail) %2) * -18px)) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(calc((var(--detail) - 3) * 22px), -55px) scale(1.4);
-  }
-}
-@keyframes leafWeave {
-  0% {
-    opacity: 0;
-    transform: rotate(calc(var(--detail) * 60deg)) translateX(20px) scale(0.2);
-  }
-  55% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(calc(var(--detail) * 60deg + 120deg)) translateX(70px) scale(1.15);
-  }
-}
-
-/* Wave 2: each move owns a silhouette and timing cue, while retaining the
-   shared affinity particles and impact grammar. */
-.move-dire_pinion .fx-projectile {
-  clip-path: polygon(0 45%, 68% 0, 52% 38%, 100% 50%, 52% 62%, 68% 100%);
-  transform: rotate(-8deg);
-}
-.move-dire_pinion .fx-detail > i {
-  clip-path: polygon(50% 0, 72% 45%, 100% 100%, 50% 76%, 0 100%, 28% 45%);
-  background: var(--fx-color);
-  animation: shadowClone 0.42s ease calc(var(--detail) * 24ms) forwards;
-}
-.move-spectral_knell .fx-projectile b::after {
-  content: '◌';
-  font-size: 48px;
-}
-.move-spectral_knell .fx-detail > i {
-  border-radius: 50%;
-  border-width: 5px 1px;
-  animation: riddleOrbit 0.72s ease calc(var(--detail) * 42ms) forwards;
-}
-.move-eclipse_of_grace .fx-curtain {
-  background: radial-gradient(circle at var(--to-x) var(--to-y), transparent 4%, #08000be8 36%, #000 78%);
-}
-.move-eclipse_of_grace .fx-sky-symbol {
-  transform: scale(1.8) rotate(180deg);
-}
-.move-eclipse_of_grace .fx-detail > i {
-  clip-path: polygon(50% 0, 66% 38%, 100% 100%, 50% 75%, 0 100%, 34% 38%);
-  background: #120016;
-  animation: shedEcho 0.85s ease calc(var(--detail) * 38ms) forwards;
-}
-.move-dawn_dew .fx-detail > i {
-  width: 13px;
-  height: 22px;
-  border: 0;
-  border-radius: 60% 40% 55% 45%;
-  background: linear-gradient(#fff, var(--fx-color));
-  animation: tidalWall 0.72s ease calc(var(--detail) * 42ms) forwards;
-}
-.move-kindred_halo .fx-detail > i {
-  width: calc(34px + var(--detail) * 12px);
-  height: calc(34px + var(--detail) * 12px);
-  margin: calc(-17px - var(--detail) * 6px);
-  border-radius: 50%;
-  border-style: double;
-  animation: resonancePulse 0.76s ease calc(var(--detail) * 48ms) forwards;
-}
-.move-immaculate_relay .fx-curtain {
-  background: linear-gradient(90deg, transparent, #fff5c633, transparent);
-}
-.move-immaculate_relay .fx-detail > i {
-  width: 44px;
-  height: 88px;
-  margin: -44px -22px;
-  border: 3px solid #fff4b8;
-  border-radius: 50% 50% 10% 10%;
-  animation: veilRise 0.9s ease calc(var(--detail) * 34ms) forwards;
-}
-.move-ember_feint .fx-projectile {
-  clip-path: polygon(0 50%, 32% 10%, 54% 38%, 100% 50%, 54% 62%, 32% 90%);
-}
-.move-ember_feint .fx-detail > i {
-  border-radius: 50% 0 50% 50%;
-  background: var(--fx-color);
-  animation: cinderSalvo 0.46s ease calc(var(--detail) * 20ms) forwards;
-}
-.move-red_horn .fx-projectile {
-  clip-path: polygon(0 64%, 28% 12%, 43% 50%, 100% 50%, 43% 76%);
-  background: linear-gradient(90deg, #3b0900, var(--fx-color), #fff);
-}
-.move-red_horn .fx-detail > i {
-  border-width: 6px 0 0;
-  transform: rotate(calc(-24deg + var(--detail) * 7deg));
-  animation: groundFracture 0.58s ease calc(var(--detail) * 25ms) forwards;
-}
-.move-last_spark_duel .fx-sky-symbol {
-  transform: scale(1.45);
-}
-.move-last_spark_duel .fx-detail > i {
-  clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%);
-  background: linear-gradient(#fff, var(--fx-color));
-  animation: eruptionPillar 0.78s ease calc(var(--detail) * 29ms) forwards;
-}
-.move-foam_foil .fx-projectile {
-  width: 150px;
-  height: 8px;
-  clip-path: polygon(0 35%, 86% 35%, 100% 50%, 86% 65%, 0 65%);
-  background: linear-gradient(90deg, transparent, #fff);
-}
-.move-foam_foil .fx-detail > i {
-  width: 30px;
-  height: 9px;
-  border-radius: 50%;
-  animation: whirlpoolFlight 0.4s ease calc(var(--detail) * 18ms) forwards;
-}
-.move-ebb_cut .fx-projectile {
-  clip-path: polygon(0 44%, 75% 18%, 100% 50%, 75% 82%, 0 56%, 56% 50%);
-}
-.move-ebb_cut .fx-detail > i {
-  border-radius: 50%;
-  border-width: 2px 5px 0 0;
-  animation: undertowSpin 0.64s ease calc(var(--detail) * 32ms) forwards;
-}
-.move-mirror_tide .fx-curtain {
-  background: linear-gradient(120deg, #69eaff1c 48%, #fff8 50%, #69eaff1c 52%);
-}
-.move-mirror_tide .fx-detail > i {
-  width: 62px;
-  height: 92px;
-  margin: -46px -31px;
-  border-radius: 50%;
-  border-left-color: #fff;
-  animation: tidalWall 0.82s ease calc(var(--detail) * 35ms) forwards;
-}
-.move-heartwood_breach .fx-projectile {
-  clip-path: polygon(0 30%, 68% 30%, 68% 0, 100% 50%, 68% 100%, 68% 70%, 0 70%);
-  background: linear-gradient(90deg, #4a2710, var(--fx-color), #f2d18a);
-}
-.move-heartwood_breach .fx-detail > i {
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  background: #dba65d;
-  animation: bracerShard 0.6s ease calc(var(--detail) * 24ms) forwards;
-}
-.move-resin_vise .fx-projectile {
-  border-radius: 50%;
-  background: radial-gradient(circle, #ffd477, #765314 52%, transparent 55%);
-}
-.move-resin_vise .fx-detail > i {
-  width: calc(26px + var(--detail) * 9px);
-  height: calc(26px + var(--detail) * 9px);
-  margin: calc(-13px - var(--detail) * 4.5px);
-  border-radius: 45% 55% 35% 65%;
-  animation: seedBloom 0.7s ease calc(var(--detail) * 45ms) forwards;
-}
-.move-falling_rings .fx-sky-symbol {
-  transform: scale(1.7) rotate(90deg);
-}
-.move-falling_rings .fx-detail > i {
-  width: calc(40px + var(--detail) * 14px);
-  height: calc(18px + var(--detail) * 5px);
-  margin: calc(-9px - var(--detail) * 2.5px) calc(-20px - var(--detail) * 7px);
-  border-radius: 50%;
-  border-width: 5px;
-  animation: groundFracture 0.9s ease calc(var(--detail) * 38ms) forwards;
-}
-.move-pulse_punch .fx-projectile {
-  clip-path: polygon(0 20%, 62% 20%, 62% 0, 100% 50%, 62% 100%, 62% 80%, 0 80%);
-}
-.move-pulse_punch .fx-detail > i {
-  border-radius: 50%;
-  border-width: 4px;
-  animation: resonancePulse 0.48s ease calc(var(--detail) * 24ms) forwards;
-}
-.move-linked_guard .fx-detail > i {
-  width: calc(46px + var(--detail) * 8px);
-  height: calc(40px + var(--detail) * 7px);
-  margin: calc(-20px - var(--detail) * 3.5px) calc(-23px - var(--detail) * 4px);
-  clip-path: polygon(50% 0, 96% 20%, 86% 75%, 50% 100%, 14% 75%, 4% 20%);
-  animation: shellLayer 0.7s ease calc(var(--detail) * 46ms) forwards;
-}
-.move-unbroken_circle .fx-curtain {
-  background: radial-gradient(circle at var(--from-x) var(--from-y), #fff3b53d, transparent 52%);
-}
-.move-unbroken_circle .fx-detail > i {
-  width: calc(48px + var(--detail) * 16px);
-  height: calc(48px + var(--detail) * 16px);
-  margin: calc(-24px - var(--detail) * 8px);
-  border: 6px double var(--fx-color);
-  border-radius: 50%;
-  animation: resonancePulse 0.95s ease calc(var(--detail) * 52ms) forwards;
-}
-
-.immaculate-relay-fx .immaculate-gate {
-  position: absolute;
-  left: var(--from-x, 50%);
-  top: var(--from-y, 50%);
-  width: 120px;
-  height: 190px;
-  translate: -50% -50%;
-  border: 7px double #fff6bd;
-  border-radius: 60% 60% 14% 14%;
-  background: radial-gradient(
-    ellipse at 50% 60%,
-    #fff5 0 18%,
-    color-mix(in srgb, var(--fx-color) 32%, transparent) 55%,
-    transparent 72%
-  );
-  animation: veilRise 0.8s ease both;
-}
-.immaculate-feathers i {
-  position: absolute;
-  left: calc(var(--from-x, 50%) + (var(--feather) - 3) * 15px);
-  top: var(--from-y, 50%);
-  width: 12px;
-  height: 38px;
-  border-radius: 80% 10% 80% 10%;
-  background: #fff9d8;
-  animation: petalFan 0.8s ease calc(var(--feather) * 35ms) both;
-}
-.immaculate-call {
-  position: absolute;
-  left: 50%;
-  top: 24%;
+.fx-number .fx-value {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  translate: -50% -50%;
+  gap: 0.06em;
+  text-shadow:
+    0 4px 0 var(--outline),
+    2.5px 2.5px 0 var(--outline),
+    -2.5px 2.5px 0 var(--outline),
+    2.5px -2.5px 0 var(--outline),
+    -2.5px -2.5px 0 var(--outline),
+    3px 0 0 var(--outline),
+    -3px 0 0 var(--outline),
+    0 -3px 0 var(--outline);
+}
+.fx-number .fx-value .ico {
+  width: 0.7em;
+  height: 0.7em;
+  stroke-width: 3;
+}
+.fx-number .fx-value .ico-star {
+  fill: currentColor;
+  stroke-width: 1.6;
+}
+.fx-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fx-number :is(.fx-stamp-pill, .fx-value, .fx-chain)[hidden] {
+  display: none;
+}
+/* Multi-hit counter on the number row ("−31 ×3"); the chain's last hit turns gold. */
+.fx-chain {
+  display: grid;
+  place-items: center;
+  min-width: 38px;
+  height: 30px;
+  padding: 0 8px;
+  border: 2px solid #fff;
+  border-radius: 999px;
   color: #fff;
-  text-shadow: 0 0 15px var(--fx-color);
+  background: var(--bg-2);
+  box-shadow: 0 3px 0 var(--ledge);
+  font: 800 20px/1 var(--font-display);
+  letter-spacing: 0;
 }
-.immaculate-call img {
-  width: 72px;
-  height: 72px;
-  object-fit: contain;
-  image-rendering: pixelated;
+.fx-chain.final {
+  border-color: var(--gold-soft);
+  color: var(--gold-ink);
+  background: linear-gradient(var(--gold-bright), var(--gold));
+  box-shadow: 0 3px 0 var(--gold-ledge);
+}
+.fx-number[data-effect='effective'] .fx-value {
+  color: #fff1dc;
+  --outline: #4a1204;
+}
+.fx-number[data-effect='resisted'] .fx-value {
+  color: #cfd6f2;
+  --outline: #151a3a;
+}
+/* A critical hit: gold digits on a burnt outline over a soft gold disc. */
+.fx-number.critical .fx-value {
+  color: var(--gold-bright);
+  --outline: #4a1d00;
+}
+.fx-number.critical .fx-value::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -16px -22px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #ffcb3dcc, #ffb02055 55%, transparent);
+}
+.fx-number[data-kind='heal'] .fx-value {
+  color: #86ffae;
+  --outline: #043019;
+}
+.fx-number[data-kind='barrier'] .fx-value,
+.fx-number[data-kind='blocked'] .fx-value {
+  color: #9ef6ff;
+  --outline: #042a36;
+}
+.fx-number[data-kind='recoil'] .fx-value {
+  color: #ffd9c9;
+  --outline: #3a0f08;
+}
+.fx-number[data-kind='tick'] .fx-value {
+  color: #ffb489;
+  --outline: #3d1100;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .immaculate-relay-fx *,
-  .move-immaculate_relay * {
-    animation: fxReduced 0.2s ease both !important;
-  }
+/* Tags under the number: COMBO ×1,3, the combo helper, the arena weather, absorbed shield, and
+   the cause of a trailing number (the talent that fired, Riposte, the move's drain or recoil). */
+.fx-number .fx-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
 }
-body.reduced-motion .immaculate-relay-fx *,
-body.reduced-motion .move-immaculate_relay * {
-  animation: fxReduced 0.2s ease both !important;
+.fx-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow: 0 2px 0 var(--ledge);
+  font: 800 13px/1 var(--font-text);
+  letter-spacing: 0.02em;
 }
-body.high-contrast .immaculate-gate,
-body.high-contrast .move-eclipse_of_grace .fx-detail > i {
-  border-color: currentColor;
-  outline: 2px solid currentColor;
+.fx-tag[hidden] {
+  display: none;
 }
-
-/* --- Emotional moments (plan §3.2–3.4): faint wisps, switch recall/spawn,
-   and the battle-outro victory pose + exit fade. --- */
-.faint-wisps {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-}
-.faint-wisps i {
-  position: absolute;
-  left: 0;
-  top: 0;
+.fx-tag .ico {
   width: 13px;
   height: 13px;
-  margin: -7px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #fff, var(--fx-color) 55%, transparent 75%);
-  opacity: 0;
-  animation: wispRise 1.05s ease-out calc(var(--wisp) * 95ms) forwards;
 }
-@keyframes wispRise {
-  12% {
-    opacity: 0.95;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--wisp-dx), -96px) scale(0.35);
-  }
+.fx-tag.combo {
+  color: var(--gold-ink);
+  background: var(--gold);
+  box-shadow: 0 2px 0 var(--gold-ledge);
 }
-.switch-ghost {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.fx-tag.assist img {
+  width: 18px;
+  height: 18px;
+  margin-left: -5px;
   image-rendering: pixelated;
-  pointer-events: none;
-  filter: brightness(1.8);
-  animation: switchOut 0.42s ease-in forwards;
 }
-.battle-screen .fighter.switch-awaiting > img:not(.switch-ghost) {
-  opacity: 0;
+.fx-tag.weather {
+  color: #d8dcf6;
+  background: #353c6c;
 }
-@keyframes switchOut {
-  35% {
-    opacity: 0.9;
-    transform: translateY(4%) scaleY(0.92);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(30%) scaleY(0.55);
-  }
+.fx-tag.weather.boost {
+  color: #fff;
+  background: #c2410c;
+  box-shadow: 0 2px 0 #5c1a02;
 }
-.switch-beam {
-  position: absolute;
-  left: 50%;
-  bottom: 6%;
-  width: 34%;
-  height: 88%;
-  transform: translateX(-50%) scaleY(0);
-  transform-origin: bottom;
-  background: radial-gradient(
-    ellipse 50% 100% at 50% 100%,
-    color-mix(in srgb, var(--fx-color, #9fd8ff) 70%, transparent),
-    transparent
-  );
-  border-radius: 50% 50% 0 0;
-  pointer-events: none;
-  animation: switchBeam 0.5s ease-out forwards;
+.fx-tag.absorbed {
+  color: #c6faff;
+  background: #0f5163;
 }
-@keyframes switchBeam {
-  25% {
-    transform: translateX(-50%) scaleY(1);
-    opacity: 0.85;
-  }
-  100% {
-    transform: translateX(-50%) scaleY(1.05);
-    opacity: 0;
-  }
-}
-.battle-screen .fighter.entering img {
-  animation:
-    switchIn 0.52s cubic-bezier(0.22, 0.9, 0.36, 1),
-    idle 2.4s ease-in-out 0.52s infinite;
-}
-@keyframes switchIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-26%) scale(0.72);
-  }
-  45% {
-    opacity: 1;
-    transform: translateY(2%) scale(1.07, 0.88);
-  }
-  68% {
-    transform: translateY(-3%) scale(0.96, 1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-.battle-screen .fighter.victory-pose img {
-  animation:
-    victoryPose 0.82s cubic-bezier(0.3, 0.9, 0.35, 1),
-    idle 2.4s ease-in-out 0.82s infinite;
-}
-@keyframes victoryPose {
-  0% {
-    transform: scale(1);
-  }
-  28% {
-    transform: translateY(-9%) scale(1.14);
-  }
-  52% {
-    transform: translateY(2%) scale(1.05, 0.92);
-  }
-  74% {
-    transform: translateY(-4%) scale(1.08);
-  }
-  100% {
-    transform: none;
-  }
-}
-.battle-screen.outro-loss .fighter.victory-pose img {
-  animation:
-    victoryPoseMuted 1.05s ease,
-    idle 2.4s ease-in-out 1.05s infinite;
-}
-@keyframes victoryPoseMuted {
-  0% {
-    transform: scale(1);
-  }
-  45% {
-    transform: translateY(-4%) scale(1.05);
-  }
-  100% {
-    transform: none;
-  }
-}
-/* A lost battle dims the arena behind the winner: one static overlay layer. */
-.battle-screen.battle-outro.outro-loss .battle-vignette {
-  background:
-    radial-gradient(circle at center, transparent 35%, #000c), linear-gradient(#0206143d, #0206143d);
-}
-/* Hand-off to results: an opacity-only fade (no blur on full-screen layers). */
-.battle-screen.battle-exit .arena-canvas,
-.battle-screen.battle-exit .battle-vignette,
-.battle-screen.battle-exit .battlefield,
-.battle-screen.battle-exit .fx-stage,
-.battle-screen.battle-exit .fx-readouts {
-  opacity: 0;
-  transition: opacity 0.42s ease;
-}
-.battle-screen.battle-exit .battle-layout {
-  opacity: 0.25;
-  transition: opacity 0.42s ease;
-}
-@media (prefers-reduced-motion: reduce) {
-  .faint-wisps,
-  .switch-beam {
-    display: none;
-  }
-  .battle-screen .fighter.ko img {
-    animation: koReduced 0.25s ease forwards;
-  }
-  .switch-ghost {
-    animation: switchOutReduced 0.18s ease forwards;
-  }
-  .battle-screen .fighter.entering img {
-    animation: fxReduced 0.2s ease;
-  }
-  .battle-screen .fighter.victory-pose img,
-  .battle-screen.outro-loss .fighter.victory-pose img {
-    animation: fxReduced 0.25s ease;
-  }
-  .battle-screen.battle-exit .arena-canvas,
-  .battle-screen.battle-exit .battle-vignette,
-  .battle-screen.battle-exit .battlefield,
-  .battle-screen.battle-exit .fx-stage,
-  .battle-screen.battle-exit .fx-readouts {
-    transition: opacity 0.15s ease;
-  }
-}
-body.reduced-motion .faint-wisps,
-body.reduced-motion .switch-beam {
-  display: none;
-}
-body.reduced-motion .battle-screen .fighter.ko img {
-  animation: koReduced 0.25s ease forwards;
-}
-@keyframes koReduced {
-  to {
-    opacity: 0.62;
-    filter: grayscale(1) brightness(0.72);
-  }
-}
-body.reduced-motion .switch-ghost {
-  animation: switchOutReduced 0.18s ease forwards;
-}
-@keyframes switchOutReduced {
-  to {
-    opacity: 0;
-  }
-}
-body.reduced-motion .battle-screen .fighter.entering img {
-  animation: fxReduced 0.2s ease;
-}
-body.reduced-motion .battle-screen .fighter.victory-pose img,
-body.reduced-motion .battle-screen.outro-loss .fighter.victory-pose img {
-  animation: fxReduced 0.25s ease;
-}
-body.reduced-motion .battle-screen.battle-exit .arena-canvas,
-body.reduced-motion .battle-screen.battle-exit .battle-vignette,
-body.reduced-motion .battle-screen.battle-exit .battlefield,
-body.reduced-motion .battle-screen.battle-exit .fx-stage,
-body.reduced-motion .battle-screen.battle-exit .fx-readouts {
-  transition: opacity 0.15s ease;
+.fx-tag.cause {
+  color: #f3eaff;
+  background: #4b2f78;
+  box-shadow: 0 2px 0 #1f0f3a;
 }
 
-/* --- Stakes and reactions (plan §4.2–4.3): cornered-attacker escalation,
-   miss whiff, and barrier shatter. --- */
-/* A cornered attacker's move opens with a hot edge pulse: a static radial glow
-   inside the stage whose opacity animates (no animated box-shadow). */
-.fx-stakes {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, transparent 48%, #ff4d3d33 72%, #ff4d3d80 100%);
-  opacity: 0;
-  animation: stakesPulse 0.85s ease-out forwards;
+/* The beat's stamp: one solid pill on top of its readout block; the big K.O. stamp sits on the
+   fallen creature. */
+.fx-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-@keyframes stakesPulse {
-  30% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
+.fx-stamp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--bg-2);
+  box-shadow:
+    inset 0 1px 0 #ffffff40,
+    0 3px 0 var(--ledge);
+  font: 800 17px/1 var(--font-display);
+  letter-spacing: 0.01em;
 }
-/* Miss: the projectile overshoots the dodger and dissolves; the trail dies. */
-.whiff .fx-projectile {
-  animation: whiffPast 0.42s ease-in forwards !important;
+.fx-stamp-pill .ico {
+  width: 16px;
+  height: 16px;
 }
-.whiff .fx-trail {
-  animation: whiffTrail 0.3s ease forwards !important;
+.fx-stamp-pill[data-kind='effective'] {
+  background: linear-gradient(#ff7b3f, #e3421d);
+  box-shadow:
+    inset 0 1px 0 #ffffff66,
+    0 3px 0 #6f1604;
 }
-@keyframes whiffPast {
-  0% {
-    translate: var(--fx-dx) var(--fx-dy);
-    opacity: 1;
-  }
-  100% {
-    translate: var(--fx-whiff-dx) var(--fx-whiff-dy);
-    transform: scale(0.6) rotate(55deg);
-    opacity: 0;
-  }
+.fx-stamp-pill[data-kind='resisted'] {
+  color: #d9def7;
+  background: #3a4172;
+  box-shadow:
+    inset 0 1px 0 #ffffff2e,
+    0 3px 0 #14183a;
 }
-.from-enemy.whiff .fx-projectile {
-  animation-name: whiffPastEnemy !important;
+.fx-stamp-pill[data-kind='critical'] {
+  color: var(--gold-ink);
+  background: linear-gradient(var(--gold-bright), var(--gold));
+  box-shadow:
+    inset 0 1px 0 #ffffffa0,
+    0 3px 0 var(--gold-ledge);
 }
-@keyframes whiffPastEnemy {
-  0% {
-    translate: var(--fx-dx) var(--fx-dy);
-    opacity: 1;
-  }
-  100% {
-    translate: var(--fx-whiff-dx) var(--fx-whiff-dy);
-    transform: scale(0.6) rotate(-55deg);
-    opacity: 0;
-  }
+.fx-stamp-pill[data-kind='critical'] .ico {
+  fill: currentColor;
+  stroke-width: 1.6;
 }
-@keyframes whiffTrail {
-  to {
-    opacity: 0;
-  }
+.fx-stamp-pill[data-kind='miss'] {
+  color: #032630;
+  background: var(--cyan);
+  box-shadow:
+    inset 0 1px 0 #ffffff99,
+    0 3px 0 #0b5b6b;
 }
-/* Barrier break: hex shards and a cracking ring burst from the defender. */
-.barrier-shatter {
-  position: absolute;
-  z-index: 5;
-  width: 1px;
-  height: 1px;
+.fx-stamp-pill[data-kind='blocked'] {
+  color: #e8fdff;
+  background: #16718a;
+  box-shadow:
+    inset 0 1px 0 #ffffff55,
+    0 3px 0 #063846;
+}
+.fx-stamp-pill[data-kind='ko'] {
+  height: 60px;
+  padding: 0 22px;
+  background: linear-gradient(#ff5a6a, #d61f3a);
+  box-shadow:
+    inset 0 2px 0 #ffffff66,
+    0 5px 0 #5c0513;
+  font-size: 44px;
+  letter-spacing: 0.02em;
+}
+body.high-contrast :is(.fx-stamp-pill, .fx-chain) {
+  box-shadow:
+    inset 0 0 0 3px #fff,
+    0 3px 0 var(--ledge);
+}
+
+/* A heal that lands on a benched ally: a chip under the pad, never over the active sprite. */
+.fx-ally {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px 0 4px;
+  border-radius: 999px;
+  color: #b9ffd2;
+  background: #0f3d28;
+  box-shadow:
+    inset 0 1px 0 #ffffff26,
+    0 3px 0 var(--ledge);
+  font: 800 15px/1 var(--font-text);
+}
+.fx-ally img {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+
+/* ?fxdebug=1: FX-layer and arena counters (director.js). */
+.fx-debug {
+  position: fixed;
+  z-index: 90;
+  left: 6px;
+  bottom: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #b8ffcf;
+  background: #000000cc;
+  font:
+    700 11px/1.35 ui-monospace,
+    monospace;
+  white-space: pre;
   pointer-events: none;
 }
-.barrier-shatter.side-player {
-  left: 23%;
-  top: 62%;
-}
-.barrier-shatter.side-enemy {
-  left: 77%;
-  top: 24%;
-}
-.shatter-hex {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 26px;
-  height: 30px;
-  margin: -15px -13px;
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-  background: linear-gradient(155deg, #fff, #a5ecff 45%, #3d7fa8);
+
+/* Hand-off to results (§6.7): an opacity-only fade of the whole battle layout. */
+.battle-screen.battle-exit .battle-layout {
   opacity: 0;
-  animation: shatterFly 0.62s cubic-bezier(0.2, 0.7, 0.3, 1) calc(var(--i) * 22ms) forwards;
-}
-.shatter-ring {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 120px;
-  height: 120px;
-  margin: -60px;
-  border: 4px dashed #bdefff;
-  border-radius: 50%;
-  background: radial-gradient(circle, transparent 52%, #8fe9ff66 64%, transparent 72%);
-  opacity: 0;
-  animation: shatterRing 0.5s ease-out forwards;
-}
-@keyframes shatterFly {
-  0% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0deg) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--dx), var(--dy)) rotate(calc(var(--spin) * 210deg)) scale(0.55);
-  }
-}
-@keyframes shatterRing {
-  0% {
-    opacity: 0.95;
-    transform: scale(0.55) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.5) rotate(35deg);
-  }
+  transition: opacity 0.42s ease;
 }
 @media (prefers-reduced-motion: reduce) {
-  .fx-stakes {
-    animation: none;
-  }
-  .whiff .fx-projectile,
-  .whiff .fx-trail {
-    animation: whiffTrail 0.2s ease forwards !important;
-  }
-  .shatter-hex {
-    display: none;
-  }
-  .shatter-ring {
-    animation: fxReduced 0.25s ease forwards;
+  .battle-screen.battle-exit .battle-layout {
+    transition-duration: 0.15s;
   }
 }
-body.reduced-motion .fx-stakes {
-  animation: none;
-}
-body.reduced-motion .whiff .fx-projectile,
-body.reduced-motion .whiff .fx-trail {
-  animation: whiffTrail 0.2s ease forwards !important;
-}
-body.reduced-motion .shatter-hex {
-  display: none;
-}
-body.reduced-motion .shatter-ring {
-  animation: fxReduced 0.25s ease forwards;
+body.reduced-motion .battle-screen.battle-exit .battle-layout {
+  transition-duration: 0.15s;
 }

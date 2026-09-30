@@ -254,13 +254,15 @@ function checkTtkProfile() {
   console.log(
     `Regular-move median TTK: neutral ${report.neutral.median} · super-effective ${report.super.median} · resisted ${report.resisted.median}; full-HP one-shots neutral ${percent(report.neutral.oneShotRate, 1)} · super-effective ${percent(report.super.oneShotRate, 1)}.`
   );
+  // Coverage moves (one off-type regular move per creature) carry −15% power, so the
+  // neutral and resisted medians sit one hit above the single-type roster's 4 / 8.
   if (
-    report.neutral.median < 3.5 ||
-    report.neutral.median > 4.5 ||
+    report.neutral.median < 4 ||
+    report.neutral.median > 5 ||
     report.super.median < 2 ||
     report.super.median > 3 ||
-    report.resisted.median < 7 ||
-    report.resisted.median > 8 ||
+    report.resisted.median < 8 ||
+    report.resisted.median > 9 ||
     report.neutral.oneShotRate > 0 ||
     report.super.oneShotRate >= 0.08
   )
@@ -292,10 +294,10 @@ if (process.argv.includes('--naive')) {
   process.exit(0);
 }
 
-// Default matrix re-picked when seeds became fmix32-mixed (G2). Aubéastre sits near the 30% floor
-// (≈30–32% over 10k samples with either RNG), so some 2400-sample matrices dip below it.
+// The default seed is the long-standing 0xc0ffee; the roster band must also hold for any
+// other ARENA_BALANCE_SEED (no creature sits within a few points of 30% or 70%).
 const samples = Math.max(100, Math.min(10000, Math.round(Number(process.env.ARENA_BALANCE_SAMPLES) || 2400))),
-  balanceSeed = normalizeSeed(Number(process.env.ARENA_BALANCE_SEED) || 0x5eed),
+  balanceSeed = normalizeSeed(Number(process.env.ARENA_BALANCE_SEED) || 0xc0ffee),
   stats = emptyRecord(CREATURE_IDS),
   archetypes = emptyRecord(PROFILE_AXES),
   classes = emptyRecord(CLASS_ORDER),

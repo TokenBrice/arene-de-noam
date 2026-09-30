@@ -210,13 +210,13 @@ test('a K.O. beat follows the lethal action, absorbs the move-skip, then the rep
 
 test('a voluntary switch plays first with its rewards, then the Perfect Relay cut-in, then the attack', () => {
   const { events } = resolveTurn(
-    battle(['virelia', 'abyssar', 'orakyn'], ['calderoc', 'kordane', 'farfombre'], { seed: 4 }),
+    battle(['virelia', 'abyssar', 'orakyn'], ['pyrolynx', 'kordane', 'farfombre'], { seed: 4 }),
     { type: 'switch', index: 1 },
-    move('cinder_burst')
+    move('scorch_mark')
   );
   const beats = groupBeats(events);
   assertWellFormed(events, beats);
-  assert.deepEqual(kinds(beats), ['switch', 'cutin', 'cinder_burst', 'chip']);
+  assert.deepEqual(kinds(beats), ['switch', 'cutin', 'scorch_mark', 'chip']);
   assert.equal(beats[0].creatureId, 'abyssar');
   assert.equal(beats[0].surges[0].source, 'switch');
   assert.equal(beats[1].cutIn, 'perfect-relay');
@@ -224,9 +224,9 @@ test('a voluntary switch plays first with its rewards, then the Perfect Relay cu
   assert.equal(beats[3].chip, 'tick');
   const entryTalent = groupBeats(
     resolveTurn(
-      battle(['virelia', 'orakyn', 'abyssar'], ['calderoc', 'kordane', 'farfombre'], { seed: 4 }),
+      battle(['virelia', 'orakyn', 'abyssar'], ['pyrolynx', 'kordane', 'farfombre'], { seed: 4 }),
       { type: 'switch', index: 1 },
-      move('cinder_burst')
+      move('scorch_mark')
     ).events
   )[0];
   assert.deepEqual(

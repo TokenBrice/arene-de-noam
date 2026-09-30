@@ -119,14 +119,14 @@ test('switch forecasts include entry talents and exactly match the incoming hit'
 test('a resisted predicted attack rewards a symmetric Perfect Relay', () => {
   const state = createBattle({
       playerTeam: ['abyssar', 'orakyn', 'virelia'],
-      enemyTeam: ['kordane', 'calderoc', 'farfombre'],
+      enemyTeam: ['calderoc', 'kordane', 'farfombre'],
       seed: 34,
     }),
     before = state.sides.player.surge,
-    forecast = previewIncomingAfterSwitch(state, 'player', 1, 'crystal_strike');
+    forecast = previewIncomingAfterSwitch(state, 'player', 1, 'cinder_burst');
   assert.equal(forecast.affinity, 0.5);
   assert.equal(forecast.perfectRelay, true);
-  const result = resolveTurn(state, { type: 'switch', index: 1 }, { type: 'move', moveId: 'crystal_strike' });
+  const result = resolveTurn(state, { type: 'switch', index: 1 }, { type: 'move', moveId: 'cinder_burst' });
   assert.ok(result.events.some((event) => event.type === 'perfect-relay' && event.side === 'player'));
   assert.ok(
     result.events.some(
@@ -143,12 +143,12 @@ test('a resisted predicted attack rewards a symmetric Perfect Relay', () => {
 test('forecasts and live damage follow the rewired Combat triangle and cross-triangle neutrality', () => {
   const state = createBattle({
       playerTeam: ['orakyn', 'nocturnyx', 'abyssar'],
-      enemyTeam: ['kordane', 'calderoc', 'virelia'],
+      enemyTeam: ['calderoc', 'kordane', 'virelia'],
       // Neither live hit crits on this seed, so both match their forecasts.
       seed: 1,
     }),
-    strongForecast = previewIncomingAfterSwitch(state, 'player', 1, 'crystal_strike'),
-    neutralForecast = previewIncomingAfterSwitch(state, 'player', 2, 'crystal_strike');
+    strongForecast = previewIncomingAfterSwitch(state, 'player', 1, 'cinder_burst'),
+    neutralForecast = previewIncomingAfterSwitch(state, 'player', 2, 'cinder_burst');
   assert.equal(strongForecast.affinity, 2);
   assert.equal(strongForecast.perfectRelay, false);
   assert.equal(neutralForecast.affinity, 1);
@@ -157,12 +157,12 @@ test('forecasts and live damage follow the rewired Combat triangle and cross-tri
   const strongResult = resolveTurn(
       state,
       { type: 'switch', index: 1 },
-      { type: 'move', moveId: 'crystal_strike' }
+      { type: 'move', moveId: 'cinder_burst' }
     ),
     neutralResult = resolveTurn(
       state,
       { type: 'switch', index: 2 },
-      { type: 'move', moveId: 'crystal_strike' }
+      { type: 'move', moveId: 'cinder_burst' }
     ),
     strongHit = strongResult.events.find((event) => event.type === 'damage' && event.side === 'player'),
     neutralHit = neutralResult.events.find((event) => event.type === 'damage' && event.side === 'player');
@@ -314,7 +314,7 @@ test('mastery ranks never change combat stats, openings, or Signature cost', () 
 
 test('arena weather scales attacks by type in previews and live hits, with no pulse events', () => {
   const base = {
-    playerTeam: ['calderoc', 'orakyn', 'virelia'],
+    playerTeam: ['pyrolynx', 'orakyn', 'virelia'],
     enemyTeam: ['thornox', 'kordane', 'farfombre'],
     seed: 23,
   };
@@ -324,7 +324,9 @@ test('arena weather scales attacks by type in previews and live hits, with no pu
   assert.deepEqual(neutral.weather, {});
   assert.deepEqual(volcano.weather, { flame: 1.2, grove: 0.8 });
   assert.deepEqual(fierce.weather, { flame: 1.4, grove: 0.6 });
-  const move = CREATURES.calderoc.moves.find((id) => MOVES[id].kind === 'damage' && !MOVES[id].signature),
+  const move = CREATURES.pyrolynx.moves.find(
+      (id) => MOVES[id].affinity === 'flame' && MOVES[id].kind === 'damage' && !MOVES[id].signature
+    ),
     attacker = activeOf(volcano, 'player'),
     defender = activeOf(volcano, 'enemy'),
     plain = previewMove(neutral, 'player', move),
@@ -1290,7 +1292,13 @@ test('Immaculate Relay protects its chosen ally until after actions and grants n
     ),
     false
   );
-  assert.equal(result.state.sides.player.surge, 19, '11 resolve Surge plus Benevolent Omen');
+  const gained = (source) =>
+    result.events
+      .filter((event) => event.type === 'surge' && event.side === 'player' && event.source === source)
+      .reduce((sum, event) => sum + event.amount, 0);
+  assert.ok(gained('resolve') > 0);
+  assert.equal(gained('passive'), 8, 'Benevolent Omen');
+  assert.equal(result.state.sides.player.surge, gained('resolve') + 8);
 });
 
 test('Immaculate Relay still completes after Aubéastre is knocked out', () => {

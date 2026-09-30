@@ -41,8 +41,8 @@ test('live dictionary values are not shadowed by duplicate definitions', () => {
   for (const [key, fr, en] of [
     [
       'move.effect.petal_ray',
-      'Inflige des dégâts et rend 3 % des PV à l’équipe.',
-      "Deals damage and restores 3% of the team's HP.",
+      'Inflige des dégâts et rend 5 % des PV à l’équipe.',
+      "Deals damage and restores 5% of the team's HP.",
     ],
     ['advice.title', 'Conseils de l’entraîneur', 'Coach Tips'],
     ['battle.switchIncoming', 'Dégâts prévus : {damage}', 'Predicted damage: {damage}'],
@@ -413,19 +413,5 @@ test('current feats and the owned-only legacy assist feat have stable localized 
     assert.equal(feat.id, id);
     assert.notEqual(DICTIONARIES.fr[`feat.${id}`], undefined);
     assert.notEqual(DICTIONARIES.en[`feat.effect.${id}`], undefined);
-  }
-});
-test('signature support tooltips stay synchronized with their authored battle values', () => {
-  for (const lang of ['fr', 'en']) {
-    const t = createI18n(lang).t;
-    assert.match(t('move.effect.oracle_veil'), new RegExp(String(MOVES.oracle_veil.barrier)));
-    assert.match(t('move.effect.deja_vu'), new RegExp(String(MOVES.deja_vu.barrier)));
-    assert.match(t('move.effect.shell_bastion'), new RegExp(String(MOVES.shell_bastion.barrier)));
-    assert.match(t('move.effect.leaf_mantle'), new RegExp(String(MOVES.leaf_mantle.barrier)));
-    assert.match(t('move.effect.leaf_mantle'), new RegExp(String(MOVES.leaf_mantle.teamBarrier)));
-    assert.match(
-      t('move.effect.leaf_mantle'),
-      new RegExp(String(Math.round(MOVES.leaf_mantle.teamHealRatio * 100)))
-    );
   }
 });

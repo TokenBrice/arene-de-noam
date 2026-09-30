@@ -39,7 +39,7 @@ Everything loads from `index.html` as browser-native ES modules; `src/main.js` i
 - **`src/battle/`** — the pure, deterministic battle engine: `engine.js` (createBattle / getLegalActions / previewMove / resolveTurn), `rng.js` (seeded RNG — never `Math.random` in combat), `damage.js`, `statuses.js`, `ai.js`. No DOM access. `resolveTurn` returns an event list.
 - **`src/battle-ui/`** — consumes engine events: `controller.js` (command flow), `playback.js` (event → animation sequencing), `hud.js`, `fx.js`.
 - **`src/data/`** — all authored content (creatures, moves, affinities, classes, passives, trainers, modes). Balance and content changes happen here, not in the engine.
-- **`src/presentation/arena.js`** — Three.js arena rendering. Loaded lazily via `ctx.loadArena()` (awaited in `renderBattle`); never import it statically, or Three.js lands on the title's critical path.
+- **`src/presentation/`** — the Three.js "Stade Lumière" stage (`arena.js` + `stage/*`, baked unlit diorama and fitted camera), WebGL fighters (`fighters.js`, pixel sprites on planes with a small shader; hidden DOM proxies `#fighter-*` keep accessibility and e2e hooks) and the pooled GPU FX layer (`fx-layer.js`). Loaded lazily via `ctx.loadArena()` (awaited in `renderBattle`); never import it statically, or Three.js lands on the title's critical path. Interface contract: `docs/battle-presentation.md`.
 - **`src/i18n.js`** — every string keyed in both `fr` and `en`, key-parallel. Any user-facing text change touches both languages. Test with `?lang=en`.
 - **`src/save.js`** — versioned localStorage save (`SAVE_VERSION`) with a chain of `migrateVN` functions. Any change to persisted shape must bump the version and add a migration; never break existing saves.
 - **`styles/`** — layered CSS: `tokens.css` (design tokens) → `base.css`/`components.css` → `screens/` → `overrides/`.
@@ -47,7 +47,8 @@ Everything loads from `index.html` as browser-native ES modules; `src/main.js` i
 ## Invariants the tests enforce
 
 - **Determinism**: same seed → same battle. The engine stays side-effect-free and DOM-free; the balance sim and engine tests depend on this.
-- **Presentation contract** (`test/presentation-contract.test.js`): types, classes, and statuses each have unique authored SVG geometry and non-overlapping color palettes. Adding/recoloring content must keep these disjoint.
+- **Presentation contract** (`test/presentation-contract.test.js`): types, classes, and statuses each have unique authored SVG geometry and non-overlapping color palettes. Every move has a `MOVE_FX` entry in `src/data/choreo.js` (valid archetype, atlas motif, palette source); a creature's three moves are not all one archetype; timelines fit `BEAT_BUDGET_MS` (`src/battle-ui/beats.js`).
+- **Performance contracts**: `test/css-perf-contract.test.js` (compositor-only keyframes; no filter/backdrop on the canvas) and `node tools/perf/gpu-budget.mjs` (per quality tier: draws, DPR/backing, no lights, renders/s). The target device is a low-end Android phone; GPU gates are design-time constraints.
 - **Preview parity** (`test/preview-parity.test.js`): what the UI previews (damage, affinity, order) must match what the engine resolves.
 
 ## Product constraints

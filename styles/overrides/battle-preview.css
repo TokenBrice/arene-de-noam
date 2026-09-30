@@ -1,56 +1,444 @@
-/* Exact end-of-turn exchange preview for Apprentice difficulty. */
-.exchange-preview {
-  flex-basis: 100%;
-  display: grid !important;
-  grid-template-columns: 18px minmax(0, 1fr);
-  grid-template-rows: repeat(2, auto);
-  gap: 1px 5px;
-  min-width: 0;
-  padding: 3px 5px !important;
-  border: 1px solid #ffffff1c !important;
-  border-radius: 7px;
-  color: #d9ddf1;
-  background: #ffffff08;
-}
-.exchange-preview > b {
+/* Read-only previews in battle sheets: the move info sheet (long-press /
+   right-click / I), the Apprentice exchange forecast, and the switch sheet's
+   rows with HP bars and Résiste / Neutre / Risqué verdicts. */
+.move-info {
   display: grid;
-  grid-row: 1 / -1;
+  gap: 12px;
+}
+.move-info-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-md);
+}
+.move-info-head .tile-disc {
+  display: grid;
   place-items: center;
-  width: 17px;
-  color: #fff3a1;
-  font-size: 11px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--move-color);
+  box-shadow:
+    inset 0 -3px 0 #00000040,
+    0 2px 0 var(--ledge);
 }
-.exchange-preview > span {
+.move-info-head .tile-disc .affinity-icon {
+  width: 22px;
+  height: 22px;
+}
+.move-info-signature {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: #ffcb3d1f;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+.move-info-signature .ico {
+  width: 18px;
+  height: 18px;
+}
+.move-info-effect {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.4;
+}
+.move-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.move-fact {
+  display: grid;
+  align-content: start;
+  gap: 4px;
   min-width: 0;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1.1;
-  white-space: nowrap;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--bg-2);
 }
-.exchange-preview > span:last-child {
-  text-align: left;
+.move-fact small {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.move-fact b {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-display);
+  line-height: 1.15;
+}
+.move-fact.good b {
+  color: #5ef59f;
+}
+.move-fact.bad b {
+  color: #c9c9da;
+}
+.move-fact.gold b {
+  color: var(--gold);
+}
+.move-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+.move-note .ico,
+.move-note .affinity-icon {
+  width: 18px;
+  height: 18px;
+}
+.move-note.signature {
+  color: var(--gold);
+  font-weight: var(--weight-strong);
+}
+.move-note.combo b {
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5fa2, #d6246e);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+}
+.move-note.weather.up {
+  color: #bff5d2;
+}
+.move-note.statuses .status-badge {
+  min-height: 28px;
+}
+/* Exact end-of-turn exchange (Apprentice, tactical details). */
+.exchange-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  color: #d9ddf1;
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px #ffffff1c;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+.exchange-preview > .ico {
+  width: 18px;
+  height: 18px;
+  color: var(--gold-bright);
+}
+.exchange-preview > small {
+  flex-basis: calc(100% - 28px);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
 }
 .exchange-preview.self-ko {
-  border-color: #ff727b70 !important;
+  box-shadow: inset 0 0 0 1px #ff727b70;
   color: #ffbdc2;
 }
 .exchange-preview.rival-ko {
-  border-color: #ffe16f75 !important;
+  box-shadow: inset 0 0 0 1px #ffe16f75;
   color: #fff0a3;
-  box-shadow: 0 0 11px #ffd55016;
 }
-@media (max-width: 600px) {
-  .exchange-preview {
-    grid-template-columns: 14px minmax(0, 1fr);
-    padding: 3px 4px !important;
+/* Switch / replacement / relay sheet rows. */
+.switch-options {
+  display: grid;
+  gap: 14px;
+  padding-top: 8px;
+}
+.battle-sheet .switch-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 84px;
+  margin: 0;
+  padding: 8px 10px 8px 8px;
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  background: var(--bg-2);
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 3px 0 var(--ledge);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transform: none;
+}
+.battle-sheet .switch-option.recommended {
+  padding-top: 16px;
+  box-shadow:
+    inset 0 0 0 2px var(--good),
+    0 3px 0 var(--ledge);
+}
+.battle-sheet .switch-option:not(:disabled):is(:active, .is-pressed) {
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 1px 0 var(--ledge);
+}
+@media (hover: hover) {
+  .battle-sheet .switch-option:hover {
+    transform: none;
+    background: var(--bg-3);
   }
-  .exchange-preview > b {
-    width: 13px;
+}
+/* The recommendation is a tab on the row's top edge, over the info column:
+   never over the portrait. */
+.battle-sheet .switch-recommended {
+  position: absolute;
+  z-index: 1;
+  top: -10px;
+  left: 84px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: 999px;
+  color: #06301a;
+  background: var(--good);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+  white-space: nowrap;
+}
+.battle-sheet .switch-recommended .ico {
+  width: 14px;
+  height: 14px;
+}
+.switch-portrait {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: radial-gradient(
+    circle at 50% 70%,
+    color-mix(in srgb, var(--switch-color) 30%, #0b0d24),
+    #0b0d24 70%
+  );
+}
+.switch-portrait img {
+  width: 76px;
+  height: 76px;
+  margin: -6px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.switch-info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.switch-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.switch-name strong {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: var(--weight-display);
+  line-height: 1.05;
+}
+.switch-name .plate-type {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--plate-type);
+}
+.switch-name .affinity-icon {
+  width: 15px;
+  height: 15px;
+}
+.switch-hp {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #05061a;
+}
+.switch-hp > i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform-origin: left center;
+}
+.switch-hp .plate-hp-fill {
+  background: var(--hp-high);
+}
+.switch-hp[data-hp-state='mid'] .plate-hp-fill {
+  background: var(--hp-mid);
+}
+.switch-hp[data-hp-state='low'] .plate-hp-fill {
+  background: var(--hp-low);
+}
+.switch-hp .plate-barrier {
+  top: auto;
+  height: 3px;
+  background: #73eaff;
+}
+.switch-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.switch-meta .num {
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+.switch-class {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.switch-class .class-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--class-color);
+}
+.battle-sheet :is(.switch-incoming, .perfect-read-bonus, .switch-passive) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  color: var(--ink-2);
+  background: none;
+  box-shadow: none;
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0;
+}
+.battle-sheet .switch-incoming.lethal {
+  color: #ff9aa6;
+}
+.battle-sheet .perfect-read-bonus {
+  color: var(--gold);
+}
+.perfect-read-bonus .ico,
+.switch-passive .ico {
+  width: 14px;
+  height: 14px;
+}
+.switch-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.switch-verdict {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 76px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  color: #d6d7ef;
+  background: #26284a;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+}
+.switch-verdict .ico {
+  width: 22px;
+  height: 22px;
+}
+.switch-verdict.good {
+  color: #7dffb0;
+  background: #0b3d22;
+}
+.switch-verdict.bad {
+  color: #ff9aa6;
+  background: #3d0b16;
+}
+body.high-contrast .battle-sheet .switch-option {
+  background: #05061a;
+  box-shadow: inset 0 0 0 2px #dfe5ffcc;
+}
+body.high-contrast .battle-sheet .switch-option.recommended {
+  box-shadow: inset 0 0 0 4px #7dffb0;
+}
+body.high-contrast .switch-verdict {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+body.high-contrast .switch-verdict.bad {
+  box-shadow: inset 0 0 0 2px currentColor;
+  outline: 2px dashed currentColor;
+  outline-offset: -5px;
+}
+@media (max-width: 360px) {
+  .battle-sheet .switch-option {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 10px;
   }
-  .exchange-preview > span {
-    font-size: 10px;
+  .switch-portrait {
+    width: 56px;
+    height: 56px;
   }
-  .exchange-preview > span:last-child {
-    text-align: left;
+  .battle-sheet .switch-recommended {
+    left: 74px;
+  }
+  .switch-verdict {
+    min-width: 68px;
+  }
+}
+/* Short landscape: the four facts on one row (Agit and Recharge included) and
+   the switch rows side by side, so the recommended one is above the fold. */
+@media (orientation: landscape) and (max-height: 480px) {
+  .move-info {
+    gap: 8px;
+  }
+  .move-info-head .tile-disc {
+    width: 32px;
+    height: 32px;
+  }
+  .move-info-effect {
+    font-size: var(--text-md);
+    line-height: 1.35;
+  }
+  .move-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .move-fact {
+    padding: 8px 10px;
+  }
+  .move-fact b {
+    font-size: var(--text-md);
+  }
+  .switch-options {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px 10px;
+  }
+  .battle-sheet .switch-option {
+    align-self: stretch;
   }
 }

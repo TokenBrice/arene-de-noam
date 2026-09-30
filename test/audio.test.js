@@ -294,21 +294,60 @@ const sourcesCreatedBy = (sound, action) => {
     .filter((node) => node.kind === 'oscillator' || node.kind === 'buffer-source');
 };
 
-test('patch starts every SFX source before stopping and cleans each chain on ended', () => {
+const nodesCreatedBy = (sound, action) => {
+  const before = sound.ctx.nodes.length;
+  const result = action();
+  return { result, nodes: sound.ctx.nodes.slice(before) };
+};
+const isSource = (node) => node.kind === 'oscillator' || node.kind === 'buffer-source';
+
+// Cue payloads shaped like docs/battle-presentation.md §5 (the director's emits).
+const MOVE = {
+  side: 'player',
+  creatureId: 'pyrolynx',
+  moveId: 'flash_pounce',
+  affinity: 'flame',
+  archetype: 'DASH',
+  tier: 1,
+  signature: false,
+  speed: 1,
+  reducedMotion: false,
+};
+const HIT = {
+  side: 'enemy',
+  sourceSide: 'player',
+  creatureId: 'kordane',
+  moveId: 'flash_pounce',
+  affinity: 'flame',
+  hit: 1,
+  hits: 1,
+  amount: 12,
+  absorbed: 0,
+  critical: false,
+  effectiveness: 1,
+  blocked: false,
+  lethal: false,
+  tier: 1,
+  speed: 1,
+  reducedMotion: false,
+};
+
+test('cue voices start before they stop and every chain disconnects once its last source ends', () => {
   const sound = soundWithGraph();
   const before = sound.ctx.nodes.length;
-  sound.patch({ duration: 0.16, noiseGain: 0.02 });
+  sound.cue('contact', { ...HIT, beat: 1, affinity: 'tide' });
+  sound.cue('status-', { beat: 2, side: 'enemy', creatureId: 'kordane', statuses: ['marked'] });
   const session = [sound.sfxSession.dry, sound.sfxSession.wet];
-  const patchNodes = sound.ctx.nodes.slice(before).filter((node) => !session.includes(node));
+  const cueNodes = sound.ctx.nodes.slice(before).filter((node) => !session.includes(node));
 
-  assert.equal(sound.sfxSources.size, 3);
-  for (const source of sound.sfxSources) {
+  assert.ok(sound.sfxSources.size > 4);
+  for (const source of [...sound.sfxSources]) {
     assert.equal(source.started.length, 1);
     assert.equal(source.stopped.length, 1);
     source.emitEnded();
   }
   assert.equal(sound.sfxSources.size, 0);
-  assert.ok(patchNodes.every((node) => node.disconnects === 1));
+  assert.ok(cueNodes.every((node) => node.disconnects === 1));
   assert.ok(
     session.every((node) => node.disconnects === 0),
     'the session outlives one cue'
@@ -332,7 +371,7 @@ test('every dry and wet path of each category passes through that category contr
       tension: true,
     })
   );
-  const sfx = sourcesCreatedBy(sound, () => sound.patch({ duration: 0.2, reverb: 0.4 }));
+  const sfx = sourcesCreatedBy(sound, () => sound.cue('contact', { ...HIT, beat: 1, affinity: 'flame' }));
   const viaConvolver = (paths) => paths.some((path) => path.some((node) => node.kind === 'convolver'));
 
   for (const source of [note, noise]) {
@@ -430,7 +469,7 @@ test('leaving a screen stops its queued cues while the results sting plays once 
 test('hiding the page stops SFX and music so nothing resumes mid-attack', () => {
   const sound = soundWithGraph();
   const cues = sourcesCreatedBy(sound, () => {
-    sound.patch({ duration: 0.4, delay: 0.2 });
+    sound.heal();
     sound.musicNote(440, 1, 1, { gain: 0.02, wave: 'sine', filter: 1500, attack: 0.01, reverb: 0.4 });
   });
   sound.handleVisibility(true);
@@ -480,4 +519,265 @@ test('the music scheduler skips steps a stall made stale and never schedules in 
   sound.scheduleAhead();
   assert.equal(scheduled[beforeLate].step, nextStep, 'a barely late step still plays');
   assert.equal(scheduled[beforeLate].time, slightlyLate, 'starting now with its full envelope');
+});
+
+test('one dominant cue per beat: impact outranks gestures, stamps ride on the contact, nothing waits', () => {
+  const sound = soundWithGraph();
+  const { ctx } = sound;
+  const earliestStart = (nodes) => Math.min(...nodes.filter(isSource).map((node) => node.started[0]));
+
+  const windup = nodesCreatedBy(sound, () => sound.cue('windup', { ...MOVE, beat: 1 }));
+  const release = nodesCreatedBy(sound, () => sound.cue('release', { ...MOVE, beat: 1, hit: 1 }));
+  const contact = nodesCreatedBy(sound, () =>
+    sound.cue('contact', { ...HIT, beat: 1, critical: true, effectiveness: 2 })
+  );
+  assert.equal(contact.result.level, 'dominant');
+  for (const cue of [windup, release, contact])
+    assert.equal(earliestStart(cue.nodes), ctx.currentTime, 'never delayed');
+  const releaseBus = release.nodes.find((node) => node.kind === 'gain');
+  assert.ok(
+    releaseBus.gain.targets.some((value) => value < 1),
+    'the release is ducked under the contact'
+  );
+  assert.equal(releaseBus.gain.targets.at(-1), 1, 'and restored when the contact ends');
+
+  const outcome = (name, payload = {}) => sound.cue(name, { beat: 1, speed: 1, ...payload })?.level;
+  assert.equal(outcome('critical', { side: 'enemy' }), 'dropped', 'the contact carried the crit accent');
+  assert.equal(outcome('effective', { side: 'enemy' }), 'dropped');
+  assert.equal(outcome('readout', { side: 'enemy', kind: 'damage', amount: 12 }), 'dropped');
+  assert.equal(outcome('switch-out', { side: 'player' }), 'dropped', 'UI never plays over the dominant cue');
+  assert.equal(outcome('heal', { side: 'player', amount: 5, team: true }), 'ducked', 'utility under impact');
+  assert.equal(
+    outcome('heal', { side: 'player', amount: 5, team: true }),
+    'dropped',
+    'one heal gesture per beat'
+  );
+  assert.equal(outcome('readout', { side: 'player', kind: 'heal', amount: 5 }), 'dropped');
+  ctx.currentTime += 2;
+  assert.equal(
+    outcome('status+', { side: 'player', statuses: ['focused'] }),
+    'full',
+    'no ducking once it ended'
+  );
+
+  assert.equal(
+    outcome('status+', { beat: 2, side: 'player', statuses: ['focused'] }),
+    'dominant',
+    'a new beat'
+  );
+  assert.equal(outcome('faint-cry', { beat: 3, side: 'enemy', creatureId: 'kordane' }), 'dominant');
+  assert.equal(
+    outcome('ko', { beat: 3, side: 'enemy', creatureId: 'kordane' }),
+    'dominant',
+    'K.O. outranks the cry'
+  );
+});
+
+test('each type plays its own material family, voiced in the phone band', () => {
+  const families = new Set();
+  const recipes = new Set();
+  for (const affinity of ['tide', 'flame', 'grove', 'mind', 'force', 'shadow']) {
+    const sound = soundWithGraph();
+    const { result, nodes } = nodesCreatedBy(sound, () =>
+      sound.cue('contact', { ...HIT, beat: 1, affinity })
+    );
+    families.add(result.family);
+    const voiced = nodes.filter((node) => isSource(node) || node.kind === 'filter');
+    recipes.add(voiced.map((node) => `${node.kind}:${node.type}:${Math.round(node.frequency.value)}`).join());
+    assert.ok(
+      voiced.some(
+        (node) =>
+          (node.kind === 'oscillator' || node.type === 'bandpass') &&
+          node.frequency.value >= 700 &&
+          node.frequency.value <= 3000
+      ),
+      `${affinity} has a 0.7–3 kHz component`
+    );
+  }
+  assert.deepEqual([...families].sort(), ['combat', 'eau', 'feu', 'plante', 'psy', 'tenebres']);
+  assert.equal(recipes.size, 6, 'six distinct recipes');
+
+  const layers = (payload) => {
+    const sound = soundWithGraph();
+    return nodesCreatedBy(sound, () => sound.cue('contact', { ...HIT, beat: 1, ...payload })).nodes;
+  };
+  const neutral = layers({});
+  const sources = (nodes) => nodes.filter(isSource).length;
+  const lowpasses = (nodes) =>
+    nodes.filter((node) => node.kind === 'filter' && node.type === 'lowpass').length;
+  const recipe = (nodes) =>
+    nodes
+      .filter(isSource)
+      .map((node) => `${node.kind}:${node.frequency.value}`)
+      .join();
+  assert.ok(
+    sources(layers({ effectiveness: 2 })) > sources(neutral),
+    'bright accent on a super-effective hit'
+  );
+  assert.ok(sources(layers({ critical: true })) > sources(neutral), 'crit accent');
+  assert.ok(lowpasses(layers({ effectiveness: 0.5 })) > lowpasses(neutral), 'a resisted hit is damped');
+  assert.notEqual(
+    recipe(layers({ blocked: true, amount: 0, absorbed: 12 })),
+    recipe(neutral),
+    'blocked is the thunk'
+  );
+});
+
+test('cries mark entrances, Signatures and faints only, trimmed at ×2 without a pitch change', () => {
+  const sound = soundWithGraph();
+  const cries = [];
+  const cryVoices = sound.cryVoices.bind(sound);
+  sound.cryVoices = (cue, id, variant, options) => {
+    cries.push({ id, variant, trim: cue.trim });
+    return cryVoices(cue, id, variant, options);
+  };
+  sound.cue('windup', { ...MOVE, beat: 1 });
+  sound.cue('release', { ...MOVE, beat: 1, hit: 1 });
+  sound.cue('contact', { ...HIT, beat: 1 });
+  assert.deepEqual(cries, [], 'no cry on an ordinary move');
+
+  sound.cue('signature-cutin', {
+    beat: 2,
+    speed: 1,
+    side: 'player',
+    creatureId: 'pyrolynx',
+    moveId: 'x',
+    clash: false,
+  });
+  sound.cue('faint-cry', { beat: 3, speed: 1, side: 'enemy', creatureId: 'kordane' });
+  sound.cue('switch-in', { beat: 4, speed: 2, side: 'enemy', creatureId: 'abyssar', source: 'replacement' });
+  assert.deepEqual(cries, [
+    { id: 'pyrolynx', variant: 'effort', trim: 1 },
+    { id: 'kordane', variant: 'faint', trim: 1 },
+    { id: 'abyssar', variant: 'entry', trim: 0.65 },
+  ]);
+
+  const cry = (speed) => {
+    const other = soundWithGraph();
+    return nodesCreatedBy(other, () =>
+      other.cue('switch-in', { beat: 1, speed, side: 'player', creatureId: 'orakyn', source: 'switch' })
+    ).nodes.filter((node) => node.kind === 'oscillator');
+  };
+  const normal = cry(1),
+    fast = cry(2);
+  assert.deepEqual(
+    fast.map((node) => node.frequency.value),
+    normal.map((node) => node.frequency.value),
+    'same pitch at ×2'
+  );
+  const length = (node) => node.stopped[0] - node.started[0];
+  assert.ok(
+    fast.every((node, index) => length(node) < length(normal[index])),
+    'shorter at ×2'
+  );
+});
+
+test('multi-hit audio follows the real contact cues instead of a pre-scheduled rhythm', () => {
+  const sound = soundWithGraph();
+  const { ctx } = sound;
+  const release = (hits) =>
+    sourcesCreatedBy(sound, () =>
+      sound.cue('release', { ...MOVE, archetype: 'PROJ', beat: hits, hits, hit: 1 })
+    );
+  assert.equal(release(3).length, release(1).length, 'the release does not play the hits');
+
+  const hits = [1, 2, 3].map((hit) => {
+    ctx.currentTime += 0.22;
+    const { result, nodes } = nodesCreatedBy(sound, () =>
+      sound.cue('contact', { ...HIT, beat: 9, hit, hits: 3 })
+    );
+    return { result, now: ctx.currentTime, sources: nodes.filter(isSource) };
+  });
+  for (const { result, now, sources } of hits) {
+    assert.notEqual(result.level, 'ducked', 'every hit plays at full level');
+    assert.equal(
+      Math.min(...sources.map((node) => node.started[0])),
+      now,
+      'each hit starts on its own contact'
+    );
+  }
+  const topPitch = ({ sources }) =>
+    Math.max(...sources.filter((node) => node.kind === 'oscillator').map((node) => node.frequency.value));
+  assert.ok(
+    topPitch(hits[2]) > topPitch(hits[1]) && topPitch(hits[1]) > topPitch(hits[0]),
+    'later hits step up'
+  );
+});
+
+test('the low-HP cue sounds once on the way down and re-arms above 35 % or on a switch', () => {
+  const view = (id, hp, enemyHp = 80) => ({
+    turn: 3,
+    sides: {
+      player: { active: 0, surge: 30, team: [{ id, hp, maxHp: 100 }] },
+      enemy: { active: 0, surge: 30, team: [{ id: 'kordane', hp: enemyHp, maxHp: 100 }] },
+    },
+  });
+  const cues = (sound, steps) =>
+    steps.map(([id, hp]) => sourcesCreatedBy(sound, () => sound.setBattleState(view(id, hp))).length > 0);
+  const sound = soundWithGraph();
+  assert.deepEqual(
+    cues(sound, [
+      ['orakyn', 100],
+      ['orakyn', 30],
+      ['orakyn', 20],
+      ['orakyn', 15],
+      ['orakyn', 30],
+      ['orakyn', 20],
+      ['orakyn', 40],
+      ['orakyn', 20],
+      ['abyssar', 20],
+      ['abyssar', 10],
+      ['abyssar', 0],
+    ]),
+    [false, false, true, false, false, false, false, true, false, true, false]
+  );
+
+  const muted = soundWithGraph({ ...DEFAULT_SAVE, musicVolume: 0, muted: true });
+  cues(muted, [
+    ['orakyn', 100],
+    ['orakyn', 20],
+  ]);
+  muted.update({ ...DEFAULT_SAVE, musicVolume: 0 });
+  assert.deepEqual(cues(muted, [['orakyn', 15]]), [false], 'a threshold crossed while muted is spent');
+
+  const music = soundWithGraph();
+  music.setBattleState(view('orakyn', 100, 100));
+  const calm = music.tension;
+  music.setBattleState(view('orakyn', 96, 97));
+  assert.equal(music.tension, calm, 'a small change stays inside the deadband');
+  music.setBattleState(view('orakyn', 30, 60));
+  assert.ok(music.tension > calm + 0.08, 'a real swing moves the score');
+});
+
+test('cue never throws and stays silent when it cannot play', () => {
+  assert.equal(new SoundSystem(DEFAULT_SAVE).cue('contact', HIT), null, 'no audio context yet');
+  const sound = soundWithGraph();
+  assert.equal(sound.cue('not-a-cue', {}), null);
+  assert.equal(sound.cue('constructor', {}), null);
+  assert.equal(
+    sound.cue('contact', {
+      get beat() {
+        throw new Error('broken payload');
+      },
+    }),
+    null
+  );
+  assert.equal(sound.cue('contact', null)?.level, 'dominant', 'a missing payload still plays the hit');
+  assert.equal(sound.cue('windup', { ...MOVE, beat: 5, reducedMotion: true }).level, 'dropped', 'cosmetic');
+  assert.equal(
+    sound.cue('windup', { ...MOVE, beat: 6, speed: 3 }).level,
+    'dropped',
+    'hurry skips the windup'
+  );
+  assert.equal(
+    sound.cue('contact', { ...HIT, beat: 7, reducedMotion: true }).level,
+    'dominant',
+    'informative'
+  );
+  sound.handleVisibility(true);
+  assert.deepEqual(
+    sourcesCreatedBy(sound, () => sound.cue('contact', { ...HIT, beat: 8 })),
+    [],
+    'hidden pages stay silent'
+  );
 });

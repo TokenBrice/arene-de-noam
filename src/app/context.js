@@ -242,19 +242,6 @@ function emblemHtml(index, earned = false) {
   return `<span class="emblem ornate ${earned ? 'earned' : ''}" style="--badge-a:${trainer.colors[0]};--badge-b:${trainer.colors[1]}" title="${earned ? label : '???'}"><i></i><b>${earned ? trainer.badge : '·'}</b><small>${earned ? label : ''}</small></span>`;
 }
 
-function statusVisuals(creature) {
-  const entries = sortStatusIds(Object.keys(creature.statuses)).map((id) => {
-    const meta = STATUS_DEFINITIONS[id];
-    const polarity = meta.positive ? 'positive' : 'negative';
-    return `<i class="status-orb status-${id} ${polarity}${meta.lightInk ? ' light-ink' : ''}" data-status="${id}" data-icon="${meta.iconKey}" data-polarity="${polarity}" style="--status-color:${meta.color}" title="${escapeHtml(t(`status.${id}`))}"><b>${statusIcon(id)}</b></i>`;
-  });
-  if (creature.barrier > 0)
-    entries.unshift(
-      `<i class="status-orb status-barrier" style="--status-color:#73eaff" title="${t('battle.barrier', { amount: creature.barrier })}"><b>⬡</b></i>`
-    );
-  return entries.join('');
-}
-
 function draftInsightHtml(candidateId) {
   const before = [...(ctx.draftRun?.team || [])],
     newAffinity = !before.some((id) => CREATURES[id].affinity === CREATURES[candidateId].affinity);
@@ -363,7 +350,6 @@ Object.assign(ctx, {
   disposeArena,
   ensureBattleStyles,
   emblemHtml,
-  statusVisuals,
   draftInsightHtml,
   topbar,
 });

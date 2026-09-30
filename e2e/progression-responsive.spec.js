@@ -262,7 +262,9 @@ test('mythic trials expose six rule-bending encounters and launch with modifiers
   await expect(page.locator('[data-creature]')).toHaveCount(30);
   await expect(page.locator('.enemy-list img')).toHaveCount(3);
   await page.getByRole('button', { name: 'Jouer cette épreuve' }).click();
-  await expect(page.getByText('Tempête de Signatures')).toBeVisible();
+  await page.locator('[data-action="battle-pause"]').click();
+  await expect(page.locator('.pause-context')).toContainText('Tempête de Signatures');
+  await page.keyboard.press('Escape');
   await expect(page.locator('#hud-player').getByText('100/80')).toBeVisible();
   await expect(page.locator('[data-move="supernova"]')).toBeEnabled();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arene-de-noam-save')));
@@ -296,7 +298,9 @@ test('the gauntlet carries a chosen boon into its second escalating battle', asy
   await expect(page.locator('[data-gauntlet-lead="1"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('[data-gauntlet-lead="0"]').click();
   await page.locator('[data-boon="surge"]').click();
-  await expect(page.getByText(/Couloir des Tempêtes · 2\/3/)).toBeVisible();
+  await page.locator('[data-action="battle-pause"]').click();
+  await expect(page.locator('.pause-context')).toContainText(/Couloir des Tempêtes · 2\/3/);
+  await page.keyboard.press('Escape');
   await expect(page.locator('#hud-player')).toContainText('55/100');
   await expect(page.locator('#hud-player')).toContainText('54/134');
 });
@@ -360,7 +364,8 @@ test('required viewports avoid horizontal clipping and survive rotation', async 
   const summaryBox = await planSummary.boundingBox();
   expect(summaryBox.y).toBeLessThan(80);
   await page.getByRole('button', { name: /Entrer dans/ }).click();
-  await expect(page.locator('.arena-nameplate')).toBeVisible();
+  await expect(page.locator('#turn-chip')).toBeVisible();
+  await expect(page.locator('[data-action="battle-pause"]')).toBeVisible();
   await expect(page.locator('#contract-chip')).toHaveCount(0);
   const boxes = await page.locator('.battle-controls button').evaluateAll((buttons) =>
     buttons.map((button) => {
